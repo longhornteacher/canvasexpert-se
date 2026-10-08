@@ -51,10 +51,10 @@ type pokemonData struct {
 	Total, Active           int
 }
 
-var pokemonTemplate = template.Must(template.New("pokemon").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE Pokemon-ify</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div>` + hubNav + `<h1>Pok&eacute;mon-ify!</h1><p>Every student gets a Pok&eacute;mon alias, so names stay out of feedback and files. The Pok&eacute;mon stays the same even if you re-roll a name later.</p>
+var pokemonTemplate = template.Must(template.New("pokemon").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE Pokemon-ify</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div>` + hubNav + `<h1>Pok&eacute;mon-ify!</h1><p>Every student gets a Pok&eacute;mon alias, so real names stay out of feedback and files. The Pok&eacute;mon stays the same even if you re-roll a name later.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <input type="checkbox" id="reveal" hidden>
-<div class="row"><form method="post" action="/pokemonify/summon"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Summon rosters from Canvas</button></form><label class="pill" for="reveal">Peek at real names</label><span class="pill on">{{.Total}} in the party</span><span class="pill">{{.Active}} active courses</span></div>
+<div class="row"><form method="post" action="/pokemonify/summon"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Summon rosters from Canvas</button></form><label class="pill" for="reveal">Hide real names</label><span class="pill on">{{.Total}} in the party</span><span class="pill">{{.Active}} active courses</span></div>
 {{range .Groups}}<section><h2 class="grp">{{.Title}}</h2><div class="deck">
 {{range .Cards}}<article class="pk t-{{.Type}}{{if .Shiny}} shiny{{end}}{{if .Monitored}} mon{{end}}" style="--i:{{.Idx}}">{{if .Fresh}}<div class="ball"><i></i></div>{{end}}
 <div class="top"><span class="tag">{{.Type}}</span><span>Lv. {{.Level}}</span></div><div class="art">{{.Art}}</div><h3>{{.Alias}}</h3><p class="real">{{.Name}}</p>{{if .Course}}<span class="course">{{.Course}}</span>{{end}}

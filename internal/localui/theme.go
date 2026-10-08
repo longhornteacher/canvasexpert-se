@@ -93,8 +93,8 @@ h2.grp{margin:1.6rem 0 0;text-transform:uppercase;letter-spacing:.1em;font-size:
 .art .eyes{transform-box:fill-box;transform-origin:center;animation:blink 4.5s infinite}
 @keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.08)}}
 .pk h3{margin:.3rem 0 0;text-align:center;font-size:1.3rem;text-transform:uppercase;letter-spacing:.05em;-webkit-text-stroke:0}
-.pk .real{margin:.1rem 0 0;text-align:center;font-size:.85rem;filter:blur(7px);transition:filter .25s;user-select:none}
-#reveal:checked ~ .deck .real,#reveal:checked ~ section .deck .real{filter:none;user-select:text}
+.pk .real{margin:.1rem 0 0;text-align:center;font-size:.85rem;font-weight:700;transition:filter .25s}
+#reveal:checked ~ section .deck .real{filter:blur(7px);user-select:none}
 .pk .course{display:block;text-align:center;font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;opacity:.8}
 .pk .acts{display:flex;gap:.4rem;justify-content:center;margin-top:.7rem;flex-wrap:wrap}.pk .acts form{margin:0}
 .pk .acts button{margin:0;padding:.3rem .75rem;font-size:.7rem;border-width:3px;box-shadow:3px 3px 0 var(--ink)}
