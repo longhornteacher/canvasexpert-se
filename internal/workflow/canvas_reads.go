@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"canvassidekick/internal/canvas"
+	"canvasexpertse/internal/canvas"
 )
 
 type Course struct {

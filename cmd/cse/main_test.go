@@ -12,7 +12,7 @@ import (
 func TestHelpAndVersionNeedNoWorkspaceOrCanvas(t *testing.T) {
 	for _, args := range [][]string{nil, {"help"}, {"--help"}, {"version"}} {
 		var out, err bytes.Buffer
-		if code := run(context.Background(), args, &out, &err); code != 0 || !strings.Contains(out.String(), "CanvasSidekick") {
+		if code := run(context.Background(), args, &out, &err); code != 0 || !strings.Contains(out.String(), "CanvasExpert-SE") {
 			t.Fatalf("%v: %d %s", args, code, err.String())
 		}
 	}

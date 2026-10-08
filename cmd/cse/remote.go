@@ -12,11 +12,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"canvassidekick/internal/canvas"
-	"canvassidekick/internal/domain"
-	"canvassidekick/internal/platform"
-	"canvassidekick/internal/workflow"
-	"canvassidekick/internal/workspace"
+	"canvasexpertse/internal/canvas"
+	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/platform"
+	"canvasexpertse/internal/workflow"
+	"canvasexpertse/internal/workspace"
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {

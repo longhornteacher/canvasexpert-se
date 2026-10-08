@@ -1,6 +1,6 @@
-# CanvasSidekick starter workspace
+# CanvasExpert-SE starter workspace
 
-This folder is a clean starting point for a teacher's CanvasSidekick workspace. The 0.1b workflow is a beta contract under implementation. The presence of these instructions does not mean the executable or every Canvas operation has been verified in a live course. Check the build's help and release notes for the commands and behaviors currently available.
+This folder is a clean starting point for a teacher's CanvasExpert-SE workspace. The 0.1b workflow is a beta contract under implementation. The presence of these instructions does not mean the executable or every Canvas operation has been verified in a live course. Check the build's help and release notes for the commands and behaviors currently available.
 
 ## Start here
 

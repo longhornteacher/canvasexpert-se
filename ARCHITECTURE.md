@@ -1,4 +1,4 @@
-# CanvasSidekick: architecture
+# CanvasExpert-SE: architecture
 
 **Updated:** 2026-10-08 · **Status:** 0.1b implementation in progress; portable executable and local checks available, district Canvas verification pending. The detailed implementation handoff is [EXECUTION-BRIEF-0.1b.md](EXECUTION-BRIEF-0.1b.md), with actual progress in [docs/0.1b-evidence.md](docs/0.1b-evidence.md). It distinguishes teacher decisions, implementation defaults, and required evidence. Items marked **[verify]** need a real Canvas or school-PC check before dependent behavior is enabled. The broader roadmap below is not all part of 0.1b; see §11.
 

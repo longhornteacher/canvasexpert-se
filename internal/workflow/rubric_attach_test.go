@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"canvassidekick/internal/domain"
-	"canvassidekick/internal/workspace"
+	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/workspace"
 )
 
 func attachmentBaseline() Assignment {

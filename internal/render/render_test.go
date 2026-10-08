@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"canvassidekick/internal/domain"
-	"canvassidekick/internal/workspace"
+	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/workspace"
 )
 
 func TestRenderFeedbackShowsAssessmentRetainedScoresThenConversation(t *testing.T) {

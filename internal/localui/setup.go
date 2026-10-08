@@ -15,13 +15,13 @@ import (
 	"sync"
 	"time"
 
-	"canvassidekick/internal/canvas"
-	"canvassidekick/internal/platform"
+	"canvasexpertse/internal/canvas"
+	"canvasexpertse/internal/platform"
 )
 
-var setupTemplate = template.Must(template.New("setup").Parse(`<!doctype html>
+var setupTemplate = template.Must(template.New("setup").Funcs(pageFuncs).Parse(`<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CanvasSidekick setup</title><style>` + funkyCSS + `</style><main><h1>Plug in Canvas!</h1><p>Your access token naps inside Windows Credential Manager on this machine. It never touches a file.</p>
+<title>CanvasExpert-SE setup</title><style>` + funkyCSS + `</style><main><div class="badge">SE = {{se}}</div><h1>Plug in Canvas!</h1><p>Your access token naps inside Windows Credential Manager on this machine. It never touches a file.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}
 <form method="post" action="/setup" autocomplete="off">
 <input type="hidden" name="request_secret" value="{{.Secret}}">

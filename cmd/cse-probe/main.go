@@ -17,11 +17,11 @@ import (
 	"strings"
 	"time"
 
-	"canvassidekick/internal/canvas"
-	"canvassidekick/internal/domain"
-	"canvassidekick/internal/platform"
-	"canvassidekick/internal/workflow"
-	"canvassidekick/internal/workspace"
+	"canvasexpertse/internal/canvas"
+	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/platform"
+	"canvasexpertse/internal/workflow"
+	"canvasexpertse/internal/workspace"
 )
 
 const allowedOrigin = "https://pearland.instructure.com"
@@ -446,7 +446,7 @@ func (p *probe) create(ctx context.Context) error {
 		return e
 	}
 	var a workflow.Assignment
-	e := p.c.Write(ctx, "POST", fmt.Sprintf("/api/v1/courses/%d/assignments", courseID), map[string]any{"assignment": map[string]any{"name": p.state.Title, "description": "<p>Disposable CanvasSidekick API test. Built-in Test Student only. Do not assign, publish, or include in final grades.</p>", "points_possible": 20, "grading_type": "points", "submission_types": []string{"online_text_entry"}, "published": false, "omit_from_final_grade": true, "post_to_sis": false}}, &a)
+	e := p.c.Write(ctx, "POST", fmt.Sprintf("/api/v1/courses/%d/assignments", courseID), map[string]any{"assignment": map[string]any{"name": p.state.Title, "description": "<p>Disposable CanvasExpert-SE API test. Built-in Test Student only. Do not assign, publish, or include in final grades.</p>", "points_possible": 20, "grading_type": "points", "submission_types": []string{"online_text_entry"}, "published": false, "omit_from_final_grade": true, "post_to_sis": false}}, &a)
 	if e == nil && a.ID > 0 {
 		p.state.AssignmentID = a.ID
 	} else if e == nil {

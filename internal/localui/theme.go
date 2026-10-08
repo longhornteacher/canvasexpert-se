@@ -1,5 +1,22 @@
 package localui
 
+import (
+	"html/template"
+	"math/rand/v2"
+)
+
+// seExpansions: "SE" stands for something different every time.
+var seExpansions = []string{
+	"Special Edition", "Speed Edition", "Special Envelope", "Sneaky Eraser", "Sloth Express",
+	"Seriously Excellent", "Sparkly Engine", "Spreadsheet Escape", "Snack Enabled", "Stapler Enthusiast",
+	"Semi-Educational", "Suspiciously Efficient", "Sticker Emporium", "Silent Elf", "Shockingly Explainable",
+}
+
+// SEExpansion returns a random meaning of "SE".
+func SEExpansion() string { return seExpansions[rand.IntN(len(seExpansions))] }
+
+var pageFuncs = template.FuncMap{"se": SEExpansion}
+
 // funkyCSS is the shared look for the loopback pages. Pure CSS (the pages run
 // under a no-script content security policy), so every effect is animation or
 // transform only and honours prefers-reduced-motion.
@@ -15,7 +32,7 @@ repeating-linear-gradient(135deg,var(--sun) 0 26px,#ffe680 26px 52px);background
 @keyframes hue{to{filter:hue-rotate(360deg)}}
 main{max-width:38rem;margin:0 auto;background:#fff;border:5px solid var(--ink);border-radius:2rem 0.6rem 2.4rem 0.8rem;padding:2rem 2rem 2.2rem;box-shadow:12px 12px 0 var(--ink),24px 24px 0 var(--pink);transform:rotate(-.7deg);position:relative}
 main.wide{max-width:78rem}
-main::before{content:"~*~ sidekick ~*~";position:absolute;top:-1.6rem;right:1.4rem;background:var(--lime);border:4px solid var(--ink);padding:.15rem .8rem;border-radius:2rem;font-size:.85rem;transform:rotate(4deg);animation:bob 3s ease-in-out infinite}
+.badge{position:absolute;top:-1.6rem;right:1.4rem;background:var(--lime);border:4px solid var(--ink);padding:.15rem .8rem;border-radius:2rem;font-size:.85rem;transform:rotate(4deg);animation:bob 3s ease-in-out infinite}
 h1{margin:.2rem 0 1rem;font-size:2.3rem;line-height:1.05;letter-spacing:-.03em;text-transform:uppercase;display:inline-block;background:linear-gradient(90deg,var(--pink),var(--grape),var(--cyan),var(--pink));background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:2px var(--ink);animation:wobble 4s ease-in-out infinite,hue 9s linear infinite}
 p{margin:.6rem 0}
 label{display:block;margin:1.3rem 0 .35rem;text-transform:uppercase;font-size:.85rem;letter-spacing:.12em}
@@ -34,6 +51,6 @@ tr:nth-child(even) td{background:#effcff}tbody tr:hover td{background:var(--sun)
 td input{box-shadow:3px 3px 0 var(--grape);padding:.45rem .6rem}
 code,.ref{font-family:Consolas,monospace;font-size:.82rem;background:var(--ink);color:var(--lime);padding:.1rem .45rem;border-radius:.4rem}
 .done{text-align:center}.done h1{font-size:3rem}
-@media (prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media (max-width:40rem){main{padding:1.4rem 1.1rem}h1{font-size:1.8rem}}
 `

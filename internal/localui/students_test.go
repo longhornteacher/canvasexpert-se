@@ -1,7 +1,7 @@
 package localui
 
 import (
-	"canvassidekick/internal/workspace"
+	"canvasexpertse/internal/workspace"
 	"net/http"
 	"net/http/httptest"
 	"net/url"

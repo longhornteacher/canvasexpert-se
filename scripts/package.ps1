@@ -10,7 +10,7 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $templateRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'workspace-template'))
 $binaryPath = [IO.Path]::GetFullPath((Join-Path $repoRoot 'dist/cse.exe'))
 $distRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'dist'))
-$packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasSidekick-0.1b-windows-amd64.zip'))
+$packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE-0.1b-windows-amd64.zip'))
 $pathSeparator = [IO.Path]::DirectorySeparatorChar
 
 if (-not (Test-Path -LiteralPath $templateRoot -PathType Container)) {
@@ -72,14 +72,14 @@ if ($claudeSettings.permissions.deny -notcontains 'Read(./.cse/**)') {
 }
 
 $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
-$stageName = "CanvasSidekick-package-$([Guid]::NewGuid().ToString('N'))"
+$stageName = "CanvasExpert-SE-package-$([Guid]::NewGuid().ToString('N'))"
 $stageRoot = [IO.Path]::GetFullPath((Join-Path $tempRoot $stageName))
 $stagePrefix = $tempRoot.TrimEnd('\', '/') + $pathSeparator
 if (-not $stageRoot.StartsWith($stagePrefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Staging path is outside the system temp directory: $stageRoot"
 }
 
-$zipTempPath = Join-Path $distRoot (".CanvasSidekick-package-$([Guid]::NewGuid().ToString('N')).zip")
+$zipTempPath = Join-Path $distRoot (".CanvasExpert-SE-package-$([Guid]::NewGuid().ToString('N')).zip")
 $zipTempFullPath = [IO.Path]::GetFullPath($zipTempPath)
 $distPrefix = $distRoot.TrimEnd('\', '/') + $pathSeparator
 if (-not $zipTempFullPath.StartsWith($distPrefix, [StringComparison]::OrdinalIgnoreCase)) {
@@ -183,7 +183,7 @@ finally {
     }
     if (Test-Path -LiteralPath $stageRoot -PathType Container) {
         $resolvedStage = [IO.Path]::GetFullPath($stageRoot)
-        if ($resolvedStage.StartsWith($stagePrefix, [StringComparison]::OrdinalIgnoreCase) -and $resolvedStage -match 'CanvasSidekick-package-[0-9a-f]{32}$') {
+        if ($resolvedStage.StartsWith($stagePrefix, [StringComparison]::OrdinalIgnoreCase) -and $resolvedStage -match 'CanvasExpert-SE-package-[0-9a-f]{32}$') {
             Remove-Item -LiteralPath $resolvedStage -Recurse -Force
         }
     }

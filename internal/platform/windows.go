@@ -58,7 +58,7 @@ func saveAt(target string, c Credential) error {
 	if err != nil {
 		return errors.New("invalid SE credential target")
 	}
-	user, _ := syscall.UTF16PtrFromString("CanvasSidekick")
+	user, _ := syscall.UTF16PtrFromString("CanvasExpert-SE")
 	native := nativeCredential{Type: 1, TargetName: name, CredentialBlobSize: uint32(len(blob)), CredentialBlob: &blob[0], Persist: 2, UserName: user}
 	ok, _, callErr := credWrite.Call(uintptr(unsafe.Pointer(&native)), 0)
 	runtime.KeepAlive(blob)
@@ -112,7 +112,7 @@ func CredentialSelfTest() (result error) {
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return errors.New("cannot create credential self-test identifier")
 	}
-	target := "CanvasSidekick/SelfTest/" + hex.EncodeToString(nonce[:])
+	target := "CanvasExpert-SE/SelfTest/" + hex.EncodeToString(nonce[:])
 	want := Credential{Origin: "https://unicode-ñ-学.example", Token: "dummy-🔐-\x00\xff\x80"}
 	if err := saveAt(target, want); err != nil {
 		return err

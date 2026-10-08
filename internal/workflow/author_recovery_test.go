@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"canvassidekick/internal/domain"
-	"canvassidekick/internal/workspace"
+	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/workspace"
 )
 
 func TestIncompleteCreatePreservesTeacherRubricAndUnknownPublication(t *testing.T) {

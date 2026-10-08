@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"canvassidekick/internal/platform"
-	"canvassidekick/internal/workspace"
+	"canvasexpertse/internal/platform"
+	"canvasexpertse/internal/workspace"
 )
 
-var studentsTemplate = template.Must(template.New("students").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasSidekick students</title><style>` + funkyCSS + `</style><main class="wide"><h1>Alias the humans</h1><p>Stable references keep scoring files glued to the same student when an alias changes.</p>{{if .Message}}<p class="error">{{.Message}}</p>{{end}}<form action="/students" method="post"><input type="hidden" name="request_secret" value="{{.Secret}}"><table><thead><tr><th>Name</th><th>Canvas instance</th><th>Stable reference</th><th>Alias</th><th>Monitored</th></tr></thead><tbody>{{range .Rows}}<tr><td>{{.Name}}</td><td>{{.Instance}}</td><td><span class="ref">{{.Ref}}</span></td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required></td><td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}}></td></tr>{{else}}<tr><td colspan="5">Nobody here yet. Pull student work first to populate this table.</td></tr>{{end}}</tbody></table><button type="submit">Save &amp; close</button></form></main></html>`))
+var studentsTemplate = template.Must(template.New("students").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE students</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div><h1>Alias the humans</h1><p>Stable references keep scoring files glued to the same student when an alias changes.</p>{{if .Message}}<p class="error">{{.Message}}</p>{{end}}<form action="/students" method="post"><input type="hidden" name="request_secret" value="{{.Secret}}"><table><thead><tr><th>Name</th><th>Canvas instance</th><th>Stable reference</th><th>Alias</th><th>Monitored</th></tr></thead><tbody>{{range .Rows}}<tr><td>{{.Name}}</td><td>{{.Instance}}</td><td><span class="ref">{{.Ref}}</span></td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required></td><td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}}></td></tr>{{else}}<tr><td colspan="5">Nobody here yet. Pull student work first to populate this table.</td></tr>{{end}}</tbody></table><button type="submit">Save &amp; close</button></form></main></html>`))
 
 type studentHandler struct {
 	origin, secret string

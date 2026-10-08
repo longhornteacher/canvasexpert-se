@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"canvassidekick/internal/platform"
+	"canvasexpertse/internal/platform"
 )
 
 func formRequest(origin, secret, token string) *http.Request {

@@ -1,4 +1,4 @@
-# CanvasSidekick 0.1b: execution brief
+# CanvasExpert-SE 0.1b: execution brief
 
 Prepared 2026-10-08 for a new implementation session led by **GPT-6.1 Sol**, using **GPT-6.1 Sol and GPT-6 Luna subagents**. This is a build specification and handoff, not a record of implemented functionality.
 
@@ -8,7 +8,7 @@ Navigation: teacher requirements are in section 3; scope and platform in 4–5; 
 
 ## 1. Mission and completion boundary
 
-Make a **functional Windows 11 portable beta** of CanvasSidekick: a teacher talks to an existing coding agent, which uses a small `cse.exe` and plain workspace files to create/edit Canvas assignments, retrieve student work, assess it with the live rubric, and post accurate results to Canvas Live.
+Make a **functional Windows 11 portable beta** of CanvasExpert-SE: a teacher talks to an existing coding agent, which uses a small `cse.exe` and plain workspace files to create/edit Canvas assignments, retrieve student work, assess it with the live rubric, and post accurate results to Canvas Live.
 
 The principal beta path is an ordinary Canvas Assignment with text-entry submissions and an attached Canvas rubric. The program contains no LLM client or model selection system. The host agent supplies educational judgment and authoring; the executable supplies reliable Canvas and filesystem operations.
 
@@ -573,4 +573,4 @@ Local evidence: [current implementation evidence](docs/0.1b-evidence.md). Histor
 
 ## 20. Suggested opening message for the execution session
 
-> Implement CanvasSidekick 0.1b from `EXECUTION-BRIEF-0.1b.md`. Read it fully, then read `ARCHITECTURE.md`, `SCORING-RULES.md`, and the WorkLaptop report. Use GPT-6.1 Sol as orchestrator with GPT-6.1 Sol and GPT-6 Luna subagents as specified. Preserve the teacher's settled decisions; make ordinary implementation choices autonomously. Inspect current repository changes before editing. Establish the build environment and disposable Canvas test target early, then execute the four slices through a working Windows build, clean starter ZIP, and truthful integration evidence. Keep the agent responsible for educational inference and the CLI responsible for validated mechanics. Do not create my real three-SCR assignment yet. Ask only for missing external inputs or a concrete decision the brief reserves for me, and continue independent work while waiting. Report verified, failed, and unverified behaviors separately.
+> Implement CanvasExpert-SE 0.1b from `EXECUTION-BRIEF-0.1b.md`. Read it fully, then read `ARCHITECTURE.md`, `SCORING-RULES.md`, and the WorkLaptop report. Use GPT-6.1 Sol as orchestrator with GPT-6.1 Sol and GPT-6 Luna subagents as specified. Preserve the teacher's settled decisions; make ordinary implementation choices autonomously. Inspect current repository changes before editing. Establish the build environment and disposable Canvas test target early, then execute the four slices through a working Windows build, clean starter ZIP, and truthful integration evidence. Keep the agent responsible for educational inference and the CLI responsible for validated mechanics. Do not create my real three-SCR assignment yet. Ask only for missing external inputs or a concrete decision the brief reserves for me, and continue independent work while waiting. Report verified, failed, and unverified behaviors separately.

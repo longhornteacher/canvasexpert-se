@@ -8,9 +8,9 @@ import (
 	"time"
 	"unicode"
 
-	"canvassidekick/internal/canvas"
-	"canvassidekick/internal/domain"
-	"canvassidekick/internal/workspace"
+	"canvasexpertse/internal/canvas"
+	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/workspace"
 )
 
 type Service struct {

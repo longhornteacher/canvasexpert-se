@@ -1,7 +1,7 @@
 package workspace
 
 import (
-	"canvassidekick/internal/domain"
+	"canvasexpertse/internal/domain"
 	"strings"
 	"testing"
 )

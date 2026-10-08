@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"canvassidekick/internal/domain"
-	"canvassidekick/internal/workspace"
+	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/workspace"
 )
 
 // pushRubricAttachment adds a new independent rubric to a freshly observed

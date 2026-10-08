@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"canvassidekick/internal/domain"
+	"canvasexpertse/internal/domain"
 )
 
 func TestStrictHeaderRejectsDuplicatesAndUnknownFields(t *testing.T) {

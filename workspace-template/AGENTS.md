@@ -1,4 +1,4 @@
-# CanvasSidekick workspace
+# CanvasExpert-SE workspace
 
 Use the bundled CLI from this workspace. Start with `.\cse\cse.exe --help` for the commands available in this build. Pass `--workspace .` explicitly, for example `.\cse\cse.exe --workspace . setup`. Load only the task guide you need from `guides/`.
 
