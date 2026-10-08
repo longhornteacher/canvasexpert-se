@@ -10,7 +10,8 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $templateRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'workspace-template'))
 $binaryPath = [IO.Path]::GetFullPath((Join-Path $repoRoot 'dist/cse.exe'))
 $distRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'dist'))
-$packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE-0.1b-windows-amd64.zip'))
+$packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE-Workspace-0.1b.zip'))
+$programPackagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE-Program-0.1b-windows-amd64.zip'))
 $pathSeparator = [IO.Path]::DirectorySeparatorChar
 
 if (-not (Test-Path -LiteralPath $templateRoot -PathType Container)) {
@@ -23,11 +24,33 @@ if (-not (Test-Path -LiteralPath $binaryPath -PathType Leaf)) {
     throw "Missing built executable: $binaryPath"
 }
 
+# Windows PowerShell 5.1 (.NET Framework) writes backslash entry names with
+# ZipFile.CreateFromDirectory, which is not a conforming ZIP. Write entries with
+# forward slashes ourselves so the archive is identical on every host.
+function New-PortableZip {
+    param([Parameter(Mandatory)][string]$SourceDirectory, [Parameter(Mandatory)][string]$DestinationPath)
+
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $sourcePrefixLength = ($SourceDirectory.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar).Length
+    $zip = [IO.Compression.ZipFile]::Open($DestinationPath, [IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($file in (Get-ChildItem -LiteralPath $SourceDirectory -Force -Recurse -File | Sort-Object FullName)) {
+            $entryName = $file.FullName.Substring($sourcePrefixLength).Replace('\', '/')
+            [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $file.FullName, $entryName, [IO.Compression.CompressionLevel]::Optimal)
+        }
+    }
+    finally {
+        $zip.Dispose()
+    }
+}
+
 function Test-TemplatePathAllowed {
     param([Parameter(Mandatory)][string]$RelativePath)
 
     $normalizedPath = $RelativePath.Replace('\', '/')
     return $normalizedPath -match '^(AGENTS|CLAUDE|README)\.md$' -or
+        $normalizedPath -eq 'cse.cmd' -or
         $normalizedPath -match '^\.claude/settings\.json$' -or
         $normalizedPath -match '^guides/[A-Za-z0-9._-]+\.md$' -or
         $normalizedPath -match '^formats/[A-Za-z0-9._-]+\.md$' -or
@@ -119,10 +142,10 @@ try {
         $expectedEntries.Add($relativePath)
     }
 
-    $binaryDirectory = Join-Path $stageRoot 'cse'
-    New-Item -ItemType Directory -Path $binaryDirectory | Out-Null
-    Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $binaryDirectory 'cse.exe')
-    $expectedEntries.Add('cse/cse.exe')
+    # The program is a separate package. The synced workspace must never contain it.
+    if (@($expectedEntries | Where-Object { $_ -match '\.exe$|^cse/' }).Count -gt 0) {
+        throw 'The workspace package must not contain the program.'
+    }
 
     $stagedFiles = @(Get-ChildItem -LiteralPath $stageRoot -Force -Recurse -File)
     $stagedEntries = @($stagedFiles | ForEach-Object { $_.FullName.Substring(($stageRoot.TrimEnd('\', '/') + $pathSeparator).Length).Replace('\', '/') })
@@ -135,8 +158,7 @@ try {
         throw 'Staging directory contains private runtime state or pulled course data.'
     }
 
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [IO.Compression.ZipFile]::CreateFromDirectory($stageRoot, $zipTempFullPath, [IO.Compression.CompressionLevel]::Optimal, $false)
+    New-PortableZip -SourceDirectory $stageRoot -DestinationPath $zipTempFullPath
 
     $archive = [IO.Compression.ZipFile]::OpenRead($zipTempFullPath)
     try {
@@ -151,6 +173,9 @@ try {
         }
         if ($archiveFiles -notcontains '.claude/settings.json') {
             throw 'Archive is missing the hidden .claude/settings.json privacy rule.'
+        }
+        if ($archiveFiles -notcontains 'cse.cmd') {
+            throw 'Archive is missing the cse.cmd launcher.'
         }
         if ($archiveFiles -notcontains 'settings/courses.md') {
             throw 'Archive is missing settings/courses.md.'
@@ -176,6 +201,34 @@ try {
     $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "Packaged $packagePath"
     Write-Host "SHA256 $hash"
+
+    # Program package: executable, hub launcher and a short README. No private or workspace files.
+    $programStageRoot = [IO.Path]::GetFullPath((Join-Path $tempRoot "$stageName-program"))
+    if (-not $programStageRoot.StartsWith($stagePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Program staging path is outside the system temp directory: $programStageRoot"
+    }
+    New-Item -ItemType Directory -Path $programStageRoot | Out-Null
+    Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $programStageRoot 'cse.exe')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'program-template/webui.cmd') -Destination (Join-Path $programStageRoot 'webui.cmd')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'program-template/README.txt') -Destination (Join-Path $programStageRoot 'README.txt')
+    $programExpected = @('cse.exe', 'webui.cmd', 'README.txt')
+    $programZipTemp = Join-Path $distRoot (".CanvasExpert-SE-program-$([Guid]::NewGuid().ToString('N')).zip")
+    New-PortableZip -SourceDirectory $programStageRoot -DestinationPath $programZipTemp
+    $programArchive = [IO.Compression.ZipFile]::OpenRead($programZipTemp)
+    try {
+        $programFiles = @($programArchive.Entries | ForEach-Object { $_.FullName.TrimEnd('/') } | Where-Object { $_ -ne '' } | Sort-Object)
+        if (($programFiles -join "`n") -cne (($programExpected | Sort-Object) -join "`n")) {
+            throw 'Program archive file list does not match the allowlist.'
+        }
+    }
+    finally {
+        $programArchive.Dispose()
+    }
+    if (Test-Path -LiteralPath $programPackagePath -PathType Leaf) { Remove-Item -LiteralPath $programPackagePath -Force }
+    Move-Item -LiteralPath $programZipTemp -Destination $programPackagePath
+    Remove-Item -LiteralPath $programStageRoot -Recurse -Force
+    Write-Host "Packaged $programPackagePath"
+    Write-Host "SHA256 $((Get-FileHash -LiteralPath $programPackagePath -Algorithm SHA256).Hash.ToLowerInvariant())"
 }
 finally {
     if (Test-Path -LiteralPath $zipTempFullPath -PathType Leaf) {

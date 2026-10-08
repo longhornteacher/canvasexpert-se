@@ -1,6 +1,6 @@
 # CanvasExpert-SE workspace
 
-Use the bundled CLI from this workspace. Start with `.\cse\cse.exe --help` for the commands available in this build. Pass `--workspace .` explicitly, for example `.\cse\cse.exe --workspace . setup`. Load only the task guide you need from `guides/`.
+Run the CLI with `.\cse.cmd` from this workspace folder; it runs this machine's separately installed program against this workspace (it adds `--workspace` for you). Start with `.\cse.cmd --help` for the commands available in this build, for example `.\cse.cmd setup`. If it says the program is not linked, ask the teacher to double-click `webui.cmd` in the program folder once. Load only the task guide you need from `guides/`.
 
 Do not open, list, search, or otherwise read `.cse/`; it contains private student identity mappings. This is an instruction for the agent, not an OS access control boundary. Claude Code also has a project Read deny rule in `.claude/settings.json`.
 

@@ -111,7 +111,7 @@ Do not silently drop required beta behaviors to meet a self-imposed time limit. 
 
 ## 5. Platform decision and known evidence
 
-**Implementation default: Go, one Windows executable, stored under the workspace's `cse/` directory.** Keep the CLI free of required Python, Node, .NET, browser-driver, and C runtime installations. Embed the small local UI assets. Select and pin an appropriate stable Go release at execution time; record the toolchain and dependency versions.
+**Implementation default: Go, one Windows executable, shipped in a separate program folder (not the synced workspace); the workspace's `cse.cmd` finds it through a per-machine link.** Keep the CLI free of required Python, Node, .NET, browser-driver, and C runtime installations. Embed the small local UI assets. Select and pin an appropriate stable Go release at execution time; record the toolchain and dependency versions.
 
 The 2026-10-08 WorkLaptop report has 17 automated passes, two manual passes, 11 informational observations, and one untested distribution step. It demonstrates unsigned .NET probe execution from OneDrive and through `cmd.exe`, Credential Manager API access, loopback serving, browser launch, and unauthenticated Canvas connectivity. Two hundred local file writes took 854 ms and reads took 378 ms.
 

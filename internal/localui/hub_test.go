@@ -109,3 +109,16 @@ func TestHubQuitSignalsShutdown(t *testing.T) {
 		t.Fatal("quit not signalled")
 	}
 }
+
+func TestHubRefusesWorkspaceOverlappingProgram(t *testing.T) {
+	h := newTestHub()
+	root := makeWorkspace(t)
+	h.programDir = filepath.Join(root, "cse")
+	if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {root}}, h.origin); w.Code != 400 || h.root != "" {
+		t.Fatalf("program inside workspace accepted: %d", w.Code)
+	}
+	h.programDir = t.TempDir()
+	if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {root}}, h.origin); w.Code != 200 || h.root == "" {
+		t.Fatalf("separate folders rejected: %d", w.Code)
+	}
+}

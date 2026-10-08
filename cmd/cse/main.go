@@ -28,6 +28,7 @@ const help = `CanvasExpert-SE 0.1b — portable Canvas assignments and scoring
 Usage: cse [--workspace PATH] COMMAND [ARGS]
 
   ui                            Open the local hub: Canvas setup, students, more
+  link                          Record this program's location for workspace cse.cmd
   setup                         Connect Canvas privately on this machine
   students                      Edit student aliases and monitored status
   courses                       Discover authorized teacher courses
@@ -102,6 +103,17 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		fmt.Fprintln(out, "Native dummy credential byte round trip passed; temporary credential removed.")
 		return 0
 	}
+	if cmd == "link" {
+		if len(args) != 0 {
+			return fail(inputError(fmt.Errorf("link takes no arguments")), progress)
+		}
+		exe, e := platform.LinkProgram()
+		if e != nil {
+			return fail(e, progress)
+		}
+		fmt.Fprintf(out, "Linked this machine to %s\n", exe)
+		return 0
+	}
 	if cmd == "ui" {
 		if len(args) != 0 {
 			return fail(inputError(fmt.Errorf("ui takes no arguments")), progress)
@@ -110,7 +122,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		if rootErr != nil && *rootOpt != "" {
 			return fail(inputError(rootErr), progress)
 		}
-		return fail(localui.RunHub(ctx, uiRoot, progress), progress)
+		return fail(localui.RunHub(ctx, uiRoot, version, progress), progress)
 	}
 	if cmd == "setup" {
 		if len(args) != 0 {

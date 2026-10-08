@@ -20,7 +20,7 @@ SE is a standalone project. It shares no code, layout, credentials, tool names o
 | D4 | Everything pulled from Canvas can be pulled again. | Pulled data is a disposable cache. No backup system, ledger or snapshots. |
 | D5 | One teacher, **one machine at a time**, across several machines: HomePC, PersonalLaptop (main), WorkLaptop. | No locks or sync merging. The workspace syncs; credentials are set up once per machine. |
 | D6 | The agent drives a **command-line tool** and reads and writes **plain files**. | No tool schemas in the agent's context. A capability is a command plus a short guide. |
-| D7 | Primary hosts: **Claude Code and Codex.** Cowork and ChatGPT Work are later and optional (§4.3). | `AGENTS.md` holds the instructions. `CLAUDE.md` is a one-line pointer to it. |
+| D7 | Primary hosts: **Claude Code and Codex.** Cowork and ChatGPT Work are later and optional (§4.4). | `AGENTS.md` holds the instructions. `CLAUDE.md` is a one-line pointer to it. |
 | D8 | When unsure whether a write happened, **SE checks Canvas itself** and asks only if it is still truly unsure. | No send journal. |
 | D9 | **Grade retention:** the feedback always contains SE's honest assessment. Raise the entered score only when it is empty or SE's assessment is higher; preserve a higher or equal entered score before late penalty. | Rubric assessment is independent and still updates accurately (§6.4). Canvas does penalty math. The rule prevents intentional lowering; a read/write race is a documented practical limit. |
 | D10 | The teacher's instruction is the authorization. "Score and post" means do it; "draft" means don't post; "show me first" means stop for review. | No mandatory preview/apply pairs and no confirmation tokens. |
@@ -71,12 +71,28 @@ Teacher ──talks to──> Agent (Claude Code / Codex)
                          │
                 PAT from Windows Credential Manager (per machine)
                          ▲
-        `cse setup` / `cse students` → loopback WebUI (PAT, student table)
+        `cse ui` (webui.cmd) → loopback hub: Canvas setup, student table, more
 ```
 
-No resident server, database or background worker. Each `cse` call ends when its operation finishes; the setup/student WebUI has a temporary command-owned listener. A call may perform bounded parallel Canvas requests. Internal operations return structured results, with compact text at the CLI boundary, so an adapter can be added later (§4.3). The executable has no LLM API: the host agent supplies interpretation and educational judgment.
+No resident server, database or background worker. Each `cse` call ends when its operation finishes; the hub (`cse ui`, plus one-shot `cse setup` / `cse students`) has a temporary command-owned listener that lasts until the teacher quits it. A call may perform bounded parallel Canvas requests. Internal operations return structured results, with compact text at the CLI boundary, so an adapter can be added later (§4.4). The executable has no LLM API: the host agent supplies interpretation and educational judgment.
 
-### 4.1 Workspace folder
+### 4.1 Program folder and workspace folder
+
+The **program** and the **workspace** are two separate folders. The program holds code only and is not synced. The workspace holds everything private and is the synced folder.
+
+```text
+<Program>/                       ← unzipped per machine, NOT synced
+  cse.exe                        ← portable Go executable (no end-user runtime install)
+  webui.cmd                      ← double-click: links this machine, opens the hub
+  README.txt
+%LOCALAPPDATA%\CanvasExpert-SE\  ← per machine, never synced
+  program.txt                    ← path of this machine's cse.exe (written by `cse link` / `cse ui`)
+  hub-workspace.txt              ← the hub's last workspace (a path, not a secret)
+```
+
+`<Workspace>/cse.cmd` reads `program.txt`, then runs `cse.exe --workspace <Workspace> ...`, so agents call `.\cse.cmd COMMAND` and the program never lives in the synced folder. The hub refuses a workspace that contains or sits inside the program folder. Two ZIPs are built: `CanvasExpert-SE-Program-<ver>-windows-amd64.zip` and `CanvasExpert-SE-Workspace-<ver>.zip`.
+
+### 4.2 Workspace folder
 
 ```text
 <Workspace>/                     ← synced cloud folder; the agent is pointed here
@@ -85,7 +101,7 @@ No resident server, database or background worker. Each `cse` call ends when its
   .claude/settings.json          ← deny rule: the agent never reads .cse/
   .cse/                          ← SE's private state (synced across machines)
     students.csv                 ← stable local reference, alias, instance/Canvas/SIS IDs, name, monitored
-  cse/                           ← portable Go executable (no end-user runtime install)
+  cse.cmd                        ← launcher: runs this machine's linked program on this workspace
   guides/                        ← loaded only when the task needs it
   settings/                      ← teacher-editable text
     courses.md                   ← nickname → course (CS8, ELA7PAP, ELA7), module naming hint, alias on/off
@@ -102,12 +118,12 @@ No resident server, database or background worker. Each `cse` call ends when its
 - Formats: Markdown with a YAML header for anything the agent writes; Canvas HTML with a YAML header for live items pulled for editing; original bytes for attachments.
 - File contracts are versioned. Assignment folders include stable assignment identity. Scoring files use a stable local student reference independent of the editable alias. Ordinary returned IDs/outcomes in draft and scoring files support resumption; they are not a runtime journal or second gradebook. A fresh pull must not erase unsent scoring work.
 
-### 4.2 Credentials
+### 4.3 Credentials
 
 - The PAT and Canvas URL live in the Windows Credential Manager of **each machine**. Run `cse setup` once per machine.
 - The PAT never appears in files, stdout, logs or the agent's context. An expired token produces "run `cse setup`".
 
-### 4.3 Cowork and ChatGPT Work
+### 4.4 Cowork and ChatGPT Work
 
 Cowork runs commands in an isolated VM. From there it can't run Windows programs, read Credential Manager, or (probably) reach Canvas. **[verify]** ChatGPT Work. If wanted later, a `cse mcp` mode would expose the same functions as a few MCP tools on the Windows side. It is not in the first build.
 

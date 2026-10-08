@@ -2,22 +2,25 @@
 
 Use this guide once for each workspace and on each computer that will use CanvasExpert-SE. The files sync with the workspace; the Canvas credential is per machine.
 
+## 0. Link the program (once per computer)
+
+The program lives in its own folder, separate from this synced workspace. On each computer, the teacher double-clicks `webui.cmd` in the program folder once. That records where the program is. If `.\cse.cmd` reports that the program is not linked, ask the teacher to do this.
+
 ## 1. Check the CLI
 
 Open a terminal in the workspace folder and inspect the available commands:
 
 ```powershell
-.\cse\cse.exe --help
-.\cse\cse.exe --workspace . --help
+.\cse.cmd --help
 ```
 
-The beta command contract uses an explicit workspace path. For example:
+`cse.cmd` supplies this workspace automatically. For example:
 
 ```powershell
-.\cse\cse.exe --workspace . setup
+.\cse.cmd setup
 ```
 
-Run `version` to see the bundled program's version and build information.
+Run `version` to see the program's version and build information.
 
 ## 2. Connect this computer
 
@@ -33,4 +36,4 @@ Use `students` for alias and monitored-status changes. Put teacher-authored acco
 
 ## When setup is done
 
-Confirm the workspace is open in the agent and that the CLI can report its version/help. Then read `authoring.md`, `edit.md`, or `score.md` for the task. The bundled 0.1b CLI provides the local setup form and stores the credential in Windows Credential Manager; Canvas write capabilities remain subject to the limits documented by this build.
+Confirm the workspace is open in the agent and that the CLI can report its version/help. Then read `authoring.md`, `edit.md`, or `score.md` for the task. The 0.1b CLI provides the local setup form and stores the credential in Windows Credential Manager; Canvas write capabilities remain subject to the limits documented by this build.

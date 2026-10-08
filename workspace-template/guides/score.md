@@ -9,10 +9,10 @@ For a “scoring session” with no further instruction, discover and pull eligi
 For a named assignment, the beta command contract is:
 
 ```powershell
-.\cse\cse.exe --workspace . pull-work [course] [assignment]
+.\cse.cmd pull-work [course] [assignment]
 ```
 
-Use `.\cse\cse.exe --workspace . --help` to confirm the syntax available in this build. Inspect the generated packet and files; do not overwrite unsent scoring work with a fresh pull.
+Use `.\cse.cmd --help` to confirm the syntax available in this build. Inspect the generated packet and files; do not overwrite unsent scoring work with a fresh pull.
 
 ## Interpret the work and rubric
 
@@ -35,7 +35,7 @@ Canvas comment feedback is sent as plain text. The renderer adds the assessed sc
 Prepare the scoring result in the assignment's scoring area using the current versioned format. Validate all scores, component mapping, feedback, and arithmetic before posting. The beta command contract is:
 
 ```powershell
-.\cse\cse.exe --workspace . post <results-file>
+.\cse.cmd post <results-file>
 ```
 
 “Draft” means save the result and do not post. “Show me first” means stop with the result for review. “Score and post” authorizes direct posting. There is no general approval or preview step. A request described as “pending my finalization” means post directly so the teacher can review afterward.

@@ -7,7 +7,7 @@ Canvas Live is authoritative. Pull the current assignment before proposing or ap
 Use the configured course nickname and a unique title or Canvas link:
 
 ```powershell
-.\cse\cse.exe --workspace . pull-item <course> <title-or-link>
+.\cse.cmd pull-item <course> <title-or-link>
 ```
 
 If more than one assignment matches, choose using the returned candidates with the teacher. Do not guess. Edit the pulled document while preserving its version, assignment identity, observed revision details, and fields the teacher did not ask to change. Preserve Canvas HTML carefully.
@@ -17,7 +17,7 @@ If more than one assignment matches, choose using the returned candidates with t
 After making the requested changes, use the current build's help to confirm syntax, then run:
 
 ```powershell
-.\cse\cse.exe --workspace . push <pulled-file>
+.\cse.cmd push <pulled-file>
 ```
 
 The intended contract rechecks the live item before writing and protects post-pull teacher edits. If it reports that the assignment changed, pull again and reconcile the requested change against the new live version. Do not overwrite the newer version using stale content.

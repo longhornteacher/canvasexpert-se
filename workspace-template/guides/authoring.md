@@ -10,10 +10,10 @@ Write a versioned Markdown assignment draft in the workspace's course `drafts/` 
 
 ## Create or resume
 
-Inspect the available command form with `.\cse\cse.exe --workspace . --help`. The beta command contract is:
+Inspect the available command form with `.\cse.cmd --help`. The beta command contract is:
 
 ```powershell
-.\cse\cse.exe --workspace . push <draft-file>
+.\cse.cmd push <draft-file>
 ```
 
 The intended `push` behavior creates from a new draft or resumes an incomplete creation using saved IDs. Confirm the output and saved paths. If the CLI reports ambiguous candidates or a partial result, use those details to resolve the specific issue; never select a same-title Canvas assignment arbitrarily or start another create when the first may have succeeded.
