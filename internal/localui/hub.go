@@ -20,6 +20,7 @@ import (
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/platform"
+	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 )
 
@@ -34,6 +35,8 @@ var homeTemplate = template.Must(template.New("home").Funcs(pageFuncs).Parse(`<!
 <div class="card"><h2>Canvas</h2>{{if .Connected}}<span class="pill on">connected</span><p><code>{{.CanvasOrigin}}</code></p>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a></div>
 <div class="card"><h2>Program</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>Code only. Nothing private is stored here.</p></div>
 <div class="card"><h2>Workspace</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Private data: students, settings, courses.</p>{{else}}<span class="pill off">none</span><p>Point the hub at your synced workspace folder below.</p>{{end}}</div>
+<div class="card"><h2>Courses</h2>{{if .Root}}<p><b>{{.ActiveCourses}}</b> active</p><a class="go" href="/courses">Pick active courses &rarr;</a>{{else}}<p>Needs a workspace.</p>{{end}}</div>
+<div class="card"><h2>Pok&eacute;mon-ify</h2>{{if .Root}}<p>Give every student a Pok&eacute;mon.</p><a class="go" href="/pokemonify">Open the party &rarr;</a>{{else}}<p>Needs a workspace.</p>{{end}}</div>
 <div class="card"><h2>Students</h2>{{if .Root}}<p><b>{{.Students}}</b> known, <b>{{.Monitored}}</b> monitored</p><a class="go" href="/students">Edit aliases &rarr;</a>{{else}}<p>Needs a workspace.</p>{{end}}</div>
 </div>
 <label for="path">Workspace folder (your synced, private one)</label>
@@ -47,6 +50,7 @@ type homeData struct {
 	Program, Version                            string
 	ConfirmPath                                 string
 	ConfirmCount                                int
+	ActiveCourses                               int
 	Picking, Connected                          bool
 	Students, Monitored                         int
 }
@@ -69,6 +73,15 @@ type Hub struct {
 	picking        bool
 	cancelPick     context.CancelFunc
 	picked         *pickResult
+	// flash carries one notice or problem across a post-redirect-get.
+	flash, flashErr string
+	// rosters (course nickname -> student refs) and fresh (newly summoned refs)
+	// live only for this hub session.
+	rosters map[string]map[string]bool
+	fresh   map[string]bool
+	// Test seams; nil means use the saved Canvas credential.
+	listCoursesFn func(context.Context) ([]workflow.Course, string, error)
+	rosterFn      func(context.Context, int64) ([]workflow.Enrollment, string, error)
 	mu             sync.Mutex
 	root           string
 	setup          *setupHandler
@@ -95,6 +108,7 @@ func (h *Hub) rememberRoot() {
 
 func (h *Hub) setRoot(root string) {
 	h.root = root
+	h.rosters, h.fresh = nil, nil
 	h.rememberRoot()
 }
 
@@ -138,6 +152,13 @@ func (h *Hub) homeWith(w http.ResponseWriter, status int, message, notice, confi
 		data.Connected, data.CanvasOrigin = true, c.Origin
 	}
 	if h.root != "" {
+		if config, _, err := h.readConfig(); err == nil {
+			for _, c := range config.Courses {
+				if c.Current {
+					data.ActiveCourses++
+				}
+			}
+		}
 		if s, err := workspace.OpenStudents(h.root); err == nil {
 			data.Students = len(s.Rows)
 			for _, row := range s.Rows {
@@ -227,6 +248,21 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.chooseWorkspace(w, r.PostForm.Get("path"), r.PostForm.Get("confirm") == "1")
+	case "/courses":
+		h.coursesPage(w, r)
+	case "/pokemonify":
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+		h.pokemonPage(w, r)
+	case "/pokemonify/summon":
+		h.pokemonAction(w, r, "summon")
+	case "/pokemonify/reroll":
+		h.pokemonAction(w, r, "reroll")
+	case "/pokemonify/monitor":
+		h.pokemonAction(w, r, "monitor")
 	case "/quit":
 		if !h.checkPost(w, r) {
 			return

@@ -24,6 +24,9 @@ type Student struct {
 type StudentStore struct {
 	Rows []Student
 	path string
+	// Choose picks one alias from the unused ones; nil takes the first. The hub
+	// sets a random chooser so new students get a surprise.
+	Choose func(available []string) string
 }
 
 var studentHeader = []string{"student_ref", "instance", "canvas_user_id", "name", "first_name", "alias", "sis_id", "login", "monitored"}
@@ -123,13 +126,7 @@ func (s *StudentStore) Upsert(instance string, userID int64, name, shortName, si
 			used[strings.ToLower(v.Alias)] = true
 		}
 	}
-	alias := ""
-	for _, a := range aliasPool {
-		if !used[strings.ToLower(a)] {
-			alias = a
-			break
-		}
-	}
+	alias := s.pickAlias(used, "")
 	if alias == "" {
 		return Student{}, fmt.Errorf("student alias pool exhausted; existing aliases are preserved")
 	}
@@ -141,6 +138,46 @@ func (s *StudentStore) Upsert(instance string, userID int64, name, shortName, si
 	s.Rows = append(s.Rows, v)
 	return v, nil
 }
+// pickAlias returns an unused alias from the pool, never skip or the current one.
+func (s *StudentStore) pickAlias(used map[string]bool, skip string) string {
+	var available []string
+	for _, a := range aliasPool {
+		if !used[strings.ToLower(a)] && !strings.EqualFold(a, skip) {
+			available = append(available, a)
+		}
+	}
+	switch {
+	case len(available) == 0:
+		return ""
+	case s.Choose != nil:
+		return s.Choose(available)
+	}
+	return available[0]
+}
+
+// Reroll gives the student a different unused alias. The stable reference does
+// not change, so scoring files stay attached.
+func (s *StudentStore) Reroll(ref string) (Student, error) {
+	for i := range s.Rows {
+		if s.Rows[i].Ref != ref {
+			continue
+		}
+		used := map[string]bool{}
+		for _, v := range s.Rows {
+			if v.Instance == s.Rows[i].Instance {
+				used[strings.ToLower(v.Alias)] = true
+			}
+		}
+		alias := s.pickAlias(used, s.Rows[i].Alias)
+		if alias == "" {
+			return Student{}, fmt.Errorf("no unused Pokémon left to assign")
+		}
+		s.Rows[i].Alias = alias
+		return s.Rows[i], nil
+	}
+	return Student{}, fmt.Errorf("student_ref %q was not found", ref)
+}
+
 func firstName(name, shortName string) string {
 	if strings.TrimSpace(shortName) != "" {
 		name = shortName
