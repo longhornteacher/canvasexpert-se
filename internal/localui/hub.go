@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workspace"
@@ -26,22 +27,33 @@ import (
 // back to any free loopback port when it is taken.
 const preferredHubAddr = "127.0.0.1:47831"
 
-var homeTemplate = template.Must(template.New("home").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE hub</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div>` + hubNav + `<h1>Command central</h1><p>Everything local lives here. This page stays open until you quit it.</p>
-{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
+var homeTemplate = template.Must(template.New("home").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{{if .Picking}}<meta http-equiv="refresh" content="2">{{end}}<title>CanvasExpert-SE hub</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div>` + hubNav + `<h1>Command central</h1><p>Everything local lives here. This page stays open until you quit it.</p>
+{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}{{if .Picking}}<p class="ok">A folder window just opened. Choose your workspace folder there (it may be behind this window). This page updates by itself.</p>{{end}}
+{{if .ConfirmPath}}<div class="card"><h2>Set up a workspace here?</h2><p><code>{{.ConfirmPath}}</code></p><p>This folder has {{.ConfirmCount}} items and is not a workspace yet. I will add the starter files only; nothing existing is changed or overwritten.</p><form method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="path" value="{{.ConfirmPath}}"><input type="hidden" name="confirm" value="1"><button type="submit">Yes, set it up</button></form></div>{{end}}
 <div class="cards">
 <div class="card"><h2>Canvas</h2>{{if .Connected}}<span class="pill on">connected</span><p><code>{{.CanvasOrigin}}</code></p>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a></div>
 <div class="card"><h2>Program</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>Code only. Nothing private is stored here.</p></div>
 <div class="card"><h2>Workspace</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Private data: students, settings, courses.</p>{{else}}<span class="pill off">none</span><p>Point the hub at your synced workspace folder below.</p>{{end}}</div>
 <div class="card"><h2>Students</h2>{{if .Root}}<p><b>{{.Students}}</b> known, <b>{{.Monitored}}</b> monitored</p><a class="go" href="/students">Edit aliases &rarr;</a>{{else}}<p>Needs a workspace.</p>{{end}}</div>
 </div>
-<form method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><label for="path">Workspace folder (your synced, private one)</label><div class="inline"><input id="path" name="path" type="text" value="{{.Root}}" placeholder="C:\path\to\workspace" autocomplete="off" required><button type="submit">Use it</button></div></form>
+<label for="path">Workspace folder (your synced, private one)</label>
+<div class="inline"><form method="post" action="/browse"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Browse&hellip;</button></form>
+<form class="inline" method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><input id="path" name="path" type="text" placeholder="or paste a full folder path" autocomplete="off" required><button type="submit">Use it</button></form></div>
+<p>Pick any folder, even a new empty one. If it isn't a workspace yet, the starter files are created for you.</p>
 <form method="post" action="/quit"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Quit the hub</button></form></main></html>`))
 
 type homeData struct {
 	Secret, Message, Notice, CanvasOrigin, Root string
 	Program, Version                            string
-	Connected                                   bool
+	ConfirmPath                                 string
+	ConfirmCount                                int
+	Picking, Connected                          bool
 	Students, Monitored                         int
+}
+
+type pickResult struct {
+	path string
+	err  error
 }
 
 // Hub is one long-lived loopback server holding every local page. Pages share
@@ -52,6 +64,10 @@ type Hub struct {
 	stateFile      string
 	programDir     string
 	version        string
+	ctx            context.Context
+	chooser        func(context.Context) (string, error)
+	picking        bool
+	picked         *pickResult
 	mu             sync.Mutex
 	root           string
 	setup          *setupHandler
@@ -112,7 +128,11 @@ func (h *Hub) checkPost(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (h *Hub) home(w http.ResponseWriter, status int, message, notice string) {
-	data := homeData{Secret: h.secret, Message: message, Notice: notice, Root: h.root, Program: h.programDir, Version: h.version}
+	h.homeWith(w, status, message, notice, "", 0)
+}
+
+func (h *Hub) homeWith(w http.ResponseWriter, status int, message, notice, confirmPath string, confirmCount int) {
+	data := homeData{Picking: h.picking, Secret: h.secret, Message: message, Notice: notice, Root: h.root, Program: h.programDir, Version: h.version, ConfirmPath: confirmPath, ConfirmCount: confirmCount}
 	if c, err := platform.LoadCredential(); err == nil {
 		data.Connected, data.CanvasOrigin = true, c.Origin
 	}
@@ -146,6 +166,27 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Method not allowed", 405)
 			return
 		}
+		if result := h.picked; result != nil {
+			h.picked = nil
+			switch {
+			case result.err != nil:
+				h.home(w, 400, result.err.Error(), "")
+			case result.path == "":
+				h.home(w, 200, "", "No folder chosen.")
+			default:
+				h.chooseWorkspace(w, result.path, false)
+			}
+			return
+		}
+		h.home(w, 200, "", "")
+	case "/browse":
+		if !h.checkPost(w, r) {
+			return
+		}
+		if !h.picking {
+			h.picking = true
+			go h.runChooser()
+		}
 		h.home(w, 200, "", "")
 	case "/setup":
 		h.setup.initialOrigin = h.knownOrigin()
@@ -165,16 +206,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !h.checkPost(w, r) {
 			return
 		}
-		root, err := workspace.ResolveRoot(strings.TrimSpace(r.PostForm.Get("path")), "")
-		if err == nil && h.programDir != "" && platform.Overlaps(root, h.programDir) {
-			err = errors.New("The workspace and the program must be separate folders. Pick your synced workspace, not the program folder or one containing it.")
-		}
-		if err != nil {
-			h.home(w, 400, err.Error(), "")
-			return
-		}
-		h.setRoot(root)
-		h.home(w, 200, "", "Workspace set.")
+		h.chooseWorkspace(w, r.PostForm.Get("path"), r.PostForm.Get("confirm") == "1")
 	case "/quit":
 		if !h.checkPost(w, r) {
 			return
@@ -187,11 +219,86 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Hub) runChooser() {
+	ctx := h.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	choose := h.chooser
+	if choose == nil {
+		choose = platform.PickFolder
+	}
+	path, err := choose(ctx)
+	h.mu.Lock()
+	h.picking = false
+	h.picked = &pickResult{path: path, err: err}
+	h.mu.Unlock()
+}
+
+// cleanPath tolerates quotes and spaces from a pasted path.
+func cleanPath(raw string) string {
+	return strings.Trim(strings.TrimSpace(raw), "\"'")
+}
+
+// chooseWorkspace adopts an existing workspace, or creates the starter files in
+// an empty or new folder, or asks before adding them to a non-empty one.
+func (h *Hub) chooseWorkspace(w http.ResponseWriter, raw string, confirmed bool) {
+	path := cleanPath(raw)
+	switch {
+	case path == "":
+		h.home(w, 400, "Browse to a folder or paste its full path.", "")
+		return
+	case !filepath.IsAbs(path):
+		h.home(w, 400, "Use a full folder path such as C:\\Users\\you\\OneDrive\\Workspace.", "")
+		return
+	case h.programDir != "" && platform.Overlaps(path, h.programDir):
+		h.home(w, 400, "The workspace and the program must be separate folders. Pick your synced workspace, not the program folder or one containing it.", "")
+		return
+	}
+	if root, err := workspace.ResolveRoot(path, ""); err == nil {
+		h.setRoot(root)
+		h.home(w, 200, "", "Workspace set.")
+		return
+	}
+	info, err := os.Stat(path)
+	switch {
+	case err == nil && !info.IsDir():
+		h.home(w, 400, "That is a file, not a folder.", "")
+		return
+	case err != nil && !os.IsNotExist(err):
+		h.home(w, 400, "Could not open that folder: "+err.Error(), "")
+		return
+	case err == nil && !confirmed:
+		if entries, readErr := os.ReadDir(path); readErr == nil && len(entries) > 0 {
+			h.homeWith(w, 200, "", "", path, len(entries))
+			return
+		}
+	}
+	created, err := workspace.Scaffold(path, embedded.WorkspaceTemplate, "workspace-template")
+	if err != nil {
+		h.home(w, 400, "Could not set up the workspace: "+err.Error(), "")
+		return
+	}
+	root, err := workspace.ResolveRoot(path, "")
+	if err != nil {
+		h.home(w, 400, err.Error(), "")
+		return
+	}
+	h.setRoot(root)
+	notice := fmt.Sprintf("Workspace created: %d starter files added; nothing was overwritten.", len(created))
+	if c, credErr := platform.LoadCredential(); credErr == nil {
+		if changed, syncErr := workspace.SyncInstance(root, c.Origin); syncErr == nil && changed {
+			notice += " It already uses your connected Canvas address."
+		}
+	}
+	h.home(w, 200, "", notice)
+}
+
 // knownOrigin prefers the workspace's configured instance, then a saved credential's.
 func (h *Hub) knownOrigin() string {
 	if h.root != "" {
 		var config domain.CourseConfig
-		if _, err := workspace.ReadDocument(filepath.Join(h.root, "settings", "courses.md"), &config); err == nil && config.Instance != "" {
+		if _, err := workspace.ReadDocument(filepath.Join(h.root, "settings", "courses.md"), &config); err == nil && config.Instance != "" && !strings.Contains(config.Instance, "canvas.example.edu") {
 			return config.Instance
 		}
 	}
@@ -224,7 +331,7 @@ func RunHub(ctx context.Context, root, version string, output io.Writer) error {
 	}
 	origin := "http://" + listener.Addr().String()
 	secret := hex.EncodeToString(nonce[:])
-	hub := &Hub{origin: origin, secret: secret, stateFile: hubStateFile(), version: version, quit: make(chan struct{})}
+	hub := &Hub{origin: origin, secret: secret, stateFile: hubStateFile(), version: version, ctx: ctx, quit: make(chan struct{})}
 	if exe, linkErr := platform.LinkProgram(); linkErr == nil {
 		hub.programDir = filepath.Dir(exe)
 	} else if exe, exeErr := os.Executable(); exeErr == nil {

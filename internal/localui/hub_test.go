@@ -1,6 +1,8 @@
 package localui
 
 import (
+	"context"
+	"time"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -120,5 +122,82 @@ func TestHubRefusesWorkspaceOverlappingProgram(t *testing.T) {
 	h.programDir = t.TempDir()
 	if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {root}}, h.origin); w.Code != 200 || h.root == "" {
 		t.Fatalf("separate folders rejected: %d", w.Code)
+	}
+}
+
+func TestHubCreatesWorkspaceInEmptyOrNewFolder(t *testing.T) {
+	for _, name := range []string{"", "new-child"} {
+		h := newTestHub()
+		h.programDir = t.TempDir()
+		folder := filepath.Join(t.TempDir(), name)
+		quoted := `"` + folder + `"` // pasted paths often carry quotes
+		w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {quoted}}, h.origin)
+		if w.Code != 200 || h.root == "" || !strings.Contains(w.Body.String(), "Workspace created") {
+			t.Fatalf("%q: not created: %d %s", name, w.Code, w.Body.String())
+		}
+		for _, want := range []string{"settings/courses.md", ".claude/settings.json", "cse.cmd", "AGENTS.md"} {
+			if _, err := os.Stat(filepath.Join(folder, filepath.FromSlash(want))); err != nil {
+				t.Fatalf("starter file missing: %s", want)
+			}
+		}
+		if _, err := os.Stat(filepath.Join(folder, "cse.exe")); err == nil {
+			t.Fatal("program copied into workspace")
+		}
+	}
+}
+
+func TestHubAsksBeforeUsingNonEmptyFolder(t *testing.T) {
+	h := newTestHub()
+	h.programDir = t.TempDir()
+	folder := t.TempDir()
+	keep := filepath.Join(folder, "mine.txt")
+	if err := os.WriteFile(keep, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"request_secret": {"nonce"}, "path": {folder}}
+	if w := hubPost(h, "/workspace", form, h.origin); w.Code != 200 || h.root != "" || !strings.Contains(w.Body.String(), "Set up a workspace here?") {
+		t.Fatal("non-empty folder was not confirmed first")
+	}
+	if _, err := os.Stat(filepath.Join(folder, "settings")); err == nil {
+		t.Fatal("scaffolded before confirmation")
+	}
+	form.Set("confirm", "1")
+	if w := hubPost(h, "/workspace", form, h.origin); w.Code != 200 || h.root == "" {
+		t.Fatal("confirmed setup failed")
+	}
+	if b, _ := os.ReadFile(keep); string(b) != "keep" {
+		t.Fatal("existing file changed")
+	}
+}
+
+func TestHubRejectsRelativeAndFilePaths(t *testing.T) {
+	h := newTestHub()
+	file := filepath.Join(t.TempDir(), "f.txt")
+	_ = os.WriteFile(file, []byte("x"), 0o644)
+	for _, p := range []string{"relative/dir", file, "  "} {
+		if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {p}}, h.origin); w.Code != 400 {
+			t.Fatalf("%q accepted: %d", p, w.Code)
+		}
+	}
+}
+
+func TestHubBrowseUsesChosenFolder(t *testing.T) {
+	h := newTestHub()
+	h.programDir = t.TempDir()
+	folder := t.TempDir()
+	done := make(chan struct{})
+	h.chooser = func(context.Context) (string, error) { defer close(done); return folder, nil }
+	w := hubPost(h, "/browse", url.Values{"request_secret": {"nonce"}}, h.origin)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `http-equiv="refresh"`) {
+		t.Fatal("browse did not show the waiting page")
+	}
+	<-done
+	for i := 0; i < 50 && func() bool { h.mu.Lock(); defer h.mu.Unlock(); return h.picked == nil }(); i++ {
+		time.Sleep(20 * time.Millisecond)
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/", nil))
+	if h.root == "" || !strings.Contains(w.Body.String(), "Workspace created") {
+		t.Fatalf("chosen folder not adopted: %s", w.Body.String())
 	}
 }

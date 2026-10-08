@@ -16,8 +16,9 @@ if ($Page -eq 'students' -and -not $Workspace) {
     throw 'The students page needs a workspace: pass -Workspace PATH or set CSE_WORKSPACE.'
 }
 
-$newestSource = Get-ChildItem -LiteralPath $repoRoot -Recurse -File -Include '*.go', 'go.mod' |
-    Where-Object { $_.FullName -notmatch '[\/](\.tools|\.cache|dist)[\/]' } |
+# Go sources, go.mod, and the workspace template (it is embedded into cse.exe).
+$newestSource = Get-ChildItem -LiteralPath $repoRoot -Recurse -File -Force |
+    Where-Object { $_.FullName -notmatch '[\\/](\.tools|\.cache|dist|\.git)[\\/]' -and ($_.Extension -eq '.go' -or $_.Name -eq 'go.mod' -or $_.FullName -match '[\\/]workspace-template[\\/]') } |
     Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 $stale = -not (Test-Path -LiteralPath $exe) -or ($newestSource -and $newestSource.LastWriteTimeUtc -gt (Get-Item -LiteralPath $exe).LastWriteTimeUtc)
 if ($stale) {

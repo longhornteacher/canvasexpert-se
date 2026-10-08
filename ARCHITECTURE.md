@@ -90,7 +90,7 @@ The **program** and the **workspace** are two separate folders. The program hold
   hub-workspace.txt              ← the hub's last workspace (a path, not a secret)
 ```
 
-`<Workspace>/cse.cmd` reads `program.txt`, then runs `cse.exe --workspace <Workspace> ...`, so agents call `.\cse.cmd COMMAND` and the program never lives in the synced folder. The hub refuses a workspace that contains or sits inside the program folder. Two ZIPs are built: `CanvasExpert-SE-Program-<ver>-windows-amd64.zip` and `CanvasExpert-SE-Workspace-<ver>.zip`.
+`<Workspace>/cse.cmd` reads `program.txt`, then runs `cse.exe --workspace <Workspace> ...`, so agents call `.\cse.cmd COMMAND` and the program never lives in the synced folder. The hub refuses a workspace that contains or sits inside the program folder, and creates a missing or empty workspace from the starter template embedded in `cse.exe` (it only adds files, never overwrites). Two ZIPs are built: `CanvasExpert-SE-Program-<ver>-windows-amd64.zip` and `CanvasExpert-SE-Workspace-<ver>.zip`.
 
 ### 4.2 Workspace folder
 
