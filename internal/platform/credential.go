@@ -9,7 +9,7 @@ import (
 	"net/url"
 )
 
-const credentialTarget = "CanvasExpert-SE/Canvas/v1"
+const credentialTarget = "CanvasSidekick/Canvas/v1"
 
 type Credential struct{ Origin, Token string }
 

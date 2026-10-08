@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"time"
 
-	"canvasexpertse/internal/domain"
+	"canvassidekick/internal/domain"
 )
 
 // PlanEdit produces the smallest explicit patch against a pulled baseline.

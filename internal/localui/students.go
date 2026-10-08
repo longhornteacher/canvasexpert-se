@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"canvasexpertse/internal/platform"
-	"canvasexpertse/internal/workspace"
+	"canvassidekick/internal/platform"
+	"canvassidekick/internal/workspace"
 )
 
-var studentsTemplate = template.Must(template.New("students").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE students</title><style>body{font:16px system-ui;color:#16304b;margin:2rem auto;max-width:75rem;padding:0 1rem}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.7rem;border-bottom:1px solid #ddd}input,button{font:inherit;padding:.5rem}button{margin-top:1rem}.error{color:#a32323}</style><h1>Student aliases and monitoring</h1><p>Stable references keep existing scoring files attached to the same student when an alias changes.</p>{{if .Message}}<p class="error">{{.Message}}</p>{{end}}<form action="/students" method="post"><input type="hidden" name="request_secret" value="{{.Secret}}"><table><tr><th>Name</th><th>Canvas instance</th><th>Stable reference</th><th>Alias</th><th>Monitored</th></tr>{{range .Rows}}<tr><td>{{.Name}}</td><td>{{.Instance}}</td><td>{{.Ref}}</td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required></td><td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}}></td></tr>{{else}}<tr><td colspan="5">Pull student work first to populate this table.</td></tr>{{end}}</table><button type="submit">Save and close</button></form></html>`))
+var studentsTemplate = template.Must(template.New("students").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasSidekick students</title><style>` + funkyCSS + `</style><main class="wide"><h1>Alias the humans</h1><p>Stable references keep scoring files glued to the same student when an alias changes.</p>{{if .Message}}<p class="error">{{.Message}}</p>{{end}}<form action="/students" method="post"><input type="hidden" name="request_secret" value="{{.Secret}}"><table><thead><tr><th>Name</th><th>Canvas instance</th><th>Stable reference</th><th>Alias</th><th>Monitored</th></tr></thead><tbody>{{range .Rows}}<tr><td>{{.Name}}</td><td>{{.Instance}}</td><td><span class="ref">{{.Ref}}</span></td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required></td><td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}}></td></tr>{{else}}<tr><td colspan="5">Nobody here yet. Pull student work first to populate this table.</td></tr>{{end}}</tbody></table><button type="submit">Save &amp; close</button></form></main></html>`))
 
 type studentHandler struct {
 	origin, secret string
@@ -92,7 +92,7 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	h.complete = true
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Students saved</title><p>Student settings saved. You can close this page.</p></html>")
+	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Students saved</title><style>"+funkyCSS+"</style><main class=\"done\"><h1>Saved!</h1><p>Student settings locked in. You can close this page.</p></main></html>")
 	close(h.done)
 }
 func Students(ctx context.Context, root string, output io.Writer) error {

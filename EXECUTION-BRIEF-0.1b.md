@@ -1,14 +1,14 @@
-# CanvasExpert-SE 0.1b: execution brief
+# CanvasSidekick 0.1b: execution brief
 
 Prepared 2026-10-08 for a new implementation session led by **GPT-6.1 Sol**, using **GPT-6.1 Sol and GPT-6 Luna subagents**. This is a build specification and handoff, not a record of implemented functionality.
 
-Read this entire brief before delegating. Then read [ARCHITECTURE.md](ARCHITECTURE.md), [CE-LESSONS.md](CE-LESSONS.md), and [current implementation evidence](docs/0.1b-evidence.md). The original [WorkLaptop report](https://github.com/longhornteacher/canvasexpert-se/blob/e49ffd9/WorkLaptopTestSuite/results/STAGCFKQ74-20261008-0640.md) remains in Git history after removal of the test suite. Do not load this long brief into ordinary teacher grading sessions; the shipped workspace needs short, task-specific guides.
+Read this entire brief before delegating. Then read [ARCHITECTURE.md](ARCHITECTURE.md), [SCORING-RULES.md](SCORING-RULES.md), and [current implementation evidence](docs/0.1b-evidence.md). The original [WorkLaptop report](https://github.com/longhornteacher/canvasexpert-se/blob/e49ffd9/WorkLaptopTestSuite/results/STAGCFKQ74-20261008-0640.md) remains in Git history after removal of the test suite. Do not load this long brief into ordinary teacher grading sessions; the shipped workspace needs short, task-specific guides.
 
 Navigation: teacher requirements are in section 3; scope and platform in 4–5; file/scoring/write decisions in 7–12; required live evidence in 13; delegation in 14; build order and acceptance in 15–18. Section 20 is a ready-to-paste opening message for the next session.
 
 ## 1. Mission and completion boundary
 
-Make a **functional Windows 11 portable beta** of CanvasExpert-SE: a teacher talks to an existing coding agent, which uses a small `cse.exe` and plain workspace files to create/edit Canvas assignments, retrieve student work, assess it with the live rubric, and post accurate results to Canvas Live.
+Make a **functional Windows 11 portable beta** of CanvasSidekick: a teacher talks to an existing coding agent, which uses a small `cse.exe` and plain workspace files to create/edit Canvas assignments, retrieve student work, assess it with the live rubric, and post accurate results to Canvas Live.
 
 The principal beta path is an ordinary Canvas Assignment with text-entry submissions and an attached Canvas rubric. The program contains no LLM client or model selection system. The host agent supplies educational judgment and authoring; the executable supplies reliable Canvas and filesystem operations.
 
@@ -30,7 +30,7 @@ This brief combines three kinds of instruction:
 - **Implementation defaults:** concrete technical choices made in this brief to make execution possible. The orchestrator may refine details when evidence warrants it, while preserving the teacher's behavior. Record a short reason in the implementation handoff; do not ask the teacher to choose libraries, folder names, or ordinary algorithms.
 - **Evidence-dependent choices:** Canvas and Windows behavior that must be tested before implementing the dependent write path. Their probes and fallbacks are specified below. Documentation is a lead, not a substitute for a district test.
 
-Later direct teacher instructions override this brief. If older CE documents or an old SE paragraph conflict with section 3, use section 3. CE is an optional source of API lessons, never the product specification.
+Later direct teacher instructions override this brief. If an old SE paragraph conflicts with section 3, use section 3.
 
 When the teacher starts an execution session with this brief, proceed with implementation, local checks, and reversible repository work. Obtain missing concrete inputs early, such as the identity of a disposable Canvas test course or access to a build host. Continue independent work while those inputs are pending. Do not introduce recurring permission requests for routine implementation choices.
 
@@ -79,7 +79,7 @@ Full criterion explanations belong in the attached rubric. Do not repeat its ent
 
 Real names may appear in student writing and `settings/students.md`. The teacher permits student data in the district synced folder. Aliases are only a convenience for names and identifiers in filenames and pulled metadata. There is no identity vault, scrubbing of student writing, or PII output gate.
 
-Keep the PAT out of files, stdout, logs, agent context, and the starter ZIP. Keep the private student mapping out of ordinary agent reads. These are the existing boundaries, not grounds to recreate CE's privacy machinery.
+Keep the PAT out of files, stdout, logs, agent context, and the starter ZIP. Keep the private student mapping out of ordinary agent reads. These are the existing boundaries, not grounds to build heavier privacy machinery.
 
 ## 4. 0.1b scope
 
@@ -128,7 +128,7 @@ Go was absent on this laptop. Prefer an existing developer build environment els
 
 Use the Windows target architecture verified on the machine; do not infer it from Windows 11 alone. Prefer a pure-Go build with C interop disabled if the selected dependencies support it. Cross-compilation is a build step; it is not evidence that Windows-only credential code or the resulting executable works.
 
-CE and SE may coexist. Use an SE-specific credential namespace, executable name, directories, and temporary loopback port. Do not read or migrate CE secrets automatically.
+SE may coexist with other Canvas tools. Use an SE-specific credential namespace, executable name, directories, and temporary loopback port. Never read or migrate another tool's secrets.
 
 ## 6. Responsibilities and internal shape
 
@@ -396,7 +396,7 @@ Never reuse the teacher's working workspace as the source of a distributable ZIP
 
 The orchestrator owns a short, sanitized `docs/0.1b-evidence.md` during implementation. Record the probe, environment/date, observed response shape, conclusion, and remaining limits. This is development evidence, not a runtime ledger. Include no PAT or real student work in committed fixtures.
 
-Use official API documentation and CE lessons to form hypotheses. The following are not currently proven in this repository:
+Use official API documentation to form hypotheses. The following are not currently proven in this repository:
 
 | Probe | Minimum evidence | Decision it unlocks |
 |---|---|---|
@@ -556,7 +556,7 @@ Do not mark a failed or unrun real Canvas check as passing because a mock passed
 
 ## 19. Source references and evidence limits
 
-Consulted 2026-10-08. These are primary documentation/source leads, not evidence of the district's configured behavior. Recheck the relevant endpoint when implementing it. Follow links only for the feature being built; do not consume CE's entire implementation up front.
+Consulted 2026-10-08. These are primary documentation/source leads, not evidence of the district's configured behavior. Recheck the relevant endpoint when implementing it. Follow links only for the feature being built; do not read every linked source up front.
 
 - **S1:** [Canvas Rubrics API](https://developerdocs.instructure.com/services/canvas/resources/rubrics) — rubric associations and the separate grade-calculation setting; criterion/assessment shapes.
 - **S2:** [Canvas Submissions API](https://developerdocs.instructure.com/services/canvas/resources/submissions) — scoped retrieval, history, per-submission and bulk updates. Their documented parameter shapes differ.
@@ -569,8 +569,8 @@ Consulted 2026-10-08. These are primary documentation/source leads, not evidence
 - **S9:** [Go build documentation](https://pkg.go.dev/cmd/go#hdr-Compile_packages_and_dependencies) and [target/build environment](https://go.dev/doc/install/source#environment) — confirm the actual build environment rather than installing an end-user runtime.
 - **S10:** [Canvas assignment API](https://developerdocs.instructure.com/services/canvas/resources/assignments) and [module API](https://developerdocs.instructure.com/services/canvas/resources/modules) — authoring and module-placement leads to verify during slice B.
 
-Local evidence: [current implementation evidence](docs/0.1b-evidence.md). Historical evidence: [WorkLaptop report](https://github.com/longhornteacher/canvasexpert-se/blob/e49ffd9/WorkLaptopTestSuite/results/STAGCFKQ74-20261008-0640.md). Local domain-knowledge map: [CE-LESSONS.md](CE-LESSONS.md). The referenced old CE checkout is a historical path and may not exist on the next machine. Its absence must not block work supported by current primary documentation and disposable-course evidence.
+Local evidence: [current implementation evidence](docs/0.1b-evidence.md). Historical evidence: [WorkLaptop report](https://github.com/longhornteacher/canvasexpert-se/blob/e49ffd9/WorkLaptopTestSuite/results/STAGCFKQ74-20261008-0640.md). Scoring rules: [SCORING-RULES.md](SCORING-RULES.md). Work is supported by current primary documentation and disposable-course evidence.
 
 ## 20. Suggested opening message for the execution session
 
-> Implement CanvasExpert-SE 0.1b from `EXECUTION-BRIEF-0.1b.md`. Read it fully, then read `ARCHITECTURE.md`, `CE-LESSONS.md`, and the WorkLaptop report. Use GPT-6.1 Sol as orchestrator with GPT-6.1 Sol and GPT-6 Luna subagents as specified. Preserve the teacher's settled decisions; make ordinary implementation choices autonomously. Inspect current repository changes before editing. Establish the build environment and disposable Canvas test target early, then execute the four slices through a working Windows build, clean starter ZIP, and truthful integration evidence. Keep the agent responsible for educational inference and the CLI responsible for validated mechanics. Do not create my real three-SCR assignment yet. Ask only for missing external inputs or a concrete decision the brief reserves for me, and continue independent work while waiting. Report verified, failed, and unverified behaviors separately.
+> Implement CanvasSidekick 0.1b from `EXECUTION-BRIEF-0.1b.md`. Read it fully, then read `ARCHITECTURE.md`, `SCORING-RULES.md`, and the WorkLaptop report. Use GPT-6.1 Sol as orchestrator with GPT-6.1 Sol and GPT-6 Luna subagents as specified. Preserve the teacher's settled decisions; make ordinary implementation choices autonomously. Inspect current repository changes before editing. Establish the build environment and disposable Canvas test target early, then execute the four slices through a working Windows build, clean starter ZIP, and truthful integration evidence. Keep the agent responsible for educational inference and the CLI responsible for validated mechanics. Do not create my real three-SCR assignment yet. Ask only for missing external inputs or a concrete decision the brief reserves for me, and continue independent work while waiting. Report verified, failed, and unverified behaviors separately.

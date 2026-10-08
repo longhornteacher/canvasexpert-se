@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"canvasexpertse/internal/domain"
+	"canvassidekick/internal/domain"
 )
 
 // Student is private machine identity. Only Ref and the chosen display name

@@ -1,8 +1,8 @@
 package workflow
 
 import (
-	"canvasexpertse/internal/canvas"
-	"canvasexpertse/internal/domain"
+	"canvassidekick/internal/canvas"
+	"canvassidekick/internal/domain"
 	"errors"
 	"fmt"
 )

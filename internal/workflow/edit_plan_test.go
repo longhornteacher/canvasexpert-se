@@ -1,7 +1,7 @@
 package workflow
 
 import (
-	"canvasexpertse/internal/domain"
+	"canvassidekick/internal/domain"
 	"reflect"
 	"testing"
 )

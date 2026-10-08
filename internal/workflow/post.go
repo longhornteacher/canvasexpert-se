@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"canvasexpertse/internal/domain"
-	"canvasexpertse/internal/render"
-	"canvasexpertse/internal/workspace"
+	"canvassidekick/internal/domain"
+	"canvassidekick/internal/render"
+	"canvassidekick/internal/workspace"
 )
 
 type StudentPostReport struct {

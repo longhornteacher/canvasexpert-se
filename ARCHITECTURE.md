@@ -1,4 +1,4 @@
-# CanvasExpert-SE: architecture
+# CanvasSidekick: architecture
 
 **Updated:** 2026-10-08 · **Status:** 0.1b implementation in progress; portable executable and local checks available, district Canvas verification pending. The detailed implementation handoff is [EXECUTION-BRIEF-0.1b.md](EXECUTION-BRIEF-0.1b.md), with actual progress in [docs/0.1b-evidence.md](docs/0.1b-evidence.md). It distinguishes teacher decisions, implementation defaults, and required evidence. Items marked **[verify]** need a real Canvas or school-PC check before dependent behavior is enabled. The broader roadmap below is not all part of 0.1b; see §11.
 
@@ -8,7 +8,7 @@ A personal tool, shared with friends. **It is not a product and not SaaS.** A te
 
 **Success means speed and accuracy in the moment.** Every design choice is weighed against those two. Defenses against rare failures are worth having only when they cost almost nothing. This is K-12: an occasional "oops" that the teacher fixes in Canvas is acceptable. Slow or fussy tooling is not.
 
-CanvasExpert (CE) is an ancestor in spirit only. SE has **no code, layout, language or tool-name obligations to CE.** CE is a reference for hard-won Canvas knowledge (see [CE-LESSONS.md](CE-LESSONS.md)).
+SE is a standalone project. It shares no code, layout, credentials, tool names or runtime with any other tool. Scoring rules live in [SCORING-RULES.md](SCORING-RULES.md).
 
 ## 2. Settled decisions
 
@@ -25,7 +25,7 @@ CanvasExpert (CE) is an ancestor in spirit only. SE has **no code, layout, langu
 | D9 | **Grade retention:** the feedback always contains SE's honest assessment. Raise the entered score only when it is empty or SE's assessment is higher; preserve a higher or equal entered score before late penalty. | Rubric assessment is independent and still updates accurately (§6.4). Canvas does penalty math. The rule prevents intentional lowering; a read/write race is a documented practical limit. |
 | D10 | The teacher's instruction is the authorization. "Score and post" means do it; "draft" means don't post; "show me first" means stop for review. | No mandatory preview/apply pairs and no confirmation tokens. |
 | D11 | Configuration is files in the workspace. **The WebUI covers the PAT and the student table** (alias, monitored status). | The teacher edits student info in a page the agent never reads. |
-| D12 | CE and SE may run on the same machine. | Separate credential name, port, command name and folders. |
+| D12 | SE is self-contained and can coexist with other Canvas tools on the same machine. | Its own credential name, ephemeral port, command name and folders. |
 | D13 | Forge contracts are a starting point, not scripture. | Lean SE authoring formats (§5). |
 | D14 | **0.1b implementation default: Go**, shipped as a portable Windows executable. | The WorkLaptop probe supports this direction; the actual Go executable still needs an execution/platform check. |
 | D15 | **No installs and no admin rights**, Windows 11 only. **WorkLaptop is the baseline**, since colleagues have the same model and permissions. | Everything ships inside the workspace folder. It must run from a user-writable folder on WorkLaptop. |

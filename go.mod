@@ -1,4 +1,4 @@
-module canvasexpertse
+module canvassidekick
 
 go 1.27.1
 

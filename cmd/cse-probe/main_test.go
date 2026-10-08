@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"canvasexpertse/internal/canvas"
-	"canvasexpertse/internal/domain"
-	"canvasexpertse/internal/workflow"
+	"canvassidekick/internal/canvas"
+	"canvassidekick/internal/domain"
+	"canvassidekick/internal/workflow"
 )
 
 func TestDisposableAssignmentGuardRejectsRealPublishedAndWrongScope(t *testing.T) {

@@ -15,24 +15,19 @@ import (
 	"sync"
 	"time"
 
-	"canvasexpertse/internal/canvas"
-	"canvasexpertse/internal/platform"
+	"canvassidekick/internal/canvas"
+	"canvassidekick/internal/platform"
 )
 
 var setupTemplate = template.Must(template.New("setup").Parse(`<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CanvasExpert-SE setup</title><style>
-body{font:17px system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;color:#16304b;background:#f6f8fb}
-main{background:white;padding:2rem;border-radius:1rem;border:1px solid #d8e1ea}h1{font-size:1.7rem;margin-top:0}
-label{display:block;margin:1.3rem 0 .4rem}input{box-sizing:border-box;width:100%;font:inherit;padding:.7rem;border:1px solid #879bad;border-radius:.4rem}
-button{font:inherit;background:#175c9b;color:white;border:0;padding:.8rem 1.2rem;margin-top:1.5rem;border-radius:.4rem}.error{color:#a32323}
-</style><main><h1>Connect Canvas</h1><p>Your access token stays in Windows Credential Manager on this machine.</p>
+<title>CanvasSidekick setup</title><style>` + funkyCSS + `</style><main><h1>Plug in Canvas!</h1><p>Your access token naps inside Windows Credential Manager on this machine. It never touches a file.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}
 <form method="post" action="/setup" autocomplete="off">
 <input type="hidden" name="request_secret" value="{{.Secret}}">
 <label for="origin">Canvas address</label><input id="origin" name="origin" type="url" value="{{.Origin}}" placeholder="https://your-school.instructure.com" required autocomplete="off">
-<label for="token">Personal access token</label><input id="token" name="token" type="password" required autocomplete="off" spellcheck="false">
-<button type="submit">Connect and save</button></form></main></html>`))
+<label for="token">Secret squirrel token</label><input id="token" name="token" type="password" required autocomplete="off" spellcheck="false">
+<button type="submit">Connect &amp; stash it</button></form></main></html>`))
 
 type setupHandler struct {
 	origin, secret string
@@ -129,7 +124,7 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	h.complete = true
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Canvas connected</title><p>Canvas credentials saved on this machine. You can close this page.</p></html>")
+	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Canvas connected</title><style>"+funkyCSS+"</style><main class=\"done\"><h1>Connected!</h1><p>Credentials stashed on this machine. Go close this tab, you wizard.</p></main></html>")
 	close(h.done)
 }
 

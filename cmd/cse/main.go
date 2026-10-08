@@ -13,17 +13,17 @@ import (
 	"runtime/debug"
 	_ "time/tzdata"
 
-	"canvasexpertse/internal/domain"
-	"canvasexpertse/internal/localui"
-	"canvasexpertse/internal/platform"
-	"canvasexpertse/internal/workspace"
+	"canvassidekick/internal/domain"
+	"canvassidekick/internal/localui"
+	"canvassidekick/internal/platform"
+	"canvassidekick/internal/workspace"
 )
 
 var version = "0.1b"
 var revision = "development"
 var builtAt = "unrecorded"
 
-const help = `CanvasExpert-SE 0.1b — portable Canvas assignments and scoring
+const help = `CanvasSidekick 0.1b — portable Canvas assignments and scoring
 
 Usage: cse [--workspace PATH] COMMAND [ARGS]
 
@@ -83,7 +83,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		if len(args) != 0 {
 			return fail(inputError(fmt.Errorf("version takes no arguments")), progress)
 		}
-		fmt.Fprintf(out, "CanvasExpert-SE %s\nrevision %s\nbuilt %s\n%s %s/%s\n", version, revision, builtAt, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		fmt.Fprintf(out, "CanvasSidekick %s\nrevision %s\nbuilt %s\n%s %s/%s\n", version, revision, builtAt, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 		if info, ok := debug.ReadBuildInfo(); ok {
 			for _, dep := range info.Deps {
 				fmt.Fprintf(out, "dependency %s %s\n", dep.Path, dep.Version)

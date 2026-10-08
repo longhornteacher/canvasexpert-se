@@ -1,6 +1,6 @@
 # Set up a workspace
 
-Use this guide once for each workspace and on each computer that will use CanvasExpert-SE. The files sync with the workspace; the Canvas credential is per machine.
+Use this guide once for each workspace and on each computer that will use CanvasSidekick. The files sync with the workspace; the Canvas credential is per machine.
 
 ## 1. Check the CLI
 

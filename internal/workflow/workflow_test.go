@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"canvasexpertse/internal/canvas"
-	"canvasexpertse/internal/domain"
-	"canvasexpertse/internal/workspace"
+	"canvassidekick/internal/canvas"
+	"canvassidekick/internal/domain"
+	"canvassidekick/internal/workspace"
 )
 
 func workflowFixture(t *testing.T, handler http.HandlerFunc) (*Service, *httptest.Server) {

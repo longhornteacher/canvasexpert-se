@@ -1,4 +1,4 @@
-// Package render converts validated CanvasExpert data to deterministic display text and HTML.
+// Package render converts validated CanvasSidekick data to deterministic display text and HTML.
 package render
 
 import (
@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"canvasexpertse/internal/domain"
+	"canvassidekick/internal/domain"
 )
 
 // FeedbackInput contains the validated grading context and student-facing
