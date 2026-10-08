@@ -18,7 +18,7 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
-var studentsTemplate = template.Must(template.New("students").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE students</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div><h1>Alias the humans</h1><p>Stable references keep scoring files glued to the same student when an alias changes.</p>{{if .Message}}<p class="error">{{.Message}}</p>{{end}}<form action="/students" method="post"><input type="hidden" name="request_secret" value="{{.Secret}}"><table><thead><tr><th>Name</th><th>Canvas instance</th><th>Stable reference</th><th>Alias</th><th>Monitored</th></tr></thead><tbody>{{range .Rows}}<tr><td>{{.Name}}</td><td>{{.Instance}}</td><td><span class="ref">{{.Ref}}</span></td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required></td><td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}}></td></tr>{{else}}<tr><td colspan="5">Nobody here yet. Pull student work first to populate this table.</td></tr>{{end}}</tbody></table><button type="submit">Save &amp; close</button></form></main></html>`))
+var studentsTemplate = template.Must(template.New("students").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE students</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div>{{if .Hub}}` + hubNav + `{{end}}<h1>Alias the humans</h1><p>Stable references keep scoring files glued to the same student when an alias changes.</p>{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}<form action="/students" method="post"><input type="hidden" name="request_secret" value="{{.Secret}}"><table><thead><tr><th>Name</th><th>Canvas instance</th><th>Stable reference</th><th>Alias</th><th>Monitored</th></tr></thead><tbody>{{range .Rows}}<tr><td>{{.Name}}</td><td>{{.Instance}}</td><td><span class="ref">{{.Ref}}</span></td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required></td><td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}}></td></tr>{{else}}<tr><td colspan="5">Nobody here yet. Pull student work first to populate this table.</td></tr>{{end}}</tbody></table><button type="submit">Save &amp; close</button></form></main></html>`))
 
 type studentHandler struct {
 	origin, secret string
@@ -26,15 +26,23 @@ type studentHandler struct {
 	done           chan struct{}
 	mu             sync.Mutex
 	complete       bool
+	// persistent keeps the editor usable after a save (the hub stays open).
+	persistent bool
+	hub        bool
 }
 
 func (h *studentHandler) page(w http.ResponseWriter, status int, message string) {
+	h.pageNotice(w, status, message, "")
+}
+
+func (h *studentHandler) pageNotice(w http.ResponseWriter, status int, message, notice string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = studentsTemplate.Execute(w, struct {
-		Secret, Message string
-		Rows            []workspace.Student
-	}{h.secret, message, h.store.Rows})
+		Secret, Message, Notice string
+		Rows                    []workspace.Student
+		Hub                     bool
+	}{h.secret, message, notice, h.store.Rows, h.hub})
 }
 func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -88,6 +96,10 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if e := h.store.Save(); e != nil {
 		h.store.Rows = before
 		h.page(w, 400, "Could not save. Aliases must be unique within each Canvas instance; check file access.")
+		return
+	}
+	if h.persistent {
+		h.pageNotice(w, 200, "", "Saved.")
 		return
 	}
 	h.complete = true

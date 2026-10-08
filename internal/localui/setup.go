@@ -21,8 +21,8 @@ import (
 
 var setupTemplate = template.Must(template.New("setup").Funcs(pageFuncs).Parse(`<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CanvasExpert-SE setup</title><style>` + funkyCSS + `</style><main><div class="badge">SE = {{se}}</div><h1>Plug in Canvas!</h1><p>Your access token naps inside Windows Credential Manager on this machine. It never touches a file.</p>
-{{if .Message}}<p class="error">{{.Message}}</p>{{end}}
+<title>CanvasExpert-SE setup</title><style>` + funkyCSS + `</style><main><div class="badge">SE = {{se}}</div>{{if .Hub}}` + hubNav + `{{end}}<h1>Plug in Canvas!</h1><p>Your access token naps inside Windows Credential Manager on this machine. It never touches a file.</p>
+{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <form method="post" action="/setup" autocomplete="off">
 <input type="hidden" name="request_secret" value="{{.Secret}}">
 <label for="origin">Canvas address</label><input id="origin" name="origin" type="url" value="{{.Origin}}" placeholder="https://your-school.instructure.com" required autocomplete="off">
@@ -38,6 +38,11 @@ type setupHandler struct {
 	done           chan struct{}
 	mu             sync.Mutex
 	complete       bool
+	// persistent keeps the form usable after a save (the hub stays open).
+	persistent bool
+	hub        bool
+	// after runs once a credential is saved and returns a note for the page.
+	after func(platform.Credential) string
 }
 
 func validateCredential(ctx context.Context, credential platform.Credential) error {
@@ -58,9 +63,16 @@ func validateCredential(ctx context.Context, credential platform.Credential) err
 }
 
 func (h *setupHandler) page(w http.ResponseWriter, status int, message string) {
+	h.pageNotice(w, status, message, "")
+}
+
+func (h *setupHandler) pageNotice(w http.ResponseWriter, status int, message, notice string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_ = setupTemplate.Execute(w, struct{ Secret, Message, Origin string }{h.secret, message, h.initialOrigin})
+	_ = setupTemplate.Execute(w, struct {
+		Secret, Message, Notice, Origin string
+		Hub                             bool
+	}{h.secret, message, notice, h.initialOrigin, h.hub})
 }
 
 func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +132,17 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = h.save(credential); err != nil {
 		h.page(w, 500, "Windows could not save the credential. Try again or check local credential access.")
+		return
+	}
+	if h.persistent {
+		notice := "Connected to " + credential.Origin + ". Token saved on this machine."
+		if h.after != nil {
+			if extra := h.after(credential); extra != "" {
+				notice += " " + extra
+			}
+		}
+		h.initialOrigin = credential.Origin
+		h.pageNotice(w, 200, "", notice)
 		return
 	}
 	h.complete = true

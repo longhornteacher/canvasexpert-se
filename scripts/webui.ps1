@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'students')]
+    [ValidateSet('ui', 'setup', 'students')]
     [string]$Page,
     [string]$Workspace = $env:CSE_WORKSPACE,
     [string]$GoExecutable
@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $exe = Join-Path $repoRoot 'dist/cse.exe'
 
-if (-not $Page) { $Page = if ($Workspace) { 'students' } else { 'setup' } }
+if (-not $Page) { $Page = 'ui' }
 if ($Page -eq 'students' -and -not $Workspace) {
     throw 'The students page needs a workspace: pass -Workspace PATH or set CSE_WORKSPACE.'
 }
@@ -30,5 +30,5 @@ if ($stale) {
     if (-not $?) { throw 'Build failed.' }
 }
 
-if ($Page -eq 'students') { & $exe --workspace $Workspace students } else { & $exe setup }
+if ($Workspace) { & $exe --workspace $Workspace $Page } else { & $exe $Page }
 exit $LASTEXITCODE

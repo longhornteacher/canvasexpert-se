@@ -27,6 +27,7 @@ const help = `CanvasExpert-SE 0.1b — portable Canvas assignments and scoring
 
 Usage: cse [--workspace PATH] COMMAND [ARGS]
 
+  ui                            Open the local hub: Canvas setup, students, more
   setup                         Connect Canvas privately on this machine
   students                      Edit student aliases and monitored status
   courses                       Discover authorized teacher courses
@@ -42,7 +43,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
 
 COURSE is an explicit nickname in settings/courses.md. FILE paths are relative
 to the workspace unless absolute. Use quotes around paths or titles with spaces.
-setup/students pages exist only while their command runs; Ctrl+C closes them.
+ui/setup/students pages exist only while their command runs; Ctrl+C closes them.
 Draft/show-me-first instructions stop before post. A scoring session pulls only.
 Exit codes: 0 success; 2 invalid input; 3 partial/held work; 4 environment/API failure.
 Read guides/setup.md, authoring.md, edit.md, score.md, and formats.md as needed.
@@ -100,6 +101,16 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		fmt.Fprintln(out, "Native dummy credential byte round trip passed; temporary credential removed.")
 		return 0
+	}
+	if cmd == "ui" {
+		if len(args) != 0 {
+			return fail(inputError(fmt.Errorf("ui takes no arguments")), progress)
+		}
+		uiRoot, rootErr := workspace.ResolveRoot(*rootOpt, "")
+		if rootErr != nil && *rootOpt != "" {
+			return fail(inputError(rootErr), progress)
+		}
+		return fail(localui.RunHub(ctx, uiRoot, progress), progress)
 	}
 	if cmd == "setup" {
 		if len(args) != 0 {

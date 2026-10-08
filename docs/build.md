@@ -23,6 +23,8 @@ Packaging rebuilds first, stages a unique workspace from the allowlisted `worksp
 
 The packaged executable is intended to run without a Go or other language runtime installed on the teacher's computer. A successful source build or ZIP inspection does not establish that the Canvas workflow passed live district checks. See `docs/0.1b-evidence.md` for current evidence and limitations. Workspace commands use the explicit workspace option, for example `.\cse\cse.exe --workspace . --help` when run from the packaged workspace root.
 
-## Local web pages
+## Local web pages (the hub)
 
-From the repository root, `webui` (or `.\scripts\webui.ps1`) opens the Canvas connection page; `webui students -Workspace PATH` opens the student editor (`CSE_WORKSPACE` can supply the path). It rebuilds `dist/cse.exe` first when sources are newer, using `.tools/go1.27.1` if present. Ctrl+C closes the page.
+Double-click `webui.cmd` in the repository root (or run `webui`, `.\scripts\webui.ps1`, or `cse ui`). One loopback server hosts every local page: Home (status, workspace chooser, Quit), Canvas setup, and the student editor. It stays open until you press Quit or Ctrl+C. It tries port 47831 first, so a bookmark works, and falls back to a free port. Pass `-Workspace PATH` or set `CSE_WORKSPACE` to start with a workspace; otherwise it restores the last one it used (a non-secret path under `%APPDATA%\CanvasExpert-SE`). The launcher rebuilds `dist/cse.exe` first when sources are newer, using `.tools/go1.27.1` if present. `cse setup` and `cse students` remain as one-shot commands.
+
+New pages go in `internal/localui` and are routed from `Hub.ServeHTTP`; every form must pass the hub's Host/Origin/secret checks.
