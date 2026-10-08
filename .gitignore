@@ -1,0 +1,12 @@
+# Local developer toolchain, caches, output, and live test workspaces.
+.tools/
+.cache/
+dist/
+build/
+.test-workspaces/
+*.exe
+*.test
+coverage.out
+
+# Never commit populated private mapping or credentials.
+.cse/
