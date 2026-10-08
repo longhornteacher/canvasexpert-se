@@ -56,7 +56,7 @@ CanvasExpert (CE) is an ancestor in spirit only. SE has **no code, layout, langu
 
 - Windows 11, standard user, no admin. Nothing system-wide, no services, no reboots.
 - Allowed: files in the user's own folders, the user's own Windows Credential Manager, and loopback HTTP.
-- [WorkLaptop checks passed](WorkLaptopTestSuite/results/STAGCFKQ74-20261008-0640.md) for an unsigned .NET probe in user/OneDrive folders, Credential Manager access, loopback HTTP, and browser launch. PowerShell was FullLanguage. This supports a workspace `cse/` executable and synced cache.
+- [WorkLaptop checks passed](https://github.com/longhornteacher/canvasexpert-se/blob/e49ffd9/WorkLaptopTestSuite/results/STAGCFKQ74-20261008-0640.md) for an unsigned .NET probe in user/OneDrive folders, Credential Manager access, loopback HTTP, and browser launch. PowerShell was FullLanguage. This supports a workspace `cse/` executable and synced cache. The original test suite was removed after implementation; its report remains in Git history.
 - **[verify on WorkLaptop]** the actual Go-built executable and its native platform operations. The real cross-machine OneDrive browser-download/Explorer-unzip test remains open. A Canvas 401 proved connectivity only, not authenticated grading behavior.
 
 ## 4. Shape of the system
@@ -236,4 +236,4 @@ Classic Quizzes → creating new rubrics standalone (beyond §6.4) → curves �
 - **Execution team:** GPT-6.1 Sol orchestrates GPT-6.1 Sol and GPT-6 Luna subagents. Sol owns high-risk semantics; Luna receives bounded work against frozen interfaces. The orchestrator owns live experiments and completion claims.
 - **Later teacher test:** a three-SCR text-entry assignment with a 100-point per-SCR rubric must be handled intelligently without a special warning. It has not been requested for creation yet. Synthetic/disposable-course engineering checks and that future teacher acceptance are separate.
 
-Machine-specific checks live in [WorkLaptopTestSuite/](WorkLaptopTestSuite/README.md). The Canvas **[verify]** items above can be checked from any machine, against a sandbox course.
+Current machine-specific and Canvas evidence lives in [docs/0.1b-evidence.md](docs/0.1b-evidence.md). The original WorkLaptop test suite remains in Git history at `e49ffd9`. The Canvas **[verify]** items above can be checked from any machine, against a sandbox course.

@@ -2,7 +2,7 @@
 
 Prepared 2026-10-08 for a new implementation session led by **GPT-6.1 Sol**, using **GPT-6.1 Sol and GPT-6 Luna subagents**. This is a build specification and handoff, not a record of implemented functionality.
 
-Read this entire brief before delegating. Then read [ARCHITECTURE.md](ARCHITECTURE.md), [CE-LESSONS.md](CE-LESSONS.md), and the [WorkLaptop report](WorkLaptopTestSuite/results/STAGCFKQ74-20261008-0640.md). Do not load this long brief into ordinary teacher grading sessions; the shipped workspace needs short, task-specific guides.
+Read this entire brief before delegating. Then read [ARCHITECTURE.md](ARCHITECTURE.md), [CE-LESSONS.md](CE-LESSONS.md), and [current implementation evidence](docs/0.1b-evidence.md). The original [WorkLaptop report](https://github.com/longhornteacher/canvasexpert-se/blob/e49ffd9/WorkLaptopTestSuite/results/STAGCFKQ74-20261008-0640.md) remains in Git history after removal of the test suite. Do not load this long brief into ordinary teacher grading sessions; the shipped workspace needs short, task-specific guides.
 
 Navigation: teacher requirements are in section 3; scope and platform in 4–5; file/scoring/write decisions in 7–12; required live evidence in 13; delegation in 14; build order and acceptance in 15–18. Section 20 is a ready-to-paste opening message for the next session.
 
@@ -569,7 +569,7 @@ Consulted 2026-10-08. These are primary documentation/source leads, not evidence
 - **S9:** [Go build documentation](https://pkg.go.dev/cmd/go#hdr-Compile_packages_and_dependencies) and [target/build environment](https://go.dev/doc/install/source#environment) — confirm the actual build environment rather than installing an end-user runtime.
 - **S10:** [Canvas assignment API](https://developerdocs.instructure.com/services/canvas/resources/assignments) and [module API](https://developerdocs.instructure.com/services/canvas/resources/modules) — authoring and module-placement leads to verify during slice B.
 
-Local evidence: [WorkLaptop report](WorkLaptopTestSuite/results/STAGCFKQ74-20261008-0640.md). Local domain-knowledge map: [CE-LESSONS.md](CE-LESSONS.md). The referenced old CE checkout is a historical path and may not exist on the next machine. Its absence must not block work supported by current primary documentation and disposable-course evidence.
+Local evidence: [current implementation evidence](docs/0.1b-evidence.md). Historical evidence: [WorkLaptop report](https://github.com/longhornteacher/canvasexpert-se/blob/e49ffd9/WorkLaptopTestSuite/results/STAGCFKQ74-20261008-0640.md). Local domain-knowledge map: [CE-LESSONS.md](CE-LESSONS.md). The referenced old CE checkout is a historical path and may not exist on the next machine. Its absence must not block work supported by current primary documentation and disposable-course evidence.
 
 ## 20. Suggested opening message for the execution session
 
