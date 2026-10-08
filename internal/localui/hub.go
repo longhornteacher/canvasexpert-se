@@ -180,6 +180,10 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		h.home(w, 200, "", "")
 	case "/browse":
+		if r.Method == http.MethodGet {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
 		if !h.checkPost(w, r) {
 			return
 		}
@@ -187,7 +191,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.picking = true
 			go h.runChooser()
 		}
-		h.home(w, 200, "", "")
+		// Redirect so the page's auto-refresh reloads "/" (GET), not this POST URL.
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	case "/setup":
 		h.setup.initialOrigin = h.knownOrigin()
 		h.setup.ServeHTTP(w, r)

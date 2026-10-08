@@ -185,15 +185,32 @@ func TestHubBrowseUsesChosenFolder(t *testing.T) {
 	h := newTestHub()
 	h.programDir = t.TempDir()
 	folder := t.TempDir()
-	done := make(chan struct{})
-	h.chooser = func(context.Context) (string, error) { defer close(done); return folder, nil }
-	w := hubPost(h, "/browse", url.Values{"request_secret": {"nonce"}}, h.origin)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `http-equiv="refresh"`) {
-		t.Fatal("browse did not show the waiting page")
+	release := make(chan struct{})
+	finished := make(chan struct{})
+	h.chooser = func(context.Context) (string, error) {
+		defer close(finished)
+		<-release
+		return folder, nil
 	}
-	<-done
-	for i := 0; i < 50 && func() bool { h.mu.Lock(); defer h.mu.Unlock(); return h.picked == nil }(); i++ {
-		time.Sleep(20 * time.Millisecond)
+	w := hubPost(h, "/browse", url.Values{"request_secret": {"nonce"}}, h.origin)
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" {
+		t.Fatalf("browse must redirect to the home page, got %d", w.Code)
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/", nil))
+	if !strings.Contains(w.Body.String(), `http-equiv="refresh"`) {
+		t.Fatal("home did not show the waiting page while the chooser is open")
+	}
+	close(release)
+	<-finished
+	for i := 0; i < 100; i++ {
+		h.mu.Lock()
+		ready := h.picked != nil
+		h.mu.Unlock()
+		if ready {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/", nil))
