@@ -7,7 +7,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"path/filepath"
-	"sort"
+
 	"strconv"
 	"strings"
 	"time"
@@ -33,34 +33,12 @@ type coursesData struct {
 	Rows                    []courseRow
 }
 
-var coursesTemplate = template.Must(template.New("courses").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE courses</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div>` + hubNav + `<h1>Pick your active courses</h1><p>Tick the courses you are teaching right now. Only active courses are scanned for work and Pok&eacute;mon-ified. The nickname is what you and the agent call the course.</p>
+var coursesTemplate = template.Must(template.New("courses").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE courses</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">Special Edition</div>` + hubNav + `<h1>Pick your active courses</h1><p>Tick the courses you are teaching right now. Active courses appear as tabs on the Students page and are scanned for work. The nickname is what you and the agent call the course.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <form method="post" action="/courses"><input type="hidden" name="request_secret" value="{{.Secret}}"><table class="courses"><thead><tr><th>Active</th><th>Course</th><th>Canvas code</th><th>Nickname</th></tr></thead><tbody>
 {{range .Rows}}<tr><td><input type="hidden" name="id" value="{{.ID}}"><input type="checkbox" name="active_{{.ID}}" {{if .Active}}checked{{end}} aria-label="Active"></td><td>{{.Name}}{{if not .InCanvas}} <span class="pill off">not in Canvas list</span>{{end}}</td><td><code>{{.Code}}</code></td><td><input type="text" name="nick_{{.ID}}" value="{{.Nick}}" maxlength="40" autocomplete="off"></td></tr>
 {{else}}<tr><td colspan="4">No courses found. Connect Canvas first, then reload this page.</td></tr>{{end}}</tbody></table>
 {{if .Rows}}<button type="submit">Save active courses</button>{{end}}</form></main></html>`))
-
-type group struct {
-	Title string
-	Cards []card
-}
-
-type pokemonData struct {
-	Secret, Message, Notice string
-	Groups                  []group
-	Total, Active           int
-}
-
-var pokemonTemplate = template.Must(template.New("pokemon").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE Pokemon-ify</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div>` + hubNav + `<h1>Pok&eacute;mon-ify!</h1><p>Every student gets a Pok&eacute;mon alias, so real names stay out of feedback and files. The Pok&eacute;mon stays the same even if you re-roll a name later.</p>
-{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
-<input type="checkbox" id="reveal" hidden>
-<div class="row"><form method="post" action="/pokemonify/summon"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Summon rosters from Canvas</button></form><label class="pill" for="reveal">Hide real names</label><span class="pill on">{{.Total}} in the party</span><span class="pill">{{.Active}} active courses</span></div>
-{{range .Groups}}<section><h2 class="grp">{{.Title}}</h2><div class="deck">
-{{range .Cards}}<article class="pk t-{{.Type}}{{if .Shiny}} shiny{{end}}{{if .Monitored}} mon{{end}}" style="--i:{{.Idx}}">{{if .Fresh}}<div class="ball"><i></i></div>{{end}}
-<div class="top"><span class="tag">{{.Type}}</span><span>Lv. {{.Level}}</span></div><div class="art">{{.Art}}</div><h3>{{.Alias}}</h3><p class="real">{{.Name}}</p>{{if .Course}}<span class="course">{{.Course}}</span>{{end}}
-<div class="acts"><form method="post" action="/pokemonify/reroll"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="ref" value="{{.Ref}}"><button type="submit">Re-roll</button></form><form method="post" action="/pokemonify/monitor"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="ref" value="{{.Ref}}"><button type="submit">{{if .Monitored}}Monitored &#10003;{{else}}Monitor{{end}}</button></form></div></article>
-{{end}}</div></section>
-{{else}}<p class="card">No students yet. Pick active courses on the Courses page, then press <b>Summon rosters from Canvas</b>.</p>{{end}}</main></html>`))
 
 func (h *Hub) reqCtx() (context.Context, context.CancelFunc) {
 	base := h.ctx
@@ -254,182 +232,8 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 			active++
 		}
 	}
-	h.rosters, h.fresh = nil, nil
+	h.loaded = nil
 	h.redirect(w, r, "/courses", fmt.Sprintf("Saved. %d active courses.", active), "")
 }
 
 func randomAlias(available []string) string { return available[rand.IntN(len(available))] }
-
-func (h *Hub) pokemonPage(w http.ResponseWriter, r *http.Request) {
-	if h.needWorkspace(w) {
-		return
-	}
-	message, notice := h.takeFlash()
-	config, _, err := h.readConfig()
-	if err != nil {
-		h.home(w, 400, "Could not read settings/courses.md: "+err.Error(), "")
-		return
-	}
-	store, err := workspace.OpenStudents(h.root)
-	if err != nil {
-		h.home(w, 400, "Could not read the student table: "+err.Error(), "")
-		return
-	}
-	data := pokemonData{Secret: h.secret, Message: message, Notice: notice, Total: len(store.Rows)}
-	byRef := map[string]workspace.Student{}
-	for _, s := range store.Rows {
-		byRef[s.Ref] = s
-	}
-	idx := 0
-	build := func(s workspace.Student, course string) card {
-		idx++
-		return newCard(s.Ref, s.Alias, s.Name, course, s.Monitored, h.fresh[s.Ref], idx-1)
-	}
-	placed := map[string]bool{}
-	for _, c := range config.Courses {
-		if !c.Current {
-			continue
-		}
-		data.Active++
-		members := h.rosters[c.Nickname]
-		if len(members) == 0 {
-			continue
-		}
-		var cards []card
-		for _, s := range store.Rows {
-			if members[s.Ref] {
-				cards = append(cards, build(s, c.Nickname))
-				placed[s.Ref] = true
-			}
-		}
-		sort.SliceStable(cards, func(i, j int) bool { return cards[i].Alias < cards[j].Alias })
-		if len(cards) > 0 {
-			data.Groups = append(data.Groups, group{Title: c.Nickname, Cards: cards})
-		}
-	}
-	var rest []card
-	for _, s := range store.Rows {
-		if !placed[s.Ref] {
-			rest = append(rest, build(s, ""))
-		}
-	}
-	if len(rest) > 0 {
-		title := "All known students"
-		if len(data.Groups) > 0 {
-			title = "Other known students"
-		}
-		sort.SliceStable(rest, func(i, j int) bool { return rest[i].Alias < rest[j].Alias })
-		data.Groups = append(data.Groups, group{Title: title, Cards: rest})
-	}
-	h.render(w, 200, pokemonTemplate, data)
-}
-
-func (h *Hub) pokemonAction(w http.ResponseWriter, r *http.Request, action string) {
-	if h.needWorkspace(w) {
-		return
-	}
-	if !h.checkPost(w, r) {
-		return
-	}
-	store, err := workspace.OpenStudents(h.root)
-	if err != nil {
-		h.redirect(w, r, "/pokemonify", "", "Could not read the student table.")
-		return
-	}
-	store.Choose = randomAlias
-	switch action {
-	case "reroll":
-		student, err := store.Reroll(r.PostForm.Get("ref"))
-		if err == nil {
-			err = store.Save()
-		}
-		if err != nil {
-			h.redirect(w, r, "/pokemonify", "", err.Error())
-			return
-		}
-		h.fresh = map[string]bool{student.Ref: true}
-		h.redirect(w, r, "/pokemonify", "A wild "+student.Alias+" appeared!", "")
-	case "monitor":
-		ref := r.PostForm.Get("ref")
-		found := false
-		for i := range store.Rows {
-			if store.Rows[i].Ref == ref {
-				store.Rows[i].Monitored = !store.Rows[i].Monitored
-				found = true
-			}
-		}
-		if !found {
-			h.redirect(w, r, "/pokemonify", "", "That student was not found.")
-			return
-		}
-		if err = store.Save(); err != nil {
-			h.redirect(w, r, "/pokemonify", "", "Could not save.")
-			return
-		}
-		h.redirect(w, r, "/pokemonify", "", "")
-	case "summon":
-		h.summon(w, r, store)
-	}
-}
-
-func (h *Hub) summon(w http.ResponseWriter, r *http.Request, store *workspace.StudentStore) {
-	config, _, err := h.readConfig()
-	if err != nil {
-		h.redirect(w, r, "/pokemonify", "", "Could not read settings/courses.md.")
-		return
-	}
-	ctx, cancel := h.reqCtx()
-	defer cancel()
-	known := map[string]bool{}
-	for _, s := range store.Rows {
-		known[s.Ref] = true
-	}
-	rosters := map[string]map[string]bool{}
-	fresh := map[string]bool{}
-	courses := 0
-	for _, course := range config.Courses {
-		if !course.Current {
-			continue
-		}
-		courses++
-		enrollments, origin, err := h.fetchRoster(ctx, course.ID)
-		if err != nil {
-			h.redirect(w, r, "/pokemonify", "", "Could not fetch the roster for "+course.Nickname+": "+err.Error())
-			return
-		}
-		members := map[string]bool{}
-		for _, e := range enrollments {
-			id := e.UserID
-			if id == 0 {
-				id = e.User.ID
-			}
-			if e.State != "active" || id <= 0 {
-				continue
-			}
-			student, err := store.Upsert(origin, id, e.User.Name, e.User.ShortName, e.User.SISID, e.User.Login)
-			if err != nil {
-				h.redirect(w, r, "/pokemonify", "", err.Error())
-				return
-			}
-			members[student.Ref] = true
-			if !known[student.Ref] {
-				fresh[student.Ref] = true
-			}
-		}
-		rosters[course.Nickname] = members
-	}
-	if courses == 0 {
-		h.redirect(w, r, "/pokemonify", "", "No active courses yet. Pick them on the Courses page first.")
-		return
-	}
-	if err = store.Save(); err != nil {
-		h.redirect(w, r, "/pokemonify", "", "Could not save the student table: "+err.Error())
-		return
-	}
-	h.rosters, h.fresh = rosters, fresh
-	total := 0
-	for _, m := range rosters {
-		total += len(m)
-	}
-	h.redirect(w, r, "/pokemonify", fmt.Sprintf("Summoned %d students from %d courses. %d new Pokémon joined the party!", total, courses, len(fresh)), "")
-}

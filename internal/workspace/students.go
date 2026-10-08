@@ -19,7 +19,7 @@ import (
 type Student struct {
 	Ref, Instance, Name, FirstName, Alias, SISID, Login string
 	UserID                                              int64
-	Monitored                                           bool
+	Monitored, ExtraTime                                bool
 }
 type StudentStore struct {
 	Rows []Student
@@ -29,7 +29,8 @@ type StudentStore struct {
 	Choose func(available []string) string
 }
 
-var studentHeader = []string{"student_ref", "instance", "canvas_user_id", "name", "first_name", "alias", "sis_id", "login", "monitored"}
+var legacyStudentHeader = []string{"student_ref", "instance", "canvas_user_id", "name", "first_name", "alias", "sis_id", "login", "monitored"}
+var studentHeader = append(append([]string(nil), legacyStudentHeader...), "extra_time")
 var aliasPool = strings.Fields(`Bulbasaur Ivysaur Venusaur Charmander Charmeleon Charizard Squirtle Wartortle Blastoise Caterpie Metapod Butterfree Pidgey Pidgeotto Pidgeot Pikachu Raichu Sandshrew Sandslash Clefairy Clefable Vulpix Ninetales Jigglypuff Wigglytuff Oddish Gloom Vileplume Paras Parasect Venonat Venomoth Diglett Dugtrio Meowth Persian Psyduck Golduck Growlithe Arcanine Poliwag Poliwhirl Poliwrath Abra Kadabra Alakazam Machop Machoke Machamp Bellsprout Weepinbell Victreebel Tentacool Tentacruel Geodude Graveler Golem Ponyta Rapidash Slowpoke Slowbro Magnemite Magneton Farfetchd Doduo Dodrio Seel Dewgong Shellder Cloyster Gastly Haunter Gengar Onix Drowzee Hypno Krabby Kingler Voltorb Electrode Exeggcute Exeggutor Cubone Marowak Hitmonlee Hitmonchan Lickitung Rhyhorn Rhydon Chansey Tangela Kangaskhan Horsea Seadra Goldeen Seaking Staryu Starmie Scyther Electabuzz Magmar Pinsir Tauros Magikarp Gyarados Lapras Ditto Eevee Vaporeon Jolteon Flareon Porygon Omanyte Omastar Kabuto Kabutops Aerodactyl Snorlax Articuno Zapdos Moltres Dratini Dragonair Dragonite Mewtwo Mew Chikorita Bayleef Meganium Cyndaquil Quilava Typhlosion Totodile Croconaw Feraligatr Sentret Furret Hoothoot Noctowl Ledyba Ledian Spinarak Ariados Chinchou Lanturn Pichu Cleffa Igglybuff Togepi Togetic Natu Xatu Mareep Flaaffy Ampharos Bellossom Marill Azumarill Sudowoodo Politoed Hoppip Skiploom Jumpluff Aipom Sunkern Sunflora Yanma Wooper Quagsire Espeon Umbreon Murkrow Slowking Misdreavus Unown Wobbuffet Girafarig Pineco Forretress Dunsparce Gligar Steelix Snubbull Granbull Qwilfish Scizor Shuckle Heracross Sneasel Teddiursa Ursaring Slugma Magcargo Swinub Piloswine Corsola Remoraid Octillery Delibird Mantine Skarmory Houndour Houndoom Kingdra Phanpy Donphan Porygon2 Stantler Smeargle Tyrogue Hitmontop Smoochum Elekid Magby Miltank Blissey Raikou Entei Suicune Larvitar Pupitar Tyranitar Lugia Hooh Celebi Treecko Grovyle Sceptile Torchic Combusken Blaziken Mudkip Marshtomp Swampert Ralts Kirlia Gardevoir Aron Lairon Aggron Swablu Altaria Spheal Sealeo Walrein Bagon Shelgon Salamence Beldum Metang Metagross Turtwig Grotle Torterra Chimchar Monferno Infernape Piplup Prinplup Empoleon Shinx Luxio Luxray Riolu Lucario Leafeon Glaceon Sylveon`)
 
 func OpenStudents(root string) (*StudentStore, error) {
@@ -49,11 +50,11 @@ func OpenStudents(root string) (*StudentStore, error) {
 	if e != nil {
 		return nil, fmt.Errorf("private student table: invalid CSV")
 	}
-	if len(rows) == 0 || strings.Join(rows[0], "\x00") != strings.Join(studentHeader, "\x00") {
+	if len(rows) == 0 || (strings.Join(rows[0], "\x00") != strings.Join(studentHeader, "\x00") && strings.Join(rows[0], "\x00") != strings.Join(legacyStudentHeader, "\x00")) {
 		return nil, fmt.Errorf("private student table: unsupported header")
 	}
 	for i, row := range rows[1:] {
-		if len(row) != len(studentHeader) {
+		if len(row) != len(rows[0]) {
 			return nil, fmt.Errorf("private student table row %d: invalid columns", i+2)
 		}
 		id, e := strconv.ParseInt(row[2], 10, 64)
@@ -64,7 +65,14 @@ func OpenStudents(root string) (*StudentStore, error) {
 		if e != nil {
 			return nil, fmt.Errorf("private student table row %d: invalid monitored flag", i+2)
 		}
-		s.Rows = append(s.Rows, Student{Ref: row[0], Instance: row[1], UserID: id, Name: row[3], FirstName: row[4], Alias: row[5], SISID: row[6], Login: row[7], Monitored: flag})
+		extraTime := false
+		if len(row) == len(studentHeader) {
+			extraTime, e = strconv.ParseBool(row[9])
+			if e != nil {
+				return nil, fmt.Errorf("private student table row %d: invalid extra time flag", i+2)
+			}
+		}
+		s.Rows = append(s.Rows, Student{Ref: row[0], Instance: row[1], UserID: id, Name: row[3], FirstName: row[4], Alias: row[5], SISID: row[6], Login: row[7], Monitored: flag, ExtraTime: extraTime})
 	}
 	if e = s.validate(); e != nil {
 		return nil, e
@@ -96,7 +104,7 @@ func (s *StudentStore) Save() error {
 	w := csv.NewWriter(&b)
 	_ = w.Write(studentHeader)
 	for _, v := range s.Rows {
-		_ = w.Write([]string{v.Ref, v.Instance, strconv.FormatInt(v.UserID, 10), v.Name, v.FirstName, v.Alias, v.SISID, v.Login, strconv.FormatBool(v.Monitored)})
+		_ = w.Write([]string{v.Ref, v.Instance, strconv.FormatInt(v.UserID, 10), v.Name, v.FirstName, v.Alias, v.SISID, v.Login, strconv.FormatBool(v.Monitored), strconv.FormatBool(v.ExtraTime)})
 	}
 	w.Flush()
 	if e := w.Error(); e != nil {
@@ -138,6 +146,7 @@ func (s *StudentStore) Upsert(instance string, userID int64, name, shortName, si
 	s.Rows = append(s.Rows, v)
 	return v, nil
 }
+
 // pickAlias returns an unused alias from the pool, never skip or the current one.
 func (s *StudentStore) pickAlias(used map[string]bool, skip string) string {
 	var available []string

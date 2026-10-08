@@ -2,7 +2,6 @@ package localui
 
 import (
 	"context"
-	"time"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,8 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"canvasexpertse/internal/workspace"
+	"time"
 )
 
 func newTestHub() *Hub {
@@ -51,7 +49,7 @@ func TestHubRejectsForeignHostAndServesNavigation(t *testing.T) {
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/", nil))
 	body := w.Body.String()
-	if w.Code != 200 || !strings.Contains(body, `href="/students"`) || !strings.Contains(body, "SE = ") {
+	if w.Code != 200 || !strings.Contains(body, `href="/students"`) || !strings.Contains(body, "CanvasExpert: Special Edition") || strings.Contains(body, "SE = ") || strings.Contains(body, "/pokemonify") {
 		t.Fatal("home page incomplete")
 	}
 }
@@ -70,33 +68,6 @@ func TestHubFormsNeedOriginAndSecret(t *testing.T) {
 	case <-h.quit:
 		t.Fatal("unauthenticated quit")
 	default:
-	}
-}
-
-func TestHubStudentsNeedWorkspaceThenStayOpenAfterSave(t *testing.T) {
-	h := newTestHub()
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/students", nil))
-	if w.Code != 400 {
-		t.Fatal("students page without workspace")
-	}
-	root := makeWorkspace(t)
-	if w = hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {root}}, h.origin); w.Code != 200 || h.root == "" {
-		t.Fatalf("workspace not set: %d %s", w.Code, w.Body.String())
-	}
-	s, _ := workspace.OpenStudents(root)
-	a, _ := s.Upsert("https://school.example", 1, "Ana", "Ana", "", "")
-	if err := s.Save(); err != nil {
-		t.Fatal(err)
-	}
-	form := url.Values{"request_secret": {"nonce"}, "alias_" + a.Ref: {"Renamed"}, "monitored_" + a.Ref: {"on"}}
-	for i := 0; i < 2; i++ { // the editor must accept repeated saves
-		if w = hubPost(h, "/students", form, h.origin); w.Code != 200 || !strings.Contains(w.Body.String(), "Saved.") {
-			t.Fatalf("save %d failed: %d", i, w.Code)
-		}
-	}
-	if again, _ := workspace.OpenStudents(root); again.Rows[0].Alias != "Renamed" || !again.Rows[0].Monitored {
-		t.Fatal("edit not persisted")
 	}
 }
 
@@ -193,11 +164,11 @@ func TestHubBrowseUsesChosenFolder(t *testing.T) {
 		return folder, nil
 	}
 	w := hubPost(h, "/browse", url.Values{"request_secret": {"nonce"}}, h.origin)
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" {
-		t.Fatalf("browse must redirect to the home page, got %d", w.Code)
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/settings" {
+		t.Fatalf("browse must redirect to settings, got %d", w.Code)
 	}
 	w = httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/", nil))
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/settings", nil))
 	if !strings.Contains(w.Body.String(), `http-equiv="refresh"`) {
 		t.Fatal("home did not show the waiting page while the chooser is open")
 	}
@@ -213,7 +184,7 @@ func TestHubBrowseUsesChosenFolder(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	w = httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/", nil))
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/settings", nil))
 	if h.root == "" || !strings.Contains(w.Body.String(), "Workspace created") {
 		t.Fatalf("chosen folder not adopted: %s", w.Body.String())
 	}

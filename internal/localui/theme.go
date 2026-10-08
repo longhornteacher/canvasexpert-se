@@ -1,27 +1,13 @@
 package localui
 
-import (
-	"html/template"
-	"math/rand/v2"
-)
-
-// seExpansions: "SE" stands for something different every time.
-var seExpansions = []string{
-	"Special Edition", "Speed Edition", "Special Envelope", "Sneaky Eraser", "Sloth Express",
-	"Seriously Excellent", "Sparkly Engine", "Spreadsheet Escape", "Snack Enabled", "Stapler Enthusiast",
-	"Semi-Educational", "Suspiciously Efficient", "Sticker Emporium", "Silent Elf", "Shockingly Explainable",
-}
-
-// SEExpansion returns a random meaning of "SE".
-func SEExpansion() string { return seExpansions[rand.IntN(len(seExpansions))] }
-
-var pageFuncs = template.FuncMap{"se": SEExpansion}
+// SEExpansion keeps the CLI's edition label consistent with the WebUI.
+func SEExpansion() string { return "Special Edition" }
 
 // funkyCSS is the shared look for the loopback pages. Pure CSS (the pages run
 // under a no-script content security policy), so every effect is animation or
 // transform only and honours prefers-reduced-motion.
 // hubNav is the navigation bar shown on every page when served by the hub.
-const hubNav = `<nav><a href="/">Home</a><a href="/setup">Canvas</a><a href="/courses">Courses</a><a href="/students">Students</a><a href="/pokemonify">Pok&eacute;mon-ify</a></nav>`
+const hubNav = `<nav aria-label="Main navigation"><a href="/">Home</a><a href="/setup">Canvas</a><a href="/courses">Courses</a><a href="/students">Students</a><a href="/settings">Settings</a></nav>`
 
 const funkyCSS = `
 :root{--ink:#1b0b3a;--pink:#ff3ea5;--lime:#c6ff3d;--cyan:#27e1ff;--sun:#ffd23f;--grape:#7a3cff}
@@ -57,12 +43,21 @@ nav{display:flex;flex-wrap:wrap;gap:.6rem;margin:0 0 1.2rem}
 nav a{color:var(--ink);text-decoration:none;text-transform:uppercase;letter-spacing:.1em;font-size:.82rem;padding:.3rem .9rem;background:var(--cyan);border:3px solid var(--ink);border-radius:2rem;box-shadow:3px 3px 0 var(--ink);transition:transform .1s,background .2s}
 nav a:nth-child(2){background:var(--lime)}nav a:nth-child(3){background:var(--sun)}nav a:nth-child(4){background:var(--pink)}nav a:nth-child(5){background:var(--grape);color:#fff}
 nav a:hover{transform:translate(-2px,-2px) rotate(-3deg);background:var(--sun)}
+.course-tabs{border-bottom:4px solid var(--ink);padding:.6rem .2rem 1rem;margin-top:1.2rem}
+nav.course-tabs a{background:#fbf4ff;color:var(--ink)}
+.course-tabs a[aria-current=page]{background:var(--lime);color:var(--ink);box-shadow:5px 5px 0 var(--grape);transform:translateY(-3px)}
+.table-scroll{overflow-x:auto;padding:0 .3rem .5rem}
+table.students{min-width:48rem}table.students input:not([type]){min-width:10rem}
+.student-name{min-width:10rem}.student-name .ref{display:inline-block;margin-top:.25rem;font-size:.7rem}
+.diff-tag{background:var(--cyan);margin:.15rem .2rem .15rem 0;text-transform:none}
+.diff-tag.silver{background:#d7dce5}.diff-tag.red{background:var(--pink);color:#fff}.diff-tag.blue{background:var(--cyan)}
 .ok{background:var(--lime);border:4px solid var(--ink);border-radius:.8rem;padding:.7rem 1rem;transform:rotate(-.6deg)}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1.4rem;margin:1.2rem 0}
 .card{border:4px solid var(--ink);border-radius:1.4rem .5rem 1.4rem .5rem;padding:1rem 1.2rem;background:#fbf4ff;box-shadow:6px 6px 0 var(--grape)}
 .card:nth-child(2n){background:#effcff;box-shadow:6px 6px 0 var(--pink);transform:rotate(.6deg)}
 .card:nth-child(2n+1){transform:rotate(-.6deg)}
 .card h2{margin:0 0 .4rem;font-size:1.1rem;text-transform:uppercase;letter-spacing:.08em}
+.card code{overflow-wrap:anywhere}
 .card a.go{display:inline-block;margin-top:.6rem;color:var(--ink)}
 .pill{display:inline-block;padding:.05rem .7rem;border:3px solid var(--ink);border-radius:2rem;font-size:.8rem;text-transform:uppercase}
 .pill.on{background:var(--lime)}.pill.off{background:var(--pink);color:#fff}

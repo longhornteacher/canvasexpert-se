@@ -2,6 +2,8 @@ package workspace
 
 import (
 	"canvasexpertse/internal/domain"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -18,8 +20,9 @@ func TestStudentRenameAndInstanceIdentity(t *testing.T) {
 	}
 	s.Rows[0].Alias = "Custom Alias"
 	s.Rows[0].Monitored = true
+	s.Rows[0].ExtraTime = true
 	b, e := s.Upsert(a.Instance, 7, "Ana Jones", "Ana", "", "")
-	if e != nil || b.Ref != a.Ref || b.Alias != "Custom Alias" || !b.Monitored {
+	if e != nil || b.Ref != a.Ref || b.Alias != "Custom Alias" || !b.Monitored || !b.ExtraTime {
 		t.Fatalf("identity changed: %#v %v", b, e)
 	}
 	other, e := s.Upsert("https://other.example", 7, "Other Person", "Other", "", "")
@@ -34,11 +37,36 @@ func TestStudentRenameAndInstanceIdentity(t *testing.T) {
 		t.Fatal(e)
 	}
 	v, e := s.Resolve(a.Instance, a.Ref)
-	if e != nil || v.Name != "Ana Jones" {
+	if e != nil || v.Name != "Ana Jones" || !v.ExtraTime {
 		t.Fatal("save/resolve failed")
 	}
 	if _, e = s.Resolve(other.Instance, a.Ref); e == nil {
 		t.Fatal("cross-instance resolution")
+	}
+}
+
+func TestLegacyStudentTableGainsExtraTimeWithoutChangingIdentity(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ".cse", "students.csv")
+	legacy := strings.Join(legacyStudentHeader, ",") + "\ns-existing,https://school.example,7,Ana Smith,Ana,Pikachu,sis7,ana,true\n"
+	if err := WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenStudents(root)
+	if err != nil || len(store.Rows) != 1 || store.Rows[0].ExtraTime || !store.Rows[0].Monitored {
+		t.Fatalf("legacy table not readable: %v", err)
+	}
+	store.Rows[0].ExtraTime = true
+	if err := store.Save(); err != nil {
+		t.Fatal(err)
+	}
+	store, err = OpenStudents(root)
+	if err != nil || store.Rows[0].Ref != "s-existing" || store.Rows[0].Alias != "Pikachu" || !store.Rows[0].ExtraTime {
+		t.Fatalf("migration lost student identity or flag: %v", err)
+	}
+	b, _ := os.ReadFile(path)
+	if !strings.HasPrefix(string(b), strings.Join(studentHeader, ",")) {
+		t.Fatal("new column not saved")
 	}
 }
 func TestNotesAmbiguityAndPlaceholder(t *testing.T) {

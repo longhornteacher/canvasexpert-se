@@ -28,22 +28,27 @@ import (
 // back to any free loopback port when it is taken.
 const preferredHubAddr = "127.0.0.1:47831"
 
-var homeTemplate = template.Must(template.New("home").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{{if .Picking}}<meta http-equiv="refresh" content="2">{{end}}<title>CanvasExpert-SE hub</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div>` + hubNav + `<h1>Command central</h1><p>Everything local lives here. This page stays open until you quit it.</p>
+var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert: Special Edition</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">Special Edition</div>` + hubNav + `<h1>CanvasExpert: Special Edition</h1><p>Your courses and students, together in one place.</p>
+{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
+<div class="cards">
+<div class="card"><h2>Courses</h2>{{if .Root}}<p><b>{{.ActiveCourses}}</b> active</p><a class="go" href="/courses">Pick active courses &rarr;</a>{{else}}<p>Choose a workspace in Settings to get started.</p><a class="go" href="/settings">Open Settings &rarr;</a>{{end}}</div>
+<div class="card"><h2>Students</h2>{{if .Root}}<p><b>{{.Students}}</b> known, <b>{{.Monitored}}</b> monitored</p><a class="go" href="/students">Open students &rarr;</a>{{else}}<p>Choose a workspace in Settings to get started.</p>{{end}}</div>
+<div class="card"><h2>Settings</h2>{{if .Connected}}<span class="pill on">Canvas connected</span>{{else}}<span class="pill off">Canvas not connected</span>{{end}}<p>Canvas connection, workspace, and preferences.</p><a class="go" href="/settings">Open Settings &rarr;</a></div>
+</div><form method="post" action="/quit"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Quit the hub</button></form></main></html>`))
+
+var settingsTemplate = template.Must(template.New("settings").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{{if .Picking}}<meta http-equiv="refresh" content="2">{{end}}<title>CanvasExpert-SE settings</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">Special Edition</div>` + hubNav + `<h1>Settings</h1><p>Manage your Canvas connection and workspace.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}{{if .Picking}}<p class="ok">A folder window just opened. Choose your workspace folder there (it may be behind this window). This page updates by itself. Not seeing it? Check the taskbar, or cancel and paste the path instead.</p><form method="post" action="/browse-cancel"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Cancel</button></form>{{end}}
 {{if .ConfirmPath}}<div class="card"><h2>Set up a workspace here?</h2><p><code>{{.ConfirmPath}}</code></p><p>This folder has {{.ConfirmCount}} items and is not a workspace yet. I will add the starter files only; nothing existing is changed or overwritten.</p><form method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="path" value="{{.ConfirmPath}}"><input type="hidden" name="confirm" value="1"><button type="submit">Yes, set it up</button></form></div>{{end}}
 <div class="cards">
 <div class="card"><h2>Canvas</h2>{{if .Connected}}<span class="pill on">connected</span><p><code>{{.CanvasOrigin}}</code></p>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a></div>
 <div class="card"><h2>Program</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>Code only. Nothing private is stored here.</p></div>
-<div class="card"><h2>Workspace</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Private data: students, settings, courses.</p>{{else}}<span class="pill off">none</span><p>Point the hub at your synced workspace folder below.</p>{{end}}</div>
-<div class="card"><h2>Courses</h2>{{if .Root}}<p><b>{{.ActiveCourses}}</b> active</p><a class="go" href="/courses">Pick active courses &rarr;</a>{{else}}<p>Needs a workspace.</p>{{end}}</div>
-<div class="card"><h2>Pok&eacute;mon-ify</h2>{{if .Root}}<p>Give every student a Pok&eacute;mon.</p><a class="go" href="/pokemonify">Open the party &rarr;</a>{{else}}<p>Needs a workspace.</p>{{end}}</div>
-<div class="card"><h2>Students</h2>{{if .Root}}<p><b>{{.Students}}</b> known, <b>{{.Monitored}}</b> monitored</p><a class="go" href="/students">Edit aliases &rarr;</a>{{else}}<p>Needs a workspace.</p>{{end}}</div>
+<div class="card"><h2>Workspace</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Private data: students, settings, courses.</p>{{else}}<span class="pill off">none</span><p>Choose your synced workspace folder below.</p>{{end}}</div>
 </div>
 <label for="path">Workspace folder (your synced, private one)</label>
 <div class="inline"><form method="post" action="/browse"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Browse&hellip;</button></form>
 <form class="inline" method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><input id="path" name="path" type="text" placeholder="or paste a full folder path" autocomplete="off" required><button type="submit">Use it</button></form></div>
 <p>Pick any folder, even a new empty one. If it isn't a workspace yet, the starter files are created for you.</p>
-<form method="post" action="/quit"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Quit the hub</button></form></main></html>`))
+{{if .Preferences}}<div class="card"><h2>Student aliases</h2><form method="post" action="/settings"><input type="hidden" name="request_secret" value="{{.Secret}}"><label><input type="checkbox" name="aliases" {{if .Aliases}}checked{{end}}> Use aliases in student work files</label><button type="submit">Save settings</button></form></div>{{end}}</main></html>`))
 
 type homeData struct {
 	Secret, Message, Notice, CanvasOrigin, Root string
@@ -52,6 +57,7 @@ type homeData struct {
 	ConfirmCount                                int
 	ActiveCourses                               int
 	Picking, Connected                          bool
+	Preferences, Aliases                        bool
 	Students, Monitored                         int
 }
 
@@ -75,18 +81,17 @@ type Hub struct {
 	picked         *pickResult
 	// flash carries one notice or problem across a post-redirect-get.
 	flash, flashErr string
-	// rosters (course nickname -> student refs) and fresh (newly summoned refs)
-	// live only for this hub session.
-	rosters map[string]map[string]bool
-	fresh   map[string]bool
+	// loaded tracks the courses refreshed from Canvas during this hub session.
+	loaded map[int64]bool
 	// Test seams; nil means use the saved Canvas credential.
 	listCoursesFn func(context.Context) ([]workflow.Course, string, error)
 	rosterFn      func(context.Context, int64) ([]workflow.Enrollment, string, error)
-	mu             sync.Mutex
-	root           string
-	setup          *setupHandler
-	quit           chan struct{}
-	quitOnce       sync.Once
+	tagsFn        func(context.Context, int64) (map[int64][]string, string, error)
+	mu            sync.Mutex
+	root          string
+	setup         *setupHandler
+	quit          chan struct{}
+	quitOnce      sync.Once
 }
 
 func hubStateFile() string {
@@ -108,7 +113,7 @@ func (h *Hub) rememberRoot() {
 
 func (h *Hub) setRoot(root string) {
 	h.root = root
-	h.rosters, h.fresh = nil, nil
+	h.loaded = nil
 	h.rememberRoot()
 }
 
@@ -130,7 +135,11 @@ func (h *Hub) checkPost(w http.ResponseWriter, r *http.Request) bool {
 		http.Error(w, "Form origin rejected", 403)
 		return false
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	limit := int64(16 << 10)
+	if r.URL.Path == "/students" {
+		limit = 256 << 10
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form", 400)
 		return false
@@ -143,16 +152,19 @@ func (h *Hub) checkPost(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (h *Hub) home(w http.ResponseWriter, status int, message, notice string) {
-	h.homeWith(w, status, message, notice, "", 0)
+	data := h.pageData()
+	data.Message, data.Notice = message, notice
+	h.render(w, status, homeTemplate, data)
 }
 
-func (h *Hub) homeWith(w http.ResponseWriter, status int, message, notice, confirmPath string, confirmCount int) {
-	data := homeData{Picking: h.picking, Secret: h.secret, Message: message, Notice: notice, Root: h.root, Program: h.programDir, Version: h.version, ConfirmPath: confirmPath, ConfirmCount: confirmCount}
+func (h *Hub) pageData() homeData {
+	data := homeData{Picking: h.picking, Secret: h.secret, Root: h.root, Program: h.programDir, Version: h.version}
 	if c, err := platform.LoadCredential(); err == nil {
 		data.Connected, data.CanvasOrigin = true, c.Origin
 	}
 	if h.root != "" {
 		if config, _, err := h.readConfig(); err == nil {
+			data.Preferences, data.Aliases = true, config.Aliases
 			for _, c := range config.Courses {
 				if c.Current {
 					data.ActiveCourses++
@@ -168,9 +180,18 @@ func (h *Hub) homeWith(w http.ResponseWriter, status int, message, notice, confi
 			}
 		}
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_ = homeTemplate.Execute(w, data)
+	return data
+}
+
+func (h *Hub) settings(w http.ResponseWriter, status int, message, notice string) {
+	h.homeWith(w, status, message, notice, "", 0)
+}
+
+func (h *Hub) homeWith(w http.ResponseWriter, status int, message, notice, confirmPath string, confirmCount int) {
+	data := h.pageData()
+	data.Message, data.Notice = message, notice
+	data.ConfirmPath, data.ConfirmCount = confirmPath, confirmCount
+	h.render(w, status, settingsTemplate, data)
 }
 
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -188,22 +209,34 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Method not allowed", 405)
 			return
 		}
+		h.home(w, 200, "", "")
+	case "/settings":
+		if r.Method == http.MethodPost {
+			h.saveSettings(w, r)
+			return
+		}
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
 		if result := h.picked; result != nil {
 			h.picked = nil
 			switch {
 			case result.err != nil:
-				h.home(w, 400, result.err.Error(), "")
+				h.settings(w, 400, result.err.Error(), "")
 			case result.path == "":
-				h.home(w, 200, "", "No folder chosen.")
+				h.settings(w, 200, "", "No folder chosen.")
 			default:
 				h.chooseWorkspace(w, result.path, false)
 			}
 			return
 		}
-		h.home(w, 200, "", "")
+		message, notice := h.takeFlash()
+		h.settings(w, 200, message, notice)
 	case "/browse":
 		if r.Method == http.MethodGet {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
 			return
 		}
 		if !h.checkPost(w, r) {
@@ -219,8 +252,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.cancelPick = cancel
 			go h.runChooser(pickCtx)
 		}
-		// Redirect so the page's auto-refresh reloads "/" (GET), not this POST URL.
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		// Auto-refresh reloads Settings with GET, not this POST URL.
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 	case "/browse-cancel":
 		if !h.checkPost(w, r) {
 			return
@@ -228,21 +261,14 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.cancelPick != nil {
 			h.cancelPick()
 		}
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 	case "/setup":
 		h.setup.initialOrigin = h.knownOrigin()
 		h.setup.ServeHTTP(w, r)
 	case "/students":
-		if h.root == "" {
-			h.home(w, 400, "Choose a workspace folder first; the student table lives inside it.", "")
-			return
-		}
-		store, err := workspace.OpenStudents(h.root)
-		if err != nil {
-			h.home(w, 400, "Could not read the student table: "+err.Error(), "")
-			return
-		}
-		(&studentHandler{origin: h.origin, secret: h.secret, store: store, persistent: true, hub: true}).ServeHTTP(w, r)
+		h.studentsPage(w, r)
+	case "/students/refresh":
+		h.refreshStudents(w, r)
 	case "/workspace":
 		if !h.checkPost(w, r) {
 			return
@@ -250,19 +276,6 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.chooseWorkspace(w, r.PostForm.Get("path"), r.PostForm.Get("confirm") == "1")
 	case "/courses":
 		h.coursesPage(w, r)
-	case "/pokemonify":
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", "GET")
-			http.Error(w, "Method not allowed", 405)
-			return
-		}
-		h.pokemonPage(w, r)
-	case "/pokemonify/summon":
-		h.pokemonAction(w, r, "summon")
-	case "/pokemonify/reroll":
-		h.pokemonAction(w, r, "reroll")
-	case "/pokemonify/monitor":
-		h.pokemonAction(w, r, "monitor")
 	case "/quit":
 		if !h.checkPost(w, r) {
 			return
@@ -301,27 +314,27 @@ func (h *Hub) chooseWorkspace(w http.ResponseWriter, raw string, confirmed bool)
 	path := cleanPath(raw)
 	switch {
 	case path == "":
-		h.home(w, 400, "Browse to a folder or paste its full path.", "")
+		h.settings(w, 400, "Browse to a folder or paste its full path.", "")
 		return
 	case !filepath.IsAbs(path):
-		h.home(w, 400, "Use a full folder path such as C:\\Users\\you\\OneDrive\\Workspace.", "")
+		h.settings(w, 400, "Use a full folder path such as C:\\Users\\you\\OneDrive\\Workspace.", "")
 		return
 	case h.programDir != "" && platform.Overlaps(path, h.programDir):
-		h.home(w, 400, "The workspace and the program must be separate folders. Pick your synced workspace, not the program folder or one containing it.", "")
+		h.settings(w, 400, "The workspace and the program must be separate folders. Pick your synced workspace, not the program folder or one containing it.", "")
 		return
 	}
 	if root, err := workspace.ResolveRoot(path, ""); err == nil {
 		h.setRoot(root)
-		h.home(w, 200, "", "Workspace set.")
+		h.settings(w, 200, "", "Workspace set.")
 		return
 	}
 	info, err := os.Stat(path)
 	switch {
 	case err == nil && !info.IsDir():
-		h.home(w, 400, "That is a file, not a folder.", "")
+		h.settings(w, 400, "That is a file, not a folder.", "")
 		return
 	case err != nil && !os.IsNotExist(err):
-		h.home(w, 400, "Could not open that folder: "+err.Error(), "")
+		h.settings(w, 400, "Could not open that folder: "+err.Error(), "")
 		return
 	case err == nil && !confirmed:
 		if entries, readErr := os.ReadDir(path); readErr == nil && len(entries) > 0 {
@@ -331,12 +344,12 @@ func (h *Hub) chooseWorkspace(w http.ResponseWriter, raw string, confirmed bool)
 	}
 	created, err := workspace.Scaffold(path, embedded.WorkspaceTemplate, "workspace-template")
 	if err != nil {
-		h.home(w, 400, "Could not set up the workspace: "+err.Error(), "")
+		h.settings(w, 400, "Could not set up the workspace: "+err.Error(), "")
 		return
 	}
 	root, err := workspace.ResolveRoot(path, "")
 	if err != nil {
-		h.home(w, 400, err.Error(), "")
+		h.settings(w, 400, err.Error(), "")
 		return
 	}
 	h.setRoot(root)
@@ -346,7 +359,7 @@ func (h *Hub) chooseWorkspace(w http.ResponseWriter, raw string, confirmed bool)
 			notice += " It already uses your connected Canvas address."
 		}
 	}
-	h.home(w, 200, "", notice)
+	h.settings(w, 200, "", notice)
 }
 
 // knownOrigin prefers the workspace's configured instance, then a saved credential's.

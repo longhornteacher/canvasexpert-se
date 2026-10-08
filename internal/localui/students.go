@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,8 +19,44 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
-var studentsTemplate = template.Must(template.New("students").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE students</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div>{{if .Hub}}` + hubNav + `{{end}}<h1>Alias the humans</h1><p>Stable references keep scoring files glued to the same student when an alias changes.</p>{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}<form action="/students" method="post"><input type="hidden" name="request_secret" value="{{.Secret}}"><table><thead><tr><th>Name</th><th>Canvas instance</th><th>Stable reference</th><th>Alias</th><th>Monitored</th></tr></thead><tbody>{{range .Rows}}<tr><td>{{.Name}}</td><td>{{.Instance}}</td><td><span class="ref">{{.Ref}}</span></td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required></td><td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}}></td></tr>{{else}}<tr><td colspan="5">Nobody here yet. Pull student work first to populate this table.</td></tr>{{end}}</tbody></table><button type="submit">Save &amp; close</button></form></main></html>`))
+var studentsTemplate = template.Must(template.New("students").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE students</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">Special Edition</div>{{if .Hub}}` + hubNav + `{{end}}<h1>Students</h1><p>Manage aliases, monitoring, and extra time for your students. Differentiation tags come from Canvas.</p>
+{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
+{{if .Hub}}{{if .Tabs}}<nav class="course-tabs" aria-label="Active courses">{{range .Tabs}}<a href="/students?course={{.ID}}" {{if .Selected}}aria-current="page"{{end}}>{{.Name}}</a>{{end}}</nav>
+<div class="row"><form method="post" action="/students/refresh"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="course" value="{{.CourseID}}"><button type="submit">Refresh from Canvas</button></form><span class="pill on">{{len .Rows}} students</span></div>
+<h2 class="grp">{{.CourseName}}</h2>{{if .UpdatedAt}}<p>Last pulled: {{.UpdatedAt}}</p>{{end}}
+{{else}}<p class="card">No active courses selected. <a href="/courses">Pick active courses</a> to load their students.</p>{{end}}{{end}}
+{{if .TagMessage}}<p class="error">{{.TagMessage}}</p>{{end}}
+{{if or .CourseID (not .Hub)}}<form action="/students" method="post"><input type="hidden" name="request_secret" value="{{.Secret}}">{{if .Hub}}<input type="hidden" name="course" value="{{.CourseID}}">{{end}}
+<div class="table-scroll"><table class="students"><thead><tr><th>Name</th><th>Alias</th><th>Differentiation tag</th><th>Monitored</th><th>Extra time</th></tr></thead><tbody>
+{{range .Rows}}<tr><td class="student-name">{{.Name}}<br><span class="ref" title="Stable student reference">{{.Ref}}</span></td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required aria-label="Alias for {{.Name}}"></td>
+<td>{{if $.TagMessage}}<span class="pill">Unavailable</span>{{else}}{{range .Tags}}<span class="pill diff-tag {{.Class}}">{{.Name}}</span>{{else}}<span class="pill">No tag</span>{{end}}{{end}}</td>
+<td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}} aria-label="Monitored for {{.Name}}"></td><td><input type="checkbox" name="extra_time_{{.Ref}}" {{if .ExtraTime}}checked{{end}} aria-label="Extra time for {{.Name}}"></td></tr>
+{{else}}<tr><td colspan="5">No students loaded{{if .Hub}} for this course. Refresh from Canvas to load its roster{{else}}. Pull student work to populate this table{{end}}.</td></tr>{{end}}</tbody></table></div>
+<p>Extra time is saved for later use. Tags are managed in Canvas.</p>{{if .Rows}}<button type="submit">{{if .Hub}}Save students{{else}}Save &amp; close{{end}}</button>{{end}}</form>{{end}}</main></html>`))
 
+type courseTab struct {
+	ID       int64
+	Name     string
+	Selected bool
+}
+
+type studentTag struct {
+	Name, Class string
+}
+
+type studentRow struct {
+	workspace.Student
+	Tags []studentTag
+}
+
+type studentsData struct {
+	Secret, Message, Notice           string
+	Rows                              []studentRow
+	Hub                               bool
+	Tabs                              []courseTab
+	CourseID                          int64
+	CourseName, UpdatedAt, TagMessage string
+}
 type studentHandler struct {
 	origin, secret string
 	store          *workspace.StudentStore
@@ -29,6 +66,9 @@ type studentHandler struct {
 	// persistent keeps the editor usable after a save (the hub stays open).
 	persistent bool
 	hub        bool
+	data       studentsData
+	// nil edits all rows in the standalone editor; the hub supplies the course roster.
+	members map[string][]string
 }
 
 func (h *studentHandler) page(w http.ResponseWriter, status int, message string) {
@@ -38,11 +78,27 @@ func (h *studentHandler) page(w http.ResponseWriter, status int, message string)
 func (h *studentHandler) pageNotice(w http.ResponseWriter, status int, message, notice string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_ = studentsTemplate.Execute(w, struct {
-		Secret, Message, Notice string
-		Rows                    []workspace.Student
-		Hub                     bool
-	}{h.secret, message, notice, h.store.Rows, h.hub})
+	data := h.data
+	data.Secret, data.Message, data.Notice, data.Hub = h.secret, message, notice, h.hub
+	data.Rows = nil
+	for _, student := range h.store.Rows {
+		tags, member := h.members[student.Ref]
+		if h.hub && !member {
+			continue
+		}
+		row := studentRow{Student: student}
+		for _, name := range tags {
+			class := ""
+			switch strings.ToLower(name) {
+			case "silver", "red", "blue":
+				class = strings.ToLower(name)
+			}
+			row.Tags = append(row.Tags, studentTag{Name: name, Class: class})
+		}
+		data.Rows = append(data.Rows, row)
+	}
+	sort.SliceStable(data.Rows, func(i, j int) bool { return strings.ToLower(data.Rows[i].Name) < strings.ToLower(data.Rows[j].Name) })
+	_ = studentsTemplate.Execute(w, data)
 }
 func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -60,7 +116,7 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		h.page(w, 200, "")
+		h.pageNotice(w, 200, h.data.Message, h.data.Notice)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -84,6 +140,9 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	before := append([]workspace.Student(nil), h.store.Rows...)
 	for i := range h.store.Rows {
 		v := &h.store.Rows[i]
+		if _, member := h.members[v.Ref]; h.hub && !member {
+			continue
+		}
 		a := strings.TrimSpace(r.PostForm.Get("alias_" + v.Ref))
 		if a == "" || len([]rune(a)) > 80 || strings.ContainsAny(a, "\r\n\x00") {
 			h.store.Rows = before
@@ -92,6 +151,7 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		v.Alias = a
 		v.Monitored = r.PostForm.Get("monitored_"+v.Ref) == "on"
+		v.ExtraTime = r.PostForm.Get("extra_time_"+v.Ref) == "on"
 	}
 	if e := h.store.Save(); e != nil {
 		h.store.Rows = before
