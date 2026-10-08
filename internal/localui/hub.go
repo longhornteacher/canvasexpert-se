@@ -28,7 +28,7 @@ import (
 const preferredHubAddr = "127.0.0.1:47831"
 
 var homeTemplate = template.Must(template.New("home").Funcs(pageFuncs).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{{if .Picking}}<meta http-equiv="refresh" content="2">{{end}}<title>CanvasExpert-SE hub</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">SE = {{se}}</div>` + hubNav + `<h1>Command central</h1><p>Everything local lives here. This page stays open until you quit it.</p>
-{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}{{if .Picking}}<p class="ok">A folder window just opened. Choose your workspace folder there (it may be behind this window). This page updates by itself.</p>{{end}}
+{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}{{if .Picking}}<p class="ok">A folder window just opened. Choose your workspace folder there (it may be behind this window). This page updates by itself. Not seeing it? Check the taskbar, or cancel and paste the path instead.</p><form method="post" action="/browse-cancel"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Cancel</button></form>{{end}}
 {{if .ConfirmPath}}<div class="card"><h2>Set up a workspace here?</h2><p><code>{{.ConfirmPath}}</code></p><p>This folder has {{.ConfirmCount}} items and is not a workspace yet. I will add the starter files only; nothing existing is changed or overwritten.</p><form method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="path" value="{{.ConfirmPath}}"><input type="hidden" name="confirm" value="1"><button type="submit">Yes, set it up</button></form></div>{{end}}
 <div class="cards">
 <div class="card"><h2>Canvas</h2>{{if .Connected}}<span class="pill on">connected</span><p><code>{{.CanvasOrigin}}</code></p>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a></div>
@@ -67,6 +67,7 @@ type Hub struct {
 	ctx            context.Context
 	chooser        func(context.Context) (string, error)
 	picking        bool
+	cancelPick     context.CancelFunc
 	picked         *pickResult
 	mu             sync.Mutex
 	root           string
@@ -189,9 +190,23 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if !h.picking {
 			h.picking = true
-			go h.runChooser()
+			base := h.ctx
+			if base == nil {
+				base = context.Background()
+			}
+			pickCtx, cancel := context.WithCancel(base)
+			h.cancelPick = cancel
+			go h.runChooser(pickCtx)
 		}
 		// Redirect so the page's auto-refresh reloads "/" (GET), not this POST URL.
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	case "/browse-cancel":
+		if !h.checkPost(w, r) {
+			return
+		}
+		if h.cancelPick != nil {
+			h.cancelPick()
+		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	case "/setup":
 		h.setup.initialOrigin = h.knownOrigin()
@@ -224,16 +239,15 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Hub) runChooser() {
-	ctx := h.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
+func (h *Hub) runChooser(ctx context.Context) {
 	choose := h.chooser
 	if choose == nil {
 		choose = platform.PickFolder
 	}
 	path, err := choose(ctx)
+	if errors.Is(err, context.Canceled) {
+		path, err = "", nil
+	}
 	h.mu.Lock()
 	h.picking = false
 	h.picked = &pickResult{path: path, err: err}
