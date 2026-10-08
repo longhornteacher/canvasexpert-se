@@ -244,11 +244,24 @@ type ResultsDocument struct {
 	Packet         string                  `yaml:"packet"`
 	Assignment     AssignmentSnapshot      `yaml:"assignment"`
 	Interpretation Interpretation          `yaml:"interpretation"`
-	Variants       []InterpretationVariant `yaml:"variants,omitempty"`
+	// ScoringBasis is the agent's own criteria for an assignment with no Canvas
+	// rubric. It drives the arithmetic and the feedback score lines only; it is
+	// never written to Canvas as a rubric.
+	ScoringBasis *Rubric                 `yaml:"scoring_basis,omitempty"`
+	Variants     []InterpretationVariant `yaml:"variants,omitempty"`
 	Students       []StudentResult         `yaml:"students"`
 }
 type InterpretationVariant struct {
 	Key            string         `yaml:"key"`
 	Basis          string         `yaml:"basis"` // private established teacher accommodation
 	Interpretation Interpretation `yaml:"interpretation"`
+}
+
+// Basis returns the criteria scoring is computed against: the live Canvas rubric
+// when the assignment has one, otherwise the agent-supplied scoring basis.
+func (d ResultsDocument) Basis() *Rubric {
+	if d.Assignment.Rubric != nil {
+		return d.Assignment.Rubric
+	}
+	return d.ScoringBasis
 }

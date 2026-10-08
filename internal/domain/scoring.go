@@ -302,6 +302,19 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 	if len(doc.Students) == 0 {
 		return nil, fmt.Errorf("results requires students")
 	}
+	if doc.Assignment.Rubric != nil && doc.ScoringBasis != nil {
+		return nil, fmt.Errorf("scoring_basis is only for assignments without a Canvas rubric; this assignment has one")
+	}
+	basis := doc.Basis()
+	hasGrade := false
+	for _, s := range doc.Students {
+		if s.Operation == "grade" {
+			hasGrade = true
+		}
+	}
+	if basis == nil && hasGrade {
+		return nil, fmt.Errorf("assignment has no Canvas rubric: add scoring_basis (your own criteria with ids, descriptions and points) to score it")
+	}
 	variants := map[string]Interpretation{}
 	for i, variant := range doc.Variants {
 		if variant.Key == "" || strings.TrimSpace(variant.Basis) == "" {
@@ -310,10 +323,10 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 		if _, ok := variants[variant.Key]; ok {
 			return nil, fmt.Errorf("duplicate variant %q", variant.Key)
 		}
-		if doc.Assignment.Rubric == nil {
-			return nil, fmt.Errorf("variant requires rubric")
+		if basis == nil {
+			return nil, fmt.Errorf("variant requires a rubric or scoring_basis")
 		}
-		if e := ValidateInterpretation(*doc.Assignment.Rubric, variant.Interpretation); e != nil {
+		if e := ValidateInterpretation(*basis, variant.Interpretation); e != nil {
 			return nil, fmt.Errorf("variant %s: %w", variant.Key, e)
 		}
 		variants[variant.Key] = variant.Interpretation
@@ -351,10 +364,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			if e := validateAttempt(g.Attempt); e != nil {
 				return fail(e)
 			}
-			if doc.Assignment.Rubric == nil {
-				return fail(fmt.Errorf("numeric rubric scoring requires a rubric"))
-			}
-			a, e := ComputeAssessment(*doc.Assignment.Rubric, v.Interpretation, g.Components, doc.Assignment.Points)
+			a, e := ComputeAssessment(*basis, v.Interpretation, g.Components, doc.Assignment.Points)
 			if e != nil {
 				return fail(e)
 			}
@@ -418,10 +428,10 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				return fail(fmt.Errorf("revision outcome id disagrees with comment_id"))
 			}
 			if r.Assessment != nil {
-				if doc.Assignment.Rubric == nil {
-					return fail(fmt.Errorf("preserved score display needs rubric"))
+				if basis == nil {
+					return fail(fmt.Errorf("preserved score display needs a rubric or scoring_basis"))
 				}
-				a, e := ComputeAssessment(*doc.Assignment.Rubric, v.Interpretation, r.Assessment.Components, doc.Assignment.Points)
+				a, e := ComputeAssessment(*basis, v.Interpretation, r.Assessment.Components, doc.Assignment.Points)
 				if e != nil {
 					return fail(e)
 				}

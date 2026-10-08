@@ -27,6 +27,10 @@ An interpretation has `mapping: repeated` or `direct`, a private `rationale`, an
 
 For every component, `evidence` is `present`, `missing`, or `unknown`, and `criteria` supplies each mapped `criterion_id` with explicit `points` and optional truthful `rating_id` or concise `comment`. Missing components explicitly score zero; unknown evidence cannot be posted. The `assessment` is derived from the fixed interpretation and component scores, normalized to assignment points, then rounded to two decimal places. The CLI validates it against the computed value.
 
+### Assignments without a Canvas rubric
+
+If the live assignment has no rubric, add a top-level `scoring_basis` to the results document: `title` and `criteria` (each `id`, `description`, nonnegative `points`; ratings optional). The interpretation and component scores work exactly as they do for a Canvas rubric, using `scoring_basis` criteria ids. It is used only for arithmetic and the compact score lines; the post writes the grade and comment but no rubric assessment (rubric outcome `not-requested`). `scoring_basis` is rejected if the assignment already has a Canvas rubric, and results for a rubric-less assignment are rejected until one is supplied.
+
 ### Student operations
 
 For `operation: grade`, include `grade` with the target `attempt`, every `components` score, the derived `assessment`, and `feedback`. Optional `teacher_note` and `strongest_prior` are private. Immediately before posting, the workflow compares the assessment with the live entered grade and passes a higher value to the renderer as `retained_grade`; it is not an extra results-file field. The rubric and `assessment` remain the honest score for current work. `late_forgiveness` is separate evidence about a genuine on-time first attempt. Outcomes record each remote action independently.

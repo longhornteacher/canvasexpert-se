@@ -257,11 +257,6 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			if e != nil {
 				return report, e
 			}
-			if snapshot.Rubric == nil {
-				summary.SkipReason = "no attached numeric rubric"
-				report.Skipped = append(report.Skipped, fmt.Sprintf("assignment %d: no attached numeric rubric", a.ID))
-				continue
-			}
 			job := fmt.Sprintf("%d-%s/pulled/%s", a.ID, Slug(a.Name), time.Now().UTC().Format("20060102T150405.000000000"))
 			relDir := filepath.Join("courses", course.Nickname, "assignments", job)
 			packet := domain.PacketDocument{Schema: 1, Kind: "packet", Course: course.Nickname, Assignment: snapshot}

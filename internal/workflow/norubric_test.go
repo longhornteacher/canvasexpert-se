@@ -1,0 +1,125 @@
+package workflow
+
+import (
+	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/workspace"
+	"context"
+	"encoding/json"
+	"net/http"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func noRubricAssignment() Assignment {
+	var a Assignment
+	_ = json.Unmarshal([]byte(`{"id":10,"course_id":1,"name":"Reflection","points_possible":20,"description":"<p>Reflect on the unit.</p>","grading_type":"points","submission_types":["online_text_entry"],"published":true}`), &a)
+	return a
+}
+
+// writeNoRubricResults builds a results file for an assignment that has no
+// Canvas rubric. basis is the agent's own scoring_basis (nil to omit it).
+func writeNoRubricResults(t *testing.T, s *Service, basis *domain.Rubric) string {
+	t.Helper()
+	snapshot, e := Snapshot(noRubricAssignment(), s.Client.Origin())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if snapshot.Rubric != nil {
+		t.Fatal("fixture must have no Canvas rubric")
+	}
+	store, e := workspace.OpenStudents(s.Root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	st, e := store.Upsert(s.Client.Origin(), 5, "Jordan Sample", "Jordan", "", "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	sub := fixtureSubmission(5)
+	sub.EnteredScore, sub.Score = nil, nil
+	work := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: st.Ref, Alias: st.Alias, AssignmentID: 10, Current: domain.AttemptWork{Ref: attemptRef(sub), BodyHTML: sub.Body}, EnteredGradeKnown: true}
+	rel := "courses/TEST/" + st.Ref + ".md"
+	if e = workspace.WriteDocument(filepath.Join(s.Root, filepath.FromSlash(rel)), work, "work"); e != nil {
+		t.Fatal(e)
+	}
+	packet := domain.PacketDocument{Schema: 1, Kind: "packet", Course: "TEST", Assignment: snapshot, Students: []string{rel}}
+	g := &domain.GradeOperation{Attempt: work.Current.Ref, Assessment: domain.MustDecimal("12"), Feedback: "{{student_name}}, your reflection names a real change in your thinking.", Components: []domain.ComponentScore{{Key: "reflection", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "overall", Points: domain.MustDecimal("6")}}}}}
+	results := domain.ResultsDocument{Schema: 1, Kind: "results", Packet: "courses/TEST/packet.md", Assignment: snapshot, ScoringBasis: basis,
+		Interpretation: domain.Interpretation{Mapping: "repeated", Rationale: "One reflection, scored on overall quality.", Components: []domain.Component{{Key: "reflection", Label: "Reflection", Weight: domain.MustDecimal("1")}}},
+		Students:       []domain.StudentResult{{StudentRef: st.Ref, Operation: "grade", Grade: g}}}
+	if e = store.Save(); e != nil {
+		t.Fatal(e)
+	}
+	if e = workspace.WriteDocument(filepath.Join(s.Root, "courses", "TEST", "packet.md"), packet, "packet"); e != nil {
+		t.Fatal(e)
+	}
+	path := filepath.Join(s.Root, "courses", "TEST", "results.md")
+	if e = workspace.WriteDocument(path, results, "results"); e != nil {
+		t.Fatal(e)
+	}
+	return path
+}
+
+func overallBasis() *domain.Rubric {
+	return &domain.Rubric{Title: "Overall quality", Criteria: []domain.Criterion{{ID: "overall", Description: "Overall quality", Points: domain.MustDecimal("10")}}}
+}
+
+func TestNoRubricAssignmentScoresWithAgentBasisAndWritesGradeAndCommentOnly(t *testing.T) {
+	live := fixtureSubmission(5)
+	live.EnteredScore, live.Score = nil, nil
+	rubricWrites, gradeWrites := 0, 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "submissions/5") {
+			if r.Method == "PUT" {
+				var request struct {
+					Rubric     map[string]RubricScore `json:"rubric_assessment"`
+					Submission map[string]any         `json:"submission"`
+					Comment    struct {
+						Text    string `json:"text_comment"`
+						Attempt int    `json:"attempt"`
+					} `json:"comment"`
+				}
+				if e := json.NewDecoder(r.Body).Decode(&request); e != nil {
+					t.Error(e)
+				}
+				if request.Rubric != nil {
+					rubricWrites++
+				}
+				if v, ok := request.Submission["posted_grade"]; ok {
+					gradeWrites++
+					n := json.Number(v.(string))
+					live.EnteredScore, live.Score = &n, &n
+				}
+				if request.Comment.Text != "" {
+					a := request.Comment.Attempt
+					live.Comments = append(live.Comments, SubmissionComment{ID: 70, Comment: request.Comment.Text, Attempt: &a})
+				}
+			}
+			_ = json.NewEncoder(w).Encode(live)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(noRubricAssignment())
+	})
+	path := writeNoRubricResults(t, s, overallBasis())
+	report, e := s.Post(context.Background(), path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(report.Students) != 1 || report.Students[0].Status != "completed" {
+		t.Fatalf("expected completed row, got %#v", report)
+	}
+	if rubricWrites != 0 || gradeWrites != 1 {
+		t.Fatalf("no-rubric post must write only grade+comment: rubricWrites=%d gradeWrites=%d", rubricWrites, gradeWrites)
+	}
+	if live.EnteredScore == nil || live.EnteredScore.String() != "12" {
+		t.Fatalf("expected entered grade 12, got %v", live.EnteredScore)
+	}
+	if len(live.Comments) != 1 || !strings.Contains(live.Comments[0].Comment, "12 / 20") || !strings.Contains(live.Comments[0].Comment, "Overall quality 6/10") {
+		t.Fatalf("feedback missing assessment or criterion line: %#v", live.Comments)
+	}
+	if report.Students[0].Outcomes.Rubric.Status != "not-requested" {
+		t.Fatalf("rubric outcome should be not-requested, got %q", report.Students[0].Outcomes.Rubric.Status)
+	}
+}

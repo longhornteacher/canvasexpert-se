@@ -339,12 +339,20 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		holdGrade(g, reason)
 		return save()
 	}
-	rubric := doc.Assignment.Rubric
-	if rubric == nil || !rubric.UseForGradingKnown {
+	// Without a Canvas rubric the agent's scoring_basis supplies criteria for the
+	// arithmetic and feedback lines; nothing rubric-shaped is written to Canvas.
+	rubric := doc.Basis()
+	noCanvasRubric := doc.Assignment.Rubric == nil
+	if rubric == nil || (!noCanvasRubric && !rubric.UseForGradingKnown) {
 		holdGrade(g, "rubric automatic-grade setting cannot be determined")
 		return save()
 	}
-	if e := s.require(s.Evidence.FractionalRubricPoints, "honest rubric criterion points"); e != nil {
+	coupled := !noCanvasRubric && rubric.UseForGrading
+	if noCanvasRubric {
+		if !definite(g.Outcomes.Rubric) {
+			g.Outcomes.Rubric = domain.ActionOutcome{Status: "not-requested", Message: "assignment has no Canvas rubric"}
+		}
+	} else if e := s.require(s.Evidence.FractionalRubricPoints, "honest rubric criterion points"); e != nil {
 		holdGrade(g, e.Error())
 		return save()
 	}
@@ -352,12 +360,12 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		holdGrade(g, e.Error())
 		return save()
 	}
-	if rubric.UseForGrading {
+	if coupled {
 		if e := s.require(s.Evidence.CoupledRubricPreservation, "combined coupled-rubric/entered-grade preservation"); e != nil {
 			holdGrade(g, e.Error()+"; existing association requires a verified path or explicit decoupling choice")
 			return save()
 		}
-	} else {
+	} else if !noCanvasRubric {
 		if e := s.require(s.Evidence.IndependentRubricAssessment, "independent rubric assessment"); e != nil {
 			holdGrade(g, e.Error())
 			return save()
@@ -387,12 +395,12 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 	if err := save(); err != nil {
 		return err
 	}
-	if rubric.UseForGrading && ambiguous(g.Outcomes.Grade) {
+	if coupled && ambiguous(g.Outcomes.Grade) {
 		holdOutcome(&g.Outcomes.Comment, "coupled entered-grade preservation remains uncertain; feedback held")
 		holdOutcome(&g.Outcomes.Late, "coupled entered-grade preservation remains uncertain; late adjustment held")
 		return save()
 	}
-	if rubric.UseForGrading {
+	if coupled {
 		if !definite(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Rubric) {
 			if definite(g.Outcomes.Grade) && decision.Write {
 				g.Outcomes.Rubric = domain.ActionOutcome{Status: "held", Message: "entered grade changed after completed grade action; coupled rubric would restore an old grade"}
@@ -433,7 +441,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 				}
 			}
 		}
-	} else if !definite(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Rubric) {
+	} else if !noCanvasRubric && !definite(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Rubric) {
 		g.Outcomes.Rubric = domain.ActionOutcome{Status: "pending"}
 		if err := save(); err != nil {
 			return err
@@ -732,7 +740,7 @@ func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument,
 	text := workspace.ReplaceStudentName(r.Feedback, source.student)
 	if r.Assessment != nil {
 		var e error
-		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Assignment.Rubric, Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, RetainedGrade: r.Assessment.RetainedGrade, Feedback: text})
+		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, RetainedGrade: r.Assessment.RetainedGrade, Feedback: text})
 		if e != nil {
 			return e
 		}

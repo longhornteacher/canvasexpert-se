@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"encoding/json"
 	"math/big"
 	"testing"
@@ -141,5 +142,36 @@ func TestDecimalJSONAndBoundaries(t *testing.T) {
 	}
 	if got := RoundRat(big.NewRat(-1005, 1000), 2).String(); got != "-1.01" {
 		t.Fatalf("half-away rounding: %s", got)
+	}
+}
+
+func noRubricResults(basis *Rubric) *ResultsDocument {
+	snap := AssignmentSnapshot{Instance: "https://canvas.example", CourseID: 1, AssignmentID: 10, Title: "Reflection", Points: MustDecimal("20"), SubmissionTypes: []string{"online_text_entry"}, GradingType: "points"}
+	attempt := AttemptRef{Attempt: 1, SubmittedAt: "2026-10-07T12:00:00Z"}
+	grade := &GradeOperation{Attempt: attempt, Assessment: MustDecimal("12"), Feedback: "Specific, kind feedback.", Components: []ComponentScore{{Key: "a", Evidence: "present", Criteria: []CriterionScore{{CriterionID: "overall", Points: MustDecimal("6")}}}}}
+	return &ResultsDocument{Schema: 1, Kind: "results", Packet: "packet.md", Assignment: snap, ScoringBasis: basis, Interpretation: Interpretation{Mapping: "repeated", Rationale: "One response.", Components: []Component{{Key: "a", Label: "Response", Weight: MustDecimal("1")}}}, Students: []StudentResult{{StudentRef: "s1", Operation: "grade", Grade: grade}}}
+}
+func overallBasis() *Rubric {
+	return &Rubric{Title: "Overall", Criteria: []Criterion{{ID: "overall", Description: "Overall quality", Points: MustDecimal("10")}}}
+}
+func TestNoCanvasRubricScoresAgainstAgentScoringBasis(t *testing.T) {
+	validated, e := ValidateResults(noRubricResults(overallBasis()))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if validated[0].Assessment.Posted.String() != "12" {
+		t.Fatalf("wanted 12/20 from 6/10 on a 20-point assignment, got %s", validated[0].Assessment.Posted)
+	}
+}
+func TestNoCanvasRubricWithoutScoringBasisGivesActionableError(t *testing.T) {
+	if _, e := ValidateResults(noRubricResults(nil)); e == nil || !strings.Contains(e.Error(), "add scoring_basis") {
+		t.Fatalf("expected guidance to add scoring_basis, got %v", e)
+	}
+}
+func TestScoringBasisRejectedWhenCanvasRubricExists(t *testing.T) {
+	doc := noRubricResults(overallBasis())
+	doc.Assignment.Rubric = overallBasis()
+	if _, e := ValidateResults(doc); e == nil || !strings.Contains(e.Error(), "only for assignments without a Canvas rubric") {
+		t.Fatalf("expected conflict error, got %v", e)
 	}
 }

@@ -14,6 +14,14 @@ For a named assignment, the beta command contract is:
 
 Use `.\cse.cmd --help` to confirm the syntax available in this build. Inspect the generated packet and files; do not overwrite unsent scoring work with a fresh pull.
 
+## Work the problem, do not block
+
+Your job is to take work off the teacher's plate. Do not stop at an obstacle: use judgment, infer what a sensible teacher would want, and keep going. When something is genuinely unclear or you are curious or concerned, ask the teacher in conversation, briefly, with your recommendation, and carry on with whatever else you can finish meanwhile. When a choice is easier to judge by looking, show it first in a preview ("Let me show you in a nice preview...") using the desktop app's preview or artifact features, then continue on the teacher's answer. Never answer "I can't" when you could propose, draft, or show.
+
+## Assignments with no Canvas rubric
+
+Score them anyway. Infer sensible criteria from the directions, the work, and the grade level, then record them once in the results file as `scoring_basis` (a rubric-shaped list: `title`, and `criteria` each with `id`, `description`, `points`). Use one overall criterion when nothing finer is warranted. Fix the basis before scoring any student and apply it consistently. It drives the arithmetic and the compact score lines in feedback; it is not written to Canvas as a rubric, so Canvas receives only the grade and the comment. If the teacher would plausibly want a real rubric attached (for a reusable assignment, say), offer to draft one in a preview. Do not use `scoring_basis` when the assignment already has a Canvas rubric.
+
 ## Interpret the work and rubric
 
 Before grading individual students, identify the required response units from the directions, rubric, and submission mode. Distinguish required answers from choices. Apply the rubric to the whole assignment and infer defensible relative weights from the task's expectations and intellectual demands. Equal weights can be reasonable but are not automatic. Record a short rationale and keep the same interpretation for all students unless a documented accommodation applies. Ask a focused question only when missing or contradictory information prevents a defensible assessment.
