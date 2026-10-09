@@ -48,7 +48,7 @@ to the workspace unless absolute. Use quotes around paths or titles with spaces.
 ui/setup/students pages exist only while their command runs; Ctrl+C closes them.
 Draft/show-me-first instructions stop before post. A scoring session pulls only.
 Exit codes: 0 success; 2 invalid input; 3 partial/held work; 4 environment/API failure.
-Read the Playbook guides (guides/setup.md, authoring.md, edit.md, score.md) as needed; use help formats and help examples for file formats.
+Read the playbooks (playbooks/setup.md, authoring.md, edit.md, score.md) as needed; use help formats and help examples for file formats.
 `
 
 // printEngineDoc prints the embedded format reference or synthetic examples.

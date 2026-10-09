@@ -1,6 +1,6 @@
 # Set up a workspace
 
-Use this guide once for each workspace and on each computer that will use CanvasExpert-SE. The files sync with the workspace; the Canvas credential is per machine.
+Use this playbook once for each workspace and on each computer that will use CanvasExpert-SE. The files sync with the workspace; the Canvas credential is per machine.
 
 ## 0. Link the program (once per computer)
 

@@ -115,6 +115,7 @@ label.check{text-transform:none;letter-spacing:0;font-size:.85rem;margin:.6rem 0
 [popover]::backdrop{background:rgba(27,11,58,.55)}
 [popover] h2{margin:0 0 .6rem;font-size:1.2rem;text-transform:uppercase;letter-spacing:.06em}[popover] ol{margin:.4rem 0 .6rem;padding-left:1.4rem}[popover] li{margin:.35rem 0}
 .row button[popovertarget]{margin-top:0}
+.pill.warn{background:var(--sun)}.card.token{transform:none}.card.t-green{border-color:#1a8f3c;box-shadow:0 0 0 3px #7dffa0,0 0 22px 6px #34d36a}.card.t-yellow{border-color:#b88a00;box-shadow:0 0 0 3px #ffe680,0 0 22px 6px #ffc400}.card.t-red{border-color:#b3122b;box-shadow:0 0 0 3px #ff9aa8,0 0 22px 6px #ff3b57}.qmark{margin:0 0 0 .3rem;padding:0;width:1.7rem;height:1.7rem;border-radius:50%;line-height:1;font-size:1rem;vertical-align:middle;cursor:pointer}p.lead{font-size:1.1rem;max-width:46rem}ol.steps{padding-left:1.4rem}ol.steps li{margin:.3rem 0}p.reassure{border:3px dashed var(--ink);border-radius:1rem;padding:.6rem 1rem;background:#f4fff4;max-width:46rem}
 .pill.same{background:var(--lime)}.pill.differs{background:var(--sun)}
 ul.playbook{list-style:none;margin:.6rem 0 0;padding:0}ul.playbook li{margin:.7rem 0;font-size:.9rem}ul.playbook code{overflow-wrap:anywhere}
 @media (prefers-reduced-motion:reduce){.ball{display:none}}

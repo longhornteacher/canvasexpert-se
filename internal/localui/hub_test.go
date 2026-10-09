@@ -198,10 +198,10 @@ func TestHubOpeningExistingWorkspaceAddsMissingSeedOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	notice := addMissingSeed(root)
-	if !strings.Contains(notice, "guides/score.md") {
+	if !strings.Contains(notice, "playbooks/score.md") {
 		t.Fatalf("notice does not name the restored guide: %q", notice)
 	}
-	if _, err := os.Stat(filepath.Join(root, "guides", "score.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "playbooks", "score.md")); err != nil {
 		t.Fatal("missing guide was not restored")
 	}
 	if got, _ := os.ReadFile(grading); string(got) != string(edited) {
@@ -216,22 +216,22 @@ func TestPlaybookReplaceKeepsOldCopyAndRefusesSettings(t *testing.T) {
 	h := newTestHub()
 	h.root = makeWorkspace(t)
 	addMissingSeed(h.root)
-	guide := filepath.Join(h.root, "guides", "score.md")
+	guide := filepath.Join(h.root, "playbooks", "score.md")
 	if err := os.WriteFile(guide, []byte("my edits"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	form := url.Values{"request_secret": {"nonce"}, "file": {"guides/score.md"}, "confirm": {"on"}}
+	form := url.Values{"request_secret": {"nonce"}, "file": {"playbooks/score.md"}, "confirm": {"on"}}
 	if w := hubPost(h, "/playbook/replace", form, h.origin); w.Code != 303 {
 		t.Fatalf("replace not accepted: %d", w.Code)
 	}
-	old, _ := filepath.Glob(filepath.Join(h.root, "playbook-old", "*", "guides", "score.md"))
+	old, _ := filepath.Glob(filepath.Join(h.root, "playbook-old", "*", "playbooks", "score.md"))
 	if len(old) != 1 {
 		t.Fatalf("old copy not kept: %v", old)
 	}
 	if b, _ := os.ReadFile(old[0]); string(b) != "my edits" {
 		t.Fatal("old copy changed")
 	}
-	if seed, _ := seedBytes("guides/score.md"); !strings.EqualFold(string(seed), readString(t, guide)) {
+	if seed, _ := seedBytes("playbooks/score.md"); !strings.EqualFold(string(seed), readString(t, guide)) {
 		t.Fatal("seed copy not written")
 	}
 	grading := filepath.Join(h.root, "settings", "grading.md")

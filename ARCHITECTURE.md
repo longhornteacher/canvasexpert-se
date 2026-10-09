@@ -18,21 +18,22 @@ Preserve useful content and teacher intent rather than byte equality of unrelate
 |---|---|---|---|
 | **CE-SE** | The whole product | this repo | n/a |
 | **Engine** | The Go program: `cse.exe` CLI plus the local hub pages | `cmd/`, `internal/` | Mechanical work the agent can't do reliably: talk to Canvas, keep student, attempt and assignment identity straight, exact score arithmetic, safe write recovery. No educational judgment. |
-| **Playbook** | The agent's norms and behaviors. Every judgment call about scoring, assignments and policy is the teacher's and agent's, and lives here | Seed: `workspace-template/` (embedded in the Engine). Teacher's copy: workspace `AGENTS.md`, `CLAUDE.md`, `guides/`, `settings/` | Tells the agent how to judge: scoring, lateness, feedback, voice, student notes, courses, calendar, when to ask the teacher |
-| **Agent** | Claude working in the teacher's workspace | n/a | Makes the judgment calls using the Playbook, then hands decisions to the Engine |
+| **Playbook** | The instruction set the agent follows for one kind of task. A teacher says "scoring playbook" and the agent reads that file. Every judgment call about scoring, assignments and policy is the teacher's and agent's, and lives here | Seed: `workspace-template/playbooks/` (embedded in the Engine). Teacher's copy: workspace `playbooks/` (plus the standing `AGENTS.md`, `CLAUDE.md`) | Tells the agent how to do a job: score, create an assignment, edit one, set up |
+| **Context** | The teacher's preferences and facts the playbooks draw on | Seed: `workspace-template/settings/`. Teacher's copy: workspace `settings/` (folder name kept) | Feedback voice, grading habits, student notes, courses, calendar |
+| **Agent** | Claude working in the teacher's workspace | n/a | Makes the judgment calls using the playbooks and context, then hands decisions to the Engine |
 
-Rule of thumb: if it needs judgment, it goes in the Playbook; if it needs Canvas access, exact identity or exact math, it goes in the Engine.
+Rule of thumb: if it needs judgment, it goes in a playbook or the context; if it needs Canvas access, exact identity or exact math, it goes in the Engine.
 
-Two folders. The **program folder** holds the Engine, which carries the **Playbook seed**. The teacher's synced **workspace** holds the **teacher's Playbook** (started from the seed, theirs to change) and student information (`.cse/`, `courses/`). New program versions add missing seed files and never change the teacher's.
+Two folders. The **program folder** holds the Engine, which carries the **starter playbooks and context**. The teacher's synced **workspace** holds the **teacher's playbooks and context** (started from the seed, theirs to change) and student information (`.cse/`, `courses/`). New program versions add missing seed files and never change the teacher's.
 
 ## Spine and operation boundaries
 
 ```text
-Agent (follows the Playbook) -> Engine: cse CLI / hub -> feature operation -> shared spine -> Canvas Live
-The teacher's Playbook and work files live in the workspace, apart from the Engine.
+Agent (follows a playbook) -> Engine: cse CLI / hub -> feature operation -> shared spine -> Canvas Live
+The teacher's playbooks, context and work files live in the workspace, apart from the Engine.
 ```
 
-The Playbook seed lives in `workspace-template/`; judgment belongs in the Playbook.
+The seed lives in `workspace-template/`; judgment belongs in the playbooks and context.
 
 ### Engine packages
 
@@ -45,7 +46,7 @@ The Playbook seed lives in `workspace-template/`; judgment belongs in the Playbo
 | `internal/domain`, `internal/render` | Feature contracts, rubric arithmetic, feedback and content rendering |
 | `cmd/cse`, `internal/localui` | CLI entry points and temporary setup/student/settings UI |
 
-A normal Go function/package is a module. A feature usually adds an operation, command entry point and short guide. Shared utilities emerge from actual use. Assignment editing shares Canvas transport and workspace I/O but owns its field patch and conflict checks. Feedback revision uses those same mechanics but owns selection and recovery of an exact comment ID. Grading semantics belong with grading, even when several grading functions share them.
+A normal Go function/package is a module. A feature usually adds an operation, command entry point and short playbook. Shared utilities emerge from actual use. Assignment editing shares Canvas transport and workspace I/O but owns its field patch and conflict checks. Feedback revision uses those same mechanics but owns selection and recovery of an exact comment ID. Grading semantics belong with grading, even when several grading functions share them.
 
 Keep the existing layout and useful transport, parsing, identity and arithmetic code. Do not introduce a plugin loader, registry, event bus, job engine, persistence layer, universal policy schema, arbitrary-HTTP agent interface or new agent protocol. Large files alone do not require splitting.
 

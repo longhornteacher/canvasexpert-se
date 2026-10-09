@@ -1,6 +1,6 @@
 # Create a new assignment
 
-Use this guide when the teacher wants a new Canvas assignment. Canvas Live is authoritative for existing course content; for new work, gather the teacher's requested content and settings before writing a draft.
+Use this playbook when the teacher wants a new Canvas assignment. Canvas Live is authoritative for existing course content; for new work, gather the teacher's requested content and settings before writing a draft.
 
 ## Prepare the draft
 
