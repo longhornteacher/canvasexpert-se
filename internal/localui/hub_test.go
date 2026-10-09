@@ -29,10 +29,10 @@ func hubPost(h *Hub, path string, form url.Values, origin string) *httptest.Resp
 
 func makeWorkspace(t *testing.T) string {
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "settings"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "context"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "settings", "courses.md"), []byte("---\nschema: 1\ninstance: \"\"\ncourses: []\n---\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "context", "courses.md"), []byte("---\nschema: 1\ninstance: \"\"\ncourses: []\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -106,7 +106,7 @@ func TestHubCreatesWorkspaceInEmptyOrNewFolder(t *testing.T) {
 		if w.Code != 200 || h.root == "" || !strings.Contains(w.Body.String(), "Workspace created") {
 			t.Fatalf("%q: not created: %d %s", name, w.Code, w.Body.String())
 		}
-		for _, want := range []string{"settings/courses.md", ".claude/settings.json", "cse.cmd", "AGENTS.md"} {
+		for _, want := range []string{"context/courses.md", ".claude/settings.json", "cse.cmd", "AGENTS.md"} {
 			if _, err := os.Stat(filepath.Join(folder, filepath.FromSlash(want))); err != nil {
 				t.Fatalf("starter file missing: %s", want)
 			}
@@ -129,7 +129,7 @@ func TestHubAsksBeforeUsingNonEmptyFolder(t *testing.T) {
 	if w := hubPost(h, "/workspace", form, h.origin); w.Code != 200 || h.root != "" || !strings.Contains(w.Body.String(), "Set up a workspace here?") {
 		t.Fatal("non-empty folder was not confirmed first")
 	}
-	if _, err := os.Stat(filepath.Join(folder, "settings")); err == nil {
+	if _, err := os.Stat(filepath.Join(folder, "context")); err == nil {
 		t.Fatal("scaffolded before confirmation")
 	}
 	form.Set("confirm", "1")
@@ -192,7 +192,7 @@ func TestHubBrowseUsesChosenFolder(t *testing.T) {
 
 func TestHubOpeningExistingWorkspaceAddsMissingSeedOnly(t *testing.T) {
 	root := makeWorkspace(t)
-	grading := filepath.Join(root, "settings", "grading.md")
+	grading := filepath.Join(root, "context", "grading.md")
 	edited := []byte("my own grading habits")
 	if err := os.WriteFile(grading, edited, 0o644); err != nil {
 		t.Fatal(err)
@@ -234,11 +234,11 @@ func TestPlaybookReplaceKeepsOldCopyAndRefusesSettings(t *testing.T) {
 	if seed, _ := seedBytes("playbooks/score.md"); !strings.EqualFold(string(seed), readString(t, guide)) {
 		t.Fatal("seed copy not written")
 	}
-	grading := filepath.Join(h.root, "settings", "grading.md")
+	grading := filepath.Join(h.root, "context", "grading.md")
 	if err := os.WriteFile(grading, []byte("mine"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	form.Set("file", "settings/grading.md")
+	form.Set("file", "context/grading.md")
 	hubPost(h, "/playbook/replace", form, h.origin)
 	if readString(t, grading) != "mine" || !strings.Contains(h.flashErr, "can't be replaced") {
 		t.Fatal("settings file was replaced or not refused")

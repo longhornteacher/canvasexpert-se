@@ -52,35 +52,35 @@ function Test-TemplatePathAllowed {
     return $normalizedPath -match '^(AGENTS|CLAUDE|README)\.md$' -or
         $normalizedPath -eq 'cse.cmd' -or
         $normalizedPath -match '^\.claude/settings\.json$' -or
-        $normalizedPath -match '^guides/[A-Za-z0-9._-]+\.md$' -or
-        $normalizedPath -match '^settings/(courses|grading|students|school-calendar)\.md$'
+        $normalizedPath -match '^playbooks/[A-Za-z0-9._-]+\.md$' -or
+        $normalizedPath -match '^context/(courses|grading|students|school-calendar)\.md$'
 }
 
-$studentNotesPath = Join-Path $templateRoot 'settings/students.md'
+$studentNotesPath = Join-Path $templateRoot 'context/students.md'
 if (-not (Test-Path -LiteralPath $studentNotesPath -PathType Leaf)) {
-    throw 'The clean template must include settings/students.md.'
+    throw 'The clean template must include context/students.md.'
 }
 $studentNotes = [IO.File]::ReadAllText($studentNotesPath)
 if ($studentNotes -notmatch '(?i)starter file: no students or real student information are configured') {
-    throw 'Refusing to package settings/students.md: it is not marked as the empty starter file.'
+    throw 'Refusing to package context/students.md: it is not marked as the empty starter file.'
 }
 
-$gradingSettingsPath = Join-Path $templateRoot 'settings/grading.md'
+$gradingSettingsPath = Join-Path $templateRoot 'context/grading.md'
 if (-not (Test-Path -LiteralPath $gradingSettingsPath -PathType Leaf)) {
-    throw 'The clean template must include settings/grading.md.'
+    throw 'The clean template must include context/grading.md.'
 }
 $gradingSettings = [IO.File]::ReadAllText($gradingSettingsPath)
 if ($gradingSettings -notmatch '(?i)starter file: no teacher-specific preferences are configured') {
-    throw 'Refusing to package settings/grading.md: it is not marked as the empty starter file.'
+    throw 'Refusing to package context/grading.md: it is not marked as the empty starter file.'
 }
 
-$courseSettingsPath = Join-Path $templateRoot 'settings/courses.md'
+$courseSettingsPath = Join-Path $templateRoot 'context/courses.md'
 if (-not (Test-Path -LiteralPath $courseSettingsPath -PathType Leaf)) {
-    throw 'The clean template must include settings/courses.md.'
+    throw 'The clean template must include context/courses.md.'
 }
 $courseSettings = [IO.File]::ReadAllText($courseSettingsPath)
 if ($courseSettings -notmatch '(?i)starter file: no courses configured') {
-    throw 'Refusing to package settings/courses.md without the empty starter marker.'
+    throw 'Refusing to package context/courses.md without the empty starter marker.'
 }
 
 $claudeSettingsPath = Join-Path $templateRoot '.claude/settings.json'
@@ -169,8 +169,8 @@ try {
         if ($archiveFiles -notcontains 'cse.cmd') {
             throw 'Archive is missing the cse.cmd launcher.'
         }
-        if ($archiveFiles -notcontains 'settings/courses.md') {
-            throw 'Archive is missing settings/courses.md.'
+        if ($archiveFiles -notcontains 'context/courses.md') {
+            throw 'Archive is missing context/courses.md.'
         }
         if (@($archiveFiles | Where-Object { $_ -match '(^|/)(\.cse|courses|scoring|pulled|cache)(/|$)' }).Count -gt 0) {
             throw 'Archive contains private runtime state or pulled course data.'

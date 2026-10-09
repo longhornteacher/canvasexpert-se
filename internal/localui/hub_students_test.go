@@ -21,7 +21,7 @@ func studentsHub(t *testing.T) (*Hub, string) {
 	h.programDir = t.TempDir()
 	root := makeWorkspace(t)
 	// A valid HTTPS instance so the course document validates.
-	path := filepath.Join(root, "settings", "courses.md")
+	path := filepath.Join(root, "context", "courses.md")
 	if err := os.WriteFile(path, []byte("---\nschema: 1\ninstance: https://school.example\naliases: true\ncourses: []\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestCreatureArtIsStableAndSafe(t *testing.T) {
 func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 	h, root := studentsHub(t)
 	config := domain.CourseConfig{Schema: 1, Instance: "https://school.example", Aliases: true, Courses: []domain.Course{{ID: 11, Nickname: "CS8", Current: true}, {ID: 22, Nickname: "ELA7", Current: true}, {ID: 33, Nickname: "OLD"}}}
-	if err := workspace.WriteDocument(filepath.Join(root, "settings", "courses.md"), config, "Course notes stay here."); err != nil {
+	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, "Course notes stay here."); err != nil {
 		t.Fatal(err)
 	}
 	h.rosterFn = func(_ context.Context, id int64) ([]workflow.Enrollment, string, error) {
@@ -180,7 +180,7 @@ func TestStudentsNoActiveCoursesAndTagFailure(t *testing.T) {
 		t.Fatal("missing empty state")
 	}
 	config := domain.CourseConfig{Schema: 1, Instance: "https://school.example", Courses: []domain.Course{{ID: 11, Nickname: "CS8", Current: true}}}
-	if err := workspace.WriteDocument(filepath.Join(root, "settings", "courses.md"), config, ""); err != nil {
+	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); err != nil {
 		t.Fatal(err)
 	}
 	h.tagsFn = func(context.Context, int64) (map[int64][]string, string, error) {

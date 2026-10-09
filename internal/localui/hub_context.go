@@ -22,8 +22,8 @@ const gradingBody = "Edited from the CE-SE hub Settings page. `voice` is how fee
 
 const notesBody = "Edited from the CE-SE hub Students page. Each note names a student by stable `student_ref` (or an unambiguous `name`, with optional `course`). Notes are private teacher context and must never be copied into student-facing feedback.\n"
 
-func gradingPath(root string) string { return filepath.Join(root, "settings", "grading.md") }
-func notesPath(root string) string   { return filepath.Join(root, "settings", "students.md") }
+func gradingPath(root string) string { return filepath.Join(root, "context", "grading.md") }
+func notesPath(root string) string   { return filepath.Join(root, "context", "students.md") }
 
 // readGrading tolerates a missing file so a fresh workspace still shows the form.
 func readGrading(root string) (domain.GradingConfig, string, error) {
@@ -100,7 +100,7 @@ func (h *Hub) saveGrading(w http.ResponseWriter, r *http.Request) {
 	}
 	config, body, err := readGrading(h.root)
 	if err != nil {
-		h.redirect(w, r, "/settings", "", "Could not read settings/grading.md: "+err.Error())
+		h.redirect(w, r, "/settings", "", "Could not read context/grading.md: "+err.Error())
 		return
 	}
 	voice, okVoice := cleanText(r.PostForm.Get("voice"))
@@ -111,7 +111,7 @@ func (h *Hub) saveGrading(w http.ResponseWriter, r *http.Request) {
 	}
 	config.Schema, config.Voice, config.FeedbackGuidance = 1, voice, guidance
 	if err = workspace.WriteDocument(gradingPath(h.root), &config, body); err != nil {
-		h.redirect(w, r, "/settings", "", "Could not save settings/grading.md: "+err.Error())
+		h.redirect(w, r, "/settings", "", "Could not save context/grading.md: "+err.Error())
 		return
 	}
 	h.redirect(w, r, "/settings", "Feedback voice saved. The agent uses it next time it writes feedback.", "")

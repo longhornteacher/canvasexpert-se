@@ -4,9 +4,9 @@ Machine-written documents begin with one YAML mapping between `---` lines, follo
 
 ## Settings
 
-`settings/courses.md` contains `schema`, the HTTPS Canvas `instance` origin, `aliases`, optional `module_hint`, and `courses`. Each course has a unique `nickname`, positive Canvas `id`, `current` scan flag, and optional IANA `timezone`. The clean starter has an example origin and an empty course list; replace the origin during setup.
+`context/courses.md` contains `schema`, the HTTPS Canvas `instance` origin, `aliases`, optional `module_hint`, and `courses`. Each course has a unique `nickname`, positive Canvas `id`, `current` scan flag, and optional IANA `timezone`. The clean starter has an example origin and an empty course list; replace the origin during setup.
 
-`settings/grading.md` contains `schema`, optional `voice`, and optional `feedback_guidance`. `settings/students.md` contains `schema` and `notes`. Each note may identify a student by stable `student_ref`, or by unambiguous `name` and optional `course`, and has a required `note`. These are teacher preferences and private context; neither is included in rendered student feedback. `settings/school-calendar.md` contains `schema`, IANA `timezone`, inclusive `start_date` and `end_date`, `non_school_dates`, and optional `non_school_ranges`. It is reference data the agent uses to work out school-day lateness (the Engine does not read it); update its coverage, closures, and make-up days. Early-release dates count as full student dates.
+`context/grading.md` contains `schema`, optional `voice`, and optional `feedback_guidance`. `context/students.md` contains `schema` and `notes`. Each note may identify a student by stable `student_ref`, or by unambiguous `name` and optional `course`, and has a required `note`. These are teacher preferences and private context; neither is included in rendered student feedback. `context/school-calendar.md` contains `schema`, IANA `timezone`, inclusive `start_date` and `end_date`, `non_school_dates`, and optional `non_school_ranges`. It is reference data the agent uses to work out school-day lateness (the Engine does not read it); update its coverage, closures, and make-up days. Early-release dates count as full student dates.
 
 ## Versioned task documents
 

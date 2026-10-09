@@ -20,7 +20,7 @@ func (h *Hub) saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	config.Aliases = r.PostForm.Get("aliases") == "on"
-	if err = workspace.WriteDocument(filepath.Join(h.root, "settings", "courses.md"), config, body); err != nil {
+	if err = workspace.WriteDocument(filepath.Join(h.root, "context", "courses.md"), config, body); err != nil {
 		h.settings(w, 400, "Could not save workspace settings.", "")
 		return
 	}

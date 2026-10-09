@@ -25,7 +25,7 @@ func (s *Service) Course(nickname string) (domain.Course, error) {
 			return course, nil
 		}
 	}
-	return domain.Course{}, fmt.Errorf("course %q is not configured in settings/courses.md", nickname)
+	return domain.Course{}, fmt.Errorf("course %q is not configured in context/courses.md", nickname)
 }
 
 // Slug is friendly decoration only. Stable remote IDs supply folder identity.

@@ -43,7 +43,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   version                       Print version and build information
   help [formats|examples]       Print this help, the file-format reference, or the synthetic examples (no Canvas requests)
 
-COURSE is an explicit nickname in settings/courses.md. FILE paths are relative
+COURSE is an explicit nickname in context/courses.md. FILE paths are relative
 to the workspace unless absolute. Use quotes around paths or titles with spaces.
 ui/setup/students pages exist only while their command runs; Ctrl+C closes them.
 Draft/show-me-first instructions stop before post. A scoring session pulls only.
@@ -165,7 +165,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		configBody := ""
 		if rootErr == nil {
 			var err error
-			configBody, err = workspace.ReadDocument(filepath.Join(setupRoot, "settings", "courses.md"), &config)
+			configBody, err = workspace.ReadDocument(filepath.Join(setupRoot, "context", "courses.md"), &config)
 			if err != nil {
 				return fail(inputError(err), progress)
 			}
@@ -184,11 +184,11 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			credential.Token = ""
 			if len(config.Courses) == 0 || config.Instance == credential.Origin {
 				config.Instance = credential.Origin
-				if err = workspace.WriteDocument(filepath.Join(setupRoot, "settings", "courses.md"), config, configBody); err != nil {
+				if err = workspace.WriteDocument(filepath.Join(setupRoot, "context", "courses.md"), config, configBody); err != nil {
 					return fail(err, progress)
 				}
 			} else {
-				fmt.Fprintln(progress, "Saved Canvas origin differs from configured courses; update settings/courses.md before remote commands.")
+				fmt.Fprintln(progress, "Saved Canvas origin differs from configured courses; update context/courses.md before remote commands.")
 			}
 		}
 		return 0

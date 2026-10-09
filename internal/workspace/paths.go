@@ -15,7 +15,7 @@ func ResolveRoot(explicit, start string) (string, error) {
 			return "", e
 		}
 		if !isRoot(p) {
-			return "", fmt.Errorf("workspace root %s lacks settings/courses.md", p)
+			return "", fmt.Errorf("workspace root %s lacks context/courses.md", p)
 		}
 		return p, nil
 	}
@@ -46,7 +46,8 @@ func ResolveRoot(explicit, start string) (string, error) {
 	return "", fmt.Errorf("no workspace found above %s; use --workspace", start)
 }
 func isRoot(p string) bool {
-	i, e := os.Stat(filepath.Join(p, "settings", "courses.md"))
+	migrateLegacyFolders(p)
+	i, e := os.Stat(filepath.Join(p, "context", "courses.md"))
 	return e == nil && !i.IsDir()
 }
 
@@ -170,4 +171,18 @@ func SafeFilename(s string) string {
 		v = strings.TrimRight(string(r[:120]), " .")
 	}
 	return v
+}
+
+// migrateLegacyFolders renames the folders of an older workspace (settings/ is
+// now context/, guides/ is now playbooks/). It only moves a folder when the new
+// name is absent, so nothing is overwritten.
+func migrateLegacyFolders(p string) {
+	if _, e := os.Stat(filepath.Join(p, "settings", "courses.md")); e != nil {
+		return
+	}
+	for _, m := range [][2]string{{"settings", "context"}, {"guides", "playbooks"}} {
+		if _, e := os.Stat(filepath.Join(p, m[1])); os.IsNotExist(e) {
+			_ = os.Rename(filepath.Join(p, m[0]), filepath.Join(p, m[1]))
+		}
+	}
 }

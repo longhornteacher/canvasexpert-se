@@ -136,7 +136,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 		return report, err
 	}
 	var notes domain.StudentNotes
-	notePath := filepath.Join(s.Root, "settings", "students.md")
+	notePath := filepath.Join(s.Root, "context", "students.md")
 	if _, e := os.Stat(notePath); e == nil {
 		if _, err = workspace.ReadDocument(notePath, &notes); err != nil {
 			return report, err

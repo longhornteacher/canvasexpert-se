@@ -418,7 +418,7 @@ func (h *Hub) chooseWorkspace(w http.ResponseWriter, raw string, confirmed bool)
 func (h *Hub) knownOrigin() string {
 	if h.root != "" {
 		var config domain.CourseConfig
-		if _, err := workspace.ReadDocument(filepath.Join(h.root, "settings", "courses.md"), &config); err == nil && config.Instance != "" && !strings.Contains(config.Instance, "canvas.example.edu") {
+		if _, err := workspace.ReadDocument(filepath.Join(h.root, "context", "courses.md"), &config); err == nil && config.Instance != "" && !strings.Contains(config.Instance, "canvas.example.edu") {
 			return config.Instance
 		}
 	}
@@ -466,9 +466,9 @@ func RunHub(ctx context.Context, root, version string, output io.Writer) error {
 		changed, err := workspace.SyncInstance(hub.root, c.Origin)
 		switch {
 		case err != nil:
-			return "Could not update settings/courses.md."
+			return "Could not update context/courses.md."
 		case !changed:
-			return "Saved origin differs from configured courses; update settings/courses.md before remote commands."
+			return "Saved origin differs from configured courses; update context/courses.md before remote commands."
 		}
 		return "Workspace settings now use this Canvas address."
 	}

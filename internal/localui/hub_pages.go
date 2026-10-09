@@ -82,7 +82,7 @@ func (h *Hub) fetchRoster(ctx context.Context, courseID int64) ([]workflow.Enrol
 
 func (h *Hub) readConfig() (domain.CourseConfig, string, error) {
 	var config domain.CourseConfig
-	body, err := workspace.ReadDocument(filepath.Join(h.root, "settings", "courses.md"), &config)
+	body, err := workspace.ReadDocument(filepath.Join(h.root, "context", "courses.md"), &config)
 	return config, body, err
 }
 
@@ -133,7 +133,7 @@ func (h *Hub) coursesPage(w http.ResponseWriter, r *http.Request) {
 	message, notice := h.takeFlash()
 	config, _, err := h.readConfig()
 	if err != nil {
-		h.home(w, 400, "Could not read settings/courses.md: "+err.Error(), "")
+		h.home(w, 400, "Could not read context/courses.md: "+err.Error(), "")
 		return
 	}
 	ctx, cancel := h.reqCtx()
@@ -176,7 +176,7 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 	}
 	config, body, err := h.readConfig()
 	if err != nil {
-		h.redirect(w, r, "/courses", "", "Could not read settings/courses.md: "+err.Error())
+		h.redirect(w, r, "/courses", "", "Could not read context/courses.md: "+err.Error())
 		return
 	}
 	origin := ""
@@ -186,7 +186,7 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 	if origin != "" && (config.Instance == "" || strings.Contains(config.Instance, starterInstance) || len(config.Courses) == 0) {
 		config.Instance = origin
 	} else if origin != "" && config.Instance != origin {
-		h.redirect(w, r, "/courses", "", "settings/courses.md uses a different Canvas address than the one saved on this machine. Fix one of them first.")
+		h.redirect(w, r, "/courses", "", "context/courses.md uses a different Canvas address than the one saved on this machine. Fix one of them first.")
 		return
 	}
 	index := map[int64]int{}
@@ -222,8 +222,8 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 		h.redirect(w, r, "/courses", "", "Not saved: nicknames must be unique and file-safe (no / \\ : * ? \" < > |). "+err.Error())
 		return
 	}
-	if err = workspace.WriteDocument(filepath.Join(h.root, "settings", "courses.md"), config, body); err != nil {
-		h.redirect(w, r, "/courses", "", "Could not save settings/courses.md.")
+	if err = workspace.WriteDocument(filepath.Join(h.root, "context", "courses.md"), config, body); err != nil {
+		h.redirect(w, r, "/courses", "", "Could not save context/courses.md.")
 		return
 	}
 	active := 0

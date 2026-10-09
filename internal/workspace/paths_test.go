@@ -64,3 +64,26 @@ func TestSafeFilenameRemainsPortableAfterTruncation(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveRootRenamesOlderFolders(t *testing.T) {
+	root := t.TempDir()
+	for _, d := range []string{"settings", "guides"} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "settings", "courses.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "guides", "score.md"), []byte("mine"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveRoot(root, ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"context/courses.md", "playbooks/score.md"} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(p))); err != nil {
+			t.Fatalf("%s missing after migration", p)
+		}
+	}
+}

@@ -24,7 +24,7 @@ func TestFeedbackVoiceSavesAndShows(t *testing.T) {
 		t.Fatalf("save: %d", w.Code)
 	}
 	var config domain.GradingConfig
-	if _, err := workspace.ReadDocument(filepath.Join(root, "settings", "grading.md"), &config); err != nil || config.Voice != "Warm & short.\nUse <first name>." || config.FeedbackGuidance != "No spelling penalties." {
+	if _, err := workspace.ReadDocument(filepath.Join(root, "context", "grading.md"), &config); err != nil || config.Voice != "Warm & short.\nUse <first name>." || config.FeedbackGuidance != "No spelling penalties." {
 		t.Fatalf("grading.md not written: %+v %v", config, err)
 	}
 	page := hubGet(h, "/settings").Body.String()
@@ -44,7 +44,7 @@ func TestFeedbackVoiceSavesAndShows(t *testing.T) {
 func TestStudentNotesSaveWithoutTouchingHandWrittenNotes(t *testing.T) {
 	h, root := studentsHub(t)
 	config := domain.CourseConfig{Schema: 1, Instance: "https://school.example", Courses: []domain.Course{{ID: 11, Nickname: "CS8", Current: true}}}
-	if err := workspace.WriteDocument(filepath.Join(root, "settings", "courses.md"), config, ""); err != nil {
+	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); err != nil {
 		t.Fatal(err)
 	}
 	if page := hubGet(h, "/students").Body.String(); !strings.Contains(page, "Notes for the agent") {
@@ -57,7 +57,7 @@ func TestStudentNotesSaveWithoutTouchingHandWrittenNotes(t *testing.T) {
 	}
 	ana, bo := refs[1], refs[2]
 	hand := domain.StudentNotes{Schema: 1, Notes: []domain.StudentNote{{Name: "Bo Real", Course: "CS8", Note: "Hand-written."}, {StudentRef: ana.Ref, Note: "Old note."}}}
-	if err := workspace.WriteDocument(filepath.Join(root, "settings", "students.md"), &hand, "Body stays."); err != nil {
+	if err := workspace.WriteDocument(filepath.Join(root, "context", "students.md"), &hand, "Body stays."); err != nil {
 		t.Fatal(err)
 	}
 	if page := hubGet(h, "/students").Body.String(); !strings.Contains(page, "Old note.") {
@@ -68,7 +68,7 @@ func TestStudentNotesSaveWithoutTouchingHandWrittenNotes(t *testing.T) {
 		t.Fatalf("save: %d %s", w.Code, w.Body.String())
 	}
 	var saved domain.StudentNotes
-	body, err := workspace.ReadDocument(filepath.Join(root, "settings", "students.md"), &saved)
+	body, err := workspace.ReadDocument(filepath.Join(root, "context", "students.md"), &saved)
 	if err != nil || body != "Body stays." {
 		t.Fatalf("notes file body lost: %q %v", body, err)
 	}
@@ -84,7 +84,7 @@ func TestStudentNotesSaveWithoutTouchingHandWrittenNotes(t *testing.T) {
 
 func TestStudentNotesMissingFileIsCreated(t *testing.T) {
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "settings"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "context"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := saveNotes(root, map[string]string{"s_1": "Hi"}); err != nil {

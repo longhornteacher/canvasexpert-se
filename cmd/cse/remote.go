@@ -35,7 +35,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 	}
 	var config domain.CourseConfig
-	if _, e := workspace.ReadDocument(filepath.Join(root, "settings", "courses.md"), &config); e != nil {
+	if _, e := workspace.ReadDocument(filepath.Join(root, "context", "courses.md"), &config); e != nil {
 		return fail(inputError(e), progress)
 	}
 	credential, e := platform.LoadCredential()
@@ -49,7 +49,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	}
 	configuredOrigin, originErr := canvas.New(config.Instance, "validate-origin-only")
 	if originErr != nil || configuredOrigin.Origin() != c.Origin() {
-		return fail(inputError(fmt.Errorf("settings/courses.md instance differs from this machine's saved Canvas origin; update the configuration")), progress)
+		return fail(inputError(fmt.Errorf("context/courses.md instance differs from this machine's saved Canvas origin; update the configuration")), progress)
 	}
 	service := &workflow.Service{Root: root, Client: c, Config: config}
 	start := time.Now()

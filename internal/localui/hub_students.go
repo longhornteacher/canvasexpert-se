@@ -59,7 +59,7 @@ func (h *Hub) studentsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	config, _, err := h.readConfig()
 	if err != nil {
-		h.home(w, 400, "Could not read settings/courses.md.", "")
+		h.home(w, 400, "Could not read context/courses.md.", "")
 		return
 	}
 	raw := r.URL.Query().Get("course")
@@ -114,7 +114,7 @@ func (h *Hub) refreshStudents(w http.ResponseWriter, r *http.Request) {
 	}
 	config, _, err := h.readConfig()
 	if err != nil {
-		h.redirect(w, r, "/students", "", "Could not read settings/courses.md.")
+		h.redirect(w, r, "/students", "", "Could not read context/courses.md.")
 		return
 	}
 	course, ok := selectedCourse(config, r.PostForm.Get("course"))

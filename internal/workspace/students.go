@@ -237,7 +237,7 @@ func NotesFor(notes domain.StudentNotes, course string, student Student, roster 
 		if count == 1 && targetMatched {
 			result = append(result, n.Note)
 		} else {
-			warnings = append(warnings, "Ambiguous student note; use an explicit student_ref in settings/students.md.")
+			warnings = append(warnings, "Ambiguous student note; use an explicit student_ref in context/students.md.")
 		}
 	}
 	return result, warnings

@@ -28,15 +28,15 @@ Run `setup` and follow the local form to enter the Canvas origin and personal ac
 
 ## 3. Configure courses
 
-Use `courses` to discover courses you can access and their IDs. Then set teacher-selected nicknames and current-course flags in `settings/courses.md`; the Engine does not infer nicknames from Canvas titles. Configure only current courses you want a “scoring session” to scan. Use `modules <course>` when an assignment needs a module target. The starter `settings/courses.md` shows the version-one configuration shape; run `.\cse.cmd help formats` for the field reference.
+Use `courses` to discover courses you can access and their IDs. Then set teacher-selected nicknames and current-course flags in `context/courses.md`; the Engine does not infer nicknames from Canvas titles. Configure only current courses you want a “scoring session” to scan. Use `modules <course>` when an assignment needs a module target. The starter `context/courses.md` shows the version-one configuration shape; run `.\cse.cmd help formats` for the field reference.
 
 ## 4. Maintain student notes
 
-Use `students` for alias and monitored-status changes. Put teacher-authored accommodations or useful context in `settings/students.md`, associated with an unambiguous student and course. These notes may contain real names and remain in the teacher's synced folder. Never put a PAT there. Agents must not read the private `.cse/` mapping.
+Use `students` for alias and monitored-status changes. Put teacher-authored accommodations or useful context in `context/students.md`, associated with an unambiguous student and course. These notes may contain real names and remain in the teacher's synced folder. Never put a PAT there. Agents must not read the private `.cse/` mapping.
 
 ## 5. Review the school calendar
 
-Review `settings/school-calendar.md` before scoring late work. The agent uses it to work out school-day lateness; update it when the school calendar changes.
+Review `context/school-calendar.md` before scoring late work. The agent uses it to work out school-day lateness; update it when the school calendar changes.
 
 ## When setup is done
 

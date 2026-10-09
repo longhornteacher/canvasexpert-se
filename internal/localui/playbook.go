@@ -24,7 +24,7 @@ type playbookRow struct {
 }
 
 // playbookSeedPaths lists the seed files the teacher can compare and refresh:
-// AGENTS.md, CLAUDE.md, playbooks/* and settings/* (the context). README.md,
+// AGENTS.md, CLAUDE.md, playbooks/* and context/* (the context). README.md,
 // cse.cmd and .claude are glue.
 func playbookSeedPaths() []string {
 	var out []string
@@ -33,7 +33,7 @@ func playbookSeedPaths() []string {
 			return err
 		}
 		rel := strings.TrimPrefix(name, "workspace-template/")
-		if rel == "AGENTS.md" || rel == "CLAUDE.md" || strings.HasPrefix(rel, "playbooks/") || strings.HasPrefix(rel, "settings/") {
+		if rel == "AGENTS.md" || rel == "CLAUDE.md" || strings.HasPrefix(rel, "playbooks/") || strings.HasPrefix(rel, "context/") {
 			out = append(out, rel)
 		}
 		return nil
@@ -42,7 +42,7 @@ func playbookSeedPaths() []string {
 	return out
 }
 
-func isSettingsPath(rel string) bool { return strings.HasPrefix(rel, "settings/") }
+func isSettingsPath(rel string) bool { return strings.HasPrefix(rel, "context/") }
 
 func seedBytes(rel string) ([]byte, error) {
 	return fs.ReadFile(embedded.WorkspaceTemplate, path.Join("workspace-template", rel))

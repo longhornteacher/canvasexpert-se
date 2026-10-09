@@ -70,7 +70,7 @@ type studentHandler struct {
 	data       studentsData
 	// nil edits all rows in the standalone editor; the hub supplies the course roster.
 	members map[string][]string
-	// notesRoot, when set, enables the notes column backed by settings/students.md.
+	// notesRoot, when set, enables the notes column backed by context/students.md.
 	notesRoot string
 }
 
@@ -89,7 +89,7 @@ func (h *studentHandler) pageNotice(w http.ResponseWriter, status int, message, 
 		if all, _, err := readNotes(h.notesRoot); err == nil {
 			data.NotesOn, notes = true, notesByRef(all)
 		} else if data.Message == "" {
-			data.Message = "Could not read settings/students.md, so notes are hidden: " + err.Error()
+			data.Message = "Could not read context/students.md, so notes are hidden: " + err.Error()
 		}
 	}
 	for _, student := range h.store.Rows {

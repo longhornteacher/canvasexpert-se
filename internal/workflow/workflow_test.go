@@ -750,7 +750,7 @@ func TestPullWorkFullRosterNotesAndAttachmentsAndPreservesResults(t *testing.T) 
 	})
 	serverURL = server.URL
 	notes := domain.StudentNotes{Schema: 1, Notes: []domain.StudentNote{{Name: "Jordan Sample", Course: "TEST", Note: "Ambiguous private note"}}}
-	if e := workspace.WriteDocument(filepath.Join(s.Root, "settings", "students.md"), notes, "notes"); e != nil {
+	if e := workspace.WriteDocument(filepath.Join(s.Root, "context", "students.md"), notes, "notes"); e != nil {
 		t.Fatal(e)
 	}
 	prepared := filepath.Join(s.Root, "courses", "TEST", "prepared-results.md")
