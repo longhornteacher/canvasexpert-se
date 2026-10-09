@@ -20,7 +20,7 @@ After making the requested changes, use the current build's help to confirm synt
 .\cse.cmd push <pulled-file>
 ```
 
-The intended contract rechecks the live item before writing and protects post-pull teacher edits. If it reports that the assignment changed, pull again and reconcile the requested change against the new live version. Do not overwrite the newer version using stale content.
+The update rechecks the live item before writing and sends the requested fields while preserving unrelated current fields. A live change to the content being replaced can require a fresh pull; keep the unsent edit and reapply it to the new version.
 
 ## Attach a rubric to an assignment without one
 
@@ -28,4 +28,4 @@ When the teacher requests a new rubric on an existing assignment, first pull the
 
 This operation creates an independent rubric association and preserves the assignment's existing point scale and settings, including publication. It refuses an already attached rubric and does not edit a shared rubric or toggle an existing grading setting. Returned rubric/association IDs and outcomes are saved under `created`; retry the same document to resolve an uncertain attachment against its exact live definition. An absent lookup does not authorize another attachment, and replaying a completed attachment performs no remote work. Pull again before scoring so the packet contains Canvas's real criterion/rating IDs.
 
-“Show me first” means prepare the edit and stop before pushing. A direct request to update authorizes that update without a routine preview/approval step. Report what succeeded and any held or incomplete work. Live conflict behavior and Canvas HTML round-tripping remain subject to verification in the specific build and district instance.
+“Show me first” means prepare the edit and stop before pushing. A direct request to update authorizes that update without a routine preview/approval step. Report what succeeded and any held or incomplete work.

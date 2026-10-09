@@ -10,7 +10,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -200,26 +199,6 @@ func (p *probe) serviceWorkflow(ctx context.Context, command string, args []stri
 		return e
 	}
 	service := &workflow.Service{Root: root, Client: p.c, Config: config}
-	capPath, e := workspace.ConstrainPath(root, filepath.Join(".cse", "capabilities.json"))
-	if e != nil {
-		return e
-	}
-	b, e := os.ReadFile(capPath)
-	if e == nil {
-		dec := json.NewDecoder(strings.NewReader(string(b)))
-		dec.DisallowUnknownFields()
-		if e = dec.Decode(&service.Evidence); e != nil {
-			return fmt.Errorf("invalid developer workspace capability evidence")
-		}
-		var extra any
-		if e = dec.Decode(&extra); e != io.EOF {
-			return fmt.Errorf("capability evidence must be one JSON object")
-		}
-	} else if !os.IsNotExist(e) {
-		return e
-	}
-	// Capabilities are read exactly as production reads them. This harness never
-	// manufactures evidence flags to make a grading path pass.
 	if command == "pull" {
 		if *results != "" {
 			return fmt.Errorf("pull does not take --results")

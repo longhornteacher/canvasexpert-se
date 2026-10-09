@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -247,17 +246,7 @@ func (s *Service) postSources(doc domain.ResultsDocument) (map[string]postSource
 			if g.StrongestPrior != nil && !hasAttempt(work.Prior, g.StrongestPrior.Attempt) {
 				return nil, fmt.Errorf("%s strongest prior is absent from actual pulled history", r.StudentRef)
 			}
-			if late := g.LateForgiveness; late != nil {
-				found := false
-				for _, prior := range work.Prior {
-					if sameAttempt(prior.Ref, late.FirstAttempt) && prior.EffectiveDueAt == late.EffectiveDueAt {
-						found = true
-					}
-				}
-				if !found {
-					return nil, fmt.Errorf("%s late evidence is absent or differs from pulled effective due date", r.StudentRef)
-				}
-			}
+
 		} else {
 			rv := r.ReviseFeedback
 			if !sameAttempt(rv.Attempt, work.Current.Ref) && !hasAttempt(work.Prior, rv.Attempt) {
@@ -322,6 +311,12 @@ func ambiguous(o domain.ActionOutcome) bool { return o.Status == "pending" || o.
 
 func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, row *domain.StudentResult, v domain.ValidatedStudent, source postSource, live Submission, save func() error) error {
 	g := row.Grade
+	// Incomplete saved rows may carry the old retention decision rather than a
+	// posted assessment. Fully completed historical rows never reach this path.
+	// Current exact-write recovery remains a completed grade action.
+	if g.Outcomes.Grade.Status == "preserved" && g.Outcomes.Grade.Message != "computed assessment is present on intended attempt" {
+		g.Outcomes.Grade = domain.ActionOutcome{}
+	}
 	if reason := unsupportedSubmission(live); reason != "" {
 		holdGrade(g, reason)
 		return save()
@@ -330,48 +325,23 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		holdGrade(g, "new submission attempt since pull; pull-work for this student")
 		return save()
 	}
-	if !reflect.DeepEqual(source.work.Current.BodyHTML, live.Body) || !sameAttachmentIDs(source.work.Current.Attachments, live.Attachments) {
+	if academicHTML(source.work.Current.BodyHTML) != academicHTML(live.Body) || !sameAttachmentIDs(source.work.Current.Attachments, live.Attachments) {
 		holdGrade(g, "submission content changed since pull; pull-work for this student")
-		return save()
-	}
-	known, entered, reason := s.enteredGrade(live)
-	if !known {
-		holdGrade(g, reason)
 		return save()
 	}
 	// Without a Canvas rubric the agent's scoring_basis supplies criteria for the
 	// arithmetic and feedback lines; nothing rubric-shaped is written to Canvas.
 	rubric := doc.Basis()
 	noCanvasRubric := doc.Assignment.Rubric == nil
-	if rubric == nil || (!noCanvasRubric && !rubric.UseForGradingKnown) {
-		holdGrade(g, "rubric automatic-grade setting cannot be determined")
+	if rubric == nil {
+		holdGrade(g, "scoring basis is absent; provide common-sense criteria for this work")
 		return save()
 	}
-	coupled := !noCanvasRubric && rubric.UseForGrading
 	if noCanvasRubric {
 		if !definite(g.Outcomes.Rubric) {
 			g.Outcomes.Rubric = domain.ActionOutcome{Status: "not-requested", Message: "assignment has no Canvas rubric"}
 		}
-	} else if e := s.require(s.Evidence.FractionalRubricPoints, "honest rubric criterion points"); e != nil {
-		holdGrade(g, e.Error())
-		return save()
 	}
-	if e := s.require(s.Evidence.CommentAttempts, "feedback attempt targeting and returned comment identity"); e != nil {
-		holdGrade(g, e.Error())
-		return save()
-	}
-	if coupled {
-		if e := s.require(s.Evidence.CoupledRubricPreservation, "combined coupled-rubric/entered-grade preservation"); e != nil {
-			holdGrade(g, e.Error()+"; existing association requires a verified path or explicit decoupling choice")
-			return save()
-		}
-	} else if !noCanvasRubric {
-		if e := s.require(s.Evidence.IndependentRubricAssessment, "independent rubric assessment"); e != nil {
-			holdGrade(g, e.Error())
-			return save()
-		}
-	}
-	decision := domain.DecideGrade(g.Assessment, entered)
 	// Unknown writes are reconciled, never replayed based on an empty lookup.
 	if ambiguous(g.Outcomes.Rubric) {
 		if rubricMatches(live, *v.Assessment) {
@@ -381,115 +351,55 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 			g.Outcomes.Rubric.Message = "rubric write completion remains uncertain; inspect current assessment"
 		}
 	}
-	gradeSatisfied := !decision.Write
 	if ambiguous(g.Outcomes.Grade) {
-		gradeSatisfied = g.DesiredEnteredGrade != nil && entered != nil && entered.Cmp(*g.DesiredEnteredGrade) >= 0
-	}
-	if !definite(g.Outcomes.Grade) && gradeSatisfied {
-		g.Outcomes.Grade = domain.ActionOutcome{Status: "preserved", Message: "live entered grade is at least the assessment"}
-	}
-	if ambiguous(g.Outcomes.Grade) && !gradeSatisfied {
-		g.Outcomes.Grade.Status = "uncertain"
-		g.Outcomes.Grade.Message = "grade write completion remains uncertain; lower live value is not proof of failure"
+		if grade := decimalPointer(live.EnteredScore); grade != nil && grade.Cmp(g.Assessment) == 0 {
+			g.Outcomes.Grade = domain.ActionOutcome{Status: "preserved", Message: "computed assessment is present on intended attempt"}
+		} else {
+			g.Outcomes.Grade.Status = "uncertain"
+			g.Outcomes.Grade.Message = "grade completion remains uncertain; a different live score is not proof of failure"
+		}
 	}
 	if err := save(); err != nil {
 		return err
 	}
-	if coupled && ambiguous(g.Outcomes.Grade) {
-		holdOutcome(&g.Outcomes.Comment, "coupled entered-grade preservation remains uncertain; feedback held")
-		holdOutcome(&g.Outcomes.Late, "coupled entered-grade preservation remains uncertain; late adjustment held")
-		return save()
-	}
-	if coupled {
-		if !definite(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Rubric) {
-			if definite(g.Outcomes.Grade) && decision.Write {
-				g.Outcomes.Rubric = domain.ActionOutcome{Status: "held", Message: "entered grade changed after completed grade action; coupled rubric would restore an old grade"}
-			} else {
-				// This coupled write necessarily re-sends the preserved current
-				// grade. Its returned grade must be checked even when the initial
-				// read already established retention; never trust field ordering.
-				needGrade := true
-				g.Outcomes.Rubric = domain.ActionOutcome{Status: "pending"}
-				desired := decision.Desired
-				g.DesiredEnteredGrade = &desired
-				if needGrade {
-					g.Outcomes.Grade = domain.ActionOutcome{Status: "pending"}
-				}
-				if err := save(); err != nil {
-					return err
-				}
-				var response Submission
-				err := s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"rubric_assessment": rubricFields(*v.Assessment), "submission": map[string]any{"posted_grade": decision.Desired.String()}}, &response)
-				if err != nil {
-					g.Outcomes.Rubric = failedOutcome(err)
-					if needGrade {
-						g.Outcomes.Grade = failedOutcome(err)
-					}
-				} else {
-					g.Outcomes.Rubric = confirmedRubric(response, *v.Assessment, g.Attempt)
-					if needGrade {
-						g.Outcomes.Grade = s.confirmedGrade(response, decision.Desired, g.Attempt)
-					}
-				}
-				if err = save(); err != nil {
-					return err
-				}
-				if !definite(g.Outcomes.Grade) {
-					holdOutcome(&g.Outcomes.Comment, "combined rubric update did not confirm grade preservation; feedback held")
-					holdOutcome(&g.Outcomes.Late, "combined rubric update did not confirm grade preservation; late action held")
-					return save()
-				}
-			}
-		}
-	} else if !noCanvasRubric && !definite(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Rubric) {
+	if !noCanvasRubric && !ambiguous(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Grade) && (!definite(g.Outcomes.Rubric) || !definite(g.Outcomes.Grade)) {
 		g.Outcomes.Rubric = domain.ActionOutcome{Status: "pending"}
+		g.Outcomes.Grade = domain.ActionOutcome{Status: "pending"}
 		if err := save(); err != nil {
 			return err
 		}
 		var response Submission
-		err := s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"rubric_assessment": rubricFields(*v.Assessment)}, &response)
+		err := s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"rubric_assessment": rubricFields(*v.Assessment), "submission": map[string]any{"posted_grade": g.Assessment.String()}}, &response)
 		if err != nil {
-			g.Outcomes.Rubric = failedOutcome(err)
+			g.Outcomes.Rubric, g.Outcomes.Grade = failedOutcome(err), failedOutcome(err)
 		} else {
 			g.Outcomes.Rubric = confirmedRubric(response, *v.Assessment, g.Attempt)
+			g.Outcomes.Grade = s.confirmedGrade(response, g.Assessment, g.Attempt)
 			live = response
 		}
 		if err = save(); err != nil {
 			return err
 		}
 	}
-	if !definite(g.Outcomes.Grade) && !ambiguous(g.Outcomes.Grade) && decision.Write {
-		// Recheck entered value/attempt after rubric write, immediately before the
-		// separate independent grade action. Concurrent teacher edits can still
-		// race this read/write interval; Canvas offers no proven conditional write.
+	if noCanvasRubric && !definite(g.Outcomes.Grade) && !ambiguous(g.Outcomes.Grade) {
 		fresh, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, source.student.UserID)
 		if e != nil {
 			g.Outcomes.Grade = domain.ActionOutcome{Status: "held", Message: e.Error()}
 		} else if !sameAttempt(g.Attempt, attemptRef(fresh)) {
 			holdGrade(g, "student resubmitted between actions")
 			return save()
-		} else if ok, current, why := s.enteredGrade(fresh); !ok {
-			g.Outcomes.Grade = domain.ActionOutcome{Status: "held", Message: why}
 		} else {
-			decision = domain.DecideGrade(g.Assessment, current)
-			entered = current
-			if !decision.Write {
-				g.Outcomes.Grade = domain.ActionOutcome{Status: "preserved"}
+			g.Outcomes.Grade = domain.ActionOutcome{Status: "pending"}
+			if err := save(); err != nil {
+				return err
+			}
+			var response Submission
+			e = s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"submission": map[string]any{"posted_grade": g.Assessment.String()}}, &response)
+			if e != nil {
+				g.Outcomes.Grade = failedOutcome(e)
 			} else {
-				g.Outcomes.Grade = domain.ActionOutcome{Status: "pending"}
-				desired := decision.Desired
-				g.DesiredEnteredGrade = &desired
-				if err := save(); err != nil {
-					return err
-				}
-				var response Submission
-				e = s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"submission": map[string]any{"posted_grade": decision.Desired.String()}}, &response)
-				if e != nil {
-					g.Outcomes.Grade = failedOutcome(e)
-				} else {
-					g.Outcomes.Grade = s.confirmedGrade(response, decision.Desired, g.Attempt)
-					live = response
-				}
+				g.Outcomes.Grade = s.confirmedGrade(response, g.Assessment, g.Attempt)
+				live = response
 			}
 		}
 		if e = save(); e != nil {
@@ -497,11 +407,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		}
 	}
 	if !definite(g.Outcomes.Comment) {
-		retained := (*domain.Decimal)(nil)
-		if entered != nil && entered.Cmp(g.Assessment) > 0 {
-			retained = entered
-		}
-		text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, RetainedGrade: retained, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student)})
+		text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student)})
 		if e != nil {
 			return e
 		}
@@ -518,21 +424,6 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 			holdGrade(g, "student resubmitted before feedback")
 			return save()
 		} else {
-			if !ambiguous(g.Outcomes.Comment) && g.Outcomes.Comment.ID == 0 {
-				known, current, why := s.enteredGrade(fresh)
-				if !known {
-					holdOutcome(&g.Outcomes.Comment, why)
-					return save()
-				}
-				retained = nil
-				if current != nil && current.Cmp(g.Assessment) > 0 {
-					retained = current
-				}
-				text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, RetainedGrade: retained, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student)})
-				if e != nil {
-					return e
-				}
-			}
 			e = s.addFeedback(ctx, *doc, source.student.UserID, g.Attempt, text, &g.Outcomes.Comment, fresh, save)
 			if e != nil {
 				return e
@@ -543,12 +434,12 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 			return e
 		}
 	}
-	if g.LateForgiveness == nil {
+	if g.Timing() == nil {
 		if !definite(g.Outcomes.Late) {
 			g.Outcomes.Late = domain.ActionOutcome{Status: "not-requested"}
 		}
 	} else if !definite(g.Outcomes.Late) {
-		if err := s.postLate(ctx, *doc, source.student.UserID, g, save); err != nil {
+		if err := s.postLate(ctx, *doc, source.student.UserID, source.work, g, save); err != nil {
 			return err
 		}
 	}
@@ -711,10 +602,6 @@ func (s *Service) addFeedback(ctx context.Context, doc domain.ResultsDocument, u
 
 func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument, row *domain.StudentResult, v domain.ValidatedStudent, source postSource, live Submission, save func() error) error {
 	r := row.ReviseFeedback
-	if e := s.require(s.Evidence.CommentEditing, "selected comment editing"); e != nil {
-		holdOutcome(&r.Outcome, e.Error())
-		return save()
-	}
 	var original *domain.ExistingComment
 	for i := range source.work.Comments {
 		if source.work.Comments[i].ID == r.CommentID {
@@ -740,7 +627,7 @@ func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument,
 	text := workspace.ReplaceStudentName(r.Feedback, source.student)
 	if r.Assessment != nil {
 		var e error
-		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, RetainedGrade: r.Assessment.RetainedGrade, Feedback: text})
+		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text})
 		if e != nil {
 			return e
 		}
@@ -777,56 +664,6 @@ func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument,
 		r.Outcome = domain.ActionOutcome{Status: "succeeded", ID: r.CommentID, PostedText: text}
 	} else {
 		r.Outcome = domain.ActionOutcome{Status: "uncertain", ID: r.CommentID, PostedText: text, Message: "comment edit response did not confirm selected ID/text"}
-	}
-	return save()
-}
-
-func (s *Service) postLate(ctx context.Context, doc domain.ResultsDocument, userID int64, g *domain.GradeOperation, save func() error) error {
-	if e := s.require(s.Evidence.LateOverride && s.Evidence.EffectiveDueDate, "late forgiveness with applicable due-date evidence"); e != nil {
-		holdOutcome(&g.Outcomes.Late, e.Error())
-		return save()
-	}
-	live, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, userID)
-	if e != nil {
-		holdOutcome(&g.Outcomes.Late, e.Error())
-		return save()
-	}
-	if !sameAttempt(g.Attempt, attemptRef(live)) {
-		holdOutcome(&g.Outcomes.Late, "new attempt before late adjustment")
-		return save()
-	}
-	l := g.LateForgiveness
-	found := false
-	for _, h := range live.History {
-		if sameAttempt(l.FirstAttempt, attemptRef(h)) && h.CachedDueDate != nil && *h.CachedDueDate == l.EffectiveDueAt {
-			found = true
-		}
-	}
-	if !found {
-		holdOutcome(&g.Outcomes.Late, "live first-attempt/applicable due-date evidence unavailable or changed")
-		return save()
-	}
-	if live.LatePolicyStatus != nil && *live.LatePolicyStatus == "none" {
-		g.Outcomes.Late = domain.ActionOutcome{Status: "preserved"}
-		return save()
-	}
-	if ambiguous(g.Outcomes.Late) {
-		g.Outcomes.Late.Status = "uncertain"
-		g.Outcomes.Late.Message = "late override completion uncertain; current state does not prove failure"
-		return save()
-	}
-	g.Outcomes.Late = domain.ActionOutcome{Status: "pending"}
-	if e = save(); e != nil {
-		return e
-	}
-	var response Submission
-	e = s.Client.Write(ctx, "PUT", submissionPath(doc, userID), map[string]any{"submission": map[string]any{"late_policy_status": "none"}}, &response)
-	if e != nil {
-		g.Outcomes.Late = failedOutcome(e)
-	} else if sameAttempt(g.Attempt, attemptRef(response)) && response.LatePolicyStatus != nil && *response.LatePolicyStatus == "none" {
-		g.Outcomes.Late = domain.ActionOutcome{Status: "succeeded"}
-	} else {
-		g.Outcomes.Late = domain.ActionOutcome{Status: "uncertain", Message: "response did not confirm late override on intended attempt"}
 	}
 	return save()
 }

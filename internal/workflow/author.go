@@ -79,14 +79,6 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		return report, err
 	}
 	resumingModule := doc.Created != nil && definite(doc.Created.Module) && doc.ModuleID > 0
-	if err = s.require(s.Evidence.Authoring, "assignment authoring"); err != nil {
-		return report, err
-	}
-	if doc.Rubric != nil {
-		if err = s.require(s.Evidence.IndependentRubricCreate, "independent rubric attachment preserving assignment points"); err != nil {
-			return report, err
-		}
-	}
 	html, err := render.MarkdownHTML(body)
 	if err != nil {
 		return report, err
@@ -484,9 +476,8 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 	base.UpdatedAt = ""
 	compare := live
 	compare.UpdatedAt = ""
-	if !SameSnapshot(base, compare) {
-		// If the exact intended patch already exists after an uncertain write, it
-		// can be recognized only when all untouched fields still match baseline.
+	if !sameEditFields(base, compare, patch) {
+		// Recovery compares the requested fields; unrelated teacher edits survive.
 		intended := base
 		intended.Title = d.Title
 		intended.Points = d.Points
@@ -496,7 +487,7 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 		intended.UnlockAt = d.UnlockAt
 		intended.LockAt = d.LockAt
 		intended.Published = d.Published
-		if (d.UpdateOutcome.Status == "pending" || d.UpdateOutcome.Status == "uncertain") && SameSnapshot(intended, compare) {
+		if (d.UpdateOutcome.Status == "pending" || d.UpdateOutcome.Status == "uncertain") && sameEditFields(intended, compare, patch) {
 			d.UpdateOutcome = domain.ActionOutcome{Status: "succeeded", Message: "intended live state recovered"}
 			if err = workspace.WriteDocument(path, d, body); err != nil {
 				return report, err
@@ -521,9 +512,6 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 		d.UpdateOutcome = domain.ActionOutcome{Status: "preserved"}
 		report.Status = "completed"
 		return report, workspace.WriteDocument(path, d, body)
-	}
-	if err = s.require(s.Evidence.Authoring, "assignment update"); err != nil {
-		return report, err
 	}
 	d.UpdateOutcome = domain.ActionOutcome{Status: "pending"}
 	if err = workspace.WriteDocument(path, d, body); err != nil {
@@ -557,7 +545,7 @@ func editPatchMatches(a Assignment, d domain.AssignmentDocument, html string, pa
 				return false
 			}
 		case "description":
-			if a.Description != html {
+			if academicHTML(a.Description) != academicHTML(html) {
 				return false
 			}
 		case "points_possible":

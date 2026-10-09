@@ -38,28 +38,16 @@ func TestFeedbackRevisionCannotCarryGradeOrLateActions(t *testing.T) {
 		t.Fatal("revision accepted grade/late data")
 	}
 }
-func TestLateForgivenessMustActuallyPrecedeCurrentAttempt(t *testing.T) {
-	d := validResults()
-	d.Students[0].Grade.LateForgiveness = &LateForgiveness{FirstAttempt: AttemptRef{Attempt: 1, SubmittedAt: "2026-10-09T12:00:00Z"}, EffectiveDueAt: "2026-10-10T12:00:00Z", GenuineReason: "Complete response."}
-	if _, e := ValidateResults(&d); e == nil {
-		t.Fatal("future first attempt accepted")
-	}
-}
-func TestGradeRecoveryTargetPreservesPrecision(t *testing.T) {
+func TestLegacyGradeRecoveryTargetDoesNotConstrainAssessment(t *testing.T) {
 	d := validResults()
 	target := MustDecimal("17.00400")
 	d.Students[0].Grade.DesiredEnteredGrade = &target
 	if _, e := ValidateResults(&d); e != nil {
 		t.Fatal(e)
 	}
-	if d.Students[0].Grade.DesiredEnteredGrade.String() != "17.00400" {
-		t.Fatal("recovery target precision changed")
-	}
-	for _, invalid := range []Decimal{{}, MustDecimal("-1"), MustDecimal("15.99")} {
-		d.Students[0].Grade.DesiredEnteredGrade = &invalid
-		if _, e := ValidateResults(&d); e == nil {
-			t.Fatal("invalid recovery target accepted")
-		}
+	target = MustDecimal("1")
+	if _, e := ValidateResults(&d); e != nil {
+		t.Fatal("legacy target influenced current assessment:", e)
 	}
 }
 func TestCreateOutcomesRemainConsistent(t *testing.T) {
@@ -118,14 +106,14 @@ func TestRevisionOutcomeMustReferToSelectedComment(t *testing.T) {
 	}
 }
 
-func TestRevisionRetainedGradeMustBeExplicit(t *testing.T) {
+func TestLegacyRevisionRetainedGradeIsIgnored(t *testing.T) {
 	d := validResults()
 	g := d.Students[0].Grade
 	g.Components[0].Criteria[0].Points = MustDecimal("0")
 	r := &FeedbackRevision{Attempt: g.Attempt, CommentID: 7, Feedback: "More specific feedback.", Assessment: &FeedbackAssessment{Assessment: MustDecimal("0"), RetainedGrade: &Decimal{}, Components: g.Components}}
 	d.Students[0] = StudentResult{StudentRef: "student-a", Operation: "revise-feedback", ReviseFeedback: r}
-	if _, err := ValidateResults(&d); err == nil {
-		t.Fatal("unset retained grade accepted as an entered zero")
+	if _, err := ValidateResults(&d); err != nil {
+		t.Fatal("legacy display metadata constrained current feedback:", err)
 	}
 	zero := MustDecimal("0")
 	r.Assessment.RetainedGrade = &zero

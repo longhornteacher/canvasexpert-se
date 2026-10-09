@@ -31,7 +31,7 @@ func workflowFixture(t *testing.T, handler http.HandlerFunc) (*Service, *httptes
 		t.Fatal(e)
 	}
 	root := t.TempDir()
-	s := &Service{Root: root, Client: client, Config: domain.CourseConfig{Schema: 1, Instance: server.URL, Aliases: true, Courses: []domain.Course{{Nickname: "TEST", ID: 1, Current: true}}}, Evidence: Capabilities{Instance: server.URL, EvidenceReference: "synthetic HTTP fixtures only", Authoring: true, IndependentRubricCreate: true, EnteredScore: true, IndependentRubricAssessment: true, CoupledRubricPreservation: true, FractionalRubricPoints: true, CommentAttempts: true, CommentEditing: true, EffectiveDueDate: true, LateOverride: true}}
+	s := &Service{Root: root, Client: client, Config: domain.CourseConfig{Schema: 1, Instance: server.URL, Aliases: true, Courses: []domain.Course{{Nickname: "TEST", ID: 1, Current: true}}}}
 	return s, server
 }
 func fixtureAssignment() Assignment {
@@ -86,8 +86,9 @@ func scoringFiles(t *testing.T, s *Service, users ...int64) string {
 	return path
 }
 
-func TestHonestRubricRetainsHigherGradeAndCompletedReplay(t *testing.T) {
+func TestHonestAssessmentReplacesHigherGradeAndCompletedReplay(t *testing.T) {
 	live := fixtureSubmission(5)
+	assignment := fixtureAssignment()
 	writes := 0
 	gradeWrites := 0
 	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
@@ -108,6 +109,8 @@ func TestHonestRubricRetainsHigherGradeAndCompletedReplay(t *testing.T) {
 				}
 				if request.Submission != nil {
 					gradeWrites++
+					n := json.Number(request.Submission["posted_grade"].(string))
+					live.EnteredScore, live.Score = &n, &n
 				}
 				if request.Rubric != nil {
 					live.RubricAssessment = request.Rubric
@@ -123,21 +126,29 @@ func TestHonestRubricRetainsHigherGradeAndCompletedReplay(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(live)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(fixtureAssignment())
+		_ = json.NewEncoder(w).Encode(assignment)
 	})
 	path := scoringFiles(t, s, 5)
+	assignment.Name = "Teacher renamed it"
+	assignment.Description = "<p>Explain your evidence.</p>\n"
+	due := "2026-10-10T12:00:00Z"
+	assignment.DueAt = &due
+	// Obsolete metadata must have no bearing on supported posting.
+	if e := os.WriteFile(filepath.Join(s.Root, ".cse", "capabilities.json"), []byte("{malformed"), 0644); e != nil {
+		t.Fatal(e)
+	}
 	report, e := s.Post(context.Background(), path)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(report.Students) != 1 || report.Students[0].Status != "completed" || gradeWrites != 0 || writes != 2 {
+	if len(report.Students) != 1 || report.Students[0].Status != "completed" || gradeWrites != 1 || writes != 2 {
 		t.Fatalf("unexpected posting: %#v gradeWrites=%d writes=%d", report, gradeWrites, writes)
 	}
-	if decimalPointer(live.RubricAssessment["c1"].Points).String() != "60" || decimalPointer(live.EnteredScore).String() != "15" {
+	if decimalPointer(live.RubricAssessment["c1"].Points).String() != "60" || decimalPointer(live.EnteredScore).String() != "12" {
 		t.Fatal("rubric assessment or entered grade dishonest")
 	}
-	if !strings.Contains(live.Comments[0].Comment, "12 / 20") || !strings.Contains(live.Comments[0].Comment, "15 / 20") {
-		t.Fatal("feedback omitted assessment/retention distinction")
+	if !strings.Contains(live.Comments[0].Comment, "12 / 20") || strings.Contains(live.Comments[0].Comment, "retained") {
+		t.Fatal("feedback did not report only the computed assessment")
 	}
 	before := s.Client.Requests()
 	live.Comments[0].Comment = "Teacher edited"
@@ -147,40 +158,6 @@ func TestHonestRubricRetainsHigherGradeAndCompletedReplay(t *testing.T) {
 	}
 	if s.Client.Requests() != before || writes != 2 {
 		t.Fatal("completed replay touched Canvas")
-	}
-}
-
-func TestNoEvidenceNoWritesAndInvalidLaterRowNoWrites(t *testing.T) {
-	writes := 0
-	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			writes++
-		}
-		if strings.Contains(r.URL.Path, "submissions") {
-			_ = json.NewEncoder(w).Encode(fixtureSubmission(5))
-		} else {
-			_ = json.NewEncoder(w).Encode(fixtureAssignment())
-		}
-	})
-	path := scoringFiles(t, s, 5)
-	s.Evidence = Capabilities{}
-	r, e := s.Post(context.Background(), path)
-	if e != nil {
-		t.Fatal(e)
-	}
-	if writes != 0 || r.Students[0].Status != "held" {
-		t.Fatal("unverified grade write was enabled")
-	}
-	// Entire strict document fails before network when an unknown field appears.
-	if e = os.WriteFile(path, []byte("---\nschema: 1\nkind: results\nunknown: yes\n---\n"), 0644); e != nil {
-		t.Fatal(e)
-	}
-	before := s.Client.Requests()
-	if _, e = s.Post(context.Background(), path); e == nil {
-		t.Fatal("invalid document accepted")
-	}
-	if writes != 0 || s.Client.Requests() != before {
-		t.Fatal("invalid file caused a request")
 	}
 }
 
@@ -209,11 +186,11 @@ func TestInvalidLaterStudentCriterionSendsNoRequests(t *testing.T) {
 	}
 }
 
-func TestEnteredGradeDecisionEmptyZeroEqualLowerAndPreciseHigher(t *testing.T) {
+func TestAssessmentPostsRegardlessOfExistingGrade(t *testing.T) {
 	for _, test := range []struct {
 		name, value string
 		gradeWrites int
-	}{{"empty", "", 1}, {"zero", "0", 1}, {"equal", "12", 0}, {"lower", "8", 1}, {"precise-higher", "15.123456", 0}} {
+	}{{"empty", "", 1}, {"zero", "0", 1}, {"equal", "12", 1}, {"lower", "8", 1}, {"precise-higher", "15.123456", 1}} {
 		t.Run(test.name, func(t *testing.T) {
 			live := fixtureSubmission(5)
 			if test.value == "" {
@@ -269,7 +246,7 @@ func TestEnteredGradeDecisionEmptyZeroEqualLowerAndPreciseHigher(t *testing.T) {
 				expected = "12"
 			}
 			if live.EnteredScore == nil || live.EnteredScore.String() != expected {
-				t.Fatal("entered grade lowered, rounded, or zero mistaken for empty")
+				t.Fatal("computed assessment was not posted")
 			}
 		})
 	}
@@ -292,13 +269,18 @@ func TestResubmissionHoldsOnlyAffectedStudent(t *testing.T) {
 					writes6++
 				}
 				var req struct {
-					Rubric  map[string]RubricScore `json:"rubric_assessment"`
-					Comment struct {
+					Rubric     map[string]RubricScore `json:"rubric_assessment"`
+					Submission map[string]string      `json:"submission"`
+					Comment    struct {
 						Text    string `json:"text_comment"`
 						Attempt int    `json:"attempt"`
 					} `json:"comment"`
 				}
 				_ = json.NewDecoder(r.Body).Decode(&req)
+				if value, ok := req.Submission["posted_grade"]; ok {
+					n := json.Number(value)
+					live.EnteredScore, live.Score = &n, &n
+				}
 				if req.Rubric != nil {
 					live.RubricAssessment = req.Rubric
 				}
@@ -330,13 +312,18 @@ func TestLostCommentResponseRecoveredWithoutDuplicate(t *testing.T) {
 		if strings.Contains(r.URL.Path, "submissions/5") {
 			if r.Method == "PUT" {
 				var req struct {
-					Rubric  map[string]RubricScore `json:"rubric_assessment"`
-					Comment struct {
+					Rubric     map[string]RubricScore `json:"rubric_assessment"`
+					Submission map[string]string      `json:"submission"`
+					Comment    struct {
 						Text    string `json:"text_comment"`
 						Attempt int    `json:"attempt"`
 					} `json:"comment"`
 				}
 				_ = json.NewDecoder(r.Body).Decode(&req)
+				if value, ok := req.Submission["posted_grade"]; ok {
+					n := json.Number(value)
+					live.EnteredScore, live.Score = &n, &n
+				}
 				if req.Rubric != nil {
 					live.RubricAssessment = req.Rubric
 				}
@@ -633,12 +620,18 @@ func TestTargetedEditWritesChangedFieldAndCompletedReplay(t *testing.T) {
 	if e = workspace.WriteDocument(path, doc, "<section data-preserved=\"yes\">New directions.</section>"); e != nil {
 		t.Fatal(e)
 	}
+	due := "2026-10-10T12:00:00Z"
+	live.DueAt = &due
+	live.Name = "Teacher renamed it"
 	report, e := s.Push(context.Background(), path)
 	if e != nil {
 		t.Fatal(e)
 	}
 	if report.Status != "succeeded" || writes != 1 {
 		t.Fatalf("targeted edit failed: %#v", report)
+	}
+	if live.Name != "Teacher renamed it" || live.DueAt == nil || *live.DueAt != due {
+		t.Fatal("unrelated live settings were replaced")
 	}
 	before := s.Client.Requests()
 	live.Description = "Teacher changed after successful update"
@@ -651,7 +644,7 @@ func TestTargetedEditWritesChangedFieldAndCompletedReplay(t *testing.T) {
 	}
 }
 
-func TestLateForgivenessOnlyOverrideAndCompletedRetry(t *testing.T) {
+func TestLateForgivenessHeldWhileOrdinaryGradingProceeds(t *testing.T) {
 	live := fixtureSubmission(5)
 	late := "late"
 	live.Late = true
@@ -669,6 +662,10 @@ func TestLateForgivenessOnlyOverrideAndCompletedRetry(t *testing.T) {
 					} `json:"comment"`
 				}
 				_ = json.NewDecoder(r.Body).Decode(&req)
+				if value, ok := req.Submission["posted_grade"]; ok {
+					n := json.Number(value)
+					live.EnteredScore, live.Score = &n, &n
+				}
 				if req.Rubric != nil {
 					live.RubricAssessment = req.Rubric
 				}
@@ -676,7 +673,13 @@ func TestLateForgivenessOnlyOverrideAndCompletedRetry(t *testing.T) {
 					a := req.Comment.Attempt
 					live.Comments = append(live.Comments, SubmissionComment{ID: 100, Comment: req.Comment.Text, Attempt: &a})
 				}
-				if req.Submission != nil {
+				if value, ok := req.Submission["posted_grade"]; ok {
+					var grade string
+					_ = json.Unmarshal(value, &grade)
+					n := json.Number(grade)
+					live.EnteredScore, live.Score = &n, &n
+				}
+				if req.Submission["late_policy_status"] != nil {
 					lateWrites++
 					if len(req.Submission) != 1 || string(req.Submission["late_policy_status"]) != `"none"` {
 						t.Error("late write changed academic score or policy")
@@ -704,13 +707,13 @@ func TestLateForgivenessOnlyOverrideAndCompletedRetry(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if lateWrites != 1 || report.Students[0].Status != "completed" {
+	if lateWrites != 0 || report.Students[0].Outcomes.Late.Status != "held" || !definite(report.Students[0].Outcomes.Comment) || !definite(report.Students[0].Outcomes.Rubric) || !definite(report.Students[0].Outcomes.Grade) {
 		t.Fatalf("late forgiveness failed: %#v", report)
 	}
 	if _, e = s.Post(context.Background(), path); e != nil {
 		t.Fatal(e)
 	}
-	if lateWrites != 1 {
+	if lateWrites != 0 {
 		t.Fatal("completed override repeated")
 	}
 }
@@ -799,7 +802,7 @@ func TestPullWorkFullRosterNotesAndAttachmentsAndPreservesResults(t *testing.T) 
 	}
 }
 
-func TestCoupledRubricNeverClaimsPreservationWhenResponseLowersGrade(t *testing.T) {
+func TestCoupledRubricPostsComputedAssessment(t *testing.T) {
 	live := fixtureSubmission(5)
 	assignment := fixtureAssignment()
 	enabled := true
@@ -819,17 +822,18 @@ func TestCoupledRubricNeverClaimsPreservationWhenResponseLowersGrade(t *testing.
 				}
 				_ = json.NewDecoder(r.Body).Decode(&req)
 				if req.Rubric != nil {
-					if req.Submission["posted_grade"] != "15" {
-						t.Error("combined preservation omitted precise entered grade")
-					}
 					live.RubricAssessment = req.Rubric
-					lower := json.Number("12")
-					live.EnteredScore = &lower
-					live.Score = &lower
+					if req.Submission["posted_grade"] != "12" {
+						t.Error("combined write omitted computed assessment")
+					}
+				}
+				if value, ok := req.Submission["posted_grade"]; ok {
+					n := json.Number(value)
+					live.EnteredScore, live.Score = &n, &n
 				}
 				if req.Comment.Text != "" {
-					a := req.Comment.Attempt
-					live.Comments = append(live.Comments, SubmissionComment{ID: 101, Comment: req.Comment.Text, Attempt: &a})
+					attempt := req.Comment.Attempt
+					live.Comments = append(live.Comments, SubmissionComment{ID: 100, Comment: req.Comment.Text, Attempt: &attempt})
 				}
 			}
 			_ = json.NewEncoder(w).Encode(live)
@@ -861,15 +865,15 @@ func TestCoupledRubricNeverClaimsPreservationWhenResponseLowersGrade(t *testing.
 	if e != nil {
 		t.Fatal(e)
 	}
-	if report.Students[0].Status == "completed" || report.Students[0].Outcomes.Grade.Status != "uncertain" || writes != 1 || len(live.Comments) != 0 {
-		t.Fatalf("unsafe coupled response reported preserved: %#v", report)
+	if report.Students[0].Status != "completed" || writes != 2 || len(live.Comments) != 1 || decimalPointer(live.EnteredScore).String() != "12" {
+		t.Fatalf("coupled operation was not held: %#v", report)
 	}
 	again, e := s.Post(context.Background(), path)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if writes != 1 || again.Students[0].Outcomes.Grade.Status != "uncertain" || len(live.Comments) != 0 {
-		t.Fatal("coupled preservation uncertainty was lost on retry")
+	if writes != 2 || again.Students[0].Status != "completed" || len(live.Comments) != 1 {
+		t.Fatal("held coupled operation wrote on retry")
 	}
 }
 
@@ -934,13 +938,18 @@ func TestRepresentativeSyntheticClassPullPost(t *testing.T) {
 			sub := lives[user]
 			if r.Method == "PUT" {
 				var req struct {
-					Rubric  map[string]RubricScore `json:"rubric_assessment"`
-					Comment struct {
+					Rubric     map[string]RubricScore `json:"rubric_assessment"`
+					Submission map[string]string      `json:"submission"`
+					Comment    struct {
 						Text    string `json:"text_comment"`
 						Attempt int    `json:"attempt"`
 					} `json:"comment"`
 				}
 				_ = json.NewDecoder(r.Body).Decode(&req)
+				if value, ok := req.Submission["posted_grade"]; ok {
+					n := json.Number(value)
+					sub.EnteredScore, sub.Score = &n, &n
+				}
 				if req.Rubric != nil {
 					sub.RubricAssessment = req.Rubric
 					sub.State = "graded"
@@ -958,7 +967,6 @@ func TestRepresentativeSyntheticClassPullPost(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(fixtureAssignment())
 	})
-	s.Evidence.CompletionDiscovery = true
 	pull, e := s.PullWork(context.Background(), "TEST", "10")
 	if e != nil {
 		t.Fatal(e)
@@ -1003,7 +1011,7 @@ func TestRepresentativeSyntheticClassPullPost(t *testing.T) {
 		t.Fatal(e)
 	}
 	if discovery.Students != 0 {
-		t.Fatal("retained lower assessment recurred in verified fixture discovery")
+		t.Fatal("completed assessment recurred in discovery")
 	}
 	sub := lives[1]
 	sub.Attempt = 3
@@ -1020,5 +1028,5 @@ func TestRepresentativeSyntheticClassPullPost(t *testing.T) {
 	if newAttempt.Students != 1 {
 		t.Fatal("new attempt was hidden by completed prior operation")
 	}
-	t.Logf("SYNTHETIC HTTP fixture only: %d students, text current+prior attempts, one rubric criterion, retained higher entered grade; pull=%s/%d requests; post=%s/%d requests; handled discovery=%s/%d requests; new-attempt discovery=%s/%d requests", size, pull.Elapsed, pull.Requests, post.Elapsed, post.Requests, discovery.Elapsed, discovery.Requests, newAttempt.Elapsed, newAttempt.Requests)
+	t.Logf("SYNTHETIC HTTP fixture only: %d students, text current+prior attempts, one rubric criterion, posted computed assessment; pull=%s/%d requests; post=%s/%d requests; handled discovery=%s/%d requests; new-attempt discovery=%s/%d requests", size, pull.Elapsed, pull.Requests, post.Elapsed, post.Requests, discovery.Elapsed, discovery.Requests, newAttempt.Elapsed, newAttempt.Requests)
 }

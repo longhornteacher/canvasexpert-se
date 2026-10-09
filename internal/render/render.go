@@ -18,12 +18,11 @@ type FeedbackInput struct {
 	Components       []domain.ComponentScore
 	Assessment       domain.Decimal
 	AssignmentPoints domain.Decimal
-	RetainedGrade    *domain.Decimal
 	Feedback         string
 }
 
 // RenderFeedback produces a deterministic Canvas comment. The order is the
-// assessment, retained-grade explanation when present, component criteria, and
+// computed assessment, component criteria, and
 // the teacher's conversational feedback.
 func RenderFeedback(in FeedbackInput) (string, error) {
 	if err := domain.ValidateInterpretation(in.Rubric, in.Interpretation); err != nil {
@@ -42,15 +41,9 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 	if !in.Assessment.IsSet() || computed.Posted.Cmp(in.Assessment) != 0 {
 		return "", fmt.Errorf("assessment %s does not match derived value %s", in.Assessment.String(), computed.Posted.String())
 	}
-	if in.RetainedGrade != nil && in.RetainedGrade.Cmp(in.Assessment) < 0 {
-		return "", fmt.Errorf("retained grade cannot be below the assessment")
-	}
 
 	var out strings.Builder
 	fmt.Fprintf(&out, "Assessment: %s / %s", in.Assessment.String(), in.AssignmentPoints.String())
-	if in.RetainedGrade != nil && in.RetainedGrade.Cmp(in.Assessment) > 0 {
-		fmt.Fprintf(&out, "\nGradebook entry retained: %s / %s (entered grade before any Canvas late policy)", in.RetainedGrade.String(), in.AssignmentPoints.String())
-	}
 	out.WriteString("\nCriterion scores:")
 	components := make(map[string]domain.ComponentScore, len(in.Components))
 	for _, c := range in.Components {

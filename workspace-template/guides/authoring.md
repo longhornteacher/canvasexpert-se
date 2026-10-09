@@ -10,7 +10,7 @@ Write a versioned Markdown assignment draft in the workspace's course `drafts/` 
 
 ## Create or resume
 
-Inspect the available command form with `.\cse.cmd --help`. The beta command contract is:
+Inspect the available command form with `.\cse.cmd --help`. Use:
 
 ```powershell
 .\cse.cmd push <draft-file>
@@ -22,4 +22,4 @@ The intended `push` behavior creates from a new draft or resumes an incomplete c
 
 “Draft” means prepare the file and do not push it. A request to create/publish the assignment authorizes the corresponding Canvas write. Do not add a general approval or confirmation step. Report the resulting Canvas state and any incomplete pieces accurately.
 
-The command forms here describe the intended 0.1b contract. Check this build's help and release notes; these docs alone do not verify that creation, rubric attachment, module placement, or publication has passed a live Canvas check.
+Use the command syntax reported by the installed build's help. Creation can return partial outcomes when requested rubric or module work cannot be completed; report those outcomes and resume using the saved IDs rather than repeating a completed create. A new assignment remains unpublished until requested rubric and module work succeeds. Canvas responses are authoritative for the resulting state.

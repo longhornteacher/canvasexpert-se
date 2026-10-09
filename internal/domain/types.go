@@ -194,6 +194,11 @@ type LateForgiveness struct {
 	EffectiveDueAt string     `yaml:"effective_due_at"`
 	GenuineReason  string     `yaml:"genuine_reason"`
 }
+type LateTimingTarget struct {
+	Seconds int64  `yaml:"seconds"`
+	Status  string `yaml:"status"`
+}
+
 type ActionOutcome struct {
 	Status     string `yaml:"status,omitempty"` // pending,succeeded,preserved,not-requested,held,failed,uncertain
 	ID         int64  `yaml:"id,omitempty"`
@@ -207,20 +212,32 @@ type ActionOutcomes struct {
 	Late    ActionOutcome `yaml:"late,omitempty"`
 }
 type GradeOperation struct {
-	DesiredEnteredGrade *Decimal         `yaml:"desired_entered_grade,omitempty"`
-	Attempt             AttemptRef       `yaml:"attempt"`
-	Components          []ComponentScore `yaml:"components"`
-	Assessment          Decimal          `yaml:"assessment"`
-	Feedback            string           `yaml:"feedback"`
-	TeacherNote         string           `yaml:"teacher_note,omitempty"`
-	StrongestPrior      *PriorComparison `yaml:"strongest_prior,omitempty"`
-	LateForgiveness     *LateForgiveness `yaml:"late_forgiveness,omitempty"`
-	Outcomes            ActionOutcomes   `yaml:"outcomes,omitempty"`
+	// Legacy recovery metadata is decoded for saved work but ignored by current posting.
+	DesiredEnteredGrade *Decimal          `yaml:"desired_entered_grade,omitempty"`
+	Attempt             AttemptRef        `yaml:"attempt"`
+	Components          []ComponentScore  `yaml:"components"`
+	Assessment          Decimal           `yaml:"assessment"`
+	Feedback            string            `yaml:"feedback"`
+	TeacherNote         string            `yaml:"teacher_note,omitempty"`
+	StrongestPrior      *PriorComparison  `yaml:"strongest_prior,omitempty"`
+	LateTiming          *LateForgiveness  `yaml:"late_timing,omitempty"`
+	TimingTarget        *LateTimingTarget `yaml:"timing_target,omitempty"`
+	LateForgiveness     *LateForgiveness  `yaml:"late_forgiveness,omitempty"`
+	Outcomes            ActionOutcomes    `yaml:"outcomes,omitempty"`
+}
+
+// Timing accepts the prior on-time-only spelling for existing saved work.
+func (g *GradeOperation) Timing() *LateForgiveness {
+	if g.LateTiming != nil {
+		return g.LateTiming
+	}
+	return g.LateForgiveness
 }
 
 // FeedbackAssessment supplies a preserved display basis, never write instructions.
 type FeedbackAssessment struct {
-	Assessment    Decimal          `yaml:"assessment"`
+	Assessment Decimal `yaml:"assessment"`
+	// Legacy display metadata is decoded but never rendered or used for grading.
 	RetainedGrade *Decimal         `yaml:"retained_grade,omitempty"`
 	Components    []ComponentScore `yaml:"components"`
 }
@@ -239,17 +256,17 @@ type StudentResult struct {
 	ReviseFeedback *FeedbackRevision `yaml:"revise_feedback,omitempty"`
 }
 type ResultsDocument struct {
-	Schema         int                     `yaml:"schema"`
-	Kind           string                  `yaml:"kind"`
-	Packet         string                  `yaml:"packet"`
-	Assignment     AssignmentSnapshot      `yaml:"assignment"`
-	Interpretation Interpretation          `yaml:"interpretation"`
+	Schema         int                `yaml:"schema"`
+	Kind           string             `yaml:"kind"`
+	Packet         string             `yaml:"packet"`
+	Assignment     AssignmentSnapshot `yaml:"assignment"`
+	Interpretation Interpretation     `yaml:"interpretation"`
 	// ScoringBasis is the agent's own criteria for an assignment with no Canvas
 	// rubric. It drives the arithmetic and the feedback score lines only; it is
 	// never written to Canvas as a rubric.
 	ScoringBasis *Rubric                 `yaml:"scoring_basis,omitempty"`
 	Variants     []InterpretationVariant `yaml:"variants,omitempty"`
-	Students       []StudentResult         `yaml:"students"`
+	Students     []StudentResult         `yaml:"students"`
 }
 type InterpretationVariant struct {
 	Key            string         `yaml:"key"`

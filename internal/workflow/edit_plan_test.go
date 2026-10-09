@@ -52,3 +52,30 @@ func TestEditPreservesHTMLAndOmittedSettings(t *testing.T) {
 		t.Fatal("directions change not detected")
 	}
 }
+
+func TestAcademicBasisIgnoresPresentationButRetainsLinksCodeAndScale(t *testing.T) {
+	base := domain.AssignmentSnapshot{Title: "Original", Points: domain.MustDecimal("20"), DescriptionHTML: `<p>Read <a href='https://example.org/a'>A &amp; B</a>.</p><pre><code>x  = 1</code></pre>`}
+	live := base
+	live.Title, live.Published = "Renamed", true
+	due := "2026-10-09T15:00:00Z"
+	live.DueAt = &due
+	live.DescriptionHTML = `<p>Read <a href="https://example.org/a">A &amp; B</a>.</p>
+<pre><code>x  = 1</code></pre>`
+	if !SameGradingBasis(base, live) {
+		t.Fatal("presentation/scheduling invalidated assessment")
+	}
+	live.DescriptionHTML = `<p>Read <a href="https://example.org/b">A &amp; B</a>.</p><pre><code>x  = 1</code></pre>`
+	if SameGradingBasis(base, live) {
+		t.Fatal("changed link ignored")
+	}
+	live = base
+	live.DescriptionHTML = `<p>Read <a href='https://example.org/a'>A &amp; B</a>.</p><pre><code>x = 1</code></pre>`
+	if SameGradingBasis(base, live) {
+		t.Fatal("code whitespace erased")
+	}
+	live = base
+	live.Points = domain.MustDecimal("25")
+	if SameGradingBasis(base, live) {
+		t.Fatal("changed scale ignored")
+	}
+}

@@ -28,7 +28,7 @@ ZIP entries are written with forward slashes by the script itself, because Windo
 
 On each computer: unzip the program somewhere outside the synced workspace, double-click `webui.cmd` once (it runs `cse link`, recording the program's location under `%LOCALAPPDATA%\CanvasExpert-SE`), then use the hub or `.\cse.cmd COMMAND` from the workspace. The hub refuses a workspace that overlaps the program folder.
 
-The packaged executable is intended to run without a Go or other language runtime installed on the teacher's computer. A successful source build or ZIP inspection does not establish that the Canvas workflow passed live district checks. See `docs/0.1b-evidence.md` for current evidence and limitations. Workspace commands use the explicit workspace option, for example `.\cse\cse.exe --workspace . --help` when run from the packaged workspace root.
+The packaged executable is intended to run without a Go or other language runtime installed on the teacher's computer. A successful source build or ZIP inspection verifies the local build and package, not every possible Canvas response or district configuration. Use current API responses and the task guides; see [0.1b-evidence.md](0.1b-evidence.md) for historical observations, not operation prerequisites. Workspace commands use the explicit workspace option, for example `.\cse\cse.exe --workspace . --help` when run from the packaged workspace root.
 
 ## Local web pages (the hub)
 

@@ -122,4 +122,161 @@ func TestNoRubricAssignmentScoresWithAgentBasisAndWritesGradeAndCommentOnly(t *t
 	if report.Students[0].Outcomes.Rubric.Status != "not-requested" {
 		t.Fatalf("rubric outcome should be not-requested, got %q", report.Students[0].Outcomes.Rubric.Status)
 	}
+	// Historical completion survives teacher output and academic-basis edits,
+	// while the next submission remains new work.
+	var saved domain.ResultsDocument
+	if _, e = workspace.ReadDocument(path, &saved); e != nil {
+		t.Fatal(e)
+	}
+	changed, e := Snapshot(noRubricAssignment(), s.Client.Origin())
+	if e != nil {
+		t.Fatal(e)
+	}
+	changed.DescriptionHTML = "Teacher changed directions after posting"
+	live.Comments[0].Comment = "Teacher revised feedback"
+	if !s.completedHint("TEST", 10, saved.Students[0].StudentRef, live, changed) {
+		t.Fatal("completed no-rubric attempt recurred after teacher edits")
+	}
+	live.State = "graded"
+	matches := true
+	live.GradeMatchesCurrentSubmission = &matches
+	if !liveHandled(live) {
+		t.Fatal("live no-rubric completion was missed")
+	}
+	live.Attempt++
+	matches = false
+	if s.completedHint("TEST", 10, saved.Students[0].StudentRef, live, changed) || liveHandled(live) {
+		t.Fatal("new no-rubric attempt was hidden")
+	}
+
+}
+
+func TestLostAssessmentResponseRecoversOnlyExactScore(t *testing.T) {
+	live := fixtureSubmission(5)
+	gradeWrites := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "submissions/5") {
+			if r.Method == "PUT" {
+				var req struct {
+					Submission map[string]string `json:"submission"`
+					Comment    struct {
+						Text    string `json:"text_comment"`
+						Attempt int    `json:"attempt"`
+					} `json:"comment"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&req)
+				if value, ok := req.Submission["posted_grade"]; ok {
+					gradeWrites++
+					n := json.Number(value)
+					live.EnteredScore, live.Score = &n, &n
+					w.WriteHeader(500)
+					return
+				}
+				if req.Comment.Text != "" {
+					attempt := req.Comment.Attempt
+					live.Comments = append(live.Comments, SubmissionComment{ID: 90, Comment: req.Comment.Text, Attempt: &attempt})
+				}
+			}
+			_ = json.NewEncoder(w).Encode(live)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(noRubricAssignment())
+	})
+	path := writeNoRubricResults(t, s, overallBasis())
+	first, e := s.Post(context.Background(), path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if first.Students[0].Outcomes.Grade.Status != "uncertain" {
+		t.Fatal("lost grade response was not uncertain")
+	}
+	second, e := s.Post(context.Background(), path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if gradeWrites != 1 || second.Students[0].Status != "completed" {
+		t.Fatal("exact assessment was not recovered without replay")
+	}
+	var saved domain.ResultsDocument
+	body, e := workspace.ReadDocument(path, &saved)
+	if e != nil {
+		t.Fatal(e)
+	}
+	saved.Students[0].Grade.Outcomes.Grade.Status = "uncertain"
+	legacy := domain.MustDecimal("10")
+	saved.Students[0].Grade.DesiredEnteredGrade = &legacy
+	if e = workspace.WriteDocument(path, saved, body); e != nil {
+		t.Fatal(e)
+	}
+	higher := json.Number("14")
+	live.EnteredScore = &higher
+	third, e := s.Post(context.Background(), path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if gradeWrites != 1 || third.Students[0].Outcomes.Grade.Status != "uncertain" {
+		t.Fatal("higher score or obsolete target falsely proved uncertain assessment completed")
+	}
+}
+
+func TestPartialLegacyRetainedGradeResumesWithComputedAssessment(t *testing.T) {
+	live := fixtureSubmission(5)
+	gradeWrites := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "submissions/5") {
+			if r.Method == "PUT" {
+				var req struct {
+					Submission map[string]string `json:"submission"`
+					Comment    struct {
+						Text    string `json:"text_comment"`
+						Attempt int    `json:"attempt"`
+					} `json:"comment"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&req)
+				if value, ok := req.Submission["posted_grade"]; ok {
+					gradeWrites++
+					n := json.Number(value)
+					live.EnteredScore, live.Score = &n, &n
+				}
+				if req.Comment.Text != "" {
+					attempt := req.Comment.Attempt
+					live.Comments = append(live.Comments, SubmissionComment{ID: 90, Comment: req.Comment.Text, Attempt: &attempt})
+				}
+			}
+			_ = json.NewEncoder(w).Encode(live)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(noRubricAssignment())
+	})
+	path := writeNoRubricResults(t, s, overallBasis())
+	var saved domain.ResultsDocument
+	body, e := workspace.ReadDocument(path, &saved)
+	if e != nil {
+		t.Fatal(e)
+	}
+	g := saved.Students[0].Grade
+	g.Outcomes.Grade = domain.ActionOutcome{Status: "preserved", Message: "live entered grade is at least the assessment"}
+	g.Outcomes.Rubric = domain.ActionOutcome{Status: "not-requested"}
+	legacy := domain.MustDecimal("15")
+	g.DesiredEnteredGrade = &legacy
+	if e = workspace.WriteDocument(path, saved, body); e != nil {
+		t.Fatal(e)
+	}
+	report, e := s.Post(context.Background(), path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if gradeWrites != 1 || report.Students[0].Status != "completed" || live.EnteredScore.String() != "12" {
+		t.Fatal("partial legacy retention suppressed computed assessment")
+	}
+	// Completed historical actions remain completed after teacher adjustments.
+	higher := json.Number("18")
+	live.EnteredScore = &higher
+	requests := s.Client.Requests()
+	if _, e = s.Post(context.Background(), path); e != nil {
+		t.Fatal(e)
+	}
+	if gradeWrites != 1 || s.Client.Requests() != requests || live.EnteredScore.String() != "18" {
+		t.Fatal("completed action was replayed")
+	}
 }

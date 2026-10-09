@@ -29,9 +29,6 @@ func (s *Service) pushRubricAttachment(ctx context.Context, path string, d *doma
 		report.Message = "rubric attachment already completed; pull-item before another operation"
 		return report, nil
 	}
-	if e = s.require(s.Evidence.IndependentRubricCreate, "independent rubric attachment preserving assignment points"); e != nil {
-		return report, e
-	}
 	live, e := GetAssignment(ctx, s.Client, d.CourseID, d.AssignmentID)
 	if e != nil {
 		return report, e
@@ -49,7 +46,7 @@ func (s *Service) pushRubricAttachment(ctx context.Context, path string, d *doma
 	compare := snapshot
 	compare.UpdatedAt = ""
 	compare.Rubric = nil
-	if !SameSnapshot(baseline, compare) {
+	if !SameGradingBasis(baseline, compare) {
 		report.Status = "held"
 		report.Message = "live assignment changed since pull; rubric attachment held and assignment preserved"
 		return report, nil
@@ -136,7 +133,7 @@ func (s *Service) pushRubricAttachment(ctx context.Context, path string, d *doma
 	compare = snapshot
 	compare.Rubric = nil
 	compare.UpdatedAt = ""
-	if !SameSnapshot(baseline, compare) || !confirm(snapshot.Rubric) {
+	if !SameGradingBasis(baseline, compare) || !confirm(snapshot.Rubric) {
 		report.Status = "held"
 		report.Message = "rubric resource IDs saved, but live attachment or preserved assignment settings do not match; no repair write performed"
 		return report, nil

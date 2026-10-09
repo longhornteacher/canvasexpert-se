@@ -10,7 +10,7 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
-func TestRenderFeedbackShowsAssessmentRetainedScoresThenConversation(t *testing.T) {
+func TestRenderFeedbackShowsAssessmentScoresThenConversation(t *testing.T) {
 	rubric := domain.Rubric{Title: "Synthetic rubric", Criteria: []domain.Criterion{
 		{ID: "ev", Description: "Evidence", Points: domain.MustDecimal("4")},
 		{ID: "rs", Description: "Reasoning", Points: domain.MustDecimal("6")},
@@ -23,13 +23,12 @@ func TestRenderFeedbackShowsAssessmentRetainedScoresThenConversation(t *testing.
 		{Key: "one", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "ev", Points: domain.MustDecimal("3")}, {CriterionID: "rs", Points: domain.MustDecimal("4")}}},
 		{Key: "two", Evidence: "missing", Criteria: []domain.CriterionScore{{CriterionID: "ev", Points: domain.MustDecimal("0")}, {CriterionID: "rs", Points: domain.MustDecimal("0")}}},
 	}
-	retained := domain.MustDecimal("15")
 	feedback := "Try **a specific** next step.\nQuoted text: `a < b`"
-	got, err := RenderFeedback(FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: components, Assessment: domain.MustDecimal("4.67"), AssignmentPoints: domain.MustDecimal("20"), RetainedGrade: &retained, Feedback: feedback})
+	got, err := RenderFeedback(FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: components, Assessment: domain.MustDecimal("4.67"), AssignmentPoints: domain.MustDecimal("20"), Feedback: feedback})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Assessment: 4.67 / 20\nGradebook entry retained: 15 / 20 (entered grade before any Canvas late policy)\nCriterion scores:\n- Response 1: Evidence 3/4; Reasoning 4/6\n- Response 2: Evidence 0/4; Reasoning 0/6\n\n" + feedback
+	want := "Assessment: 4.67 / 20\nCriterion scores:\n- Response 1: Evidence 3/4; Reasoning 4/6\n- Response 2: Evidence 0/4; Reasoning 0/6\n\n" + feedback
 	if got != want {
 		t.Fatalf("unexpected rendering\n got: %s\nwant: %s", got, want)
 	}

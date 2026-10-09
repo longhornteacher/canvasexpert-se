@@ -2,7 +2,10 @@ package workflow
 
 import (
 	"fmt"
+	"html"
 	"reflect"
+	"regexp"
+	"strings"
 	"time"
 
 	"canvasexpertse/internal/domain"
@@ -53,14 +56,109 @@ func PlanEdit(doc domain.AssignmentDocument, html string) (map[string]any, error
 	return patch, nil
 }
 
-// SameGradingBasis ignores unrelated timestamps but includes the actual work's
-// expectations, scale, rubric, and submission/grade modes.
+// SameGradingBasis compares academic expectations rather than presentation/scheduling.
 func SameGradingBasis(a, b domain.AssignmentSnapshot) bool {
-	a.UpdatedAt = ""
-	b.UpdatedAt = ""
-	a.Published = false
-	b.Published = false
+	a.UpdatedAt, b.UpdatedAt = "", ""
+	a.Title, b.Title = "", ""
+	a.Published, b.Published = false, false
+	a.DueAt, b.DueAt = nil, nil
+	a.UnlockAt, b.UnlockAt = nil, nil
+	a.LockAt, b.LockAt = nil, nil
+	if a.Rubric != nil {
+		r := *a.Rubric
+		r.UseForGrading, r.UseForGradingKnown = false, false
+		a.Rubric = &r
+	}
+	if b.Rubric != nil {
+		r := *b.Rubric
+		r.UseForGrading, r.UseForGradingKnown = false, false
+		b.Rubric = &r
+	}
+	a.DescriptionHTML, b.DescriptionHTML = academicHTML(a.DescriptionHTML), academicHTML(b.DescriptionHTML)
 	return SameSnapshot(a, b)
+}
+
+// Only fields being replaced can conflict. All other current fields are preserved.
+func sameEditFields(a, b domain.AssignmentSnapshot, patch map[string]any) bool {
+	if a.Instance != b.Instance || a.CourseID != b.CourseID || a.AssignmentID != b.AssignmentID {
+		return false
+	}
+	for key := range patch {
+		switch key {
+		case "name":
+			if a.Title != b.Title {
+				return false
+			}
+		case "description":
+			if academicHTML(a.DescriptionHTML) != academicHTML(b.DescriptionHTML) {
+				return false
+			}
+		case "points_possible":
+			if a.Points.Cmp(b.Points) != 0 {
+				return false
+			}
+		case "submission_types":
+			if !reflect.DeepEqual(a.SubmissionTypes, b.SubmissionTypes) {
+				return false
+			}
+		case "due_at":
+			if !sameDate(a.DueAt, b.DueAt) {
+				return false
+			}
+		case "unlock_at":
+			if !sameDate(a.UnlockAt, b.UnlockAt) {
+				return false
+			}
+		case "lock_at":
+			if !sameDate(a.LockAt, b.LockAt) {
+				return false
+			}
+		case "published":
+			if a.Published != b.Published {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+var ordinaryTags = regexp.MustCompile(`(?s)<[^>]*>`)
+var quotedAttribute = regexp.MustCompile(`([[:alnum:]_:-]+)\s*=\s*'([^']*)'`)
+
+// Modest representation normalization, retaining tags, attributes (including URLs)
+// and code whitespace. This deliberately does not infer semantic equivalence.
+func academicHTML(source string) string {
+	var out strings.Builder
+	at, literal := 0, 0
+	for _, loc := range ordinaryTags.FindAllStringIndex(source, -1) {
+		text := html.UnescapeString(source[at:loc[0]])
+		if literal == 0 {
+			text = strings.Join(strings.Fields(text), " ")
+		}
+		out.WriteString(text)
+		tag := source[loc[0]:loc[1]]
+		lower := strings.ToLower(tag)
+		if strings.HasPrefix(lower, "</pre") || strings.HasPrefix(lower, "</code") {
+			if literal > 0 {
+				literal--
+			}
+		}
+		if literal == 0 {
+			tag = quotedAttribute.ReplaceAllString(tag, `$1="$2"`)
+			tag = strings.TrimSpace(tag)
+		}
+		out.WriteString(tag)
+		if strings.HasPrefix(lower, "<pre>") || strings.HasPrefix(lower, "<pre ") || strings.HasPrefix(lower, "<code>") || strings.HasPrefix(lower, "<code ") {
+			literal++
+		}
+		at = loc[1]
+	}
+	text := html.UnescapeString(source[at:])
+	if literal == 0 {
+		text = strings.Join(strings.Fields(text), " ")
+	}
+	out.WriteString(text)
+	return out.String()
 }
 
 // SameSnapshot compares numeric values and date instants without mistaking API

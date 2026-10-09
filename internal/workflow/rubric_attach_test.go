@@ -132,8 +132,8 @@ func TestAttachRubricUncertainResponseRecoversGeneratedIDsWithoutReplay(t *testi
 	}
 }
 
-func TestAttachRubricRefusesExistingAssociationAndChangedAssignment(t *testing.T) {
-	for _, change := range []string{"existing", "title", "points", "published"} {
+func TestAttachRubricChecksRelevantAssignmentChanges(t *testing.T) {
+	for _, change := range []string{"existing", "points", "directions", "title", "published"} {
 		t.Run(change, func(t *testing.T) {
 			live := attachmentBaseline()
 			base := live
@@ -141,6 +141,9 @@ func TestAttachRubricRefusesExistingAssociationAndChangedAssignment(t *testing.T
 			s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 				if r.Method != "GET" {
 					writes++
+					installFixtureRubric(&live)
+					_, _ = w.Write([]byte(`{"rubric":{"id":20},"rubric_association":{"id":30}}`))
+					return
 				}
 				_ = json.NewEncoder(w).Encode(live)
 			})
@@ -148,10 +151,12 @@ func TestAttachRubricRefusesExistingAssociationAndChangedAssignment(t *testing.T
 			switch change {
 			case "existing":
 				installFixtureRubric(&live)
-			case "title":
-				live.Name = "Teacher changed"
 			case "points":
 				live.Points = json.Number("50")
+			case "directions":
+				live.Description = "Teacher changed academic requirements"
+			case "title":
+				live.Name = "Teacher renamed it"
 			case "published":
 				live.Published = false
 			}
@@ -159,24 +164,21 @@ func TestAttachRubricRefusesExistingAssociationAndChangedAssignment(t *testing.T
 			if e != nil {
 				t.Fatal(e)
 			}
-			if report.Status != "held" || writes != 0 {
-				t.Fatalf("live state overwritten: %+v", report)
+			if change == "title" || change == "published" {
+				if report.Status != "completed" || writes != 1 || (change == "title" && live.Name != "Teacher renamed it") || (change == "published" && live.Published) {
+					t.Fatalf("irrelevant live change blocked or overwritten: %+v", report)
+				}
+			} else if report.Status != "held" || writes != 0 {
+				t.Fatalf("meaningful live change was overwritten: %+v", report)
 			}
 		})
 	}
 }
 
-func TestAttachRubricMissingEvidenceAndMalformedDraftHaveNoRequests(t *testing.T) {
+func TestAttachRubricMalformedDraft(t *testing.T) {
 	live := attachmentBaseline()
 	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) { t.Error("invalid/unverified attachment reached Canvas") })
 	path := attachmentDraft(t, s, live)
-	s.Evidence.IndependentRubricCreate = false
-	if _, e := s.Push(context.Background(), path); e == nil {
-		t.Fatal("unverified attachment enabled")
-	}
-	if s.Client.Requests() != 0 {
-		t.Fatal("missing evidence triggered requests")
-	}
 	var d domain.AssignmentDocument
 	body, e := workspace.ReadDocument(path, &d)
 	if e != nil {

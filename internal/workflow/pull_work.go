@@ -230,7 +230,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 					report.Skipped = append(report.Skipped, fmt.Sprintf("assignment %d: %s", a.ID, why))
 					continue
 				}
-				if query == "" && s.proven(s.Evidence.CompletionDiscovery) && liveHandled(sub) {
+				if query == "" && liveHandled(sub) {
 					summary.Handled++
 					continue
 				}
@@ -331,12 +331,6 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				privateNotes, warnings := workspace.NotesFor(notes, course.Nickname, st, courseRoster)
 				doc.Notes = privateNotes
 				report.Warnings = append(report.Warnings, warnings...)
-				if !doc.EnteredGradeKnown {
-					report.Warnings = append(report.Warnings, fmt.Sprintf("%s entered grade unavailable: %s", st.Ref, doc.EnteredGradeReason))
-				}
-				if query == "" && !s.proven(s.Evidence.CompletionDiscovery) && sub.State == "graded" {
-					report.Warnings = append(report.Warnings, fmt.Sprintf("%s current-attempt completion is unverified; included for inspection", st.Ref))
-				}
 				file, e := workspace.ConstrainPath(s.Root, filepath.Join(relDir, "students", st.Ref+".md"))
 				if e != nil {
 					return report, e
@@ -382,7 +376,7 @@ func unsupportedSubmission(s Submission) string {
 	return ""
 }
 func liveHandled(s Submission) bool {
-	return s.State == "graded" && s.GradeMatchesCurrentSubmission != nil && *s.GradeMatchesCurrentSubmission && len(s.RubricAssessment) > 0
+	return s.State == "graded" && s.GradeMatchesCurrentSubmission != nil && *s.GradeMatchesCurrentSubmission
 }
 func decimalPointer(n *json.Number) *domain.Decimal {
 	if n == nil {
@@ -395,20 +389,17 @@ func decimalPointer(n *json.Number) *domain.Decimal {
 	return &d
 }
 func (s *Service) enteredGrade(sub Submission) (bool, *domain.Decimal, string) {
-	if !s.proven(s.Evidence.EnteredScore) {
-		return false, nil, "pre-penalty entered-score semantics lack district evidence"
-	}
 	if sub.EnteredScore != nil {
 		d := decimalPointer(sub.EnteredScore)
 		if d == nil {
 			return false, nil, "invalid returned entered_score"
 		}
-		return true, d, "verified entered_score"
+		return true, d, "returned entered_score"
 	}
 	// An absent entered_score is only accepted as empty when the graded score is
 	// also absent. No reconstruction from score or late deductions is guessed.
 	if sub.Score == nil {
-		return true, nil, "verified empty grade"
+		return true, nil, "empty grade"
 	}
 	return false, nil, "entered_score absent while score exists; no reliable pre-penalty value"
 }
@@ -421,7 +412,7 @@ func attemptRef(sub Submission) domain.AttemptRef {
 }
 func (s *Service) attemptWork(ctx context.Context, relDir, ref string, sub Submission) (domain.AttemptWork, error) {
 	w := domain.AttemptWork{Ref: attemptRef(sub), BodyHTML: sub.Body, ReadableText: render.HTMLText(sub.Body), Late: sub.Late}
-	if s.proven(s.Evidence.EffectiveDueDate) && sub.CachedDueDate != nil {
+	if sub.CachedDueDate != nil {
 		w.EffectiveDueAt = *sub.CachedDueDate
 	}
 	if known, grade, _ := s.enteredGrade(sub); known {
@@ -511,8 +502,7 @@ func plainTextExtension(name string) bool {
 	return false
 }
 
-// Completed files are only hints. Suppression additionally requires the same
-// live attempt, exact feedback text/attempt and current honest rubric values.
+// Completed actions belong to an identity/attempt, even after teacher output edits.
 func (s *Service) completedHint(nickname string, id int64, ref string, sub Submission, snapshot domain.AssignmentSnapshot) bool {
 	matched := false
 	base := filepath.Join(s.Root, "courses", nickname)
@@ -530,26 +520,12 @@ func (s *Service) completedHint(nickname string, id int64, ref string, sub Submi
 		if _, e := workspace.ReadDocument(path, &results); e != nil {
 			return nil
 		}
-		if !SameGradingBasis(results.Assignment, snapshot) {
+		if results.Schema != 1 || results.Kind != "results" || results.Assignment.Instance != snapshot.Instance || results.Assignment.CourseID != snapshot.CourseID || results.Assignment.AssignmentID != id {
 			return nil
 		}
-		valid, e := domain.ValidateResults(&results)
-		if e != nil {
-			return nil
-		}
-		for _, v := range valid {
-			g := v.Student.Grade
-			if v.Student.StudentRef != ref || !gradeComplete(g) || !sameAttempt(g.Attempt, attemptRef(sub)) {
-				continue
-			}
-			comment := g.Outcomes.Comment
-			found := false
-			for _, c := range submissionComments(sub) {
-				if c.Attempt != nil && *c.Attempt == g.Attempt.Attempt && c.Comment == comment.PostedText && (comment.ID == 0 || comment.ID == c.ID) {
-					found = true
-				}
-			}
-			if found && rubricMatches(sub, *v.Assessment) {
+		for _, row := range results.Students {
+			g := row.Grade
+			if row.Operation == "grade" && row.StudentRef == ref && gradeComplete(g) && sameAttempt(g.Attempt, attemptRef(sub)) {
 				matched = true
 			}
 		}

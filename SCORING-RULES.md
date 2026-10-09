@@ -1,11 +1,13 @@
 # Scoring rules
 
-## Highest score is canon
+Teacher policy updated 2026-10-09: SE and the host assess work honestly using the Canvas rubric when available, or a common-sense local scoring basis when absent. A missing Canvas rubric is not a blocker. Always post the computed assessment, even below an existing entered grade. Never consider a higher entered grade when choosing the assessment or deciding to post; the teacher handles later raises.
 
-Teacher decision, 2026-09-23: the highest score is canon. This applies to all scoring (ARCHITECTURE D9):
+Keep the rubric and feedback honest. Do not inflate criteria to match a teacher's final grade or call a skipped rubric complete. Compare revisions with the strongest preceding academic attempt from work and rubric evidence.
 
-- The feedback comment always carries the tool's score.
-- The score field is written only when it is empty or the tool's score is higher.
-- Never lowers a grade.
+The agent infers response units and defensible weights. For a rubric repeated across components, normalize component weights to shares a_i; aggregate each criterion q_j = sum_i(a_i * s_ij), then assess P * sum_j(q_j) / sum_j(m_j), using live assignment maximum P and rubric criterion maxima m_j. If criteria already correspond to distinct prompts, use that mapping instead of repeating them. Preserve calculation precision; round the proposed posting/display score to two decimals with deliberate precision. Use real rating IDs only when they truthfully match the awarded points. Zero-point descriptive criteria do not enter the denominator; do not invent a numeric basis for a wholly unscored rubric. A no-Canvas-rubric assignment requires an explicit local scoring basis.
 
-**2026-10-08 refinement:** this retention rule governs the entered grade only. The teacher requires an honest, fully populated rubric even when its assessment is lower than the teacher's retained grade. Feedback distinguishes those values and may include compact criterion scores per response without repeating full rubric definitions. Compare revisions with the strongest preceding academic attempt. The old idea of skipping the rubric when retaining a higher/equal grade is superseded; see [EXECUTION-BRIEF-0.1b.md](EXECUTION-BRIEF-0.1b.md) for the tested coupling strategy and practical read/write race limit.
+Feedback order: overall computed assessment, compact per-response criterion scores, conversational glows/grows grounded in the work. Full rubric definitions remain in Canvas. Teacher-only notes never enter student output.
+
+New SE rubric attachments disable automatic grade calculation. Do not silently change existing rubric coupling. Post the honest rubric assessment and computed grade normally, including coupled assignments; confirm returned rubric/grade outcomes and report uncertainty honestly. Do not invent a preservation guarantee. Independent-rubric and no-rubric work need no workspace certification metadata.
+
+Canvas exclusively calculates late point penalties. SE only supplies lateness timing, excluding weekends and school holidays; later drafts use the first genuine submission's lateness. The host selects the first genuine current or prior attempt from actual work, excluding blank, placeholder or accidental submissions, and supplies `late_timing` with its attempt reference, applicable cached due date and reason. The CLI reads `settings/school-calendar.md` and counts elapsed clock seconds on whole student school dates (not classroom hours), using local midnight boundaries. It writes only `late_policy_status` and, for positive lateness, `seconds_late_override`; Canvas calculates point consequences. Missing or changed timing evidence and missing/out-of-coverage calendars hold timing only; grade/comment work continues. See [ARCHITECTURE.md](ARCHITECTURE.md) for current boundaries. [Historical evidence](docs/0.1b-evidence.md) is observation, not a runtime prerequisite.

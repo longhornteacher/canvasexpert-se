@@ -14,10 +14,9 @@ import (
 )
 
 type Service struct {
-	Root     string
-	Client   *canvas.Client
-	Config   domain.CourseConfig
-	Evidence Capabilities
+	Root   string
+	Client *canvas.Client
+	Config domain.CourseConfig
 }
 
 func (s *Service) Course(nickname string) (domain.Course, error) {

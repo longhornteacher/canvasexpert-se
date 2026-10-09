@@ -26,23 +26,7 @@ type ValidatedStudent struct {
 	Interpretation Interpretation
 	Assignment     AssignmentSnapshot
 }
-type GradeDecision struct {
-	Assessed Decimal
-	Desired  Decimal
-	Write    bool
-	Retained bool
-}
 
-func DecideGrade(assessed Decimal, entered *Decimal) GradeDecision {
-	a := RoundRat(assessed.Rat(), 2)
-	d := GradeDecision{Assessed: a, Desired: a, Write: true}
-	if entered != nil && entered.Cmp(a) >= 0 {
-		d.Desired = *entered
-		d.Write = false
-		d.Retained = entered.Cmp(a) > 0
-	}
-	return d
-}
 func validInstance(s string) bool {
 	u, e := url.Parse(s)
 	return e == nil && u.Scheme == "https" && u.Hostname() != "" && u.Opaque == "" && u.User == nil && (u.Path == "" || u.Path == "/") && u.RawQuery == "" && !u.ForceQuery && u.Fragment == ""
@@ -358,9 +342,6 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				return fail(fmt.Errorf("grade operation requires grade only"))
 			}
 			g := s.Grade
-			if g.DesiredEnteredGrade != nil && (!g.DesiredEnteredGrade.IsSet() || g.DesiredEnteredGrade.Sign() < 0) {
-				return fail(fmt.Errorf("desired_entered_grade must be an explicit finite nonnegative decimal"))
-			}
 			if e := validateAttempt(g.Attempt); e != nil {
 				return fail(e)
 			}
@@ -370,9 +351,6 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			}
 			if !g.Assessment.IsSet() || g.Assessment.Cmp(a.Posted) != 0 {
 				return fail(fmt.Errorf("assessment must equal derived posted value %s", a.Posted.String()))
-			}
-			if g.DesiredEnteredGrade != nil && g.DesiredEnteredGrade.Cmp(a.Posted) < 0 {
-				return fail(fmt.Errorf("desired_entered_grade cannot be below the assessment"))
 			}
 			if strings.TrimSpace(g.Feedback) == "" {
 				return fail(fmt.Errorf("conversational feedback required"))
@@ -388,20 +366,6 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				ct, _ := time.Parse(time.RFC3339Nano, g.Attempt.SubmittedAt)
 				if !pt.Before(ct) {
 					return fail(fmt.Errorf("strongest_prior timestamp must precede current work"))
-				}
-			}
-			if late := g.LateForgiveness; late != nil {
-				if e := validateAttempt(late.FirstAttempt); e != nil {
-					return fail(e)
-				}
-				due, e := time.Parse(time.RFC3339Nano, late.EffectiveDueAt)
-				if e != nil {
-					return fail(fmt.Errorf("late effective_due_at must be RFC3339"))
-				}
-				first, _ := time.Parse(time.RFC3339Nano, late.FirstAttempt.SubmittedAt)
-				current, _ := time.Parse(time.RFC3339Nano, g.Attempt.SubmittedAt)
-				if late.FirstAttempt.Attempt != 1 || g.Attempt.Attempt <= 1 || first.After(due) || !first.Before(current) || strings.TrimSpace(late.GenuineReason) == "" {
-					return fail(fmt.Errorf("late forgiveness requires genuine on-time attempt 1 preceding current attempt"))
 				}
 			}
 			for _, o := range []ActionOutcome{g.Outcomes.Comment, g.Outcomes.Rubric, g.Outcomes.Grade, g.Outcomes.Late} {
@@ -438,9 +402,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				if !r.Assessment.Assessment.IsSet() || r.Assessment.Assessment.Cmp(a.Posted) != 0 {
 					return fail(fmt.Errorf("preserved assessment disagrees with component scores"))
 				}
-				if r.Assessment.RetainedGrade != nil && (!r.Assessment.RetainedGrade.IsSet() || r.Assessment.RetainedGrade.Cmp(a.Posted) < 0) {
-					return fail(fmt.Errorf("retained grade must be explicit and cannot be below assessment"))
-				}
+
 				v.Assessment = &a
 			}
 		default:

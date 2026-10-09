@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -54,9 +52,6 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		return fail(inputError(fmt.Errorf("settings/courses.md instance differs from this machine's saved Canvas origin; update the configuration")), progress)
 	}
 	service := &workflow.Service{Root: root, Client: c, Config: config}
-	if e = loadEvidence(root, &service.Evidence); e != nil {
-		return fail(inputError(e), progress)
-	}
 	start := time.Now()
 	defer func() {
 		fmt.Fprintf(progress, "%s: %s, %d HTTP requests\n", cmd, time.Since(start).Round(time.Millisecond), c.Requests())
@@ -188,27 +183,4 @@ func workflowError(e error) error {
 		return &cliError{3, e}
 	}
 	return inputError(e)
-}
-func loadEvidence(root string, out *workflow.Capabilities) error {
-	p, e := workspace.ConstrainPath(root, filepath.Join(".cse", "capabilities.json"))
-	if e != nil {
-		return e
-	}
-	b, e := os.ReadFile(p)
-	if os.IsNotExist(e) {
-		return nil
-	}
-	if e != nil {
-		return e
-	}
-	dec := json.NewDecoder(strings.NewReader(string(b)))
-	dec.DisallowUnknownFields()
-	if e = dec.Decode(out); e != nil {
-		return fmt.Errorf("invalid local capability evidence: %w", e)
-	}
-	var extra any
-	if e = dec.Decode(&extra); e != io.EOF {
-		return fmt.Errorf("local capability evidence must contain one JSON object")
-	}
-	return nil
 }

@@ -34,6 +34,10 @@ Use `courses` to discover courses you can access and their IDs. Then set teacher
 
 Use `students` for alias and monitored-status changes. Put teacher-authored accommodations or useful context in `settings/students.md`, associated with an unambiguous student and course. These notes may contain real names and remain in the teacher's synced folder. Never put a PAT there. Agents must not read the private `.cse/` mapping.
 
+## 5. Review the school calendar
+
+Review `settings/school-calendar.md` before scoring late work. It lists student dates for elapsed lateness calculations; update it when the school calendar changes.
+
 ## When setup is done
 
-Confirm the workspace is open in the agent and that the CLI can report its version/help. Then read `authoring.md`, `edit.md`, or `score.md` for the task. The 0.1b CLI provides the local setup form and stores the credential in Windows Credential Manager; Canvas write capabilities remain subject to the limits documented by this build.
+Confirm the workspace is open in the agent and that the CLI can report its version/help. Then read `authoring.md`, `edit.md`, or `score.md` for the task. Setup stores the credential in Windows Credential Manager. Routine supported operations do not depend on workspace certification metadata; follow the task guide for any specific unresolved limitation.

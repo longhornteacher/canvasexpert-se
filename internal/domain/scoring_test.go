@@ -1,9 +1,9 @@
 package domain
 
 import (
-	"strings"
 	"encoding/json"
 	"math/big"
+	"strings"
 	"testing"
 )
 
@@ -30,11 +30,7 @@ func TestAssignmentRubricScaleAndExactWeights(t *testing.T) {
 	if a.Posted.String() != "12" || a.Criteria[0].Points.Cmp(big.NewRat(60, 1)) != 0 {
 		t.Fatalf("wanted 12/20 and 60/100, got %+v", a)
 	}
-	entered := MustDecimal("15")
-	d := DecideGrade(a.Posted, &entered)
-	if d.Write || !d.Retained || d.Desired.String() != "15" {
-		t.Fatalf("wanted retained 15, got %+v", d)
-	}
+
 }
 func TestFractionalRepeatedAndDirect(t *testing.T) {
 	r := oneCriterion("3.5")
@@ -90,20 +86,6 @@ func TestOverallUsesUnroundedCriteria(t *testing.T) {
 	}
 	if a.Posted.String() != "33.33" || a.Criteria[0].Points.Cmp(big.NewRat(1, 3)) != 0 {
 		t.Fatalf("overall used rounded criterion displays: %s (%s)", a.Posted, a.Criteria[0].Points)
-	}
-}
-func TestEnteredZeroAndPrecision(t *testing.T) {
-	zero := MustDecimal("0")
-	if d := DecideGrade(zero, &zero); d.Write {
-		t.Fatal("entered zero mistaken for absent")
-	}
-	if d := DecideGrade(zero, nil); !d.Write {
-		t.Fatal("absent grade not written")
-	}
-	entered := MustDecimal("12.00400")
-	d := DecideGrade(MustDecimal("12.004"), &entered)
-	if d.Write || !d.Retained || d.Desired.String() != "12.00400" {
-		t.Fatalf("existing precision lost: %+v", d)
 	}
 }
 func TestCriterionExplanationAndTruthfulRatings(t *testing.T) {
