@@ -37,6 +37,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   push FILE                     Create/resume or update an assignment
   pull-item COURSE TITLE|ID|LINK Pull actual assignment HTML for editing
   pull-work [COURSE [ASSIGNMENT]] Pull work; no scope uses current courses
+  push-quiz COURSE FILE         Create or resume a New Quiz from a QuizForge file
   post RESULTS_FILE             Post validated grades or selected revisions
   validate FILE                 Validate a workspace document locally
   doctor                        Test native dummy credential round trip
@@ -48,7 +49,7 @@ to the workspace unless absolute. Use quotes around paths or titles with spaces.
 ui/setup/students pages exist only while their command runs; Ctrl+C closes them.
 Draft/show-me-first instructions stop before post. A scoring session pulls only.
 Exit codes: 0 success; 2 invalid input; 3 partial/held work; 4 environment/API failure.
-Read the playbooks (playbooks/setup.md, authoring.md, edit.md, score.md) as needed; use help formats and help examples for file formats.
+Read the playbooks (playbooks/setup.md, authoring.md, edit.md, score.md, quizzes.md) as needed; use help formats and help examples for file formats.
 `
 
 // printEngineDoc prints the embedded format reference or synthetic examples.
@@ -193,7 +194,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "push": true, "pull-item": true, "pull-work": true, "post": true, "validate": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "push": true, "pull-item": true, "pull-work": true, "post": true, "push-quiz": true, "validate": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}

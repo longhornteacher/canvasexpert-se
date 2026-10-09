@@ -98,3 +98,14 @@ func TestSyntheticExamplesMatchDocumentSchemas(t *testing.T) {
 		})
 	}
 }
+
+func TestMarkdownHTMLRendersOnlyCourseAndWebLinks(t *testing.T) {
+	got, err := MarkdownHTML("- [Silver supports](/courses/1/pages/hub-silver)\n\n[x](javascript:alert(1)) and [site](https://example.com/a?b=1&c=2)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<ul><li><a href="/courses/1/pages/hub-silver">Silver supports</a></li></ul><p>[x](javascript:alert(1)) and <a href="https://example.com/a?b=1&amp;c=2">site</a></p>`
+	if got != want {
+		t.Fatalf("got %s\nwant %s", got, want)
+	}
+}

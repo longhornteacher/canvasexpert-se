@@ -36,4 +36,6 @@ Double-click `webui.cmd` in the repository root (or run `webui`, `.\scripts\webu
 
 The hub stays open until you press Quit or Ctrl+C. It tries port 47831 first, so a bookmark works, and falls back to a free port. In Settings, choose the workspace with Browse (a native folder window) or by pasting a full path. If the folder is empty or new, the hub creates the starter workspace in it from the template embedded in `cse.exe`; a non-empty folder asks first, and existing files are never overwritten. You can also pass `-Workspace PATH` or set `CSE_WORKSPACE`; otherwise it restores the last one it used (a non-secret path under `%APPDATA%\CanvasExpert-SE`). The launcher rebuilds `dist/cse.exe` first when sources are newer, using `.tools/go1.27.1` if present. `cse setup` and `cse students` remain as one-shot commands.
 
+The **Capabilities** page (`/capabilities`) shows the recorded green/yellow/red Canvas Live feature map, evidence limits, and review date. It is linked from Home and the shared navigation and works without a configured workspace or Canvas connection. Keep its status data in `internal/localui/capabilities.go` aligned with [engine-capabilities.md](engine-capabilities.md).
+
 New pages go in `internal/localui` and are routed from `Hub.ServeHTTP`; every form must pass the hub's Host/Origin/secret checks.

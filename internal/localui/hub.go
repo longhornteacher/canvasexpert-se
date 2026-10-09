@@ -39,6 +39,7 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><htm
 <div class="card"><h2>Students</h2>{{if .Root}}<p><b>{{.Students}}</b> known, <b>{{.Monitored}}</b> monitored</p><a class="go" href="/students">Open students &rarr;</a>{{else}}<p>Choose a workspace in Settings to get started.</p>{{end}}</div>
 <div class="card"><h2>Playbooks &amp; context</h2><p>Feedback voice, how each job is done, and your starter files.</p><a class="go" href="/settings">Open Settings &rarr;</a></div>
 <div class="card"><h2>New here?</h2><p>Two folders, one program, your private workspace.</p><a class="go" href="/how">See how it works &rarr;</a></div>
+<div class="card"><h2>Capabilities</h2><p>Green, yellow, and red lights for what CE-SE can do with Canvas Live.</p><a class="go" href="/capabilities">See the capability map &rarr;</a></div>
 </div>
 <div popover id="pat-help"><h2>Get a Canvas access token</h2><ol><li>Sign in to Canvas in your browser.</li><li>Click your profile picture (or <b>Account</b>), then <b>Settings</b>.</li><li>Scroll to <b>Approved Integrations</b> and click <b>+ New Access Token</b>.</li><li>Purpose: <code>CanvasExpert SE</code>. Leave the expiry blank, or pick a date you'll remember.</li><li>Click <b>Generate Token</b> and copy it right away. Canvas shows it only once.</li><li>Back here, choose <b>Connect Canvas</b> and paste it. It is kept in Windows Credential Manager, not in a file.</li></ol><p>If your district hides this option, ask your Canvas admin for a teacher access token.</p><button type="button" class="small" popovertarget="pat-help" popovertargetaction="hide">Close</button></div>
 <form method="post" action="/quit"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Quit the hub</button></form></main></html>`))
@@ -107,11 +108,11 @@ type Hub struct {
 	// seedNotice reports starter files added when the hub opened the remembered
 	// workspace; Home shows it once.
 	seedNotice string
-	mu            sync.Mutex
-	root          string
-	setup         *setupHandler
-	quit          chan struct{}
-	quitOnce      sync.Once
+	mu         sync.Mutex
+	root       string
+	setup      *setupHandler
+	quit       chan struct{}
+	quitOnce   sync.Once
 }
 
 func hubStateFile() string {
@@ -322,6 +323,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.saveGrading(w, r)
 	case "/how":
 		h.howPage(w, r)
+	case "/capabilities":
+		h.capabilitiesPage(w, r)
 	case "/playbook/replace":
 		h.replacePlaybook(w, r)
 	case "/canvas/test":

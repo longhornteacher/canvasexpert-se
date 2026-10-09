@@ -7,3 +7,5 @@ Preserve teacher intent and unsent work. Canvas Live is authoritative. Check cou
 CE-SE has two parts: the **Engine** (Go code in `cmd/`, `internal/`: Canvas access, identity, exact math, safe writes) and the **playbooks and context** (all judgment; `workspace-template/` is their seed embedded in the Engine, and the Engine's own contract docs, such as the format reference, live with the Engine). Put judgment in the playbooks, not the Engine.
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md) and [SCORING-RULES.md](SCORING-RULES.md). The shipped workspace AGENTS.md is for teacher sessions; the old 0.1b brief is historical.
+
+Keep the WebUI Capabilities page current: when changes or findings affect a capability, limitation, or verification status, update the status data and review date in `internal/localui/capabilities.go` together with [docs/engine-capabilities.md](docs/engine-capabilities.md). Preserve the distinction between Canvas Live evidence, local tests, and pending human validation; local tests alone must not be presented as live proof.

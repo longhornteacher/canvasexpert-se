@@ -126,7 +126,7 @@ func (c *Client) apiURL(path string) (*url.URL, error) {
 		return nil, &Error{Kind: "validation"}
 	}
 	u = c.origin.ResolveReference(u)
-	if !sameOrigin(c.origin, u) || !strings.HasPrefix(u.Path, "/api/v1/") {
+	if !sameOrigin(c.origin, u) || !(strings.HasPrefix(u.Path, "/api/v1/") || strings.HasPrefix(u.Path, "/api/quiz/v1/")) {
 		return nil, &Error{Kind: "validation"}
 	}
 	return u, nil

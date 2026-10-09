@@ -131,10 +131,16 @@ var whitespaceRun = regexp.MustCompile(`\s+`)
 var tagGap = regexp.MustCompile(`\s*(/?>)$`)
 var attrEquals = regexp.MustCompile(`\s*=\s*`)
 
+// Canvas stores a course link as an absolute URL and adds data-api-* attributes
+// to it; neither is a teacher edit.
+var canvasLinkAttrs = regexp.MustCompile(`\s+data-api-(?:endpoint|returntype)="[^"]*"`)
+var canvasAbsoluteLink = regexp.MustCompile(`href="https?://[^"/]+(/courses/)`)
+
 // Modest representation normalization, retaining tags, attributes (including URLs)
 // and code whitespace. Whitespace between text and inline tags is kept as one
 // space. This deliberately does not infer semantic equivalence.
 func academicHTML(source string) string {
+	source = canvasAbsoluteLink.ReplaceAllString(canvasLinkAttrs.ReplaceAllString(source, ""), `href="$1`)
 	var out strings.Builder
 	at, literal := 0, 0
 	for _, loc := range ordinaryTags.FindAllStringIndex(source, -1) {

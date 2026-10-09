@@ -158,6 +158,9 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 			return e
 		}
 	}
+	if e := validateTiers(d, body); e != nil {
+		return e
+	}
 	if d.Operation == "update" || d.Operation == "attach-rubric" {
 		if d.Observed == nil {
 			return fmt.Errorf("update requires observed live baseline")

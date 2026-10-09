@@ -8,6 +8,14 @@ import (
 
 func escape(s string) string { return html.EscapeString(s) }
 
+// inlineLink is the one inline construct rendered: [text](destination), limited to
+// Canvas course paths and http(s) URLs so hub links to tier pages work.
+var inlineLink = regexp.MustCompile(`\[([^\[\]]+)\]\((/courses/[0-9]+/pages/[^\s()<>"]+|https?://[^\s()<>"]+)\)`)
+
+func inline(s string) string {
+	return inlineLink.ReplaceAllString(escape(s), `<a href="$2">$1</a>`)
+}
+
 var (
 	headingLine   = regexp.MustCompile(`^(#{1,6})\s+(.+?)\s*#*\s*$`)
 	unorderedLine = regexp.MustCompile(`^\s*[-*+]\s+(.+)$`)
@@ -16,7 +24,8 @@ var (
 
 // MarkdownHTML renders a small, safe Markdown subset used for assignment
 // directions: headings, paragraphs, ordered/unordered lists, and fenced code.
-// Raw HTML and inline Markdown syntax are escaped and displayed as text.
+// Raw HTML and inline Markdown syntax are escaped and displayed as text, except
+// [text](destination) links to Canvas course paths or http(s) URLs.
 func MarkdownHTML(source string) (string, error) {
 	lines := strings.Split(strings.ReplaceAll(source, "\r\n", "\n"), "\n")
 	var out strings.Builder
@@ -27,7 +36,7 @@ func MarkdownHTML(source string) (string, error) {
 	flushParagraph := func() {
 		if len(paragraph) != 0 {
 			out.WriteString("<p>")
-			out.WriteString(escape(strings.Join(paragraph, " ")))
+			out.WriteString(inline(strings.Join(paragraph, " ")))
 			out.WriteString("</p>")
 			paragraph = nil
 		}
@@ -85,7 +94,7 @@ func MarkdownHTML(source string) (string, error) {
 				list = kind
 				out.WriteString("<" + list + ">")
 			}
-			out.WriteString("<li>" + escape(strings.TrimSpace(item)) + "</li>")
+			out.WriteString("<li>" + inline(strings.TrimSpace(item)) + "</li>")
 			continue
 		}
 		closeList()

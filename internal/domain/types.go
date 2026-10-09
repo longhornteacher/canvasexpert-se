@@ -1,5 +1,7 @@
 package domain
 
+import "strings"
+
 // All machine-written documents use schema 1. Markdown/HTML body is returned
 // separately by workspace.ReadDocument so live HTML is never round-tripped.
 type Course struct {
@@ -72,7 +74,40 @@ type AssignmentSnapshot struct {
 	ModeratedGrading bool     `yaml:"moderated_grading"`
 	GroupCategoryID  int64    `yaml:"group_category_id,omitempty"`
 }
+
+// Tier is one differentiated-hub tier of a create document: a supplement page
+// restricted to a Canvas differentiation tag. Empty Supports means no page.
+type Tier struct {
+	Label    string `yaml:"label"`
+	Tag      string `yaml:"tag"`
+	Title    string `yaml:"title,omitempty"`
+	Supports string `yaml:"supports,omitempty"`
+}
+
+// PageTitle is the Canvas page title: explicit, or "<base> - <tag>".
+func (t Tier) PageTitle(base string) string {
+	if strings.TrimSpace(t.Title) != "" {
+		return strings.TrimSpace(t.Title)
+	}
+	return strings.TrimSpace(base) + " - " + strings.TrimSpace(t.Tag)
+}
+
+// TierPage records one delivered tier page. It never holds membership.
+type TierPage struct {
+	Label         string `yaml:"label" json:"label"`
+	Tag           string `yaml:"tag" json:"tag"`
+	Title         string `yaml:"title" json:"title"`
+	PageID        int64  `yaml:"page_id,omitempty" json:"page_id,omitempty"`
+	Slug          string `yaml:"slug,omitempty" json:"slug,omitempty"`
+	URL           string `yaml:"url,omitempty" json:"url,omitempty"`
+	GroupID       int64  `yaml:"group_id,omitempty" json:"group_id,omitempty"`
+	TagStatus     string `yaml:"tag_status,omitempty" json:"tag_status,omitempty"` // matched, not_found, ambiguous, unavailable, manual
+	Published     bool   `yaml:"published,omitempty" json:"published,omitempty"`
+	TeacherAction string `yaml:"teacher_action,omitempty" json:"teacher_action,omitempty"`
+}
+
 type CreatedResources struct {
+	TierPages           []TierPage    `yaml:"tier_pages,omitempty"`
 	StartedAt           string        `yaml:"create_started_at,omitempty"`
 	IntendedHTML        string        `yaml:"intended_html,omitempty"`
 	AssignmentID        int64         `yaml:"assignment_id,omitempty"`
@@ -104,6 +139,7 @@ type AssignmentDocument struct {
 	ModuleID        int64               `yaml:"module_id,omitempty"`
 	Published       bool                `yaml:"published"`
 	Rubric          *Rubric             `yaml:"rubric,omitempty"`
+	Tiers           []Tier              `yaml:"tiers,omitempty"` // create-time differentiated hub
 	Observed        *AssignmentSnapshot `yaml:"observed,omitempty"`
 	Created         *CreatedResources   `yaml:"created,omitempty"`
 	UpdateOutcome   ActionOutcome       `yaml:"update_outcome,omitempty"`

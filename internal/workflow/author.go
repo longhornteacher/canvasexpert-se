@@ -22,6 +22,57 @@ type PushReport struct {
 	Elapsed                    time.Duration
 	Resources                  *domain.CreatedResources
 	UpdateOutcome              domain.ActionOutcome
+	TierPages                  []domain.TierPage // differentiated hub pages, when the document has tiers
+}
+
+// deliverHub creates or verifies the tier pages, records them in the document's
+// created block, and returns the body with {{tier:LABEL}} tokens bound to the
+// verified page paths. A non-empty held message means the push must stop.
+func (s *Service) deliverHub(ctx context.Context, path string, doc *domain.AssignmentDocument, body string, courseID int64) (string, string, error) {
+	var tiers []HubTier
+	for _, t := range doc.Tiers {
+		if strings.TrimSpace(t.Supports) == "" {
+			continue
+		}
+		page, err := render.MarkdownHTML(t.Supports)
+		if err != nil {
+			return "", "", err
+		}
+		tiers = append(tiers, HubTier{Label: t.Label, Tag: t.Tag, Title: t.PageTitle(doc.Title), BodyHTML: page})
+	}
+	if len(tiers) == 0 {
+		return body, "", nil
+	}
+	fresh := doc.Created == nil
+	if fresh {
+		doc.Created = &domain.CreatedResources{}
+	}
+	c := doc.Created
+	// Pages are only delivered before the assignment exists; afterwards the
+	// recorded pages are the exact ones the assignment body links to.
+	if c.AssignmentID == 0 && c.Assignment.Status != "uncertain" && c.Assignment.Status != "pending" {
+		pages, err := s.DeliverTierPages(ctx, courseID, tiers, doc.Published, c.TierPages, func(p []TierPage) error {
+			c.TierPages = p
+			return workspace.WriteDocument(path, doc, body)
+		})
+		known := false
+		for _, p := range pages {
+			known = known || p.PageID > 0
+		}
+		if known {
+			c.TierPages = pages
+			if e := workspace.WriteDocument(path, doc, body); e != nil && err == nil {
+				err = e
+			}
+		} else if fresh {
+			doc.Created = nil
+		}
+		if err != nil {
+			return "", "", fmt.Errorf("tier pages not ready, assignment not created: %w", err)
+		}
+	}
+	bound, err := BindTierLinks(body, c.TierPages, courseID)
+	return bound, "", err
 }
 
 func (s *Service) Push(ctx context.Context, path string) (report PushReport, err error) {
@@ -42,6 +93,10 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 			report.URL = doc.Created.URL
 			if err != nil && doc.Created.AssignmentID > 0 && report.Status == "" {
 				report.Status = "partial"
+			}
+			if len(doc.Created.TierPages) > 0 {
+				report.TierPages = doc.Created.TierPages
+				report.Message = strings.TrimSpace(report.Message + "\n" + HubSummary(doc.Created.TierPages))
 			}
 		}
 	}()
@@ -79,7 +134,18 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		return report, err
 	}
 	resumingModule := doc.Created != nil && definite(doc.Created.Module) && doc.ModuleID > 0
-	html, err := render.MarkdownHTML(body)
+	bound := body
+	if len(doc.Tiers) > 0 {
+		var held string
+		if bound, held, err = s.deliverHub(ctx, path, &doc, body, course.ID); err != nil || held != "" {
+			report.Status, report.Message = "held", held
+			if err != nil {
+				report.Message = err.Error()
+			}
+			return report, nil
+		}
+	}
+	html, err := render.MarkdownHTML(bound)
 	if err != nil {
 		return report, err
 	}
@@ -87,6 +153,9 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		doc.Created = &domain.CreatedResources{StartedAt: time.Now().UTC().Format(time.RFC3339Nano), IntendedHTML: html}
 	}
 	c := doc.Created
+	if c.IntendedHTML == "" && c.AssignmentID == 0 {
+		c.IntendedHTML = html // hub delivery recorded tier pages before the assignment body existed
+	}
 	if c.IntendedHTML != html {
 		return report, fmt.Errorf("incomplete create body changed; recover known creation before editing live content")
 	}

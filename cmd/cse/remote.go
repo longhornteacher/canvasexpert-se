@@ -18,12 +18,22 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "push-quiz": {2, 2}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
 	}
 	var file string
+	if cmd == "push-quiz" {
+		p, e := documentPath(root, args[1])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		if _, e = workflow.ReadQuizForge(p); e != nil {
+			return fail(inputError(e), progress)
+		}
+		file = p
+	}
 	if cmd == "push" || cmd == "post" {
 		p, e := documentPath(root, args[0])
 		if e != nil {
@@ -105,6 +115,22 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 		if report.Status != "completed" && report.Status != "succeeded" {
 			return 3
+		}
+	case "push-quiz":
+		report, e := service.PushQuiz(ctx, args[0], file)
+		if report.Engine == "classic" && report.QuizID > 0 {
+			fmt.Fprintf(out, "%s: Classic Quiz %d (assignment %d), %d of %d questions, %v points, published: %t\n%s\n", report.Status, report.QuizID, report.AssignmentID, report.ItemsAdded, report.ItemsTotal, report.Points, report.Published, report.URL)
+		} else if report.AssignmentID > 0 {
+			fmt.Fprintf(out, "%s: New Quiz %d, %d of %d items, published: %t\n%s\n", report.Status, report.AssignmentID, report.ItemsAdded, report.ItemsTotal, report.Published, report.URL)
+		}
+		if report.Hub != "" {
+			fmt.Fprintln(out, report.Hub)
+		}
+		if report.Message != "" {
+			fmt.Fprintln(out, report.Message)
+		}
+		if e != nil {
+			return fail(workflowError(e), progress)
 		}
 	case "pull-work":
 		nickname, query := "", ""

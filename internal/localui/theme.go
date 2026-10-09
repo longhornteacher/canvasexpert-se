@@ -7,7 +7,7 @@ func SEExpansion() string { return "Special Edition" }
 // under a no-script content security policy), so every effect is animation or
 // transform only and honours prefers-reduced-motion.
 // hubNav is the navigation bar shown on every page when served by the hub.
-const hubNav = `<nav aria-label="Main navigation"><a href="/">Home</a><a href="/how">How it works</a><a href="/setup">Canvas</a><a href="/courses">Courses</a><a href="/students">Students</a><a href="/settings">Settings</a></nav>`
+const hubNav = `<nav aria-label="Main navigation"><a href="/">Home</a><a href="/how">How it works</a><a href="/setup">Canvas</a><a href="/courses">Courses</a><a href="/students">Students</a><a href="/settings">Settings</a><a href="/capabilities">Capabilities</a></nav>`
 
 const funkyCSS = `
 :root{--ink:#1b0b3a;--pink:#ff3ea5;--lime:#c6ff3d;--cyan:#27e1ff;--sun:#ffd23f;--grape:#7a3cff}
