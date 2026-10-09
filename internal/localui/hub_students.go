@@ -105,7 +105,7 @@ func (h *Hub) studentsPage(w http.ResponseWriter, r *http.Request) {
 			data.Tabs = append(data.Tabs, courseTab{ID: active.ID, Name: active.Nickname, Selected: active.ID == course.ID})
 		}
 	}
-	(&studentHandler{origin: h.origin, secret: h.secret, store: store, persistent: true, hub: true, data: data, members: roster.Members}).ServeHTTP(w, r)
+	(&studentHandler{origin: h.origin, secret: h.secret, store: store, persistent: true, hub: true, data: data, members: roster.Members, notesRoot: h.root}).ServeHTTP(w, r)
 }
 
 func (h *Hub) refreshStudents(w http.ResponseWriter, r *http.Request) {

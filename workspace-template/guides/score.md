@@ -34,6 +34,8 @@ Assess a missing required response as part of the student's work; do not average
 
 The rubric records the current work's assessment even when Canvas already has a higher entered grade. If the current assessment is lower, retain the higher entered grade and explain both values clearly. Never inflate rubric criteria to match a teacher-entered grade. Keep late deductions to Canvas's own policy; do not calculate a penalty yourself. Report missing submissions rather than assigning zero automatically.
 
+Before writing any feedback, read `settings/grading.md` and follow its `voice` (how feedback should sound) and `feedback_guidance` (the teacher's grading habits and rubric preferences). The teacher edits these in the hub's Settings page; they override general style defaults in this guide but never the rubric or posting rules. Student notes from `settings/students.md` arrive with each student's pulled work; use them for accommodations and context only.
+
 Keep teacher-only notes, internal rationale, and operational details out of the student feedback. Give specific, respectful glows and grows grounded in the writing, including meaningful changes from the strongest earlier attempt. Include concise criterion scores for each response unit where the current feedback format supports them; full rubric definitions belong in the rubric.
 
 Canvas comment feedback is sent as plain text. The renderer adds the assessed score, any higher retained entered grade, and concise criterion lines before the feedback text; it preserves the feedback wording and formatting as supplied.

@@ -28,7 +28,7 @@ import (
 // back to any free loopback port when it is taken.
 const preferredHubAddr = "127.0.0.1:47831"
 
-var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert: Special Edition</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">Special Edition</div>` + hubNav + `<h1>CanvasExpert: Special Edition</h1><p>Your courses and students, together in one place.</p>
+var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert: Special Edition</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>CanvasExpert: Special Edition</h1><p>Your courses and students, together in one place.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <div class="cards">
 <div class="card"><h2>Courses</h2>{{if .Root}}<p><b>{{.ActiveCourses}}</b> active</p><a class="go" href="/courses">Pick active courses &rarr;</a>{{else}}<p>Choose a workspace in Settings to get started.</p><a class="go" href="/settings">Open Settings &rarr;</a>{{end}}</div>
@@ -36,11 +36,11 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><htm
 <div class="card"><h2>Settings</h2>{{if .Connected}}<span class="pill on">Canvas connected</span>{{else}}<span class="pill off">Canvas not connected</span>{{end}}<p>Canvas connection, workspace, and preferences.</p><a class="go" href="/settings">Open Settings &rarr;</a></div>
 </div><form method="post" action="/quit"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Quit the hub</button></form></main></html>`))
 
-var settingsTemplate = template.Must(template.New("settings").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{{if .Picking}}<meta http-equiv="refresh" content="2">{{end}}<title>CanvasExpert-SE settings</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">Special Edition</div>` + hubNav + `<h1>Settings</h1><p>Manage your Canvas connection and workspace.</p>
+var settingsTemplate = template.Must(template.New("settings").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{{if .Picking}}<meta http-equiv="refresh" content="2">{{end}}<title>CanvasExpert-SE settings</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>Settings</h1><p>Manage your Canvas connection and workspace.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}{{if .Picking}}<p class="ok">A folder window just opened. Choose your workspace folder there (it may be behind this window). This page updates by itself. Not seeing it? Check the taskbar, or cancel and paste the path instead.</p><form method="post" action="/browse-cancel"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Cancel</button></form>{{end}}
 {{if .ConfirmPath}}<div class="card"><h2>Set up a workspace here?</h2><p><code>{{.ConfirmPath}}</code></p><p>This folder has {{.ConfirmCount}} items and is not a workspace yet. I will add the starter files only; nothing existing is changed or overwritten.</p><form method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="path" value="{{.ConfirmPath}}"><input type="hidden" name="confirm" value="1"><button type="submit">Yes, set it up</button></form></div>{{end}}
 <div class="cards">
-<div class="card"><h2>Canvas</h2>{{if .Connected}}<span class="pill on">connected</span><p><code>{{.CanvasOrigin}}</code></p>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a></div>
+<div class="card"><h2>Canvas</h2>{{if .Connected}}<span class="pill on">connected</span><p><code>{{.CanvasOrigin}}</code></p>{{if .CanvasUser}}<p>Signed in as <b>{{.CanvasUser}}</b></p>{{end}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" class="small">Test connection</button></form>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a>{{if .Connected}}<details class="forget"><summary>Forget token on this computer</summary><form method="post" action="/canvas/forget"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="confirm" required> Yes, remove it. I can reconnect later.</label><button type="submit" class="small danger">Remove token</button></form></details>{{end}}</div>
 <div class="card"><h2>Program</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>Code only. Nothing private is stored here.</p></div>
 <div class="card"><h2>Workspace</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Private data: students, settings, courses.</p>{{else}}<span class="pill off">none</span><p>Choose your synced workspace folder below.</p>{{end}}</div>
 </div>
@@ -48,7 +48,11 @@ var settingsTemplate = template.Must(template.New("settings").Parse(`<!doctype h
 <div class="inline"><form method="post" action="/browse"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Browse&hellip;</button></form>
 <form class="inline" method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><input id="path" name="path" type="text" placeholder="or paste a full folder path" autocomplete="off" required><button type="submit">Use it</button></form></div>
 <p>Pick any folder, even a new empty one. If it isn't a workspace yet, the starter files are created for you.</p>
-{{if .Preferences}}<div class="card"><h2>Student aliases</h2><form method="post" action="/settings"><input type="hidden" name="request_secret" value="{{.Secret}}"><label><input type="checkbox" name="aliases" {{if .Aliases}}checked{{end}}> Use aliases in student work files</label><button type="submit">Save settings</button></form></div>{{end}}</main></html>`))
+{{if .Preferences}}<div class="card"><h2>Student aliases</h2><form method="post" action="/settings"><input type="hidden" name="request_secret" value="{{.Secret}}"><label><input type="checkbox" name="aliases" {{if .Aliases}}checked{{end}}> Use aliases in student work files</label><button type="submit">Save settings</button></form></div>{{end}}
+{{if .Root}}<div class="card voice"><h2>Feedback voice</h2><p>The agent reads this every time it writes feedback or scores work. Plain sentences are fine.</p><form method="post" action="/grading"><input type="hidden" name="request_secret" value="{{.Secret}}">
+<label for="voice">How feedback should sound</label><textarea id="voice" name="voice" rows="4" maxlength="8000" placeholder="Warm and encouraging, short sentences a 7th grader can read. Start with one glow, then one grow. Use their first name.">{{.Voice}}</textarea>
+<label for="feedback_guidance">Grading habits and rubric preferences</label><textarea id="feedback_guidance" name="feedback_guidance" rows="6" maxlength="8000" placeholder="Don't take off points for spelling in CS8. Accept late work without comment. Quote one line from their work when praising it.">{{.FeedbackGuidance}}</textarea>
+<button type="submit">Save feedback voice</button></form></div>{{end}}</main></html>`))
 
 type homeData struct {
 	Secret, Message, Notice, CanvasOrigin, Root string
@@ -59,6 +63,7 @@ type homeData struct {
 	Picking, Connected                          bool
 	Preferences, Aliases                        bool
 	Students, Monitored                         int
+	CanvasUser, Voice, FeedbackGuidance         string
 }
 
 type pickResult struct {
@@ -87,6 +92,10 @@ type Hub struct {
 	listCoursesFn func(context.Context) ([]workflow.Course, string, error)
 	rosterFn      func(context.Context, int64) ([]workflow.Enrollment, string, error)
 	tagsFn        func(context.Context, int64) (map[int64][]string, string, error)
+	whoamiFn      func(context.Context) (string, error)
+	forgetFn      func() error
+	// canvasUser is the account name from the last successful connection test.
+	canvasUser string
 	mu            sync.Mutex
 	root          string
 	setup         *setupHandler
@@ -136,7 +145,7 @@ func (h *Hub) checkPost(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	limit := int64(16 << 10)
-	if r.URL.Path == "/students" {
+	if r.URL.Path == "/students" || r.URL.Path == "/grading" {
 		limit = 256 << 10
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
@@ -160,7 +169,7 @@ func (h *Hub) home(w http.ResponseWriter, status int, message, notice string) {
 func (h *Hub) pageData() homeData {
 	data := homeData{Picking: h.picking, Secret: h.secret, Root: h.root, Program: h.programDir, Version: h.version}
 	if c, err := platform.LoadCredential(); err == nil {
-		data.Connected, data.CanvasOrigin = true, c.Origin
+		data.Connected, data.CanvasOrigin, data.CanvasUser = true, c.Origin, h.canvasUser
 	}
 	if h.root != "" {
 		if config, _, err := h.readConfig(); err == nil {
@@ -170,6 +179,9 @@ func (h *Hub) pageData() homeData {
 					data.ActiveCourses++
 				}
 			}
+		}
+		if g, _, err := readGrading(h.root); err == nil {
+			data.Voice, data.FeedbackGuidance = g.Voice, g.FeedbackGuidance
 		}
 		if s, err := workspace.OpenStudents(h.root); err == nil {
 			data.Students = len(s.Rows)
@@ -276,6 +288,12 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.chooseWorkspace(w, r.PostForm.Get("path"), r.PostForm.Get("confirm") == "1")
 	case "/courses":
 		h.coursesPage(w, r)
+	case "/grading":
+		h.saveGrading(w, r)
+	case "/canvas/test":
+		h.testCanvas(w, r)
+	case "/canvas/forget":
+		h.forgetCanvas(w, r)
 	case "/quit":
 		if !h.checkPost(w, r) {
 			return
@@ -407,6 +425,7 @@ func RunHub(ctx context.Context, root, version string, output io.Writer) error {
 	}
 	hub.setup = &setupHandler{origin: origin, secret: secret, ctx: ctx, validate: validateCredential, save: platform.SaveCredential, persistent: true, hub: true, done: make(chan struct{})}
 	hub.setup.after = func(c platform.Credential) string {
+		hub.canvasUser = ""
 		if hub.root == "" {
 			return ""
 		}

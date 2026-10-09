@@ -103,6 +103,14 @@ h2.grp{margin:1.6rem 0 0;text-transform:uppercase;letter-spacing:.1em;font-size:
 @keyframes popball{0%,72%{opacity:1;transform:none}100%{opacity:0;visibility:hidden;transform:scale(1.6)}}
 .swatch{display:inline-block;width:1rem;height:1rem;border:3px solid var(--ink);border-radius:50%;vertical-align:middle}
 table.courses td input[type=text]{min-width:10rem}
+textarea{width:100%;font:inherit;font-weight:400;padding:.7rem .9rem;color:var(--ink);background:#f4fff0;border:4px solid var(--ink);border-radius:.9rem .3rem .9rem .3rem;box-shadow:5px 5px 0 var(--cyan);outline:0;resize:vertical}
+textarea:focus{box-shadow:9px 9px 0 var(--grape);background:#fff}
+td textarea{box-shadow:3px 3px 0 var(--grape);padding:.45rem .6rem;min-width:16rem;font-size:.9rem}
+.card.voice{transform:none;margin-top:1.6rem}
+button.small{margin-top:.6rem;padding:.4rem .9rem;font-size:.75rem;box-shadow:4px 4px 0 var(--ink)}
+button.danger{background:var(--pink);color:#fff}
+details.forget{margin-top:.8rem;font-size:.85rem}details.forget summary{cursor:pointer;text-decoration:underline}
+label.check{text-transform:none;letter-spacing:0;font-size:.85rem;margin:.6rem 0 0}
 @media (prefers-reduced-motion:reduce){.ball{display:none}}
 .done{text-align:center}.done h1{font-size:3rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

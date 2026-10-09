@@ -105,6 +105,9 @@ func deleteAt(target string) error {
 func LoadCredential() (Credential, error) { return loadAt(credentialTarget) }
 func SaveCredential(c Credential) error   { return saveAt(credentialTarget, c) }
 
+// DeleteCredential forgets this machine's saved Canvas token; absent is fine.
+func DeleteCredential() error { return deleteAt(credentialTarget) }
+
 // CredentialSelfTest only touches a randomly named dummy SE credential.
 // It never reads, overwrites, or deletes the configured teacher credential.
 func CredentialSelfTest() (result error) {
