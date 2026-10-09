@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"net/url"
@@ -21,6 +22,9 @@ type Assessment struct {
 	Criteria    []AggregateCriterion
 }
 type ValidatedStudent struct {
+	// Hold, when set, means this student cannot be scored honestly; the rest of
+	// the file is unaffected.
+	Hold           string
 	Student        StudentResult
 	Assessment     *Assessment
 	Interpretation Interpretation
@@ -117,6 +121,14 @@ func ValidateInterpretation(r Rubric, in Interpretation) error {
 	}
 	return nil
 }
+
+// UnknownEvidenceError marks work the agent could not read.
+type UnknownEvidenceError struct{ Component string }
+
+func (e *UnknownEvidenceError) Error() string {
+	return fmt.Sprintf("component %s has unknown evidence; hold for readable evidence", e.Component)
+}
+
 func ComputeAssessment(r Rubric, in Interpretation, scores []ComponentScore, points ...Decimal) (Assessment, error) {
 	if e := ValidateInterpretation(r, in); e != nil {
 		return Assessment{}, e
@@ -173,7 +185,7 @@ func ComputeAssessment(r Rubric, in Interpretation, scores []ComponentScore, poi
 			return Assessment{}, fmt.Errorf("missing required component %q", component.Key)
 		}
 		if s.Evidence == "unknown" {
-			return Assessment{}, fmt.Errorf("component %s has unknown evidence; hold for readable evidence", s.Key)
+			return Assessment{}, &UnknownEvidenceError{Component: s.Key}
 		}
 		if s.Evidence != "present" && s.Evidence != "missing" {
 			return Assessment{}, fmt.Errorf("component %s: evidence must be present, missing, or unknown", s.Key)
@@ -345,11 +357,22 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			if e := validateAttempt(g.Attempt); e != nil {
 				return fail(e)
 			}
+			if e := validateLateTiming(g.LateTiming); e != nil {
+				return fail(e)
+			}
 			a, e := ComputeAssessment(*basis, v.Interpretation, g.Components, doc.Assignment.Points)
+			var unknown *UnknownEvidenceError
+			if errors.As(e, &unknown) {
+				v.Hold = "unreadable work for component " + unknown.Component + "; not scored"
+				validated = append(validated, v)
+				continue
+			}
 			if e != nil {
 				return fail(e)
 			}
-			if !g.Assessment.IsSet() || g.Assessment.Cmp(a.Posted) != 0 {
+			if !g.Assessment.IsSet() {
+				g.Assessment = a.Posted
+			} else if g.Assessment.Cmp(a.Posted) != 0 {
 				return fail(fmt.Errorf("assessment must equal derived posted value %s", a.Posted.String()))
 			}
 			if strings.TrimSpace(g.Feedback) == "" {
@@ -399,7 +422,9 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				if e != nil {
 					return fail(e)
 				}
-				if !r.Assessment.Assessment.IsSet() || r.Assessment.Assessment.Cmp(a.Posted) != 0 {
+				if !r.Assessment.Assessment.IsSet() {
+					r.Assessment.Assessment = a.Posted
+				} else if r.Assessment.Assessment.Cmp(a.Posted) != 0 {
 					return fail(fmt.Errorf("preserved assessment disagrees with component scores"))
 				}
 
@@ -411,5 +436,29 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 		validated = append(validated, v)
 	}
 	return validated, nil
+}
+func validateLateTiming(t *LateTiming) error {
+	if t == nil {
+		return nil
+	}
+	switch t.Status {
+	case "late":
+		if t.SecondsLate <= 0 {
+			return fmt.Errorf("late_timing: seconds_late must be positive when status is late")
+		}
+	case "none":
+		if t.SecondsLate != 0 {
+			return fmt.Errorf("late_timing: seconds_late must be 0 or absent when status is none")
+		}
+	default:
+		return fmt.Errorf("late_timing: status must be late or none")
+	}
+	if _, e := time.Parse(time.RFC3339Nano, t.DueAt); e != nil {
+		return fmt.Errorf("late_timing: due_at must be RFC3339: %w", e)
+	}
+	if strings.TrimSpace(t.Basis) == "" {
+		return fmt.Errorf("late_timing: basis is required")
+	}
+	return nil
 }
 func (d *ResultsDocument) Validate() error { _, e := ValidateResults(d); return e }

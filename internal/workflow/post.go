@@ -101,6 +101,14 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 			report.Students = append(report.Students, postReport(*r))
 			continue
 		}
+		if v.Hold != "" {
+			holdGrade(r.Grade, v.Hold)
+			if err = save(); err != nil {
+				return report, err
+			}
+			report.Students = append(report.Students, postReport(*r))
+			continue
+		}
 		if r.Operation == "grade" && !basisMatches {
 			holdGrade(r.Grade, "assignment/rubric grading basis changed; pull-work for reassessment")
 			if err = save(); err != nil {
@@ -311,22 +319,12 @@ func ambiguous(o domain.ActionOutcome) bool { return o.Status == "pending" || o.
 
 func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, row *domain.StudentResult, v domain.ValidatedStudent, source postSource, live Submission, save func() error) error {
 	g := row.Grade
-	// Incomplete saved rows may carry the old retention decision rather than a
-	// posted assessment. Fully completed historical rows never reach this path.
-	// Current exact-write recovery remains a completed grade action.
-	if g.Outcomes.Grade.Status == "preserved" && g.Outcomes.Grade.Message != "computed assessment is present on intended attempt" {
-		g.Outcomes.Grade = domain.ActionOutcome{}
-	}
 	if reason := unsupportedSubmission(live); reason != "" {
 		holdGrade(g, reason)
 		return save()
 	}
 	if !sameAttempt(g.Attempt, attemptRef(live)) {
 		holdGrade(g, "new submission attempt since pull; pull-work for this student")
-		return save()
-	}
-	if academicHTML(source.work.Current.BodyHTML) != academicHTML(live.Body) || !sameAttachmentIDs(source.work.Current.Attachments, live.Attachments) {
-		holdGrade(g, "submission content changed since pull; pull-work for this student")
 		return save()
 	}
 	// Without a Canvas rubric the agent's scoring_basis supplies criteria for the
@@ -434,31 +432,16 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 			return e
 		}
 	}
-	if g.Timing() == nil {
+	if g.LateTiming == nil {
 		if !definite(g.Outcomes.Late) {
 			g.Outcomes.Late = domain.ActionOutcome{Status: "not-requested"}
 		}
 	} else if !definite(g.Outcomes.Late) {
-		if err := s.postLate(ctx, *doc, source.student.UserID, source.work, g, save); err != nil {
+		if err := s.postLate(ctx, *doc, source.student.UserID, g, save); err != nil {
 			return err
 		}
 	}
 	return save()
-}
-func sameAttachmentIDs(a []domain.Attachment, b []Attachment) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	ids := map[int64]bool{}
-	for _, v := range a {
-		ids[v.ID] = true
-	}
-	for _, v := range b {
-		if !ids[v.ID] {
-			return false
-		}
-	}
-	return true
 }
 func confirmedRubric(s Submission, a domain.Assessment, attempt domain.AttemptRef) domain.ActionOutcome {
 	if sameAttempt(attempt, attemptRef(s)) && rubricMatches(s, a) {

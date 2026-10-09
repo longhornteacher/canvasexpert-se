@@ -16,13 +16,30 @@ func TestResultsValidateWholeFile(t *testing.T) {
 		func(d *ResultsDocument) { d.Assignment.GradingType = "pass_fail" },
 		func(d *ResultsDocument) { d.Assignment.AnonymousGrading = true },
 		func(d *ResultsDocument) { d.Assignment.GroupCategoryID = 10 },
-		func(d *ResultsDocument) { d.Students[0].Grade.Components[0].Evidence = "unknown" },
 	} {
 		d := validResults()
 		mutate(&d)
 		if rows, e := ValidateResults(&d); e == nil || rows != nil {
 			t.Fatalf("invalid document produced usable rows: %v %v", rows, e)
 		}
+	}
+}
+func TestUnknownEvidenceHoldsOneStudentAndAssessmentIsFilled(t *testing.T) {
+	d := validResults()
+	second := d.Students[0]
+	g := *second.Grade
+	g.Components = append([]ComponentScore(nil), g.Components...)
+	g.Components[0].Evidence = "unknown"
+	second.StudentRef, second.Grade = "student-b", &g
+	d.Students = append(d.Students, second)
+	want := d.Students[0].Grade.Assessment
+	d.Students[0].Grade.Assessment = Decimal{}
+	rows, e := ValidateResults(&d)
+	if e != nil || rows[0].Hold != "" || rows[1].Hold == "" {
+		t.Fatalf("holds wrong: %v %+v", e, rows)
+	}
+	if d.Students[0].Grade.Assessment.Cmp(want) != 0 {
+		t.Fatal("omitted assessment was not filled with the computed value")
 	}
 }
 func TestFeedbackRevisionCannotCarryGradeOrLateActions(t *testing.T) {
@@ -33,21 +50,9 @@ func TestFeedbackRevisionCannotCarryGradeOrLateActions(t *testing.T) {
 	if _, e := ValidateResults(&d); e != nil {
 		t.Fatal(e)
 	}
-	d.Students[0].Grade = &GradeOperation{Attempt: attempt, LateForgiveness: &LateForgiveness{}}
+	d.Students[0].Grade = &GradeOperation{Attempt: attempt, LateTiming: &LateTiming{}}
 	if _, e := ValidateResults(&d); e == nil {
 		t.Fatal("revision accepted grade/late data")
-	}
-}
-func TestLegacyGradeRecoveryTargetDoesNotConstrainAssessment(t *testing.T) {
-	d := validResults()
-	target := MustDecimal("17.00400")
-	d.Students[0].Grade.DesiredEnteredGrade = &target
-	if _, e := ValidateResults(&d); e != nil {
-		t.Fatal(e)
-	}
-	target = MustDecimal("1")
-	if _, e := ValidateResults(&d); e != nil {
-		t.Fatal("legacy target influenced current assessment:", e)
 	}
 }
 func TestCreateOutcomesRemainConsistent(t *testing.T) {
@@ -101,22 +106,6 @@ func TestRevisionOutcomeMustReferToSelectedComment(t *testing.T) {
 		t.Fatal("revision outcome for a different comment accepted")
 	}
 	r.Outcome.ID = r.CommentID
-	if _, err := ValidateResults(&d); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestLegacyRevisionRetainedGradeIsIgnored(t *testing.T) {
-	d := validResults()
-	g := d.Students[0].Grade
-	g.Components[0].Criteria[0].Points = MustDecimal("0")
-	r := &FeedbackRevision{Attempt: g.Attempt, CommentID: 7, Feedback: "More specific feedback.", Assessment: &FeedbackAssessment{Assessment: MustDecimal("0"), RetainedGrade: &Decimal{}, Components: g.Components}}
-	d.Students[0] = StudentResult{StudentRef: "student-a", Operation: "revise-feedback", ReviseFeedback: r}
-	if _, err := ValidateResults(&d); err != nil {
-		t.Fatal("legacy display metadata constrained current feedback:", err)
-	}
-	zero := MustDecimal("0")
-	r.Assessment.RetainedGrade = &zero
 	if _, err := ValidateResults(&d); err != nil {
 		t.Fatal(err)
 	}

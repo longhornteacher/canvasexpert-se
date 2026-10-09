@@ -1,10 +1,10 @@
 # CanvasExpert-SE architecture
 
-Updated 2026-10-09. Current development direction is here and in [SCORING-RULES.md](SCORING-RULES.md). The [retired 0.1b brief](handoffs/retired/EXECUTION-BRIEF-0.1b.md) and [historical evidence](docs/0.1b-evidence.md) describe history, not implementation prerequisites.
+Updated 2026-10-09 (Engine/Playbook naming; lateness is agent-supplied). Current development direction is here and in [SCORING-RULES.md](SCORING-RULES.md). The [retired 0.1b brief](handoffs/retired/EXECUTION-BRIEF-0.1b.md) and [historical evidence](docs/0.1b-evidence.md) describe history, not implementation prerequisites.
 
 ## Intent and engineering default
 
-SE is a personal teacher tool shared with friends. The host agent supplies intent, educational judgment, and content; a portable Go CLI and plain workspace files execute tasks against Canvas Live. Optimize for successful work with little friction, speed, and practical accuracy. Ordinary repairable imperfections are acceptable.
+CE-SE is a personal teacher tool shared with friends. The agent supplies intent, educational judgment, and content; the Engine (a portable Go CLI) and plain workspace files execute tasks against Canvas Live. Optimize for successful work with little friction, speed, and practical accuracy. Ordinary repairable imperfections are acceptable.
 
 Prefer direct implementations using existing packages. Add a defensive branch or abstraction when a supported workflow needs it, a real failure demonstrates its value, or a cheap check prevents a consequential mistake. Hypothetical edge cases alone do not justify expansion. Validate at useful boundaries, continue independent items when one fails, and explain uncertainty honestly without turning unverified assumptions into prohibitions.
 
@@ -12,12 +12,29 @@ Test changed behavior in proportion to its consequences. Reuse tests and add foc
 
 Preserve useful content and teacher intent rather than byte equality of unrelated state. A renamed assignment does not invalidate a score; dates affect lateness; a new attempt needs assessment; an unreadable optional attachment is reported without inventing contents.
 
+## Vocabulary
+
+| Name | What it is | Where it lives | Its job |
+|---|---|---|---|
+| **CE-SE** | The whole product | this repo | n/a |
+| **Engine** | The Go program: `cse.exe` CLI plus the local hub pages | `cmd/`, `internal/` | Mechanical work the agent can't do reliably: talk to Canvas, keep student, attempt and assignment identity straight, exact score arithmetic, safe write recovery. No educational judgment. |
+| **Playbook** | The agent's norms and behaviors. Every judgment call about scoring, assignments and policy is the teacher's and agent's, and lives here | Seed: `workspace-template/` (embedded in the Engine). Teacher's copy: workspace `AGENTS.md`, `CLAUDE.md`, `guides/`, `settings/` | Tells the agent how to judge: scoring, lateness, feedback, voice, student notes, courses, calendar, when to ask the teacher |
+| **Agent** | Claude working in the teacher's workspace | n/a | Makes the judgment calls using the Playbook, then hands decisions to the Engine |
+
+Rule of thumb: if it needs judgment, it goes in the Playbook; if it needs Canvas access, exact identity or exact math, it goes in the Engine.
+
+Two folders. The **program folder** holds the Engine, which carries the **Playbook seed**. The teacher's synced **workspace** holds the **teacher's Playbook** (started from the seed, theirs to change) and student information (`.cse/`, `courses/`). New program versions add missing seed files and never change the teacher's.
+
 ## Spine and operation boundaries
 
 ```text
-Host agent -> CLI / plain work files -> feature operation -> shared spine -> Canvas Live
-                                      local UI ----------^
+Agent (follows the Playbook) -> Engine: cse CLI / hub -> feature operation -> shared spine -> Canvas Live
+The teacher's Playbook and work files live in the workspace, apart from the Engine.
 ```
+
+The Playbook seed lives in `workspace-template/`; judgment belongs in the Playbook.
+
+### Engine packages
 
 | Package | Responsibility |
 |---|---|
@@ -30,15 +47,16 @@ Host agent -> CLI / plain work files -> feature operation -> shared spine -> Can
 
 A normal Go function/package is a module. A feature usually adds an operation, command entry point and short guide. Shared utilities emerge from actual use. Assignment editing shares Canvas transport and workspace I/O but owns its field patch and conflict checks. Feedback revision uses those same mechanics but owns selection and recovery of an exact comment ID. Grading semantics belong with grading, even when several grading functions share them.
 
-Keep the existing layout and useful transport, parsing, identity and arithmetic code. Do not introduce a plugin loader, registry, event bus, job engine, persistence layer, universal policy schema, arbitrary-HTTP agent interface or new host protocol. Large files alone do not require splitting.
+Keep the existing layout and useful transport, parsing, identity and arithmetic code. Do not introduce a plugin loader, registry, event bus, job engine, persistence layer, universal policy schema, arbitrary-HTTP agent interface or new agent protocol. Large files alone do not require splitting.
 
 ## Teacher decisions and working behavior
 
 - Teacher instructions authorize the requested scope: score and post posts, draft does not, show me first stops for review. No mandatory preview/apply tokens. Scoring session alone pulls current-course work and asks what to do; it never implies posting.
 - Canvas Live governs existing content. Pull before editing; send only requested changes. Preserve unsent edits when replaced content conflicts, return a fresh version, and let the agent reapply. Read-before-write checks reduce conflicts but cannot eliminate a concurrent edit race.
-- Always post SE's honest computed assessment. Never use an existing higher entered grade to alter or suppress it; the teacher handles later adjustments. Feedback and rubric report that academic assessment. The agent compares with the strongest earlier academic attempt from actual work, not a teacher-adjusted grade. See scoring rules for arithmetic and posting behavior.
-- Use the official Canvas rubric when present, and a common-sense local scoring basis otherwise. A missing Canvas rubric is not a blocker. New SE rubrics have automatic grading disabled; existing coupling is not silently changed. Post the honest rubric and computed grade normally, confirm returned outcomes, and report actual failures or uncertainty without claiming guarantees. No workspace certification is needed.
-- Canvas alone calculates late point penalties. SE adjusts lateness timing only: exclude weekends and school holidays, and later drafts inherit the first genuine submission's lateness. The host selects `grade.late_timing.first_attempt` from actual work, with the student's applicable cached due date and a genuine-work reason; the selected attempt may be current or earlier and need not be attempt 1. The CLI computes elapsed school-date seconds from `settings/school-calendar.md`, then supplies only Canvas lateness status and seconds override. Missing evidence or calendar coverage holds timing only.
+- Always post the Engine's honest computed assessment. Never use an existing higher entered grade to alter or suppress it; the teacher handles later adjustments. Feedback and rubric report that academic assessment. The agent compares with the strongest earlier academic attempt from actual work, not a teacher-adjusted grade. See scoring rules for arithmetic and posting behavior.
+- Use the official Canvas rubric when present, and a common-sense local scoring basis otherwise. A missing Canvas rubric is not a blocker. Rubrics the Engine attaches have automatic grading disabled; existing coupling is not silently changed. Post the honest rubric and computed grade normally, confirm returned outcomes, and report actual failures or uncertainty without claiming guarantees. No workspace certification is needed.
+- Canvas alone calculates late point penalties. The agent works out lateness from the actual work, `settings/school-calendar.md` and teacher notes, and supplies `grade.late_timing` (`status`, `seconds_late`, `due_at`, `basis`). The Engine writes the lateness timing the agent supplies after checking the attempt is current and the live due date still equals `due_at`; it does not read the calendar. Unclear inputs mean the agent omits timing and tells the teacher.
+- Posting holds only for changes to points, rubric, grading type or grading mode; the Engine does not read directions at post.
 - Feedback begins with the computed assessment, then compact per-response criterion scores, then conversational glows/grows. Full criterion definitions stay in the rubric; settings/grading.md can shape voice.
 - The agent infers response units, rubric application and weights consistently; no hardcoded three-response or equal-weight recipe. A deliberately absent Canvas rubric may use an explicit local scoring basis.
 - Completed action records refer to the course/student/attempt, not permanent exact output. Teacher feedback/rubric edits do not automatically enqueue completed attempts. New attempts remain discoverable; explicit scoped pulls permit reassessment. Uncertain creates require bounded identity lookup, known IDs when available, and an explanation if ambiguous; never blind replay.

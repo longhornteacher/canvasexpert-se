@@ -23,7 +23,7 @@ var version = "0.1b"
 var revision = "development"
 var builtAt = "unrecorded"
 
-const help = `CanvasExpert-SE 0.1b — portable Canvas assignments and scoring
+const help = `CanvasExpert-SE 0.1b — the Engine: Canvas assignments and scoring
 
 Usage: cse [--workspace PATH] COMMAND [ARGS]
 
@@ -47,7 +47,7 @@ to the workspace unless absolute. Use quotes around paths or titles with spaces.
 ui/setup/students pages exist only while their command runs; Ctrl+C closes them.
 Draft/show-me-first instructions stop before post. A scoring session pulls only.
 Exit codes: 0 success; 2 invalid input; 3 partial/held work; 4 environment/API failure.
-Read guides/setup.md, authoring.md, edit.md, score.md, and formats.md as needed.
+Read the Playbook guides (guides/setup.md, authoring.md, edit.md, score.md, formats.md) as needed.
 `
 
 type cliError struct {
@@ -216,6 +216,42 @@ func documentPath(root, name string) (string, error) {
 		return workspace.ConstrainPath(root, relative)
 	}
 	return workspace.ConstrainPath(root, name)
+}
+// previewResults prints each student's computed assessment and late timing so the
+// agent can show the teacher a preview without posting.
+func previewResults(path string, out io.Writer) {
+	var doc domain.ResultsDocument
+	if _, e := workspace.ReadDocument(path, &doc); e != nil {
+		return
+	}
+	rows, e := domain.ValidateResults(&doc)
+	if e != nil {
+		return
+	}
+	for _, v := range rows {
+		g := v.Student.Grade
+		if g == nil {
+			continue
+		}
+		late := "—"
+		if g.LateTiming != nil {
+			late = lateText(*g.LateTiming)
+		}
+		if v.Hold != "" {
+			fmt.Fprintf(out, "%s  held: %s\n", v.Student.StudentRef, v.Hold)
+			continue
+		}
+		fmt.Fprintf(out, "%s  %s  late: %s\n", v.Student.StudentRef, g.Assessment.String(), late)
+	}
+}
+
+// lateText shows seconds_late as school days (24 h each) plus hours.
+func lateText(t domain.LateTiming) string {
+	if t.Status != "late" {
+		return "none"
+	}
+	hours := t.SecondsLate / 3600
+	return fmt.Sprintf("%dd %dh", hours/24, hours%24)
 }
 func validateDocument(path string) error {
 	b, e := os.ReadFile(path)

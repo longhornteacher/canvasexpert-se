@@ -22,4 +22,4 @@ non_school_ranges:
     end_date: "2027-03-29"
 ---
 
-Student school calendar for lateness timing. Weekends are always excluded. Update coverage and non-school dates for your school before using this starter calendar. Early-release dates count as full dates. SE supplies elapsed timing only; Canvas computes point penalties.
+Weekends are always excluded. The agent uses this calendar to work out school-day lateness; Canvas computes point penalties. Early-release dates count as full dates. Update dates for your school.

@@ -1,7 +1,7 @@
 CanvasExpert-SE program folder
 ==============================
 
-This folder holds only the program. Keep it separate from your synced
+This folder holds only the program (the CE-SE Engine). Keep it separate from your synced
 workspace folder (the one with students, settings and courses).
 
 1. Unzip this somewhere that is NOT your synced workspace, for example

@@ -1,6 +1,8 @@
 # CanvasExpert-SE workspace
 
-Run the CLI with `.\cse.cmd` from this workspace folder; it runs this machine's separately installed program against this workspace (it adds `--workspace` for you). Start with `.\cse.cmd --help` for the commands available in this build, for example `.\cse.cmd setup`. If it says the program is not linked, ask the teacher to double-click `webui.cmd` in the program folder once. Load only the task guide you need from `guides/`.
+This file and `guides/` are your **Playbook**: they tell you how to make the judgment calls. `.\cse.cmd` runs the **Engine**, which talks to Canvas, keeps students and attempts straight, and does exact math; it carries out your decisions and doesn't make them.
+
+Run the Engine with `.\cse.cmd` from this workspace folder; it runs this machine's separately installed program against this workspace (it adds `--workspace` for you). Start with `.\cse.cmd --help` for the commands available in this build, for example `.\cse.cmd setup`. If it says the program is not linked, ask the teacher to double-click `webui.cmd` in the program folder once. Load only the task guide you need from `guides/`.
 
 Do not open, list, search, or otherwise read `.cse/`; it contains private student identity mappings. This is an instruction for the agent, not an OS access control boundary. Claude Code also has a project Read deny rule in `.claude/settings.json`.
 

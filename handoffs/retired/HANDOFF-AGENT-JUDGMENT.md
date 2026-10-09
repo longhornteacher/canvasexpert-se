@@ -1,3 +1,5 @@
+**Completed 2026-10-09:** Tasks 1–8 done; `go test ./...`, `go vet ./...` and packaging pass. Not committed.
+
 # CE-SE: hand judgment back to the agent, name the Engine and Playbook, fix the review findings
 
 **Handoff date:** 2026-10-09. **Baseline:** `87179b5` plus the uncommitted working tree from the retired [lean-spine handoff](../retired/HANDOFF-LEAN-SPINE.md). `go test ./...` passed on that tree when this handoff was written.

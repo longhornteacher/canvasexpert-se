@@ -164,7 +164,7 @@ func TestAttachRubricChecksRelevantAssignmentChanges(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			if change == "title" || change == "published" {
+			if change == "title" || change == "published" || change == "directions" {
 				if report.Status != "completed" || writes != 1 || (change == "title" && live.Name != "Teacher renamed it") || (change == "published" && live.Published) {
 					t.Fatalf("irrelevant live change blocked or overwritten: %+v", report)
 				}

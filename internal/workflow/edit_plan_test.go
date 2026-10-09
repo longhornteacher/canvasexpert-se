@@ -48,12 +48,12 @@ func TestEditPreservesHTMLAndOmittedSettings(t *testing.T) {
 		t.Fatal("timestamp alone invalidates work")
 	}
 	copy.DescriptionHTML = "teacher changed instructions"
-	if SameGradingBasis(base, copy) {
-		t.Fatal("directions change not detected")
+	if !SameGradingBasis(base, copy) {
+		t.Fatal("directions change must not affect grading basis")
 	}
 }
 
-func TestAcademicBasisIgnoresPresentationButRetainsLinksCodeAndScale(t *testing.T) {
+func TestAcademicBasisIgnoresPresentationAndDirectionsButRetainsScale(t *testing.T) {
 	base := domain.AssignmentSnapshot{Title: "Original", Points: domain.MustDecimal("20"), DescriptionHTML: `<p>Read <a href='https://example.org/a'>A &amp; B</a>.</p><pre><code>x  = 1</code></pre>`}
 	live := base
 	live.Title, live.Published = "Renamed", true
@@ -64,18 +64,24 @@ func TestAcademicBasisIgnoresPresentationButRetainsLinksCodeAndScale(t *testing.
 	if !SameGradingBasis(base, live) {
 		t.Fatal("presentation/scheduling invalidated assessment")
 	}
-	live.DescriptionHTML = `<p>Read <a href="https://example.org/b">A &amp; B</a>.</p><pre><code>x  = 1</code></pre>`
-	if SameGradingBasis(base, live) {
-		t.Fatal("changed link ignored")
-	}
-	live = base
-	live.DescriptionHTML = `<p>Read <a href='https://example.org/a'>A &amp; B</a>.</p><pre><code>x = 1</code></pre>`
-	if SameGradingBasis(base, live) {
-		t.Fatal("code whitespace erased")
-	}
 	live = base
 	live.Points = domain.MustDecimal("25")
 	if SameGradingBasis(base, live) {
 		t.Fatal("changed scale ignored")
+	}
+}
+
+func TestAcademicHTMLComparison(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		same bool
+	}{
+		{`<p>Explain.</p>`, `<p >Explain.</p>`, true},
+		{`a <b>x</b>`, `a<b>x</b>`, false},
+		{`<span style="color:red">x</span>`, `<span style="color:blue">x</span>`, false},
+	} {
+		if got := academicHTML(c.a) == academicHTML(c.b); got != c.same {
+			t.Errorf("%q vs %q: same=%v want %v", c.a, c.b, got, c.same)
+		}
 	}
 }

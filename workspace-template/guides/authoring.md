@@ -16,7 +16,7 @@ Inspect the available command form with `.\cse.cmd --help`. Use:
 .\cse.cmd push <draft-file>
 ```
 
-The intended `push` behavior creates from a new draft or resumes an incomplete creation using saved IDs. Confirm the output and saved paths. If the CLI reports ambiguous candidates or a partial result, use those details to resolve the specific issue; never select a same-title Canvas assignment arbitrarily or start another create when the first may have succeeded.
+The intended `push` behavior creates from a new draft or resumes an incomplete creation using saved IDs. Confirm the output and saved paths. If the Engine reports ambiguous candidates or a partial result, use those details to resolve the specific issue; never select a same-title Canvas assignment arbitrarily or start another create when the first may have succeeded.
 
 ## Teacher intent
 

@@ -54,7 +54,7 @@ function Test-TemplatePathAllowed {
         $normalizedPath -match '^\.claude/settings\.json$' -or
         $normalizedPath -match '^guides/[A-Za-z0-9._-]+\.md$' -or
         $normalizedPath -match '^formats/[A-Za-z0-9._-]+\.md$' -or
-        $normalizedPath -match '^settings/(courses|grading|students)\.md$' -or
+        $normalizedPath -match '^settings/(courses|grading|students|school-calendar)\.md$' -or
         $normalizedPath -match '^examples/[A-Za-z0-9._/-]+\.(md|txt|yaml|yml|json|csv|html)$'
 }
 

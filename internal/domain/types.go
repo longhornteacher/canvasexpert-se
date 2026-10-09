@@ -189,14 +189,15 @@ type PriorComparison struct {
 	Basis           string     `yaml:"basis"` // academic evidence, never teacher grade
 	ComparisonLimit string     `yaml:"comparison_limit,omitempty"`
 }
-type LateForgiveness struct {
-	FirstAttempt   AttemptRef `yaml:"first_attempt"`
-	EffectiveDueAt string     `yaml:"effective_due_at"`
-	GenuineReason  string     `yaml:"genuine_reason"`
-}
-type LateTimingTarget struct {
-	Seconds int64  `yaml:"seconds"`
-	Status  string `yaml:"status"`
+
+// LateTiming is the agent's own lateness decision. Basis is for the teacher;
+// the Engine never parses it. DueAt guards against a deadline moved after the
+// agent counted.
+type LateTiming struct {
+	Status      string `yaml:"status"` // late or none
+	SecondsLate int64  `yaml:"seconds_late,omitempty"`
+	DueAt       string `yaml:"due_at"`
+	Basis       string `yaml:"basis"`
 }
 
 type ActionOutcome struct {
@@ -212,34 +213,20 @@ type ActionOutcomes struct {
 	Late    ActionOutcome `yaml:"late,omitempty"`
 }
 type GradeOperation struct {
-	// Legacy recovery metadata is decoded for saved work but ignored by current posting.
-	DesiredEnteredGrade *Decimal          `yaml:"desired_entered_grade,omitempty"`
-	Attempt             AttemptRef        `yaml:"attempt"`
-	Components          []ComponentScore  `yaml:"components"`
-	Assessment          Decimal           `yaml:"assessment"`
-	Feedback            string            `yaml:"feedback"`
-	TeacherNote         string            `yaml:"teacher_note,omitempty"`
-	StrongestPrior      *PriorComparison  `yaml:"strongest_prior,omitempty"`
-	LateTiming          *LateForgiveness  `yaml:"late_timing,omitempty"`
-	TimingTarget        *LateTimingTarget `yaml:"timing_target,omitempty"`
-	LateForgiveness     *LateForgiveness  `yaml:"late_forgiveness,omitempty"`
-	Outcomes            ActionOutcomes    `yaml:"outcomes,omitempty"`
-}
-
-// Timing accepts the prior on-time-only spelling for existing saved work.
-func (g *GradeOperation) Timing() *LateForgiveness {
-	if g.LateTiming != nil {
-		return g.LateTiming
-	}
-	return g.LateForgiveness
+	Attempt        AttemptRef       `yaml:"attempt"`
+	Components     []ComponentScore `yaml:"components"`
+	Assessment     Decimal          `yaml:"assessment"`
+	Feedback       string           `yaml:"feedback"`
+	TeacherNote    string           `yaml:"teacher_note,omitempty"`
+	StrongestPrior *PriorComparison `yaml:"strongest_prior,omitempty"`
+	LateTiming     *LateTiming      `yaml:"late_timing,omitempty"`
+	Outcomes       ActionOutcomes   `yaml:"outcomes,omitempty"`
 }
 
 // FeedbackAssessment supplies a preserved display basis, never write instructions.
 type FeedbackAssessment struct {
-	Assessment Decimal `yaml:"assessment"`
-	// Legacy display metadata is decoded but never rendered or used for grading.
-	RetainedGrade *Decimal         `yaml:"retained_grade,omitempty"`
-	Components    []ComponentScore `yaml:"components"`
+	Assessment Decimal          `yaml:"assessment"`
+	Components []ComponentScore `yaml:"components"`
 }
 type FeedbackRevision struct {
 	Attempt    AttemptRef          `yaml:"attempt"`

@@ -19,10 +19,10 @@ To create the distributable starter workspace:
 .\scripts\package.ps1 -GoExecutable '.\.tools\go1.27.1\go\bin\go.exe'
 ```
 
-Packaging rebuilds first and writes two ZIPs to `dist/`, each with its SHA-256 hash printed:
+Packaging rebuilds first and writes two ZIPs to `dist/`, each with its SHA-256 hash printed. The build produces the Engine (`cse.exe`, in the program ZIP); the workspace ZIP carries the Playbook plus starter teacher settings:
 
 - `CanvasExpert-SE-Program-0.1b-windows-amd64.zip`: `cse.exe`, `webui.cmd` and `README.txt` (from `program-template/`). It is unzipped per machine and is not synced.
-- `CanvasExpert-SE-Workspace-0.1b.zip`: the allowlisted `workspace-template` files, including the `cse.cmd` launcher and the hidden `.claude/settings.json` rule. It contains no program, so it is safe to place in a synced folder. Example files are accepted only when their content explicitly labels them synthetic. The starter settings files must retain their empty-template markers; private `.cse` state, pulled course data, scoring files, build caches, and compiler files are not package inputs. Course configuration lives at `settings/courses.md`, the same path the CLI uses to recognize a workspace.
+- `CanvasExpert-SE-Workspace-0.1b.zip`: the allowlisted `workspace-template` files, including the `cse.cmd` launcher and the hidden `.claude/settings.json` rule. It contains no program, so it is safe to place in a synced folder. Example files are accepted only when their content explicitly labels them synthetic. The starter settings files must retain their empty-template markers; private `.cse` state, pulled course data, scoring files, build caches, and compiler files are not package inputs. Course configuration lives at `settings/courses.md`, the same path the Engine uses to recognize a workspace.
 
 ZIP entries are written with forward slashes by the script itself, because Windows PowerShell 5.1's `CreateFromDirectory` writes backslashes.
 

@@ -262,16 +262,16 @@ func FindAssignment(ctx context.Context, c *canvas.Client, courseID int64, query
 
 func UnsupportedAssignment(a Assignment) string {
 	if a.Anonymous {
-		return "anonymous grading is outside 0.1b"
+		return "anonymous grading isn't supported yet"
 	}
 	if a.Moderated {
-		return "moderated grading is outside 0.1b"
+		return "moderated grading isn't supported yet"
 	}
 	if a.GroupCategoryID != nil && *a.GroupCategoryID != 0 {
-		return "group submissions are outside 0.1b"
+		return "group submissions aren't supported yet"
 	}
 	if a.QuizID != nil {
-		return "quizzes are outside 0.1b"
+		return "quizzes aren't supported yet"
 	}
 	if a.GradingType != "points" && a.GradingType != "percent" {
 		return "requires numeric points or percent grading"

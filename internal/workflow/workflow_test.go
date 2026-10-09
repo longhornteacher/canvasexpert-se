@@ -644,7 +644,7 @@ func TestTargetedEditWritesChangedFieldAndCompletedReplay(t *testing.T) {
 	}
 }
 
-func TestLateForgivenessHeldWhileOrdinaryGradingProceeds(t *testing.T) {
+func TestLateTimingHeldWhenDueDateChangedWhileOrdinaryGradingProceeds(t *testing.T) {
 	live := fixtureSubmission(5)
 	late := "late"
 	live.Late = true
@@ -699,7 +699,7 @@ func TestLateForgivenessHeldWhileOrdinaryGradingProceeds(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	doc.Students[0].Grade.LateForgiveness = &domain.LateForgiveness{FirstAttempt: attemptRef(live.History[0]), EffectiveDueAt: *live.History[0].CachedDueDate, GenuineReason: "The first attempt contains a developed response."}
+	doc.Students[0].Grade.LateTiming = &domain.LateTiming{Status: "none", DueAt: "2020-01-01T00:00:00Z", Basis: "Agent counted against an older due date."}
 	if e = workspace.WriteDocument(path, doc, body); e != nil {
 		t.Fatal(e)
 	}
@@ -708,7 +708,7 @@ func TestLateForgivenessHeldWhileOrdinaryGradingProceeds(t *testing.T) {
 		t.Fatal(e)
 	}
 	if lateWrites != 0 || report.Students[0].Outcomes.Late.Status != "held" || !definite(report.Students[0].Outcomes.Comment) || !definite(report.Students[0].Outcomes.Rubric) || !definite(report.Students[0].Outcomes.Grade) {
-		t.Fatalf("late forgiveness failed: %#v", report)
+		t.Fatalf("late timing hold failed: %#v", report)
 	}
 	if _, e = s.Post(context.Background(), path); e != nil {
 		t.Fatal(e)

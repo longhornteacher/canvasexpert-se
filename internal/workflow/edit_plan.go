@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"canvasexpertse/internal/domain"
 )
@@ -23,10 +24,10 @@ func PlanEdit(doc domain.AssignmentDocument, html string) (map[string]any, error
 	}
 	base := doc.Observed
 	if !sameRubric(doc.Rubric, base.Rubric) {
-		return nil, fmt.Errorf("editing a live rubric definition is outside 0.1b; preserve its pulled rubric")
+		return nil, fmt.Errorf("editing an existing rubric's criteria isn't supported yet; keep the pulled rubric")
 	}
 	if doc.ModuleID != 0 {
-		return nil, fmt.Errorf("module moves on existing assignments are outside 0.1b")
+		return nil, fmt.Errorf("moving an existing assignment between modules isn't supported yet")
 	}
 	patch := map[string]any{}
 	if doc.Title != base.Title {
@@ -56,7 +57,9 @@ func PlanEdit(doc domain.AssignmentDocument, html string) (map[string]any, error
 	return patch, nil
 }
 
-// SameGradingBasis compares academic expectations rather than presentation/scheduling.
+// SameGradingBasis compares the fields posting arithmetic or writes depend on:
+// points, rubric, grading type, submission types and grading modes. Directions,
+// title and scheduling are ignored.
 func SameGradingBasis(a, b domain.AssignmentSnapshot) bool {
 	a.UpdatedAt, b.UpdatedAt = "", ""
 	a.Title, b.Title = "", ""
@@ -74,7 +77,7 @@ func SameGradingBasis(a, b domain.AssignmentSnapshot) bool {
 		r.UseForGrading, r.UseForGradingKnown = false, false
 		b.Rubric = &r
 	}
-	a.DescriptionHTML, b.DescriptionHTML = academicHTML(a.DescriptionHTML), academicHTML(b.DescriptionHTML)
+	a.DescriptionHTML, b.DescriptionHTML = "", ""
 	return SameSnapshot(a, b)
 }
 
@@ -124,16 +127,20 @@ func sameEditFields(a, b domain.AssignmentSnapshot, patch map[string]any) bool {
 
 var ordinaryTags = regexp.MustCompile(`(?s)<[^>]*>`)
 var quotedAttribute = regexp.MustCompile(`([[:alnum:]_:-]+)\s*=\s*'([^']*)'`)
+var whitespaceRun = regexp.MustCompile(`\s+`)
+var tagGap = regexp.MustCompile(`\s*(/?>)$`)
+var attrEquals = regexp.MustCompile(`\s*=\s*`)
 
 // Modest representation normalization, retaining tags, attributes (including URLs)
-// and code whitespace. This deliberately does not infer semantic equivalence.
+// and code whitespace. Whitespace between text and inline tags is kept as one
+// space. This deliberately does not infer semantic equivalence.
 func academicHTML(source string) string {
 	var out strings.Builder
 	at, literal := 0, 0
 	for _, loc := range ordinaryTags.FindAllStringIndex(source, -1) {
 		text := html.UnescapeString(source[at:loc[0]])
 		if literal == 0 {
-			text = strings.Join(strings.Fields(text), " ")
+			text = whitespaceRun.ReplaceAllString(text, " ")
 		}
 		out.WriteString(text)
 		tag := source[loc[0]:loc[1]]
@@ -145,7 +152,7 @@ func academicHTML(source string) string {
 		}
 		if literal == 0 {
 			tag = quotedAttribute.ReplaceAllString(tag, `$1="$2"`)
-			tag = strings.TrimSpace(tag)
+			tag = normalizeTag(tag)
 		}
 		out.WriteString(tag)
 		if strings.HasPrefix(lower, "<pre>") || strings.HasPrefix(lower, "<pre ") || strings.HasPrefix(lower, "<code>") || strings.HasPrefix(lower, "<code ") {
@@ -155,10 +162,41 @@ func academicHTML(source string) string {
 	}
 	text := html.UnescapeString(source[at:])
 	if literal == 0 {
-		text = strings.Join(strings.Fields(text), " ")
+		text = whitespaceRun.ReplaceAllString(text, " ")
 	}
 	out.WriteString(text)
-	return out.String()
+	return strings.TrimSpace(out.String())
+}
+
+// normalizeTag collapses whitespace inside a tag outside quoted attribute values.
+func normalizeTag(tag string) string {
+	var out strings.Builder
+	var quote rune
+	space := false
+	for _, r := range tag {
+		switch {
+		case quote != 0:
+			out.WriteRune(r)
+			if r == quote {
+				quote = 0
+			}
+		case r == '"' || r == '\'':
+			quote = r
+			out.WriteRune(r)
+		case unicode.IsSpace(r):
+			space = true
+		default:
+			if space {
+				out.WriteRune(' ')
+				space = false
+			}
+			out.WriteRune(r)
+		}
+	}
+	t := out.String()
+	t = strings.Replace(t, "< ", "<", 1)
+	t = tagGap.ReplaceAllString(t, "$1")
+	return t
 }
 
 // SameSnapshot compares numeric values and date instants without mistaking API
