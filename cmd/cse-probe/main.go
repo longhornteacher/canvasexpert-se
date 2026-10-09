@@ -26,6 +26,7 @@ import (
 const allowedOrigin = "https://pearland.instructure.com"
 const courseID int64 = 121046
 const prefix = "[CSE 0.1b DISPOSABLE]"
+const unattendedPrefix = "[CSE UNATTENDED]"
 const statePath = ".test-workspaces/live-probe/state.json"
 
 type probeState struct {
@@ -36,6 +37,10 @@ type probeState struct {
 	RubricID              int64                           `json:"rubric_id,omitempty"`
 	AssociationID         int64                           `json:"association_id,omitempty"`
 	CriterionID           string                          `json:"criterion_id,omitempty"`
+	CriterionIDs          []string                        `json:"criterion_ids,omitempty"`
+	ModuleID              int64                           `json:"module_id,omitempty"`
+	ModuleName            string                          `json:"module_name,omitempty"`
+	Published             bool                            `json:"published"`
 	Title                 string                          `json:"title,omitempty"`
 	StartedAt             string                          `json:"started_at,omitempty"`
 	PublicationAuthorized bool                            `json:"publication_authorized,omitempty"`
@@ -55,11 +60,19 @@ func main() {
 	}
 }
 func run(ctx context.Context, args []string) error {
+	selectedState := statePath
+	if len(args) > 0 && args[0] == "--state" {
+		if len(args) < 3 || strings.TrimSpace(args[1]) == "" {
+			return fmt.Errorf("--state requires a path followed by a command")
+		}
+		selectedState, args = args[1], args[2:]
+	}
 	if len(args) == 0 || args[0] == "help" {
+		fmt.Println("Optional leading --state PATH. Unattended helpers: select --assignment ID | configure-fixture [--assignment ID] [--submission-types online_text_entry,online_upload] | create-module --name '[CSE UNATTENDED] ...' | read-module | submit-file --file SYNTHETIC_PATH. Use a separate state per assignment; configure only unpublished exact named fixtures, then select. select never adopts legacy coursework.")
 		fmt.Println("DEV ONLY: cse-probe inspect-test-student | create | attach-rubric | read | submit [--body SYNTHETIC_TEXT] [--submitted-at RFC3339] | submit-as [same flags] | grade [--grade POINTS] [--rubric POINTS] [--comment SYNTHETIC_TEXT] | edit-comment --id ID --text SYNTHETIC_TEXT | couple-association [--enabled=false] | late --status none|late | set-due --at RFC3339 | publish | unpublish | pull [--workspace DEV_ROOT] | post --results RESULTS [--workspace DEV_ROOT] | inspect-state\nHardcoded CS8 course 121046; exact disposable assignment; built-in Test Student only. Publish requires separate teacher authorization and an explicit invocation; no automatic publication. Unpublish may be rejected by Canvas after submissions; no policy workaround. No delete/course-policy commands. State: " + statePath)
 		return nil
 	}
-	path, e := filepath.Abs(statePath)
+	path, e := filepath.Abs(selectedState)
 	if e != nil {
 		return e
 	}
@@ -97,6 +110,17 @@ func run(ctx context.Context, args []string) error {
 	command := args[0]
 	args = args[1:]
 	switch command {
+	case "select":
+		return p.selectFixture(ctx, args)
+	case "configure-fixture":
+		return p.configureFixture(ctx, args)
+	case "create-module":
+		return p.createModule(ctx, args)
+	case "read-module":
+		if len(args) != 0 {
+			return fmt.Errorf("read-module takes no arguments")
+		}
+		return p.readModule(ctx)
 	case "inspect-test-student":
 		if len(args) != 0 {
 			return fmt.Errorf("inspect-test-student takes no arguments")
@@ -124,11 +148,13 @@ func run(ctx context.Context, args []string) error {
 		if len(args) != 0 {
 			return fmt.Errorf("read takes no arguments")
 		}
-		a, e := p.assignment(ctx)
+		a, e := p.checkedAssignment(ctx)
 		if e != nil {
 			return e
 		}
-		if e = emit(assignmentShape(a)); e != nil {
+		shape := assignmentShape(a.Assignment)
+		shape["omit_from_final_grade"], shape["post_to_sis"] = a.OmitFromFinalGrade, a.PostToSIS
+		if e = emit(shape); e != nil {
 			return e
 		}
 		if p.state.TestStudentID > 0 {
@@ -141,6 +167,8 @@ func run(ctx context.Context, args []string) error {
 		return nil
 	case "submit", "submit-as":
 		return p.submit(ctx, args, command == "submit-as")
+	case "submit-file":
+		return p.submitFile(ctx, args)
 	case "grade":
 		return p.grade(ctx, args)
 	case "edit-comment":
@@ -298,20 +326,27 @@ func (p *probe) target(ctx context.Context) error {
 	return nil
 }
 func (p *probe) assignment(ctx context.Context) (workflow.Assignment, error) {
+	a, e := p.checkedAssignment(ctx)
+	return a.Assignment, e
+}
+func (p *probe) checkedAssignment(ctx context.Context) (fixtureAssignment, error) {
 	if p.state.AssignmentID <= 0 {
-		return workflow.Assignment{}, fmt.Errorf("no known probe assignment; create first")
+		return fixtureAssignment{}, fmt.Errorf("no known probe assignment; create or select first")
 	}
-	a, e := workflow.GetAssignment(ctx, p.c, courseID, p.state.AssignmentID)
+	a, e := p.getFixture(ctx, p.state.AssignmentID)
 	if e != nil {
 		return a, e
 	}
-	if e = validateAssignment(a, p.state); e != nil {
+	if e = validateAssignment(a.Assignment, p.state); e != nil {
 		return a, e
+	}
+	if strings.HasPrefix(a.Name, unattendedPrefix) && !a.safelyExcluded() {
+		return a, fmt.Errorf("unattended fixture must omit final grades and disable SIS posting")
 	}
 	return a, nil
 }
 func validateAssignment(a workflow.Assignment, s probeState) error {
-	if s.Origin != allowedOrigin || s.CourseID != courseID || a.ID != s.AssignmentID || a.CourseID != courseID || !strings.HasPrefix(a.Name, prefix) || a.Name != s.Title || (a.Published && !s.PublicationAuthorized) || a.GradingType != "points" {
+	if s.Origin != allowedOrigin || s.CourseID != courseID || a.ID != s.AssignmentID || a.CourseID != courseID || (!strings.HasPrefix(a.Name, prefix) && !strings.HasPrefix(a.Name, unattendedPrefix)) || a.Name != s.Title || (a.Published && !s.PublicationAuthorized) || a.GradingType != "points" {
 		return fmt.Errorf("refusing write/read: target is not the exact authorized unpublished disposable assignment")
 	}
 	return nil
@@ -323,7 +358,8 @@ func (p *probe) publication(ctx context.Context, published bool) error {
 	if p.state.AssignmentID <= 0 {
 		return fmt.Errorf("no exact probe assignment")
 	}
-	a, e := workflow.GetAssignment(ctx, p.c, courseID, p.state.AssignmentID)
+	fixture, e := p.getFixture(ctx, p.state.AssignmentID)
+	a := fixture.Assignment
 	if e != nil {
 		return e
 	}
@@ -334,12 +370,16 @@ func (p *probe) publication(ctx context.Context, published bool) error {
 	if e = validateAssignment(a, check); e != nil {
 		return e
 	}
+	if strings.HasPrefix(a.Name, unattendedPrefix) && !fixture.safelyExcluded() {
+		return fmt.Errorf("unattended publication requires final-grade and SIS exclusion")
+	}
 	step := "unpublish"
 	if published {
 		step = "publish"
 	}
 	if a.Published == published {
 		p.state.PublicationAuthorized = published
+		p.state.Published = published
 		p.state.Outcomes[step] = domain.ActionOutcome{Status: "preserved", ID: a.ID}
 		if e = p.save(); e != nil {
 			return e
@@ -359,6 +399,7 @@ func (p *probe) publication(ctx context.Context, published bool) error {
 	}
 	if e == nil {
 		p.state.PublicationAuthorized = published
+		p.state.Published = published
 	}
 	if f := p.finish(step, e, p.state.AssignmentID); f != nil {
 		if !published {
@@ -674,22 +715,56 @@ func (p *probe) couple(ctx context.Context, args []string) error {
 	if e != nil {
 		return e
 	}
-	if a.RubricSettings.ID != p.state.RubricID || p.state.RubricID <= 0 || p.state.AssociationID <= 0 {
+	if a.RubricSettings.ID != p.state.RubricID || p.state.RubricID <= 0 || p.state.AssociationID <= 0 || a.RubricAssociation == nil || a.RubricAssociation.ID != p.state.AssociationID {
 		return fmt.Errorf("probe rubric identity mismatch")
+	}
+	before, e := workflow.Snapshot(a, p.c.Origin())
+	if e != nil || before.Rubric == nil || len(before.Rubric.Criteria) == 0 {
+		return fmt.Errorf("probe lacks a complete live rubric definition")
 	}
 	if e = p.begin("couple-association"); e != nil {
 		return e
 	}
 	var response json.RawMessage
-	e = p.c.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/rubrics/%d", courseID, p.state.RubricID), map[string]any{"rubric_association_id": p.state.AssociationID, "rubric": map[string]any{"skip_updating_points_possible": true}, "rubric_association": map[string]any{"association_id": p.state.AssignmentID, "association_type": "Assignment", "use_for_grading": *enabled, "purpose": "grading"}}, &response)
+	e = p.c.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/rubrics/%d", courseID, p.state.RubricID), couplingFields(*before.Rubric, p.state.AssignmentID, *enabled), &response)
+	if e == nil {
+		a, e = p.assignment(ctx)
+		if e == nil {
+			var after domain.AssignmentSnapshot
+			after, e = workflow.Snapshot(a, p.c.Origin())
+			before.UpdatedAt, after.UpdatedAt = "", ""
+			before.Rubric.UseForGrading, before.Rubric.UseForGradingKnown = *enabled, true
+			if e == nil && !workflow.SameSnapshot(before, after) {
+				e = fmt.Errorf("coupling changed the fixture definition, points, or unrelated settings")
+			}
+		}
+		if e != nil {
+			e = &canvas.Error{Kind: "uncertain", Uncertain: true}
+		}
+	}
 	if f := p.finish("couple-association", e, p.state.AssociationID); f != nil {
 		return f
 	}
-	a, e = p.assignment(ctx)
-	if e != nil {
-		return e
-	}
 	return emit(assignmentShape(a))
+}
+
+// The rubric update endpoint needs a complete definition to change coupling.
+// Omitting criteria empties the rubric, and its skip-points flag is top-level.
+// Keep all fixture criterion/rating IDs so existing assessments remain attached.
+func couplingFields(r domain.Rubric, assignmentID int64, enabled bool) map[string]any {
+	criteria := map[string]any{}
+	for i, c := range r.Criteria {
+		ratings := map[string]any{}
+		for j, rating := range c.Ratings {
+			ratings[strconv.Itoa(j)] = map[string]any{"id": rating.ID, "points": rating.Points, "description": rating.Description, "long_description": rating.LongDescription}
+		}
+		criteria[strconv.Itoa(i)] = map[string]any{"id": c.ID, "points": c.Points, "description": c.Description, "long_description": c.LongDescription, "criterion_use_range": c.UseRange, "ratings": ratings}
+	}
+	freeForm := "0"
+	if r.FreeFormCriterionComments {
+		freeForm = "1"
+	}
+	return map[string]any{"rubric_association_id": r.AssociationID, "skip_updating_points_possible": "true", "rubric": map[string]any{"title": r.Title, "free_form_criterion_comments": freeForm, "criteria": criteria}, "rubric_association": map[string]any{"association_id": assignmentID, "association_type": "Assignment", "use_for_grading": enabled, "purpose": "grading"}}
 }
 func (p *probe) late(ctx context.Context, args []string) error {
 	flags := flag.NewFlagSet("late", flag.ContinueOnError)
@@ -750,14 +825,14 @@ func assignmentShape(a workflow.Assignment) map[string]any {
 		}
 		criteria = append(criteria, map[string]any{"criterion_id": c.ID, "points": c.Points, "ratings": ratings})
 	}
-	return map[string]any{"assignment_id": a.ID, "course_id": a.CourseID, "unpublished": !a.Published, "points_possible": a.Points, "due_at": a.DueAt, "rubric_id": a.RubricSettings.ID, "rubric_total": a.RubricSettings.Points, "association": a.RubricAssociation, "criteria": criteria}
+	return map[string]any{"assignment_id": a.ID, "course_id": a.CourseID, "title": a.Name, "description": a.Description, "published": a.Published, "unpublished": !a.Published, "grading_type": a.GradingType, "submission_types": a.SubmissionTypes, "points_possible": a.Points, "due_at": a.DueAt, "unlock_at": a.UnlockAt, "lock_at": a.LockAt, "rubric_id": a.RubricSettings.ID, "rubric_total": a.RubricSettings.Points, "association": a.RubricAssociation, "criteria": criteria}
 }
 func submissionShape(s workflow.Submission) map[string]any {
 	history := []map[string]any{}
 	for _, h := range s.History {
-		history = append(history, map[string]any{"attempt": h.Attempt, "submitted_at": h.SubmittedAt, "body_present": h.Body != "", "cached_due_date": h.CachedDueDate, "comments": commentShapes(h.Comments)})
+		history = append(history, map[string]any{"attempt": h.Attempt, "submitted_at": h.SubmittedAt, "body_present": h.Body != "", "attachment_count": len(h.Attachments), "submission_type": h.Type, "cached_due_date": h.CachedDueDate, "comments": commentShapes(h.Comments)})
 	}
-	return map[string]any{"assignment_id": s.AssignmentID, "test_student_id": s.UserID, "submission_id": s.ID, "attempt": s.Attempt, "submitted_at": s.SubmittedAt, "score": s.Score, "entered_score": s.EnteredScore, "points_deducted": s.PointsDeducted, "state": s.State, "grade_matches_current_submission": s.GradeMatchesCurrentSubmission, "late": s.Late, "late_policy_status": s.LatePolicyStatus, "seconds_late": s.SecondsLate, "cached_due_date": s.CachedDueDate, "rubric_assessment": s.RubricAssessment, "comments": commentShapes(s.Comments), "history": history}
+	return map[string]any{"assignment_id": s.AssignmentID, "test_student_id": s.UserID, "submission_id": s.ID, "attempt": s.Attempt, "body_present": s.Body != "", "attachment_count": len(s.Attachments), "submission_type": s.Type, "submitted_at": s.SubmittedAt, "score": s.Score, "entered_score": s.EnteredScore, "points_deducted": s.PointsDeducted, "state": s.State, "grade_matches_current_submission": s.GradeMatchesCurrentSubmission, "late": s.Late, "late_policy_status": s.LatePolicyStatus, "seconds_late": s.SecondsLate, "cached_due_date": s.CachedDueDate, "rubric_assessment": s.RubricAssessment, "comments": commentShapes(s.Comments), "history": history}
 }
 func commentShapes(comments []workflow.SubmissionComment) []map[string]any {
 	result := []map[string]any{}

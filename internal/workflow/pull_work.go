@@ -81,7 +81,7 @@ func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, a
 	if e != nil {
 		return PullReport{}, e
 	}
-	if !strings.HasPrefix(a.Name, "[CSE 0.1b DISPOSABLE]") {
+	if !strings.HasPrefix(a.Name, "[CSE 0.1b DISPOSABLE]") && !strings.HasPrefix(a.Name, "[CSE UNATTENDED] ") {
 		return PullReport{}, fmt.Errorf("developer pull requires conspicuously disposable assignment prefix")
 	}
 	probeElapsed := time.Since(start)
@@ -288,7 +288,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			}
 			for i, sub := range detailed {
 				st := roster[i]
-				if query == "" && s.completedHint(course.Nickname, a.ID, st.Ref, sub, snapshot) {
+				if query == "" && s.completedHint(a.ID, st.Ref, sub, snapshot) {
 					summary.Handled++
 					continue
 				}
@@ -503,17 +503,18 @@ func plainTextExtension(name string) bool {
 }
 
 // Completed actions belong to an identity/attempt, even after teacher output edits.
-func (s *Service) completedHint(nickname string, id int64, ref string, sub Submission, snapshot domain.AssignmentSnapshot) bool {
+func (s *Service) completedHint(id int64, ref string, sub Submission, snapshot domain.AssignmentSnapshot) bool {
 	matched := false
-	base := filepath.Join(s.Root, "courses", nickname)
-	_ = filepath.WalkDir(base, func(path string, d os.DirEntry, e error) error {
+	// Post accepts results anywhere in the workspace. Completion follows the
+	// assignment/student/attempt identity, not the author's folder choice.
+	_ = filepath.WalkDir(s.Root, func(path string, d os.DirEntry, e error) error {
 		if e != nil || d == nil {
 			return nil
 		}
 		if d.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) != ".md" {
+		if !strings.EqualFold(filepath.Ext(path), ".md") {
 			return nil
 		}
 		var results domain.ResultsDocument
@@ -527,6 +528,7 @@ func (s *Service) completedHint(nickname string, id int64, ref string, sub Submi
 			g := row.Grade
 			if row.Operation == "grade" && row.StudentRef == ref && gradeComplete(g) && sameAttempt(g.Attempt, attemptRef(sub)) {
 				matched = true
+				return filepath.SkipAll
 			}
 		}
 		return nil

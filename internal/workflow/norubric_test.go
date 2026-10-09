@@ -134,7 +134,7 @@ func TestNoRubricAssignmentScoresWithAgentBasisAndWritesGradeAndCommentOnly(t *t
 	}
 	changed.DescriptionHTML = "Teacher changed directions after posting"
 	live.Comments[0].Comment = "Teacher revised feedback"
-	if !s.completedHint("TEST", 10, saved.Students[0].StudentRef, live, changed) {
+	if !s.completedHint(10, saved.Students[0].StudentRef, live, changed) {
 		t.Fatal("completed no-rubric attempt recurred after teacher edits")
 	}
 	live.State = "graded"
@@ -145,7 +145,7 @@ func TestNoRubricAssignmentScoresWithAgentBasisAndWritesGradeAndCommentOnly(t *t
 	}
 	live.Attempt++
 	matches = false
-	if s.completedHint("TEST", 10, saved.Students[0].StudentRef, live, changed) || liveHandled(live) {
+	if s.completedHint(10, saved.Students[0].StudentRef, live, changed) || liveHandled(live) {
 		t.Fatal("new no-rubric attempt was hidden")
 	}
 

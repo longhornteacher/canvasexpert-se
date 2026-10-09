@@ -823,8 +823,8 @@ func TestCoupledRubricPostsComputedAssessment(t *testing.T) {
 				_ = json.NewDecoder(r.Body).Decode(&req)
 				if req.Rubric != nil {
 					live.RubricAssessment = req.Rubric
-					if req.Submission["posted_grade"] != "12" {
-						t.Error("combined write omitted computed assessment")
+					if len(req.Submission) != 0 {
+						t.Error("coupled rubric and computed grade must use separate writes")
 					}
 				}
 				if value, ok := req.Submission["posted_grade"]; ok {
@@ -865,14 +865,14 @@ func TestCoupledRubricPostsComputedAssessment(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if report.Students[0].Status != "completed" || writes != 2 || len(live.Comments) != 1 || decimalPointer(live.EnteredScore).String() != "12" {
+	if report.Students[0].Status != "completed" || writes != 3 || len(live.Comments) != 1 || decimalPointer(live.EnteredScore).String() != "12" {
 		t.Fatalf("coupled operation was not held: %#v", report)
 	}
 	again, e := s.Post(context.Background(), path)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if writes != 2 || again.Students[0].Status != "completed" || len(live.Comments) != 1 {
+	if writes != 3 || again.Students[0].Status != "completed" || len(live.Comments) != 1 {
 		t.Fatal("held coupled operation wrote on retry")
 	}
 }
@@ -990,7 +990,8 @@ func TestRepresentativeSyntheticClassPullPost(t *testing.T) {
 		}
 		doc.Students = append(doc.Students, domain.StudentResult{StudentRef: work.StudentRef, Operation: "grade", Grade: &domain.GradeOperation{Attempt: work.Current.Ref, Assessment: domain.MustDecimal("12"), Feedback: "Explain how your evidence supports the claim.", Components: []domain.ComponentScore{{Key: "answer", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "c1", Points: domain.MustDecimal("60")}}}}}})
 	}
-	resultsPath := filepath.Join(s.Root, "courses", "TEST", "class-results.md")
+	// Results can be prepared anywhere inside the workspace, as Post permits.
+	resultsPath := filepath.Join(s.Root, "drafts", "class-results.md")
 	if e = workspace.WriteDocument(resultsPath, doc, "synthetic class"); e != nil {
 		t.Fatal(e)
 	}
@@ -1006,12 +1007,24 @@ func TestRepresentativeSyntheticClassPullPost(t *testing.T) {
 			t.Fatalf("class row not complete: %#v", row)
 		}
 	}
+	// Canvas output edits should not erase the recorded completed attempt.
+	// Force discovery to rely on persisted outcomes rather than liveHandled.
+	for user, sub := range lives {
+		sub.State = "submitted"
+		matches := false
+		sub.GradeMatchesCurrentSubmission = &matches
+		lives[user] = sub
+	}
 	discovery, e := s.PullWork(context.Background(), "TEST", "")
 	if e != nil {
 		t.Fatal(e)
 	}
 	if discovery.Students != 0 {
 		t.Fatal("completed assessment recurred in discovery")
+	}
+	explicit, e := s.PullWork(context.Background(), "TEST", "10")
+	if e != nil || explicit.Students != size {
+		t.Fatalf("explicit reassessment should include completed attempts: %d %v", explicit.Students, e)
 	}
 	sub := lives[1]
 	sub.Attempt = 3

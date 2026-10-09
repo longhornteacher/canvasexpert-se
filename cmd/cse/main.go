@@ -219,6 +219,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return fail(inputError(e), progress)
 		}
 		fmt.Fprintf(out, "Valid document: %s\n", p)
+		previewResults(p, out)
 		return 0
 	}
 	return runRemote(ctx, root, cmd, args, out, progress)
@@ -248,6 +249,7 @@ func documentPath(root, name string) (string, error) {
 	}
 	return workspace.ConstrainPath(root, name)
 }
+
 // previewResults prints each student's computed assessment and late timing so the
 // agent can show the teacher a preview without posting.
 func previewResults(path string, out io.Writer) {

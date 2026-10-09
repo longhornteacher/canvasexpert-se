@@ -370,7 +370,7 @@ func createFields(d domain.AssignmentDocument, html string) map[string]any {
 }
 func sameCreateCore(a Assignment, d domain.AssignmentDocument, html string) bool {
 	p, e := domain.ParseDecimal(a.Points.String())
-	return e == nil && p.Cmp(d.Points) == 0 && a.Name == d.Title && a.Description == html && a.GradingType == "points" && !a.Anonymous && !a.Moderated && (a.GroupCategoryID == nil || *a.GroupCategoryID == 0) && reflect.DeepEqual(a.SubmissionTypes, d.SubmissionTypes) && sameDate(a.DueAt, d.DueAt) && sameDate(a.UnlockAt, d.UnlockAt) && sameDate(a.LockAt, d.LockAt)
+	return e == nil && p.Cmp(d.Points) == 0 && a.Name == d.Title && academicHTML(a.Description) == academicHTML(html) && a.GradingType == "points" && !a.Anonymous && !a.Moderated && (a.GroupCategoryID == nil || *a.GroupCategoryID == 0) && reflect.DeepEqual(a.SubmissionTypes, d.SubmissionTypes) && sameDate(a.DueAt, d.DueAt) && sameDate(a.UnlockAt, d.UnlockAt) && sameDate(a.LockAt, d.LockAt)
 }
 func sameDate(a, b *string) bool {
 	if a == nil || *a == "" {
@@ -397,6 +397,7 @@ func sameRubricDefinition(a, b domain.Rubric) bool {
 	}
 	for i, c := range a.Criteria {
 		d := b.Criteria[i]
+		d.Ratings = authoredRatings(d)
 		if c.Description != d.Description || c.LongDescription != d.LongDescription || c.UseRange != d.UseRange || c.Points.Cmp(d.Points) != 0 || len(c.Ratings) != len(d.Ratings) {
 			return false
 		}
@@ -417,11 +418,30 @@ func sameRubricDefinition(a, b domain.Rubric) bool {
 	}
 	return true
 }
+
+// Canvas derives a criterion's maximum from its ratings, ignoring an explicit
+// criterion maximum when ratings are absent or lower. Numeric anchors preserve
+// the teacher's declared scale without inventing performance descriptions.
+// Only intended new definitions use this normalization; live ratings stay exact.
+func authoredRatings(c domain.Criterion) []domain.Rating {
+	for _, rating := range c.Ratings {
+		if rating.Points.Cmp(c.Points) == 0 {
+			return c.Ratings
+		}
+	}
+	ratings := append([]domain.Rating(nil), c.Ratings...)
+	ratings = append(ratings, domain.Rating{Points: c.Points, Description: c.Points.String() + " points"})
+	if len(c.Ratings) == 0 && c.Points.Sign() > 0 {
+		ratings = append(ratings, domain.Rating{Points: domain.MustDecimal("0"), Description: "0 points"})
+	}
+	return ratings
+}
+
 func rubricCreateFields(r domain.Rubric, assignmentID int64) map[string]any {
 	criteria := map[string]any{}
 	for i, c := range r.Criteria {
 		ratings := map[string]any{}
-		for j, v := range c.Ratings {
+		for j, v := range authoredRatings(c) {
 			ratings[strconv.Itoa(j)] = map[string]any{"points": v.Points, "description": v.Description, "long_description": v.LongDescription}
 		}
 		criteria[strconv.Itoa(i)] = map[string]any{"points": c.Points, "description": c.Description, "long_description": c.LongDescription, "ratings": ratings, "criterion_use_range": c.UseRange}

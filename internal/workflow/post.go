@@ -93,6 +93,7 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		return report, err
 	}
 	basisMatches := SameGradingBasis(doc.Assignment, liveBasis)
+	coupledRubric := liveBasis.Rubric != nil && liveBasis.Rubric.UseForGradingKnown && liveBasis.Rubric.UseForGrading
 	save := func() error { return workspace.WriteDocument(path, &doc, body) }
 	for i := range doc.Students {
 		r := &doc.Students[i]
@@ -137,7 +138,7 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		if r.Operation == "revise-feedback" {
 			err = s.postRevision(ctx, &doc, r, v, source, live, save)
 		} else {
-			err = s.postGrade(ctx, &doc, r, v, source, live, save)
+			err = s.postGrade(ctx, &doc, r, v, source, live, coupledRubric, save)
 		}
 		if err != nil {
 			return report, err
@@ -317,7 +318,7 @@ func rubricMatches(sub Submission, a domain.Assessment) bool {
 }
 func ambiguous(o domain.ActionOutcome) bool { return o.Status == "pending" || o.Status == "uncertain" }
 
-func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, row *domain.StudentResult, v domain.ValidatedStudent, source postSource, live Submission, save func() error) error {
+func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, row *domain.StudentResult, v domain.ValidatedStudent, source postSource, live Submission, coupledRubric bool, save func() error) error {
 	g := row.Grade
 	if reason := unsupportedSubmission(live); reason != "" {
 		holdGrade(g, reason)
@@ -360,7 +361,37 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 	if err := save(); err != nil {
 		return err
 	}
-	if !noCanvasRubric && !ambiguous(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Grade) && (!definite(g.Outcomes.Rubric) || !definite(g.Outcomes.Grade)) {
+	// Canvas applies a coupled rubric's raw sum after a simultaneous grade,
+	// which can replace the computed assessment when their scales differ.
+	// Confirm the honest rubric first, then post the computed grade separately.
+	if coupledRubric && !definite(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Grade) {
+		g.Outcomes.Rubric = domain.ActionOutcome{Status: "pending"}
+		g.Outcomes.Grade = domain.ActionOutcome{}
+		if err := save(); err != nil {
+			return err
+		}
+		var response Submission
+		err := s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"rubric_assessment": rubricFields(*v.Assessment)}, &response)
+		if err != nil {
+			g.Outcomes.Rubric = failedOutcome(err)
+		} else {
+			g.Outcomes.Rubric = confirmedRubric(response, *v.Assessment, g.Attempt)
+			live = response
+			// Canvas sometimes omits rubric_assessment in its write response.
+			// An exact fresh read can confirm that write before the grade begins.
+			if ambiguous(g.Outcomes.Rubric) {
+				fresh, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, source.student.UserID)
+				if e == nil && sameAttempt(g.Attempt, attemptRef(fresh)) && rubricMatches(fresh, *v.Assessment) {
+					g.Outcomes.Rubric = domain.ActionOutcome{Status: "preserved", Message: "fresh submission confirms intended rubric values"}
+					live = fresh
+				}
+			}
+		}
+		if err = save(); err != nil {
+			return err
+		}
+	}
+	if !noCanvasRubric && !coupledRubric && !ambiguous(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Grade) && (!definite(g.Outcomes.Rubric) || !definite(g.Outcomes.Grade)) {
 		g.Outcomes.Rubric = domain.ActionOutcome{Status: "pending"}
 		g.Outcomes.Grade = domain.ActionOutcome{Status: "pending"}
 		if err := save(); err != nil {
@@ -379,7 +410,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 			return err
 		}
 	}
-	if noCanvasRubric && !definite(g.Outcomes.Grade) && !ambiguous(g.Outcomes.Grade) {
+	if (noCanvasRubric || (coupledRubric && definite(g.Outcomes.Rubric))) && !definite(g.Outcomes.Grade) && !ambiguous(g.Outcomes.Grade) {
 		fresh, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, source.student.UserID)
 		if e != nil {
 			g.Outcomes.Grade = domain.ActionOutcome{Status: "held", Message: e.Error()}
