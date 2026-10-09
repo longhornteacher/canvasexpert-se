@@ -11,12 +11,16 @@ This folder is a clean starting point for a teacher's CanvasExpert-SE workspace.
 
 Do not put a Canvas personal access token in a file, command line, prompt, or workspace note. Setup opens a local form and saves the credential through Windows Credential Manager.
 
-The Engine is the program that talks to Canvas. The Playbook (`AGENTS.md` and `guides/`) is the instructions the agent follows. Your settings are yours to edit in the hub.
+The Engine is the program that talks to Canvas. Your Playbook is how the agent behaves: `AGENTS.md`, `guides/` and `settings/`. It started as a copy of the program's starter Playbook and is yours to change.
 
 ## Folders
 
-- `guides/` contains short instructions for setup, authoring, editing, and scoring.
-- `settings/courses.md` contains the Canvas instance and configured course nicknames.
+Two folders: the program folder (the Engine plus the starter Playbook; nothing private) and this workspace (your Playbook plus student information).
+
+New program versions add new Playbook files but never change yours. To get the newest version of a file, use Your Playbook in the hub's Settings, or delete it and reopen the hub.
+
+- `AGENTS.md`, `CLAUDE.md` and `guides/` are your Playbook: short instructions for setup, authoring, editing, and scoring.
+- `settings/` is also part of your Playbook. `settings/courses.md` contains the Canvas instance and configured course nicknames.
 - `settings/grading.md` holds teacher feedback preferences and grading context.
 - `settings/students.md` is for teacher-authored accommodations and student notes. Keep this starter copy empty of real student information.
 - `settings/school-calendar.md` is reference data the agent uses to work out school-day lateness; update it for the school's calendar.
@@ -24,4 +28,4 @@ The Engine is the program that talks to Canvas. The Playbook (`AGENTS.md` and `g
 - `cse.cmd` finds this computer's linked program. The program itself is deliberately not in this synced folder.
 - `courses/` is where the Engine stores course work. It is populated as supported operations are run.
 
-The course configuration and task document formats are described in `guides/formats.md`. Do not invent fields outside that guide and the corresponding CLI contract. Canvas Live is authoritative; where a specific Canvas behavior remains unresolved, the affected action's guide explains the limitation.
+The course configuration and task document formats come from the Engine: run `.\cse.cmd help formats` for the reference and `.\cse.cmd help examples` for samples. Do not invent fields outside that reference and the CLI contract. Canvas Live is authoritative; where a specific Canvas behavior remains unresolved, the affected action's guide explains the limitation.

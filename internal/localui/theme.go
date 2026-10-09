@@ -7,7 +7,7 @@ func SEExpansion() string { return "Special Edition" }
 // under a no-script content security policy), so every effect is animation or
 // transform only and honours prefers-reduced-motion.
 // hubNav is the navigation bar shown on every page when served by the hub.
-const hubNav = `<nav aria-label="Main navigation"><a href="/">Home</a><a href="/setup">Canvas</a><a href="/courses">Courses</a><a href="/students">Students</a><a href="/settings">Settings</a></nav>`
+const hubNav = `<nav aria-label="Main navigation"><a href="/">Home</a><a href="/how">How it works</a><a href="/setup">Canvas</a><a href="/courses">Courses</a><a href="/students">Students</a><a href="/settings">Settings</a></nav>`
 
 const funkyCSS = `
 :root{--ink:#1b0b3a;--pink:#ff3ea5;--lime:#c6ff3d;--cyan:#27e1ff;--sun:#ffd23f;--grape:#7a3cff}
@@ -41,7 +41,7 @@ td input{box-shadow:3px 3px 0 var(--grape);padding:.45rem .6rem}
 code,.ref{font-family:Consolas,monospace;font-size:.82rem;background:var(--ink);color:var(--lime);padding:.1rem .45rem;border-radius:.4rem}
 nav{display:flex;flex-wrap:wrap;gap:.6rem;margin:0 0 1.2rem}
 nav a{color:var(--ink);text-decoration:none;text-transform:uppercase;letter-spacing:.1em;font-size:.82rem;padding:.3rem .9rem;background:var(--cyan);border:3px solid var(--ink);border-radius:2rem;box-shadow:3px 3px 0 var(--ink);transition:transform .1s,background .2s}
-nav a:nth-child(2){background:var(--lime)}nav a:nth-child(3){background:var(--sun)}nav a:nth-child(4){background:var(--pink)}nav a:nth-child(5){background:var(--grape);color:#fff}
+nav a:nth-child(2){background:var(--lime)}nav a:nth-child(3){background:var(--cyan)}nav a:nth-child(4){background:var(--sun)}nav a:nth-child(5){background:var(--pink)}nav a:nth-child(6){background:var(--grape);color:#fff}
 nav a:hover{transform:translate(-2px,-2px) rotate(-3deg);background:var(--sun)}
 .course-tabs{border-bottom:4px solid var(--ink);padding:.6rem .2rem 1rem;margin-top:1.2rem}
 nav.course-tabs a{background:#fbf4ff;color:var(--ink)}
@@ -111,6 +111,12 @@ button.small{margin-top:.6rem;padding:.4rem .9rem;font-size:.75rem;box-shadow:4p
 button.danger{background:var(--pink);color:#fff}
 details.forget{margin-top:.8rem;font-size:.85rem}details.forget summary{cursor:pointer;text-decoration:underline}
 label.check{text-transform:none;letter-spacing:0;font-size:.85rem;margin:.6rem 0 0}
+[popover]{max-width:32rem;width:calc(100% - 2rem);margin:auto;padding:1.2rem 1.4rem;color:var(--ink);background:#fff;border:5px solid var(--ink);border-radius:1.4rem .5rem 1.4rem .5rem;box-shadow:8px 8px 0 var(--pink);font:inherit}
+[popover]::backdrop{background:rgba(27,11,58,.55)}
+[popover] h2{margin:0 0 .6rem;font-size:1.2rem;text-transform:uppercase;letter-spacing:.06em}[popover] ol{margin:.4rem 0 .6rem;padding-left:1.4rem}[popover] li{margin:.35rem 0}
+.row button[popovertarget]{margin-top:0}
+.pill.same{background:var(--lime)}.pill.differs{background:var(--sun)}
+ul.playbook{list-style:none;margin:.6rem 0 0;padding:0}ul.playbook li{margin:.7rem 0;font-size:.9rem}ul.playbook code{overflow-wrap:anywhere}
 @media (prefers-reduced-motion:reduce){.ball{display:none}}
 .done{text-align:center}.done h1{font-size:3rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

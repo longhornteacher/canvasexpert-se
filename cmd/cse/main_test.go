@@ -28,3 +28,12 @@ func TestInvalidResultsAreRejectedBeforeCredentials(t *testing.T) {
 		t.Fatalf("invalid file reached environment: %d %s", code, err.String())
 	}
 }
+
+func TestHelpFormatsAndExamplesNeedNoWorkspace(t *testing.T) {
+	for _, topic := range []string{"formats", "examples"} {
+		var out, err bytes.Buffer
+		if code := run(context.Background(), []string{"help", topic}, &out, &err); code != 0 || out.Len() == 0 {
+			t.Fatalf("help %s: %d %s", topic, code, err.String())
+		}
+	}
+}

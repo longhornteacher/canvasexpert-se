@@ -189,3 +189,76 @@ func TestHubBrowseUsesChosenFolder(t *testing.T) {
 		t.Fatalf("chosen folder not adopted: %s", w.Body.String())
 	}
 }
+
+func TestHubOpeningExistingWorkspaceAddsMissingSeedOnly(t *testing.T) {
+	root := makeWorkspace(t)
+	grading := filepath.Join(root, "settings", "grading.md")
+	edited := []byte("my own grading habits")
+	if err := os.WriteFile(grading, edited, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	notice := addMissingSeed(root)
+	if !strings.Contains(notice, "guides/score.md") {
+		t.Fatalf("notice does not name the restored guide: %q", notice)
+	}
+	if _, err := os.Stat(filepath.Join(root, "guides", "score.md")); err != nil {
+		t.Fatal("missing guide was not restored")
+	}
+	if got, _ := os.ReadFile(grading); string(got) != string(edited) {
+		t.Fatal("edited settings file changed")
+	}
+	if again := addMissingSeed(root); again != "" {
+		t.Fatalf("second open should add nothing, got %q", again)
+	}
+}
+
+func TestPlaybookReplaceKeepsOldCopyAndRefusesSettings(t *testing.T) {
+	h := newTestHub()
+	h.root = makeWorkspace(t)
+	addMissingSeed(h.root)
+	guide := filepath.Join(h.root, "guides", "score.md")
+	if err := os.WriteFile(guide, []byte("my edits"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"request_secret": {"nonce"}, "file": {"guides/score.md"}, "confirm": {"on"}}
+	if w := hubPost(h, "/playbook/replace", form, h.origin); w.Code != 303 {
+		t.Fatalf("replace not accepted: %d", w.Code)
+	}
+	old, _ := filepath.Glob(filepath.Join(h.root, "playbook-old", "*", "guides", "score.md"))
+	if len(old) != 1 {
+		t.Fatalf("old copy not kept: %v", old)
+	}
+	if b, _ := os.ReadFile(old[0]); string(b) != "my edits" {
+		t.Fatal("old copy changed")
+	}
+	if seed, _ := seedBytes("guides/score.md"); !strings.EqualFold(string(seed), readString(t, guide)) {
+		t.Fatal("seed copy not written")
+	}
+	grading := filepath.Join(h.root, "settings", "grading.md")
+	if err := os.WriteFile(grading, []byte("mine"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	form.Set("file", "settings/grading.md")
+	hubPost(h, "/playbook/replace", form, h.origin)
+	if readString(t, grading) != "mine" || !strings.Contains(h.flashErr, "can't be replaced") {
+		t.Fatal("settings file was replaced or not refused")
+	}
+}
+
+func readString(t *testing.T, p string) string {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestHowPageShowsPaths(t *testing.T) {
+	h := newTestHub()
+	h.programDir, h.root, h.version = `C:\Prog`, `C:\Work`, "0.1b"
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/how", nil))
+	if body := w.Body.String(); w.Code != 200 || !strings.Contains(body, `C:\Prog`) || !strings.Contains(body, `C:\Work`) {
+		t.Fatal("how page missing paths")
+	}
+}

@@ -28,7 +28,7 @@ Run `setup` and follow the local form to enter the Canvas origin and personal ac
 
 ## 3. Configure courses
 
-Use `courses` to discover courses you can access and their IDs. Then set teacher-selected nicknames and current-course flags in `settings/courses.md`; the Engine does not infer nicknames from Canvas titles. Configure only current courses you want a “scoring session” to scan. Use `modules <course>` when an assignment needs a module target. The starter `settings/courses.md` shows the version-one configuration shape; see `formats.md` for the field reference.
+Use `courses` to discover courses you can access and their IDs. Then set teacher-selected nicknames and current-course flags in `settings/courses.md`; the Engine does not infer nicknames from Canvas titles. Configure only current courses you want a “scoring session” to scan. Use `modules <course>` when an assignment needs a module target. The starter `settings/courses.md` shows the version-one configuration shape; run `.\cse.cmd help formats` for the field reference.
 
 ## 4. Maintain student notes
 

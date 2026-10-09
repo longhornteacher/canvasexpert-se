@@ -13,6 +13,7 @@ import (
 	"runtime/debug"
 	_ "time/tzdata"
 
+	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/localui"
 	"canvasexpertse/internal/platform"
@@ -40,15 +41,39 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   validate FILE                 Validate a workspace document locally
   doctor                        Test native dummy credential round trip
   version                       Print version and build information
-  help                          Print this help, without Canvas requests
+  help [formats|examples]       Print this help, the file-format reference, or the synthetic examples (no Canvas requests)
 
 COURSE is an explicit nickname in settings/courses.md. FILE paths are relative
 to the workspace unless absolute. Use quotes around paths or titles with spaces.
 ui/setup/students pages exist only while their command runs; Ctrl+C closes them.
 Draft/show-me-first instructions stop before post. A scoring session pulls only.
 Exit codes: 0 success; 2 invalid input; 3 partial/held work; 4 environment/API failure.
-Read the Playbook guides (guides/setup.md, authoring.md, edit.md, score.md, formats.md) as needed.
+Read the Playbook guides (guides/setup.md, authoring.md, edit.md, score.md) as needed; use help formats and help examples for file formats.
 `
+
+// printEngineDoc prints the embedded format reference or synthetic examples.
+func printEngineDoc(out io.Writer, topic string) error {
+	if topic == "formats" {
+		b, err := embedded.EngineDocs.ReadFile("engine-docs/formats.md")
+		if err != nil {
+			return err
+		}
+		_, err = out.Write(b)
+		return err
+	}
+	entries, err := embedded.EngineDocs.ReadDir("engine-docs/examples")
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		b, err := embedded.EngineDocs.ReadFile("engine-docs/examples/" + e.Name())
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "# %s\n\n%s\n", e.Name(), b)
+	}
+	return nil
+}
 
 type cliError struct {
 	code int
@@ -75,6 +100,12 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		return 2
 	}
 	args = flags.Args()
+	if len(args) > 0 && args[0] == "help" && len(args) == 2 && (args[1] == "formats" || args[1] == "examples") {
+		if e := printEngineDoc(out, args[1]); e != nil {
+			return fail(e, progress)
+		}
+		return 0
+	}
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" {
 		fmt.Fprint(out, help)
 		return 0

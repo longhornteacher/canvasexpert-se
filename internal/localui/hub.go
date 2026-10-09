@@ -31,6 +31,7 @@ const preferredHubAddr = "127.0.0.1:47831"
 var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert: Special Edition</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>CanvasExpert: Special Edition</h1><p>Your courses and students, together in one place.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <div class="cards">
+<div class="card"><h2>New here?</h2><a class="go" href="/how">See how it works &rarr;</a></div>
 <div class="card"><h2>Courses</h2>{{if .Root}}<p><b>{{.ActiveCourses}}</b> active</p><a class="go" href="/courses">Pick active courses &rarr;</a>{{else}}<p>Choose a workspace in Settings to get started.</p><a class="go" href="/settings">Open Settings &rarr;</a>{{end}}</div>
 <div class="card"><h2>Students</h2>{{if .Root}}<p><b>{{.Students}}</b> known, <b>{{.Monitored}}</b> monitored</p><a class="go" href="/students">Open students &rarr;</a>{{else}}<p>Choose a workspace in Settings to get started.</p>{{end}}</div>
 <div class="card"><h2>Settings</h2>{{if .Connected}}<span class="pill on">Canvas connected</span>{{else}}<span class="pill off">Canvas not connected</span>{{end}}<p>Canvas connection, workspace, and preferences.</p><a class="go" href="/settings">Open Settings &rarr;</a></div>
@@ -41,18 +42,18 @@ var settingsTemplate = template.Must(template.New("settings").Parse(`<!doctype h
 {{if .ConfirmPath}}<div class="card"><h2>Set up a workspace here?</h2><p><code>{{.ConfirmPath}}</code></p><p>This folder has {{.ConfirmCount}} items and is not a workspace yet. I will add the starter files only; nothing existing is changed or overwritten.</p><form method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="path" value="{{.ConfirmPath}}"><input type="hidden" name="confirm" value="1"><button type="submit">Yes, set it up</button></form></div>{{end}}
 <div class="cards">
 <div class="card"><h2>Canvas</h2>{{if .Connected}}<span class="pill on">connected</span><p><code>{{.CanvasOrigin}}</code></p>{{if .CanvasUser}}<p>Signed in as <b>{{.CanvasUser}}</b></p>{{end}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" class="small">Test connection</button></form>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a>{{if .Connected}}<details class="forget"><summary>Forget token on this computer</summary><form method="post" action="/canvas/forget"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="confirm" required> Yes, remove it. I can reconnect later.</label><button type="submit" class="small danger">Remove token</button></form></details>{{end}}</div>
-<div class="card"><h2>Program</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>Code only. Nothing private is stored here.</p></div>
-<div class="card"><h2>Workspace</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Private data: students, settings, courses.</p>{{else}}<span class="pill off">none</span><p>Choose your synced workspace folder below.</p>{{end}}</div>
+<div class="card"><h2>Engine (program folder)</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>The machinery plus the starter Playbook. Nothing private.</p></div>
+<div class="card"><h2>Your workspace</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Your Playbook and student information.</p>{{else}}<span class="pill off">none</span><p>Choose your synced workspace folder below.</p>{{end}}</div>
 </div>
 <label for="path">Workspace folder (your synced, private one)</label>
 <div class="inline"><form method="post" action="/browse"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Browse&hellip;</button></form>
 <form class="inline" method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><input id="path" name="path" type="text" placeholder="or paste a full folder path" autocomplete="off" required><button type="submit">Use it</button></form></div>
 <p>Pick any folder, even a new empty one. If it isn't a workspace yet, the starter files are created for you.</p>
 {{if .Preferences}}<div class="card"><h2>Student aliases</h2><form method="post" action="/settings"><input type="hidden" name="request_secret" value="{{.Secret}}"><label><input type="checkbox" name="aliases" {{if .Aliases}}checked{{end}}> Use aliases in student work files</label><button type="submit">Save settings</button></form></div>{{end}}
-{{if .Root}}<div class="card voice"><h2>Feedback voice</h2><p>The agent reads this every time it writes feedback or scores work. Plain sentences are fine.</p><form method="post" action="/grading"><input type="hidden" name="request_secret" value="{{.Secret}}">
+{{if .Root}}<div class="card voice"><h2>Feedback voice</h2><p><span class="pill">Part of your Playbook</span></p><p>The agent reads this every time it writes feedback or scores work. Plain sentences are fine.</p><form method="post" action="/grading"><input type="hidden" name="request_secret" value="{{.Secret}}">
 <label for="voice">How feedback should sound</label><textarea id="voice" name="voice" rows="4" maxlength="8000" placeholder="Warm and encouraging, short sentences a 7th grader can read. Start with one glow, then one grow. Use their first name.">{{.Voice}}</textarea>
 <label for="feedback_guidance">Grading habits and rubric preferences</label><textarea id="feedback_guidance" name="feedback_guidance" rows="6" maxlength="8000" placeholder="Don't take off points for spelling in CS8. Accept late work without comment. Quote one line from their work when praising it.">{{.FeedbackGuidance}}</textarea>
-<button type="submit">Save feedback voice</button></form></div>{{end}}</main></html>`))
+<button type="submit">Save feedback voice</button></form></div>{{end}}{{if .Playbook}}<div class="card voice"><h2>Your Playbook</h2><p>The files the agent follows, compared with this program version's starter copy.</p><ul class="playbook">{{range .Playbook}}<li><code>{{.Path}}</code> {{if eq .State "same"}}<span class="pill same">same as this version</span>{{else if eq .State "missing"}}<span class="pill off">missing</span>{{else}}<span class="pill differs">yours / differs</span> <small>differs from this version's starter copy</small>{{end}}{{if .Replaceable}}<details class="forget"><summary>Get the new version</summary><form method="post" action="/playbook/replace"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="file" value="{{.Path}}"><label class="check"><input type="checkbox" name="confirm" required> Replace my copy. Keep my old one in playbook-old.</label><button type="submit" class="small danger">Replace file</button></form></details>{{end}}</li>{{end}}</ul></div>{{end}}</main></html>`))
 
 type homeData struct {
 	Secret, Message, Notice, CanvasOrigin, Root string
@@ -64,6 +65,7 @@ type homeData struct {
 	Preferences, Aliases                        bool
 	Students, Monitored                         int
 	CanvasUser, Voice, FeedbackGuidance         string
+	Playbook                                    []playbookRow
 }
 
 type pickResult struct {
@@ -96,6 +98,9 @@ type Hub struct {
 	forgetFn      func() error
 	// canvasUser is the account name from the last successful connection test.
 	canvasUser string
+	// seedNotice reports starter files added when the hub opened the remembered
+	// workspace; Home shows it once.
+	seedNotice string
 	mu            sync.Mutex
 	root          string
 	setup         *setupHandler
@@ -124,6 +129,21 @@ func (h *Hub) setRoot(root string) {
 	h.root = root
 	h.loaded = nil
 	h.rememberRoot()
+}
+
+// addMissingSeed copies any Playbook seed file the workspace lacks (never
+// overwrites) and returns a teacher-facing notice, empty when nothing changed.
+// A failure is reported in the notice and never blocks opening the workspace.
+func addMissingSeed(root string) string {
+	added, err := workspace.Scaffold(root, embedded.WorkspaceTemplate, "workspace-template")
+	var notice string
+	if len(added) > 0 {
+		notice = "Added from the new program version: " + strings.Join(added, ", ") + "."
+	}
+	if err != nil {
+		notice += " Could not add some starter files: " + err.Error()
+	}
+	return strings.TrimSpace(notice)
 }
 
 func (h *Hub) headers(w http.ResponseWriter) {
@@ -161,6 +181,9 @@ func (h *Hub) checkPost(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (h *Hub) home(w http.ResponseWriter, status int, message, notice string) {
+	if notice == "" {
+		notice, h.seedNotice = h.seedNotice, ""
+	}
 	data := h.pageData()
 	data.Message, data.Notice = message, notice
 	h.render(w, status, homeTemplate, data)
@@ -180,6 +203,7 @@ func (h *Hub) pageData() homeData {
 				}
 			}
 		}
+		data.Playbook = playbookRows(h.root)
 		if g, _, err := readGrading(h.root); err == nil {
 			data.Voice, data.FeedbackGuidance = g.Voice, g.FeedbackGuidance
 		}
@@ -290,6 +314,10 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.coursesPage(w, r)
 	case "/grading":
 		h.saveGrading(w, r)
+	case "/how":
+		h.howPage(w, r)
+	case "/playbook/replace":
+		h.replacePlaybook(w, r)
 	case "/canvas/test":
 		h.testCanvas(w, r)
 	case "/canvas/forget":
@@ -343,7 +371,7 @@ func (h *Hub) chooseWorkspace(w http.ResponseWriter, raw string, confirmed bool)
 	}
 	if root, err := workspace.ResolveRoot(path, ""); err == nil {
 		h.setRoot(root)
-		h.settings(w, 200, "", "Workspace set.")
+		h.settings(w, 200, "", strings.TrimSpace("Workspace set. "+addMissingSeed(root)))
 		return
 	}
 	info, err := os.Stat(path)
@@ -448,6 +476,7 @@ func RunHub(ctx context.Context, root, version string, output io.Writer) error {
 		if b, err := os.ReadFile(hub.stateFile); err == nil {
 			if remembered, err := workspace.ResolveRoot(strings.TrimSpace(string(b)), ""); err == nil && !platform.Overlaps(remembered, hub.programDir) {
 				hub.root = remembered
+				hub.seedNotice = addMissingSeed(remembered)
 			}
 		}
 	}

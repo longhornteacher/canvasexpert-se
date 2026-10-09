@@ -72,7 +72,7 @@ func TestMarkdownHTMLSafeSubsetAndHTMLText(t *testing.T) {
 }
 
 func TestSyntheticExamplesMatchDocumentSchemas(t *testing.T) {
-	root := filepath.Join("..", "..", "workspace-template", "examples")
+	root := filepath.Join("..", "..", "engine-docs", "examples")
 	for _, name := range []string{
 		"synthetic-assignment-create.md",
 		"synthetic-results-two.md",

@@ -1,3 +1,5 @@
+**Completed 2026-10-09:** Tasks 1-7 done on dev; tests, vet and package pass.
+
 # CE-SE: two folders, Engine vs. Playbook
 
 **Handoff date:** 2026-10-09. **Baseline:** `a9608ae` plus the uncommitted working tree from the retired [agent-judgment handoff](../retired/HANDOFF-AGENT-JUDGMENT.md).

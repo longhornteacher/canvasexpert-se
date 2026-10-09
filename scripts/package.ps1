@@ -53,9 +53,7 @@ function Test-TemplatePathAllowed {
         $normalizedPath -eq 'cse.cmd' -or
         $normalizedPath -match '^\.claude/settings\.json$' -or
         $normalizedPath -match '^guides/[A-Za-z0-9._-]+\.md$' -or
-        $normalizedPath -match '^formats/[A-Za-z0-9._-]+\.md$' -or
-        $normalizedPath -match '^settings/(courses|grading|students|school-calendar)\.md$' -or
-        $normalizedPath -match '^examples/[A-Za-z0-9._/-]+\.(md|txt|yaml|yml|json|csv|html)$'
+        $normalizedPath -match '^settings/(courses|grading|students|school-calendar)\.md$'
 }
 
 $studentNotesPath = Join-Path $templateRoot 'settings/students.md'
@@ -123,12 +121,6 @@ try {
         $relativePath = $entry.FullName.Substring($sourcePrefix.Length).Replace('\', '/')
         if (-not (Test-TemplatePathAllowed -RelativePath $relativePath)) {
             throw "Template file is outside the package allowlist: $relativePath"
-        }
-        if ($relativePath.StartsWith('examples/', [StringComparison]::OrdinalIgnoreCase)) {
-            $exampleText = [IO.File]::ReadAllText($entry.FullName)
-            if ($exampleText -notmatch '(?i)synthetic') {
-                throw "Refusing to package an example without an explicit synthetic-data label: $relativePath"
-            }
         }
 
         $destination = [IO.Path]::GetFullPath((Join-Path $stageRoot ($relativePath.Replace('/', $pathSeparator))))

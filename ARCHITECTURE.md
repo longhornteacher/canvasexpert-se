@@ -64,7 +64,7 @@ Keep the existing layout and useful transport, parsing, identity and arithmetic 
 
 ## Workspace and platform
 
-Windows 11, standard user, no installer/admin/runtime requirement for teachers. Go builds a portable executable; platform/distribution checks are ordinary release work, not workspace certifications. Program and synced district workspace are separate. A per-machine program link backs workspace cse.cmd; the embedded starter template adds missing files without overwriting work. Temporary loopback UI exists only while its command runs. No resident service or database.
+Windows 11, standard user, no installer/admin/runtime requirement for teachers. Go builds a portable executable; platform/distribution checks are ordinary release work, not workspace certifications. Program and synced district workspace are separate. A per-machine program link backs workspace cse.cmd; whenever the hub opens a workspace, the embedded Playbook seed adds missing files without overwriting work. Temporary loopback UI exists only while its command runs. No resident service or database.
 
 PAT and Canvas origin live in per-machine Windows Credential Manager. Never expose the PAT in files, logs, output or agent context. Private student mapping stays in .cse/students.csv and out of ordinary agent reads. Stable student references target persisted work; aliases decorate filenames/metadata and remain editable. Real names are allowed in student writing and teacher notes; do not scrub writing. Expand intentional name placeholders only, and keep teacher-only notes out of student feedback.
 

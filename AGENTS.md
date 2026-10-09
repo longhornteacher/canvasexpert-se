@@ -4,6 +4,6 @@ Optimize for the teacher completing the requested task with little friction. Use
 
 Preserve teacher intent and unsent work. Canvas Live is authoritative. Check course/student/attempt identity, protect credentials and teacher-only notes, post the honest computed assessment, keep rubric assessments honest, and respect requested posting scope. Continue independent work when one item cannot proceed and explain that item specifically.
 
-CE-SE has two parts: the **Engine** (Go code in `cmd/`, `internal/`: Canvas access, identity, exact math, safe writes) and the **Playbook** (`workspace-template/` instructions: all judgment). Put judgment in the Playbook, not the Engine.
+CE-SE has two parts: the **Engine** (Go code in `cmd/`, `internal/`: Canvas access, identity, exact math, safe writes) and the **Playbook** (all judgment; `workspace-template/` is the Playbook seed embedded in the Engine, and the Engine's own contract docs, such as the format reference, live with the Engine). Put judgment in the Playbook, not the Engine.
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md) and [SCORING-RULES.md](SCORING-RULES.md). The shipped workspace AGENTS.md is for teacher sessions; the old 0.1b brief is historical.

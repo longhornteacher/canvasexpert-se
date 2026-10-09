@@ -8,3 +8,9 @@ import "embed"
 //
 //go:embed all:workspace-template
 var WorkspaceTemplate embed.FS
+
+// EngineDocs is the format reference and synthetic examples, served by
+// `cse help formats` and `cse help examples` so they always match this Engine.
+//
+//go:embed engine-docs
+var EngineDocs embed.FS
