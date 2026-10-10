@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workflow"
 )
 
@@ -250,7 +249,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not save review notes: "+err.Error(), 500)
 		return
 	}
-	if r.PostForm.Get("action") == "post" {
+	if r.PostForm.Get("action") == "post" && len(out.Approved) > 0 {
 		ctx, cancel := context.WithTimeout(h.ctx, 10*time.Minute)
 		defer cancel()
 		summary, perr := h.post(ctx, skip)
@@ -306,9 +305,7 @@ func Review(ctx context.Context, path string, build func() (workflow.ReviewModel
 		_ = server.Close()
 	}()
 	_, _ = fmt.Fprintf(output, "Open the local review page: %s/review\n", origin)
-	if err = platform.OpenBrowser(origin + "/review"); err != nil {
-		_, _ = fmt.Fprintln(output, "The browser could not open automatically; open the local URL above.")
-	}
+	// The page is not opened for you: the agent shows it in the desktop app's browser pane (or the teacher opens the URL).
 	select {
 	case <-h.done:
 		h.mu.Lock()

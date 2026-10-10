@@ -66,9 +66,21 @@ Prepare the scoring result in the assignment's scoring area using the current ve
 .\cse.cmd post <results-file>
 ```
 
-“Draft” means save the result and do not post. “Show me first” means stop with the result for review. “Score and post” authorizes direct posting. “Pending my finalization” means post directly; the teacher reviews the result afterward without approval polling.
+“Draft” means save the result and do not post. “Score and post” sets the scope of what is posted, and the default is to put the scores through teacher review first (next section). The teacher skips review only by saying so for this task (“just post it”, “skip the review”, “pending my finalization”); then run `post` directly and the teacher reviews in Canvas afterward. Never infer a skip from earlier tasks.
 
 Use the installed Engine's help for exact syntax. Report each student's outcome accurately, including held rows, partial results, and any live change that requires reassessment.
+
+## Review before posting (default)
+
+After `validate` passes, run the review in the background so you are notified when the teacher finishes:
+
+```powershell
+.\cse.cmd review <results-file>
+```
+
+It prints a local address (`http://127.0.0.1:...`). Open that address in the desktop app's browser pane and tell the teacher in one line that the scores are ready to review; nothing is written to Canvas yet. Write no preview, summary or HTML of your own. The page shows each student's exact comment and computed score, calls out held students, and approves everyone by default; the teacher clicks Revise (with a note) on anything to rework and then Post. The command exits when the teacher presses Post approved or Send revisions only, and prints what was posted, which students were sent back with their notes, and which are held. Report that outcome plainly.
+
+Revised students: fix exactly those students in the results file following the teacher's note, change nothing else, then run `.\cse.cmd review <results-file>` again. Students you did not change keep their approval; fixed ones are marked as changed. If the command is interrupted or the teacher says “check revisions”, read the saved notes in `<results-file>.review.json` (items with `"status": "revise"`); the page never loses them. Held students are not blocked on each other: explain each held student specifically and carry on. Only the teacher's own approval on the page authorizes posting from the review; do not run `post` for students who were revised or held.
 
 ## Classic quiz writing
 
@@ -82,4 +94,4 @@ Use the existing lateness judgment guidance above, including the school calendar
 
 Run `validate <results-file>` to check packet/work references, score bounds and the per-question preview. The Engine rounds direct points to two decimals and prefixes each comment with `Assessment: score/maximum`, then preserves your feedback. It posts those comments directly to the questions; Canvas visibility/posting settings still govern whether students see them. This operation writes no assignment rubric assessment or separate submission comment. Students see a question comment as one run-together paragraph, so do not depend on line breaks there (`.\cse.cmd help fields`).
 
-"Draft" saves locally; "show me first" stops for review; "score and post" authorizes `post <results-file>`. Rerun the same results to confirm uncertain outcomes. If read-back still differs, report the specific unresolved question; it is not automatically resent. Fresh explicitly requested reassessment uses a fresh pull/result without inherited outcomes. Do not erase successful saved outcomes as a retry technique. Requested scope can be complete while other unrequested writing remains pending review in Canvas.
+"Draft" saves locally; "show me first" stops for review; "score and post" means run `review <results-file>` first (it also takes Classic results) and post what the teacher approves, or run `post <results-file>` directly only when the teacher skipped review. Rerun the same results to confirm uncertain outcomes. If read-back still differs, report the specific unresolved question; it is not automatically resent. Fresh explicitly requested reassessment uses a fresh pull/result without inherited outcomes. Do not erase successful saved outcomes as a retry technique. Requested scope can be complete while other unrequested writing remains pending review in Canvas.
