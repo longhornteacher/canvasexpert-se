@@ -182,9 +182,9 @@ func TestPushQuizRefusesDuplicateTitleWithoutResumeRecord(t *testing.T) {
 	}
 }
 
-// Probe-pending: these payload shapes are recalled from the New Quizzes Items
-// API and have not been checked against Canvas Live.
-func TestNewQuizWrittenItemsShapeProbePending(t *testing.T) {
+// Canvas Live (CS8, 2026-10-10) rejects both written items without scoring_data
+// ("can't be blank") and accepts {"value": ""}.
+func TestNewQuizWrittenItemsShape(t *testing.T) {
 	body := `{"title":"Mixed","items":[
 		{"id":"M","type":"MC","prompt":"q","points":2,"choices":[{"text":"a","correct":true},{"text":"b"}]},
 		{"id":"E","type":"ESSAY","prompt":"Explain.","points":5,"rubric_hint":"TEACHER ONLY","length_guidance":"TEACHER ONLY","word_limit_max":300},
@@ -203,12 +203,12 @@ func TestNewQuizWrittenItemsShapeProbePending(t *testing.T) {
 	entry := func(i int) map[string]any { return ps[i]["item"].(map[string]any)["entry"].(map[string]any) }
 	essay, up := entry(1), entry(2)
 	data := essay["interaction_data"].(map[string]any)
-	if essay["interaction_type_slug"] != "essay" || essay["scoring_algorithm"] != "None" || essay["scoring_data"] != nil ||
+	if essay["interaction_type_slug"] != "essay" || essay["scoring_algorithm"] != "None" || fmt.Sprint(essay["scoring_data"]) != "map[value:]" ||
 		data["rce"] != true || data["word_limit_enabled"] != true || data["word_limit_max"] != 300 {
 		t.Errorf("essay shape: %v", essay)
 	}
 	data = up["interaction_data"].(map[string]any)
-	if up["interaction_type_slug"] != "file-upload" || up["scoring_algorithm"] != "None" || data["restrict_types"] != true ||
+	if up["interaction_type_slug"] != "file-upload" || up["scoring_algorithm"] != "None" || fmt.Sprint(up["scoring_data"]) != "map[value:]" || data["restrict_types"] != true ||
 		fmt.Sprint(data["valid_types"]) != "[pdf docx]" || data["files_count"] != "1" {
 		t.Errorf("file upload shape: %v", up)
 	}

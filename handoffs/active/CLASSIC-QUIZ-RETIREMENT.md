@@ -1,6 +1,6 @@
 # New Quiz written responses: scoring (open)
 
-**Status, 2026-10-10.** Classic Quizzes are removed from CE-SE for good: the Go code, tests, docs and records are gone (only the `push-quiz` refusal that says they are retired remains), and Canvas had already migrated every Classic quiz to New Quizzes. Written items (`ESSAY`, `FILEUPLOAD` in `push-quiz`) and Hub on New Quizzes are done locally (local tests only; the item payloads are not yet checked against Canvas Live). **The ONLY open item is scoring New Quiz written responses, plus the live probe of the New Quiz essay and file-upload payloads.** Migrated IDs and gradebook columns are not this project's concern.
+**Status, 2026-10-10.** Classic Quizzes are removed from CE-SE for good: the Go code, tests, docs and records are gone (only the `push-quiz` refusal that says they are retired remains), and Canvas had already migrated every Classic quiz to New Quizzes. Written items (`ESSAY`, `FILEUPLOAD` in `push-quiz`) and Hub on New Quizzes are done locally (item payloads probed in CS8 on 2026-10-10, API storage only; see docs/engine-capabilities.md). **The ONLY open item is scoring New Quiz written responses**, plus an optional human Build, then Preview of quiz 3698183 to see the word limits and file types enforced. Migrated IDs and gradebook columns are not this project's concern.
 
 ## Open item: scoring New Quiz written responses
 

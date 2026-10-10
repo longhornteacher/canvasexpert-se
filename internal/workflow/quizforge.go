@@ -459,7 +459,7 @@ func (it qfItem) buildEssay() map[string]any {
 		}
 	}
 	return wrap(map[string]any{"title": it.title("ESSAY"), "item_body": it.Prompt, "interaction_type_slug": "essay",
-		"interaction_data": data, "scoring_algorithm": "None", "feedback": map[string]any{}})
+		"interaction_data": data, "scoring_algorithm": "None", "scoring_data": map[string]any{"value": ""}, "feedback": map[string]any{}})
 }
 
 func (it qfItem) buildFileUpload() map[string]any {
@@ -471,7 +471,7 @@ func (it qfItem) buildFileUpload() map[string]any {
 	}
 	data := map[string]any{"files_count": "1", "restrict_count": false, "restrict_types": len(formats) > 0, "valid_types": formats}
 	return wrap(map[string]any{"title": it.title("FILEUPLOAD"), "item_body": it.Prompt, "interaction_type_slug": "file-upload",
-		"interaction_data": data, "scoring_algorithm": "None", "feedback": map[string]any{}})
+		"interaction_data": data, "scoring_algorithm": "None", "scoring_data": map[string]any{"value": ""}, "feedback": map[string]any{}})
 }
 
 func (it qfItem) buildChoice() map[string]any {
