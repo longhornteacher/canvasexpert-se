@@ -68,7 +68,7 @@ func run(ctx context.Context, args []string) error {
 		selectedState, args = args[1], args[2:]
 	}
 	if len(args) == 0 || args[0] == "help" {
-		fmt.Println("Optional leading --state PATH. Unattended helpers: select --assignment ID | configure-fixture [--assignment ID] [--submission-types online_text_entry,online_upload] | create-module --name '[CSE UNATTENDED] ...' | read-module | submit-file --file SYNTHETIC_PATH. Use a separate state per assignment; configure only unpublished exact named fixtures, then select. select never adopts legacy coursework.")
+		fmt.Println("Optional leading --state PATH. Unattended helpers: select --assignment ID | configure-fixture [--assignment ID] [--submission-types online_text_entry,online_upload] | create-module --name '[CSE UNATTENDED] ...' | read-module | submit-file --file SYNTHETIC_PATH. Read-only field probe: field-read course | image-files | page ID | new-quiz ID | classic-quiz ID | assignment ID ([CSE FIELD PROBE] objects only). Use a separate state per assignment; configure only unpublished exact named fixtures, then select. select never adopts legacy coursework.")
 		fmt.Println("DEV ONLY: cse-probe inspect-test-student | create | attach-rubric | read | submit [--body SYNTHETIC_TEXT] [--submitted-at RFC3339] | submit-as [same flags] | grade [--grade POINTS] [--rubric POINTS] [--comment SYNTHETIC_TEXT] | edit-comment --id ID --text SYNTHETIC_TEXT | couple-association [--enabled=false] | late --status none|late | set-due --at RFC3339 | publish | unpublish | pull [--workspace DEV_ROOT] | post --results RESULTS [--workspace DEV_ROOT] | inspect-state\nHardcoded CS8 course 121046; exact disposable assignment; built-in Test Student only. Publish requires separate teacher authorization and an explicit invocation; no automatic publication. Unpublish may be rejected by Canvas after submissions; no policy workaround. No delete/course-policy commands. State: " + statePath)
 		return nil
 	}
@@ -110,6 +110,8 @@ func run(ctx context.Context, args []string) error {
 	command := args[0]
 	args = args[1:]
 	switch command {
+	case "field-read":
+		return p.fieldRead(ctx, args)
 	case "select":
 		return p.selectFixture(ctx, args)
 	case "configure-fixture":

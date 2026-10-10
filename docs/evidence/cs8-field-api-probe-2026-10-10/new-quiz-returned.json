@@ -1,0 +1,212 @@
+{
+  "children": [
+    {
+      "entry": {
+        "answer_feedback": {
+          "44331b87-9003-43c6-944a-4ff4b38ab0e5": "<p>Plain feedback.</p>",
+          "eb59e8c4-b539-43f7-84fe-0bb36d4a7363": "<strong>bold</strong> <em>em</em> x<sup>2</sup> <code>a &lt; b</code> <a href=\"https://www.python.org/\">link</a>"
+        },
+        "calculator_type": "none",
+        "created_at": "2026-10-10T12:37:23.645Z",
+        "feedback": {},
+        "id": "8780281",
+        "interaction_data": {
+          "choices": [
+            {
+              "id": "eb59e8c4-b539-43f7-84fe-0bb36d4a7363",
+              "item_body": "<strong>bold</strong> <em>em</em> x<sup>2</sup> <code>a &lt; b</code> <a href=\"https://www.python.org/\">link</a>",
+              "position": 1
+            },
+            {
+              "id": "44331b87-9003-43c6-944a-4ff4b38ab0e5",
+              "item_body": "<p>Plain choice</p>",
+              "position": 2
+            }
+          ]
+        },
+        "interaction_type_slug": "choice",
+        "item_body": "<h3>Canary heading three</h3><h4>Canary heading four</h4><p>Paragraph with <strong>strong</strong>, <em>em</em>, <b>b</b>, <i>i</i>, <u>u</u>, x<sup>2</sup>, H<sub>2</sub>O, and inline <code>print(x)</code>.<br>Line after a br.</p><ul>\n<li>Unordered one</li>\n<li>Unordered two</li>\n</ul><ol>\n<li>Ordered one</li>\n<li>Ordered two</li>\n</ol><p><a href=\"/courses/121046/pages/cse-field-probe-page-html-canaries-2026-10-10\">Relative course page link</a> and <a href=\"https://www.python.org/\">external link</a>.</p><table>\n<thead><tr>\n<th>Input</th>\n<th>Output</th>\n</tr></thead>\n<tbody>\n<tr>\n<td>2</td>\n<td>4</td>\n</tr>\n<tr><td colspan=\"2\">Spans both columns</td></tr>\n</tbody>\n</table><p><img src=\"https://inst-fs-iad-prod.inscloudgate.net/files/98f1f310-5c72-4776-841f-cdfda6aa84be/2bears1.png?token=REDACTED\" alt=\"Canary course image\" data-old-link=\"/courses/121046/files/18945746/preview\"></p><p style=\"text-align:center\">Centered with an inline style.</p><p>LaTeX as typed: \\(x^2 + 3x = 10\\)</p><p>Equation image: <img class=\"equation_image\" title=\"x^2\" src=\"/equation_images/x%255E2?scale=1\" alt=\"LaTeX: x^2\" data-equation-content=\"x^2\"></p><pre style=\"background-color:#272822;color:#F8F8F2;padding:12px;border-radius:6px;font-family:Consolas,Monaco,&quot;Courier New&quot;,monospace;font-size:14px;line-height:1.5;overflow-x:auto;white-space:pre;display:block;\"><code><span style=\"color:#66D9EF\">if</span> x <span style=\"color:#F92672\">&lt;</span> <span style=\"color:#AE81FF\">10</span> <span style=\"color:#F92672\">and</span> y <span style=\"color:#F92672\">&gt;</span> <span style=\"color:#AE81FF\">2</span>:\n    print(<span style=\"color:#E6DB74\">\"a &amp; b\"</span>)</code></pre><p>Paragraph with an onclick attribute.</p>",
+        "properties": {
+          "shuffle_rules": {
+            "choices": {
+              "shuffled": false
+            }
+          },
+          "vary_points_by_answer": false
+        },
+        "scoring_algorithm": "Equivalence",
+        "scoring_data": {
+          "value": "eb59e8c4-b539-43f7-84fe-0bb36d4a7363"
+        },
+        "tag_associations": [],
+        "title": "mc_canary",
+        "updated_at": "2026-10-10T12:37:29.248Z"
+      },
+      "entry_editable": true,
+      "entry_type": "Item",
+      "id": "9845010",
+      "points_possible": 1,
+      "position": 1,
+      "properties": {},
+      "status": "mutable",
+      "stimulus_quiz_entry_id": ""
+    },
+    {
+      "entry": {
+        "answer_feedback": {},
+        "calculator_type": "none",
+        "created_at": "2026-10-10T12:37:24.136Z",
+        "feedback": {},
+        "id": "8780282",
+        "interaction_data": {
+          "answers": [
+            "Right <i>one</i>",
+            "Right two"
+          ],
+          "questions": [
+            {
+              "id": "10001",
+              "item_body": "<b>x</b> = 5 & y < 3\nsecond line"
+            },
+            {
+              "id": "10002",
+              "item_body": "Left two"
+            }
+          ]
+        },
+        "interaction_type_slug": "matching",
+        "item_body": "<p>Match each item.</p>",
+        "properties": {
+          "shuffle_rules": {
+            "questions": {
+              "shuffled": false
+            }
+          }
+        },
+        "scoring_algorithm": "DeepEquals",
+        "scoring_data": {
+          "edit_data": {
+            "distractors": [],
+            "matches": [
+              {
+                "answer_body": "Right <i>one</i>",
+                "question_body": "<b>x</b> = 5 & y < 3\nsecond line",
+                "question_id": "10001"
+              },
+              {
+                "answer_body": "Right two",
+                "question_body": "Left two",
+                "question_id": "10002"
+              }
+            ]
+          },
+          "value": {
+            "10001": "Right <i>one</i>",
+            "10002": "Right two"
+          }
+        },
+        "tag_associations": [],
+        "title": "match_canary",
+        "updated_at": "2026-10-10T12:37:24.136Z"
+      },
+      "entry_editable": true,
+      "entry_type": "Item",
+      "id": "9845011",
+      "points_possible": 1,
+      "position": 2,
+      "properties": {},
+      "status": "mutable",
+      "stimulus_quiz_entry_id": ""
+    },
+    {
+      "entry": {
+        "answer_feedback": {},
+        "calculator_type": "none",
+        "created_at": "2026-10-10T12:37:24.640Z",
+        "feedback": {},
+        "id": "8780283",
+        "interaction_data": {
+          "choices": {
+            "342eeba8-dbd8-4817-ae22-6bcfd122ce2d": {
+              "id": "342eeba8-dbd8-4817-ae22-6bcfd122ce2d",
+              "item_body": "Second step"
+            },
+            "6b4161b0-a89e-4322-ab94-5a77ab7594e8": {
+              "id": "6b4161b0-a89e-4322-ab94-5a77ab7594e8",
+              "item_body": "<b>x</b> = 5 &amp; y &lt; 3\nsecond line"
+            },
+            "c7134c82-faf2-4677-8419-0799a25b9d41": {
+              "id": "c7134c82-faf2-4677-8419-0799a25b9d41",
+              "item_body": "Third step"
+            }
+          }
+        },
+        "interaction_type_slug": "ordering",
+        "item_body": "<p>Put these in order.</p>",
+        "properties": {
+          "bottom_label": "Last",
+          "display_answers_paragraph": false,
+          "include_labels": false,
+          "shuffle_rules": null,
+          "top_label": "First"
+        },
+        "scoring_algorithm": "DeepEquals",
+        "scoring_data": {
+          "value": [
+            "6b4161b0-a89e-4322-ab94-5a77ab7594e8",
+            "342eeba8-dbd8-4817-ae22-6bcfd122ce2d",
+            "c7134c82-faf2-4677-8419-0799a25b9d41"
+          ]
+        },
+        "tag_associations": [],
+        "title": "order_canary",
+        "updated_at": "2026-10-10T12:37:24.640Z"
+      },
+      "entry_editable": true,
+      "entry_type": "Item",
+      "id": "9845012",
+      "points_possible": 1,
+      "position": 3,
+      "properties": {},
+      "status": "mutable",
+      "stimulus_quiz_entry_id": ""
+    }
+  ],
+  "object": {
+    "assignment_group_id": "259100",
+    "due_at": null,
+    "grading_type": "points",
+    "id": "3698178",
+    "instructions": "<h3>Canary heading three</h3><h4>Canary heading four</h4><p>Paragraph with <strong>strong</strong>, <em>em</em>, <b>b</b>, <i>i</i>, <u>u</u>, x<sup>2</sup>, H<sub>2</sub>O, and inline <code>print(x)</code>.<br>Line after a br.</p><ul><li>Unordered one</li><li>Unordered two</li></ul><ol><li>Ordered one</li><li>Ordered two</li></ol><p><a href=\"/courses/121046/pages/cse-field-probe-page-html-canaries-2026-10-10\">Relative course page link</a> and <a href=\"https://www.python.org/\">external link</a>.</p><table><thead><tr><th>Input</th><th>Output</th></tr></thead><tbody><tr><td>2</td><td>4</td></tr><tr><td colspan=\"2\">Spans both columns</td></tr></tbody></table><p><img src=\"/courses/121046/files/18945746/preview\" alt=\"Canary course image\"></p><p style=\"text-align:center\">Centered with an inline style.</p><p>LaTeX as typed: \\(x^2 + 3x = 10\\)</p><p>Equation image: <img class=\"equation_image\" title=\"x^2\" src=\"/equation_images/x%255E2?scale=1\" alt=\"LaTeX: x^2\" data-equation-content=\"x^2\"></p><pre><code>if x &lt; 10 and y &gt; 2:\n    print(\"a &amp; b\")</code></pre><p>Paragraph with an onclick attribute.</p>",
+    "lock_at": null,
+    "points_possible": 3,
+    "published": false,
+    "quiz_settings": {
+      "allow_backtracking": true,
+      "calculator_type": "none",
+      "filter_ip_address": false,
+      "filters": {},
+      "has_time_limit": false,
+      "multiple_attempts": {},
+      "one_at_a_time_type": "none",
+      "require_student_access_code": false,
+      "result_view_settings": {
+        "display_item_correct_answer": true,
+        "display_item_feedback": true,
+        "display_item_response": true,
+        "display_item_response_correctness": true,
+        "display_item_response_qualifier": "after_last_attempt",
+        "display_items": true,
+        "display_points_awarded": true,
+        "display_points_possible": true,
+        "result_view_restricted": true
+      },
+      "session_time_limit_in_seconds": 0,
+      "shuffle_answers": true,
+      "shuffle_questions": false,
+      "student_access_code": null
+    },
+    "title": "[CSE FIELD PROBE] New Quiz HTML canaries 2026-10-10",
+    "unlock_at": null
+  }
+}

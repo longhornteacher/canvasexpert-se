@@ -1,0 +1,43 @@
+{
+  "description": "<h3>Canary heading three</h3><h4>Canary heading four</h4><p>Paragraph with <strong>strong</strong>, <em>em</em>, <b>b</b>, <i>i</i>, <u>u</u>, x<sup>2</sup>, H<sub>2</sub>O, and inline <code>print(x)</code>.<br>Line after a br.</p><ul><li>Unordered one</li><li>Unordered two</li></ul><ol><li>Ordered one</li><li>Ordered two</li></ol><p><a href=\"/courses/121046/pages/cse-field-probe-page-html-canaries-2026-10-10\">Relative course page link</a> and <a href=\"https://www.python.org/\">external link</a>.</p><table><thead><tr><th>Input</th><th>Output</th></tr></thead><tbody><tr><td>2</td><td>4</td></tr><tr><td colspan=\"2\">Spans both columns</td></tr></tbody></table><p><img src=\"/courses/121046/files/18945746/preview\" alt=\"Canary course image\"></p><p style=\"text-align:center\">Centered with an inline style.</p><p>LaTeX as typed: \\(x^2 + 3x = 10\\)</p><p>Equation image: <img class=\"equation_image\" title=\"x^2\" src=\"/equation_images/x%255E2?scale=1\" alt=\"LaTeX: x^2\" data-equation-content=\"x^2\"></p><pre><code>if x &lt; 10 and y &gt; 2:\n    print(\"a &amp; b\")</code></pre><p onclick=\"alert(1)\">Paragraph with an onclick attribute.</p><script>alert(1)</script>",
+  "questions": [
+    {
+      "question": {
+        "answers": [
+          {
+            "answer_comment_html": "<strong>bold</strong> <em>em</em> x<sup>2</sup> <code>a &lt; b</code> <a href=\"https://www.python.org/\">link</a>",
+            "answer_html": "<strong>bold</strong> <em>em</em> x<sup>2</sup> <code>a &lt; b</code> <a href=\"https://www.python.org/\">link</a>",
+            "answer_weight": 100
+          },
+          {
+            "answer_comment_html": "<p>Plain feedback.</p>",
+            "answer_text": "Plain choice",
+            "answer_weight": 0
+          }
+        ],
+        "points_possible": 1,
+        "question_name": "mc_canary",
+        "question_text": "<h3>Canary heading three</h3><h4>Canary heading four</h4><p>Paragraph with <strong>strong</strong>, <em>em</em>, <b>b</b>, <i>i</i>, <u>u</u>, x<sup>2</sup>, H<sub>2</sub>O, and inline <code>print(x)</code>.<br>Line after a br.</p><ul><li>Unordered one</li><li>Unordered two</li></ul><ol><li>Ordered one</li><li>Ordered two</li></ol><p><a href=\"/courses/121046/pages/cse-field-probe-page-html-canaries-2026-10-10\">Relative course page link</a> and <a href=\"https://www.python.org/\">external link</a>.</p><table><thead><tr><th>Input</th><th>Output</th></tr></thead><tbody><tr><td>2</td><td>4</td></tr><tr><td colspan=\"2\">Spans both columns</td></tr></tbody></table><p><img src=\"/courses/121046/files/18945746/preview\" alt=\"Canary course image\"></p><p style=\"text-align:center\">Centered with an inline style.</p><p>LaTeX as typed: \\(x^2 + 3x = 10\\)</p><p>Equation image: <img class=\"equation_image\" title=\"x^2\" src=\"/equation_images/x%255E2?scale=1\" alt=\"LaTeX: x^2\" data-equation-content=\"x^2\"></p><pre style='background-color:#272822;color:#F8F8F2;padding:12px;border-radius:6px;font-family:Consolas,Monaco,\"Courier New\",monospace;font-size:14px;line-height:1.5;overflow-x:auto;white-space:pre;display:block;'><code><span style='color:#66D9EF'>if</span> x <span style='color:#F92672'>&lt;</span> <span style='color:#AE81FF'>10</span> <span style='color:#F92672'>and</span> y <span style='color:#F92672'>&gt;</span> <span style='color:#AE81FF'>2</span>:\n    print(<span style='color:#E6DB74'>&#34;a &amp; b&#34;</span>)</code></pre><p onclick=\"alert(1)\">Paragraph with an onclick attribute.</p><script>alert(1)</script>",
+        "question_type": "multiple_choice_question"
+      }
+    },
+    {
+      "question": {
+        "answers": [
+          {
+            "answer_match_left": "<b>x</b> = 5 & y < 3\nsecond line",
+            "answer_match_right": "Right <i>one</i>"
+          },
+          {
+            "answer_match_left": "Left two",
+            "answer_match_right": "Right two"
+          }
+        ],
+        "points_possible": 1,
+        "question_name": "match_canary",
+        "question_text": "<p>Match each item.</p>",
+        "question_type": "matching_question"
+      }
+    }
+  ]
+}

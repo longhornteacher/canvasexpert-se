@@ -91,3 +91,4 @@ Stop when each "Yes" row above has an API read-back verdict (kept, rewritten, st
 ## Record of the first run
 
 - 2026-10-10, CS8 (course 121046): one unpublished Page 2266154, created through the Canvas editor and left for inspection. There were no student writes.
+- 2026-10-10, CS8, API probe through `cse`: unpublished New Quiz 3698178, Classic quiz 483151 (assignment 3698179), and assignment 3698180, left for inspection. There were no student writes. See [the API probe report](../../docs/canvas-field-api-probe-2026-10-10.md). The human glance at the canaries is still pending.
