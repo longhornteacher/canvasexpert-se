@@ -7,7 +7,12 @@ func SEExpansion() string { return "Special Edition" }
 // under a no-script content security policy), so every effect is animation or
 // transform only and honours prefers-reduced-motion.
 // hubNav is the navigation bar shown on every page when served by the hub.
-const hubNav = `<nav aria-label="Main navigation"><a href="/">Home</a><a href="/how">How it works</a><a href="/setup">Canvas</a><a href="/courses">Courses</a><a href="/students">Students</a><a href="/settings">Settings</a><a href="/capabilities">Capabilities</a></nav>`
+const hubNav = `<nav class="hub-nav" aria-label="Main navigation">
+<a href="/">Home</a>
+<details><summary>Classroom</summary><div class="nav-menu"><a href="/courses">Courses</a><a href="/students">Students</a></div></details>
+<details><summary>Settings</summary><div class="nav-menu"><a href="/settings">Settings</a><a href="/setup">Canvas connection</a></div></details>
+<details><summary>Guide</summary><div class="nav-menu"><a href="/how">How it works</a><a href="/capabilities">Capabilities</a></div></details>
+</nav>`
 
 const funkyCSS = `
 :root{--ink:#1b0b3a;--pink:#ff3ea5;--lime:#c6ff3d;--cyan:#27e1ff;--sun:#ffd23f;--grape:#7a3cff}
@@ -41,8 +46,23 @@ td input{box-shadow:3px 3px 0 var(--grape);padding:.45rem .6rem}
 code,.ref{font-family:Consolas,monospace;font-size:.82rem;background:var(--ink);color:var(--lime);padding:.1rem .45rem;border-radius:.4rem}
 nav{display:flex;flex-wrap:wrap;gap:.6rem;margin:0 0 1.2rem}
 nav a{color:var(--ink);text-decoration:none;text-transform:uppercase;letter-spacing:.1em;font-size:.82rem;padding:.3rem .9rem;background:var(--cyan);border:3px solid var(--ink);border-radius:2rem;box-shadow:3px 3px 0 var(--ink);transition:transform .1s,background .2s}
-nav a:nth-child(2){background:var(--lime)}nav a:nth-child(3){background:var(--cyan)}nav a:nth-child(4){background:var(--sun)}nav a:nth-child(5){background:var(--pink)}nav a:nth-child(6){background:var(--grape);color:#fff}
 nav a:hover{transform:translate(-2px,-2px) rotate(-3deg);background:var(--sun)}
+.hub-nav{position:relative;align-items:flex-start}
+.hub-nav details{position:relative}
+.hub-nav details[open]{z-index:10}
+.hub-nav summary{list-style:none;cursor:pointer;color:var(--ink);text-transform:uppercase;letter-spacing:.1em;font-size:.82rem;padding:.3rem .9rem;border:3px solid var(--ink);border-radius:2rem;box-shadow:3px 3px 0 var(--ink);transition:transform .1s,background .2s}
+.hub-nav summary::-webkit-details-marker{display:none}
+.hub-nav summary::after{content:" ▾"}
+.hub-nav details[open] summary::after{content:" ▴"}
+.hub-nav > details:nth-of-type(1) summary{background:var(--lime)}
+.hub-nav > details:nth-of-type(2) summary{background:var(--sun)}
+.hub-nav > details:nth-of-type(3) summary{background:var(--pink)}
+.hub-nav > a:hover,.hub-nav summary:hover{transform:translate(-2px,-2px) rotate(-3deg);background:var(--sun)}
+.hub-nav a:focus-visible,.hub-nav summary:focus-visible{outline:3px solid var(--grape);outline-offset:4px}
+.hub-nav .nav-menu{position:absolute;z-index:5;top:calc(100% + .5rem);left:0;min-width:13rem;padding:.45rem;background:#fff;border:3px solid var(--ink);border-radius:.8rem;box-shadow:5px 5px 0 var(--ink)}
+.hub-nav > details:last-child .nav-menu{left:auto;right:0}
+.hub-nav .nav-menu a{display:block;margin:.2rem 0;padding:.4rem .65rem;border:0;border-radius:.5rem;background:#fbf4ff;box-shadow:none;white-space:nowrap}
+.hub-nav .nav-menu a:hover{transform:none;background:var(--sun)}
 .course-tabs{border-bottom:4px solid var(--ink);padding:.6rem .2rem 1rem;margin-top:1.2rem}
 nav.course-tabs a{background:#fbf4ff;color:var(--ink)}
 .course-tabs a[aria-current=page]{background:var(--lime);color:var(--ink);box-shadow:5px 5px 0 var(--grape);transform:translateY(-3px)}
@@ -122,4 +142,5 @@ ul.playbook{list-style:none;margin:.6rem 0 0;padding:0}ul.playbook li{margin:.7r
 .done{text-align:center}.done h1{font-size:3rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media (max-width:40rem){main{padding:1.4rem 1.1rem}h1{font-size:1.8rem}}
+@media (max-width:40rem){.hub-nav > a,.hub-nav details{flex:1 1 9rem}.hub-nav summary{text-align:center}.hub-nav .nav-menu,.hub-nav > details:last-child .nav-menu{position:static;min-width:0;margin-top:.5rem}.hub-nav .nav-menu a{white-space:normal}}
 `
