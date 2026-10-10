@@ -69,3 +69,17 @@ Prepare the scoring result in the assignment's scoring area using the current ve
 “Draft” means save the result and do not post. “Show me first” means stop with the result for review. “Score and post” authorizes direct posting. “Pending my finalization” means post directly; the teacher reviews the result afterward without approval polling.
 
 Use the installed Engine's help for exact syntax. Report each student's outcome accurately, including held rows, partial results, and any live change that requires reassessment.
+
+## Classic quiz writing
+
+Use `pull-work <course> <backing-assignment-id>` for a Classic quiz; the target is its backing assignment, not a quiz URL or quiz name. Recognize `classic-quiz-packet` and `classic-quiz-work`. Automatic discovery uses `unhandled_question_ids` to identify unfinished writing; honor the teacher's narrower student/question scope. Explicit pulls include completed work for requested reassessment.
+
+Read `context/grading.md` for voice and habits and the work's private student notes. Judge actual essay/upload responses against their prompts and the official assignment rubric when present; explain a consistent question/rubric mapping in private `scoring_notes`. Question maxima establish the scale. Return direct honest question scores and concise feedback in `classic-quiz-results`; do not invent equal weighting, average only answered questions, preserve a higher entered score, or change objective points. Omitted students/questions are untouched. Canvas calculates the quiz total; do not supply a total, fudge points, or assignment grade.
+
+A returned empty required response is an academic judgment (`evidence: missing` with an explicit score and comment); absent or unreadable API evidence is not zero. Preserve attachments and use another reading tool when helpful. `evidence: unknown` has no score/comment and requires an actionable private `teacher_note`; that question holds while independent ready work proceeds. Earlier attempts are read-only evidence. Select the strongest preceding academic work from its contents, and report missing prior evidence without inventing a comparison.
+
+Use the existing lateness judgment guidance above, including the school calendar, first genuine submission, documented accommodations, and the current live `effective_due_at`. Do not double an extension already reflected in that date. Optional `late_timing` is separate from question actions. Private context, scoring rationale, teacher notes, prior-comparison basis and timing basis stay out of student feedback.
+
+Run `validate <results-file>` to check packet/work references, score bounds and the per-question preview. The Engine rounds direct points to two decimals and prefixes each comment with `Assessment: score/maximum`, then preserves your feedback. It posts those comments directly to the questions; Canvas visibility/posting settings still govern whether students see them. This operation writes no assignment rubric assessment or separate submission comment.
+
+"Draft" saves locally; "show me first" stops for review; "score and post" authorizes `post <results-file>`. Rerun the same results to confirm uncertain outcomes. If read-back still differs, report the specific unresolved question; it is not automatically resent. Fresh explicitly requested reassessment uses a fresh pull/result without inherited outcomes. Do not erase successful saved outcomes as a retry technique. Requested scope can be complete while other unrequested writing remains pending review in Canvas.

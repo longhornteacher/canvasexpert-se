@@ -196,6 +196,13 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			setPhase("discovery")
 			report.Assignments = append(report.Assignments, PullAssignmentSummary{Course: course.Nickname, AssignmentID: a.ID, Title: a.Name})
 			summary := &report.Assignments[len(report.Assignments)-1]
+			if a.QuizID != nil && *a.QuizID > 0 {
+				setPhase("fetch")
+				if e := s.pullClassicWork(ctx, course, a, students, active, courseRoster, notes, query != "", builtin, &report, summary); e != nil {
+					return report, e
+				}
+				continue
+			}
 			if reason := UnsupportedAssignment(a); reason != "" {
 				summary.SkipReason = reason
 				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, reason))
@@ -429,23 +436,30 @@ func (s *Service) attemptWork(ctx context.Context, relDir, ref string, sub Submi
 			w.RubricAssessment = append(w.RubricAssessment, domain.CriterionScore{CriterionID: key, Points: *p, RatingID: r.RatingID, Comment: r.Comments})
 		}
 	}
-	for _, a := range sub.Attachments {
+	var e error
+	w.Attachments, e = s.downloadAttachments(ctx, relDir, ref, sub.Attempt, sub.Attachments)
+	return w, e
+}
+
+func (s *Service) downloadAttachments(ctx context.Context, relDir, ref string, attempt int, attachments []Attachment) ([]domain.Attachment, error) {
+	var items []domain.Attachment
+	for _, a := range attachments {
 		name := a.Filename
 		if name == "" {
 			name = a.DisplayName
 		}
 		item := domain.Attachment{ID: a.ID, Name: name, Status: "unreadable", Reason: "unsupported attachment format; original preserved"}
-		rel := filepath.Join(relDir, "attachments", ref, fmt.Sprintf("attempt-%d", sub.Attempt), fmt.Sprintf("%d-%s", a.ID, workspace.SafeFilename(name)))
+		rel := filepath.Join(relDir, "attachments", ref, fmt.Sprintf("attempt-%d", attempt), fmt.Sprintf("%d-%s", a.ID, workspace.SafeFilename(name)))
 		path, e := workspace.ConstrainPath(s.Root, rel)
 		if e != nil {
-			return w, e
+			return items, e
 		}
 		if e = os.MkdirAll(filepath.Dir(path), 0755); e != nil {
-			return w, e
+			return items, e
 		}
 		f, e := os.CreateTemp(filepath.Dir(path), ".cse-download-*")
 		if e != nil {
-			return w, e
+			return items, e
 		}
 		tmp := f.Name()
 		e = s.Client.Download(ctx, a.URL, f)
@@ -457,18 +471,18 @@ func (s *Service) attemptWork(ctx context.Context, relDir, ref string, sub Submi
 			os.Remove(tmp)
 			item.Status = "failed"
 			item.Reason = e.Error()
-			w.Attachments = append(w.Attachments, item)
+			items = append(items, item)
 			continue
 		}
 		if e = os.Rename(tmp, path); e != nil {
 			os.Remove(tmp)
-			return w, e
+			return items, e
 		}
 		item.Path = filepath.ToSlash(rel)
 		if strings.HasPrefix(a.ContentType, "text/") || plainTextExtension(name) {
 			b, e := os.ReadFile(path)
 			if e != nil {
-				return w, e
+				return items, e
 			}
 			if utf8.Valid(b) && !bytes.ContainsRune(b, 0) {
 				readable := string(b)
@@ -478,10 +492,10 @@ func (s *Service) attemptWork(ctx context.Context, relDir, ref string, sub Submi
 				textRel := rel + ".readable.txt"
 				textPath, e := workspace.ConstrainPath(s.Root, textRel)
 				if e != nil {
-					return w, e
+					return items, e
 				}
 				if e = workspace.WriteFile(textPath, []byte(readable), 0644); e != nil {
-					return w, e
+					return items, e
 				}
 				item.ReadablePath = filepath.ToSlash(textRel)
 				item.Status = "readable"
@@ -490,9 +504,9 @@ func (s *Service) attemptWork(ctx context.Context, relDir, ref string, sub Submi
 				item.Reason = "text is not valid UTF-8 or contains NUL bytes; original preserved"
 			}
 		}
-		w.Attachments = append(w.Attachments, item)
+		items = append(items, item)
 	}
-	return w, nil
+	return items, nil
 }
 func plainTextExtension(name string) bool {
 	switch strings.ToLower(filepath.Ext(name)) {

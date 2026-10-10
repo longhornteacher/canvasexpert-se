@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"fmt"
 
 	"canvasexpertse/internal/domain"
 )
@@ -20,31 +21,34 @@ func timingMatches(sub Submission, t domain.LateTiming) bool {
 // postLate writes the lateness the agent worked out. The Engine only checks that
 // the attempt and due date are still the ones the agent used.
 func (s *Service) postLate(ctx context.Context, doc domain.ResultsDocument, userID int64, g *domain.GradeOperation, save func() error) error {
-	hold := func(message string) error { holdOutcome(&g.Outcomes.Late, message); return save() }
-	target := g.LateTiming
+	return s.postLateTiming(ctx, doc.Assignment, userID, g.Attempt, g.LateTiming, &g.Outcomes.Late, save)
+}
+
+func (s *Service) postLateTiming(ctx context.Context, assignment domain.AssignmentSnapshot, userID int64, attempt domain.AttemptRef, target *domain.LateTiming, outcome *domain.ActionOutcome, save func() error) error {
+	hold := func(message string) error { holdOutcome(outcome, message); return save() }
 	if target == nil {
 		return nil
 	}
-	live, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, userID)
+	live, e := GetSubmission(ctx, s.Client, assignment.CourseID, assignment.AssignmentID, userID)
 	if e != nil {
 		return hold(e.Error())
 	}
-	if !sameAttempt(g.Attempt, attemptRef(live)) {
+	if !sameAttempt(attempt, attemptRef(live)) {
 		return hold("new submission before late timing adjustment")
 	}
 	if live.CachedDueDate == nil || !sameDate(live.CachedDueDate, &target.DueAt) {
 		return hold("due date changed since the agent worked out lateness; redo timing")
 	}
 	if timingMatches(live, *target) {
-		g.Outcomes.Late = domain.ActionOutcome{Status: "preserved", Message: "requested lateness timing is present"}
+		*outcome = domain.ActionOutcome{Status: "preserved", Message: "requested lateness timing is present"}
 		return save()
 	}
-	if ambiguous(g.Outcomes.Late) {
-		g.Outcomes.Late.Status = "uncertain"
-		g.Outcomes.Late.Message = "late timing completion remains uncertain; different live timing is not proof of failure"
+	if ambiguous(*outcome) {
+		outcome.Status = "uncertain"
+		outcome.Message = "late timing completion remains uncertain; different live timing is not proof of failure"
 		return save()
 	}
-	g.Outcomes.Late = domain.ActionOutcome{Status: "pending"}
+	*outcome = domain.ActionOutcome{Status: "pending"}
 	if e = save(); e != nil {
 		return e
 	}
@@ -53,13 +57,13 @@ func (s *Service) postLate(ctx context.Context, doc domain.ResultsDocument, user
 		fields["seconds_late_override"] = target.SecondsLate
 	}
 	var response Submission
-	e = s.Client.Write(ctx, "PUT", submissionPath(doc, userID), map[string]any{"submission": fields}, &response)
+	e = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions/%d", assignment.CourseID, assignment.AssignmentID, userID), map[string]any{"submission": fields}, &response)
 	if e != nil {
-		g.Outcomes.Late = failedOutcome(e)
-	} else if sameAttempt(g.Attempt, attemptRef(response)) && timingMatches(response, *target) {
-		g.Outcomes.Late = domain.ActionOutcome{Status: "succeeded"}
+		*outcome = failedOutcome(e)
+	} else if sameAttempt(attempt, attemptRef(response)) && timingMatches(response, *target) {
+		*outcome = domain.ActionOutcome{Status: "succeeded"}
 	} else {
-		g.Outcomes.Late = domain.ActionOutcome{Status: "uncertain", Message: "response did not confirm requested timing on intended attempt"}
+		*outcome = domain.ActionOutcome{Status: "uncertain", Message: "response did not confirm requested timing on intended attempt"}
 	}
 	return save()
 }

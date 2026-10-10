@@ -341,6 +341,17 @@ func (c *Client) Get(ctx context.Context, path string, out any) error {
 
 // List collects every page atomically; a failed page leaves out unchanged.
 func (c *Client) List(ctx context.Context, path string, out any) error {
+	return c.list(ctx, path, "", out)
+}
+
+// ListField collects a named array envelope using the same pagination rules.
+func (c *Client) ListField(ctx context.Context, path, field string, out any) error {
+	if field == "" {
+		return &Error{Kind: "validation"}
+	}
+	return c.list(ctx, path, field, out)
+}
+func (c *Client) list(ctx context.Context, path, field string, out any) error {
 	v := reflect.ValueOf(out)
 	if v.Kind() != reflect.Ptr || v.IsNil() || v.Elem().Kind() != reflect.Slice {
 		return &Error{Kind: "validation"}
@@ -364,7 +375,18 @@ func (c *Client) List(ctx context.Context, path string, out any) error {
 			// Relative pagination references belong to the URL that produced
 			// this response, including a permitted same-origin redirect.
 			pageURL = resp.Request.URL
-			return readJSON(resp, &items)
+			if field == "" {
+				return readJSON(resp, &items)
+			}
+			var envelope map[string]json.RawMessage
+			if e := readJSON(resp, &envelope); e != nil {
+				return e
+			}
+			raw := bytes.TrimSpace(envelope[field])
+			if len(raw) == 0 || raw[0] != '[' || json.Unmarshal(raw, &items) != nil {
+				return &Error{Kind: "validation"}
+			}
+			return nil
 		})
 		if err != nil {
 			return err

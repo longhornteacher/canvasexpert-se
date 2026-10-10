@@ -290,3 +290,29 @@ func TestCanceledReadAndInvalidPathSendNothing(t *testing.T) {
 		t.Fatal("invalid request sent")
 	}
 }
+
+func TestListFieldEnvelopePagination(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "2" {
+			_, _ = io.WriteString(w, `{"quiz_submissions":[{"id":2}]}`)
+			return
+		}
+		w.Header().Set("Link", `<?page=2>; rel="next"`)
+		_, _ = io.WriteString(w, `{"quiz_submissions":[{"id":1}]}`)
+	}))
+	defer server.Close()
+	c := testClient(t, server)
+	var rows []struct{ ID int }
+	if e := c.ListField(context.Background(), "/api/v1/quizzes/1/submissions", "quiz_submissions", &rows); e != nil || len(rows) != 2 || rows[1].ID != 2 {
+		t.Fatalf("rows=%v error=%v", rows, e)
+	}
+	for _, body := range []string{`{}`, `{"quiz_submissions":null}`, `{"quiz_submissions":{}}`} {
+		bad := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, body) }))
+		e := testClient(t, bad).ListField(context.Background(), "/api/v1/quizzes/1/submissions", "quiz_submissions", &rows)
+		bad.Close()
+		requireKind(t, e, "validation")
+		if len(rows) != 2 {
+			t.Fatal("failed response changed output")
+		}
+	}
+}

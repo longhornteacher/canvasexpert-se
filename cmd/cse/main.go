@@ -17,6 +17,7 @@ import (
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/localui"
 	"canvasexpertse/internal/platform"
+	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 )
 
@@ -214,13 +215,13 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		p, e := documentPath(root, args[0])
 		if e == nil {
-			e = validateDocument(p)
+			e = validateDocument(p, root)
 		}
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
 		fmt.Fprintf(out, "Valid document: %s\n", p)
-		previewResults(p, out)
+		previewResults(p, out, root)
 		return 0
 	}
 	return runRemote(ctx, root, cmd, args, out, progress)
@@ -253,7 +254,30 @@ func documentPath(root, name string) (string, error) {
 
 // previewResults prints each student's computed assessment and late timing so the
 // agent can show the teacher a preview without posting.
-func previewResults(path string, out io.Writer) {
+func previewResults(path string, out io.Writer, roots ...string) {
+	if len(roots) > 0 {
+		if rows, e := workflow.ClassicPreview(roots[0], path); e == nil {
+			for _, row := range rows {
+				for _, q := range row.Questions {
+					if q.Score == nil || q.Outcome.Status == "held" {
+						fmt.Fprintf(out, "%s | %d | %d | held: %s\n", row.StudentRef, row.Attempt.Attempt, q.QuestionID, compact(q.Outcome.Message))
+					} else {
+						fmt.Fprintf(out, "%s | %d | %d | %s/%s\n", row.StudentRef, row.Attempt.Attempt, q.QuestionID, q.Score.String(), q.PointsPossible.String())
+					}
+				}
+			}
+			var doc domain.ClassicQuizResults
+			if _, e := workspace.ReadDocument(path, &doc); e == nil {
+				for _, row := range doc.Students {
+					if row.LateTiming != nil {
+						fmt.Fprintf(out, "%s | late: %s\n", row.StudentRef, lateText(*row.LateTiming))
+					}
+				}
+			}
+			return
+		}
+	}
+
 	var doc domain.ResultsDocument
 	if _, e := workspace.ReadDocument(path, &doc); e != nil {
 		return
@@ -287,7 +311,7 @@ func lateText(t domain.LateTiming) string {
 	hours := t.SecondsLate / 3600
 	return fmt.Sprintf("%dd %dh", hours/24, hours%24)
 }
-func validateDocument(path string) error {
+func validateDocument(path string, roots ...string) error {
 	b, e := os.ReadFile(path)
 	if e != nil {
 		return e
@@ -295,6 +319,19 @@ func validateDocument(path string) error {
 	kind, kindErr := workspace.DocumentKind(b)
 	var target any
 	switch kind {
+	case "classic-quiz-packet":
+		target = &domain.ClassicQuizPacket{}
+	case "classic-quiz-work":
+		target = &domain.ClassicQuizWork{}
+	case "classic-quiz-results":
+		if len(roots) == 0 {
+			return fmt.Errorf("workspace root required for Classic source validation")
+		}
+		var doc domain.ClassicQuizResults
+		if _, e := workspace.ReadDocument(path, &doc); e != nil {
+			return e
+		}
+		return workflow.ValidateClassicResults(roots[0], &doc)
 	case "assignment":
 		target = &domain.AssignmentDocument{}
 	case "results":

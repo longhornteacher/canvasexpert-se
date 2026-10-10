@@ -71,3 +71,52 @@ func TestValidateResultsPreviewsComputedAssessmentTimingAndHold(t *testing.T) {
 		t.Fatalf("non-results output changed: %d %s %s", code, out.String(), progress.String())
 	}
 }
+
+func TestClassicExamplesAndUnknownPreview(t *testing.T) {
+	root := t.TempDir()
+	config := domain.CourseConfig{Schema: 1, Instance: "https://canvas.example", Courses: []domain.Course{{Nickname: "TEST", ID: 1}}}
+	if e := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); e != nil {
+		t.Fatal(e)
+	}
+	for _, name := range []string{"classic-writing-packet.md", "classic-writing-work.md", "classic-writing-results.md"} {
+		b, e := os.ReadFile(filepath.Join("..", "..", "engine-docs", "examples", name))
+		if e != nil {
+			t.Fatal(e)
+		}
+		path := filepath.Join(root, "engine-docs", "examples", name)
+		if e = workspace.WriteFile(path, b, 0644); e != nil {
+			t.Fatal(e)
+		}
+		if e = validateDocument(path, root); e != nil {
+			t.Fatalf("example %s: %v", name, e)
+		}
+	}
+	path := filepath.Join(root, "engine-docs", "examples", "classic-writing-results.md")
+	var doc domain.ClassicQuizResults
+	if _, e := workspace.ReadDocument(path, &doc); e != nil {
+		t.Fatal(e)
+	}
+	doc.Students[0].Questions[2].Outcome = domain.ActionOutcome{Status: "uncertain", ID: 504}
+	if e := workspace.WriteDocument(path, &doc, "synthetic example"); e != nil {
+		t.Fatal(e)
+	}
+	var out, progress bytes.Buffer
+	if code := run(context.Background(), []string{"--workspace", root, "validate", "engine-docs/examples/classic-writing-results.md"}, &out, &progress); code != 0 {
+		t.Fatal(code, progress.String())
+	}
+	for _, want := range []string{"s-synthetic-classic | 2 | 502 | 7.5/10", "s-synthetic-classic | 2 | 503 | 0/5", "s-synthetic-classic | 2 | 504 | held:", "s-synthetic-classic | late: 1d 0h"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatal(want, out.String())
+		}
+	}
+	// Source errors are rejected at the command boundary before credential access.
+	doc.Students[0].Questions[0].QuestionID = 999
+	if e := workspace.WriteDocument(path, &doc, ""); e != nil {
+		t.Fatal(e)
+	}
+	out.Reset()
+	progress.Reset()
+	if code := run(context.Background(), []string{"--workspace", root, "post", "engine-docs/examples/classic-writing-results.md"}, &out, &progress); code != 2 || strings.Contains(progress.String(), "credential") {
+		t.Fatal(code, progress.String())
+	}
+}

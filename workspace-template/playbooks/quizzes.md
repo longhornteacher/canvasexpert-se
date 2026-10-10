@@ -28,7 +28,7 @@ Report the quiz URL, the point total, and whether it is published. New Quizzes c
 
 ## Classic quizzes (written work in the same quiz)
 
-When the quiz must hold writing (essay or file upload) alongside auto-scored items, set `"quiz_engine": "classic"`. Classic cannot hold ordering or categorization items, FITB word banks, or case-sensitive/fuzzy FITB; the Engine refuses them with a message, so offer the closest supported type. Run the same `push-quiz` command. A Classic quiz resumes when the same file is rerun; if the quiz was deleted in Canvas, delete the `.cse.json` sidecar to start over. Scoring a Classic quiz's essays is not part of the Engine yet.
+When the quiz must hold writing (essay or file upload) alongside auto-scored items, set `"quiz_engine": "classic"`. Classic cannot hold ordering or categorization items, FITB word banks, or case-sensitive/fuzzy FITB; the Engine refuses them with a message, so offer the closest supported type. Run the same `push-quiz` command. A Classic quiz resumes when the same file is rerun; if the quiz was deleted in Canvas, delete the `.cse.json` sidecar to start over. To score Classic essay/file-upload responses, use the Classic section of `score.md`: pull the quiz's backing assignment ID, assess its question work, validate, and post the selected question scores/comments. Canvas owns objective scores and quiz totals.
 
 ## Differentiated hub for a Classic quiz
 
