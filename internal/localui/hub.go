@@ -375,7 +375,7 @@ func (h *Hub) chooseWorkspace(w http.ResponseWriter, raw string, confirmed bool)
 		h.settings(w, 400, "Use a full folder path such as C:\\Users\\you\\OneDrive\\Workspace.", "")
 		return
 	case !platform.SeparateFrom(path, h.programDir):
-		h.settings(w, 400, "The workspace and the program must be separate folders (or the program must be the workspace's own engine folder). Pick your workspace, not the program folder or one containing it.", "")
+		h.settings(w, 400, "That folder overlaps the Engine's own folder. Pick your workspace: the folder that contains engine, not engine itself.", "")
 		return
 	}
 	if root, err := workspace.ResolveRoot(path, ""); err == nil {
@@ -477,7 +477,7 @@ func RunHub(ctx context.Context, root, version string, output io.Writer) error {
 	}
 	switch {
 	case root != "" && !platform.SeparateFrom(root, hub.programDir):
-		_, _ = fmt.Fprintln(output, "Ignoring that workspace: it overlaps the program folder. Choose a separate workspace in the hub.")
+		_, _ = fmt.Fprintln(output, "Ignoring that workspace: it overlaps the Engine's folder. Choose your workspace in the hub.")
 	case root != "":
 		hub.root = root
 		hub.rememberRoot()

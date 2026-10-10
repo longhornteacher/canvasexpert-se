@@ -12,7 +12,7 @@ Load only the playbook you need:
 
 ## Reaching the Engine
 
-The playbooks write Engine commands as `.\cse.cmd <command>`; run them from this folder on the teacher's Windows computer. The Engine is in `engine\` (or, for a workspace kept in a synced folder, in a separate program folder this computer is linked to).
+The playbooks write Engine commands as `.\cse.cmd <command>`; run them from this folder on the teacher's Windows computer. The Engine is in `engine\`.
 
 If you can read this folder but can't run commands on the teacher's computer (for example a cloud sandbox), tell the teacher plainly that this app can't run CanvasExpert-SE yet. As a stopgap you may do the reading, judging and file writing yourself and give the teacher each exact command to paste into a terminal opened at this folder. Never reproduce the Engine's work (Canvas access, student matching, arithmetic, posting) some other way.
 

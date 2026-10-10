@@ -61,7 +61,7 @@ Skip this section if step 1 showed a cloud sandbox, but try 3.1 anyway to captur
 
 ## 4. Can its browser reach the local hub?
 
-1. Double-click `webui.cmd` in the program folder yourself. Copy the hub address from your browser.
+1. Double-click `webui.cmd` in your CanvasExpert-SE folder yourself. Copy the hub address from your browser.
 2. Paste:
    > Open <hub address> in your browser and tell me the titles of the cards on the page.
    - Result: Did it load, or fail with something like "can't reach localhost" or "blocked"?

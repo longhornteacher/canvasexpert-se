@@ -13,7 +13,6 @@ $distRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'dist'))
 # Single-folder package: the starter workspace with the Engine in engine\. Extracting it
 # with Windows' Extract All gives a CanvasExpert-SE folder the teacher points the agent at.
 $packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE.zip'))
-$programPackagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE-Program-0.1b-windows-amd64.zip'))
 $pathSeparator = [IO.Path]::DirectorySeparatorChar
 
 if (-not (Test-Path -LiteralPath $templateRoot -PathType Container)) {
@@ -145,7 +144,7 @@ try {
     }
     New-Item -ItemType Directory -Path (Join-Path $stageRoot 'engine') | Out-Null
     Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $stageRoot 'engine/cse.exe')
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'program-template/workspace-webui.cmd') -Destination (Join-Path $stageRoot 'webui.cmd')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/package-webui.cmd') -Destination (Join-Path $stageRoot 'webui.cmd')
     $expectedEntries.Add('engine/cse.exe')
     $expectedEntries.Add('webui.cmd')
 
@@ -206,35 +205,6 @@ try {
     $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "Packaged $packagePath"
     Write-Host "SHA256 $hash"
-
-    # Separate program package for a synced workspace that keeps the program elsewhere.
-    # Executable, hub launcher and a short README. No private or workspace files.
-    $programStageRoot = [IO.Path]::GetFullPath((Join-Path $tempRoot "$stageName-program"))
-    if (-not $programStageRoot.StartsWith($stagePrefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Program staging path is outside the system temp directory: $programStageRoot"
-    }
-    New-Item -ItemType Directory -Path $programStageRoot | Out-Null
-    Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $programStageRoot 'cse.exe')
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'program-template/webui.cmd') -Destination (Join-Path $programStageRoot 'webui.cmd')
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'program-template/README.txt') -Destination (Join-Path $programStageRoot 'README.txt')
-    $programExpected = @('cse.exe', 'webui.cmd', 'README.txt')
-    $programZipTemp = Join-Path $distRoot (".CanvasExpert-SE-program-$([Guid]::NewGuid().ToString('N')).zip")
-    New-PortableZip -SourceDirectory $programStageRoot -DestinationPath $programZipTemp
-    $programArchive = [IO.Compression.ZipFile]::OpenRead($programZipTemp)
-    try {
-        $programFiles = @($programArchive.Entries | ForEach-Object { $_.FullName.TrimEnd('/') } | Where-Object { $_ -ne '' } | Sort-Object)
-        if (($programFiles -join "`n") -cne (($programExpected | Sort-Object) -join "`n")) {
-            throw 'Program archive file list does not match the allowlist.'
-        }
-    }
-    finally {
-        $programArchive.Dispose()
-    }
-    if (Test-Path -LiteralPath $programPackagePath -PathType Leaf) { Remove-Item -LiteralPath $programPackagePath -Force }
-    Move-Item -LiteralPath $programZipTemp -Destination $programPackagePath
-    Remove-Item -LiteralPath $programStageRoot -Recurse -Force
-    Write-Host "Packaged $programPackagePath"
-    Write-Host "SHA256 $((Get-FileHash -LiteralPath $programPackagePath -Algorithm SHA256).Hash.ToLowerInvariant())"
 }
 finally {
     if (Test-Path -LiteralPath $zipTempFullPath -PathType Leaf) {

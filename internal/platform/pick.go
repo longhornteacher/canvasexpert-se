@@ -29,7 +29,7 @@ $owner.Show()
 [void][Fg]::SetForegroundWindow($owner.Handle)
 $owner.Activate()
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = 'Choose your synced CanvasExpert-SE workspace folder. Private data lives there, so pick a folder that is not the program folder.'
+$dialog.Description = 'Choose your CanvasExpert-SE workspace folder.'
 $dialog.ShowNewFolderButton = $true
 if ($dialog.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.SelectedPath }
 $owner.Dispose()

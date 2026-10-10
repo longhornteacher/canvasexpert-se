@@ -20,8 +20,8 @@ func LocalDir() (string, error) {
 	return filepath.Join(base, "CanvasExpert-SE"), nil
 }
 
-// LinkProgram records where this machine's cse executable lives so a synced
-// workspace's cse.cmd can find it without containing the program.
+// LinkProgram records where this machine's cse executable lives so the cse.cmd
+// of a workspace without its own engine folder can find it.
 func LinkProgram() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -51,7 +51,7 @@ func LinkedProgram() (string, error) {
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "program.txt"))
 	if err != nil {
-		return "", errors.New("no program is linked on this machine; run webui.cmd in the program folder")
+		return "", errors.New("no Engine is linked on this machine; open the hub with webui.cmd once")
 	}
 	return strings.TrimSpace(string(b)), nil
 }

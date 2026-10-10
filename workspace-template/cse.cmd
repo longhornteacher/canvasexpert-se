@@ -1,7 +1,7 @@
 @echo off
 rem CanvasExpert-SE workspace launcher. Runs the Engine against THIS workspace:
-rem the copy in this folder's engine\ if there is one, otherwise the program this
-rem computer is linked to (for a synced workspace that keeps the program elsewhere).
+rem the copy in this folder's engine\ if there is one, otherwise the Engine the
+rem hub last ran from on this computer (for a workspace the hub created elsewhere).
 rem Usage:  .\cse.cmd COMMAND [ARGS]     e.g.  .\cse.cmd --help   .\cse.cmd setup
 setlocal
 set "CSE_EXE=%~dp0engine\cse.exe"
@@ -15,6 +15,6 @@ if not exist "%CSE_EXE%" goto missing
 exit /b %ERRORLEVEL%
 :missing
 echo The CanvasExpert-SE program was not found. 1>&2
-echo This folder has no engine\cse.exe, and this computer is not linked to a program folder. 1>&2
-echo Unzip the full CanvasExpert-SE download again, or double-click webui.cmd in your program folder once. 1>&2
+echo This folder has no engine\cse.exe, and the hub has not run on this computer. 1>&2
+echo Unzip the full CanvasExpert-SE download again. 1>&2
 exit /b 4
