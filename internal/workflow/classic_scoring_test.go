@@ -458,3 +458,23 @@ func TestClassicTimingSeparateFromQuestionOutcomes(t *testing.T) {
 		})
 	}
 }
+
+func TestPostLeavesSkippedStudentsUntouched(t *testing.T) {
+	s, f := newClassicFixture(t)
+	path := classicResultFile(t, s, 5)
+	var doc domain.ClassicQuizResults
+	if _, e := workspace.ReadDocument(path, &doc); e != nil {
+		t.Fatal(e)
+	}
+	s.Skip = map[string]bool{doc.Students[0].StudentRef: true}
+	if _, e := s.Post(context.Background(), path); e != nil {
+		t.Fatal(e)
+	}
+	if f.puts != 0 {
+		t.Fatal("a skipped student must not be written")
+	}
+	s.Skip = nil
+	if report, e := s.Post(context.Background(), path); e != nil || f.puts != 1 || report.QuizStudents[0].Status != "completed" {
+		t.Fatal("skipped student must still post later", report, e, f.puts)
+	}
+}

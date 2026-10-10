@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 )
 
@@ -108,6 +109,14 @@ func TestClassicExamplesAndUnknownPreview(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Fatal(want, out.String())
 		}
+	}
+	cards, e := workflow.BuildReview(root, path)
+	if e != nil || len(cards.Cards) != 1 {
+		t.Fatal(e, cards)
+	}
+	card := cards.Cards[0]
+	if len(card.Lines) != 3 || card.Lines[0].Score != "7.5 / 10" || card.Lines[2].Hold == "" || card.Late == "" || card.Digest == "" {
+		t.Fatalf("%+v", card)
 	}
 	// Source errors are rejected at the command boundary before credential access.
 	doc.Students[0].Questions[0].QuestionID = 999

@@ -43,6 +43,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   validate FILE                 Validate a workspace document locally
   doctor                        Test native dummy credential round trip
   version                       Print version and build information
+  review RESULTS-FILE  Open a local page where the teacher reviews scores, revises some, and posts the approved ones; exits when finished and prints what was posted, revised and held
   help [formats|fields|examples] Print this help, the file-format reference, Canvas field limits, or the synthetic examples (no Canvas requests)
 
 COURSE is an explicit nickname in context/courses.md. FILE paths are relative
@@ -195,7 +196,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "push": true, "pull-item": true, "pull-work": true, "post": true, "push-quiz": true, "validate": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "push": true, "pull-item": true, "pull-work": true, "post": true, "review": true, "push-quiz": true, "validate": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}

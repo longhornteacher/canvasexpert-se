@@ -12,13 +12,14 @@ import (
 
 	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/localui"
 	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "push-quiz": {2, 2}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 1}, "push-quiz": {2, 2}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -34,7 +35,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 		file = p
 	}
-	if cmd == "push" || cmd == "post" {
+	if cmd == "push" || cmd == "post" || cmd == "review" {
 		p, e := documentPath(root, args[0])
 		if e != nil {
 			return fail(inputError(e), progress)
@@ -173,6 +174,44 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		fmt.Fprintf(progress, "Discovery: %s, %d HTTP requests; fetch/download: %s, %d HTTP requests\n", report.DiscoveryElapsed.Round(time.Millisecond), report.DiscoveryRequests, report.FetchElapsed.Round(time.Millisecond), report.FetchRequests)
 		if e != nil {
 			return fail(e, progress)
+		}
+	case "review":
+		outcome, e := localui.Review(ctx, file, func() (workflow.ReviewModel, error) { return workflow.BuildReview(root, file) }, func(ctx context.Context, skip map[string]bool) (string, error) {
+			service.Skip = skip
+			report, e := service.Post(ctx, file)
+			failed := 0
+			for _, r := range report.Students {
+				if r.Status != "completed" && r.Status != "succeeded" && !skip[r.StudentRef] {
+					failed++
+				}
+			}
+			for _, r := range report.QuizStudents {
+				if r.Status != "completed" && !skip[r.StudentRef] {
+					failed++
+				}
+			}
+			summary := fmt.Sprintf("%d approved student(s) did not fully complete; run cse validate/post output or rerun review", failed)
+			if failed == 0 {
+				summary = "all approved students completed"
+			}
+			return summary, e
+		}, progress)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		fmt.Fprintf(out, "Review finished. Posted: %t\n", outcome.Posted)
+		if outcome.Posted {
+			fmt.Fprintln(out, "Post:", outcome.PostSummary)
+		}
+		fmt.Fprintf(out, "Approved (%d): %s\n", len(outcome.Approved), strings.Join(outcome.Approved, ", "))
+		for _, r := range outcome.Revise {
+			fmt.Fprintf(out, "Revise %s: %s\n", r.Ref, r.Note)
+		}
+		for _, h := range outcome.Held {
+			fmt.Fprintln(out, "Held", h)
+		}
+		if len(outcome.Revise) > 0 {
+			fmt.Fprintln(out, "Revision notes are saved beside the results file; fix those students, then run cse review again.")
 		}
 	case "post":
 		report, e := service.Post(ctx, file)

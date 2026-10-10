@@ -193,6 +193,9 @@ func (s *Service) postClassicResults(ctx context.Context, path string) (report P
 	identities := map[string]workspace.Student{}
 	complete := true
 	for _, row := range doc.Students {
+		if s.Skip[row.StudentRef] {
+			continue
+		}
 		st, e := store.Resolve(s.Client.Origin(), row.StudentRef)
 		if e != nil {
 			return report, e
@@ -222,7 +225,7 @@ func (s *Service) postClassicResults(ctx context.Context, path string) (report P
 		if row.LateTiming == nil {
 			row.LateOutcome = domain.ActionOutcome{Status: "not-requested"}
 		}
-		if classicStudentComplete(*row) {
+		if classicStudentComplete(*row) || s.Skip[row.StudentRef] {
 			continue
 		}
 		if !basisMatches {

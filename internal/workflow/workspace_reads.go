@@ -17,6 +17,8 @@ type Service struct {
 	Root   string
 	Client *canvas.Client
 	Config domain.CourseConfig
+	// Skip lists student refs post must leave untouched (review: not approved).
+	Skip map[string]bool
 }
 
 func (s *Service) Course(nickname string) (domain.Course, error) {

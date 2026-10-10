@@ -112,7 +112,7 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 	for i := range doc.Students {
 		r := &doc.Students[i]
 		v := validated[i]
-		if resultComplete(*r) {
+		if resultComplete(*r) || s.Skip[r.StudentRef] {
 			report.Students = append(report.Students, postReport(*r))
 			continue
 		}
@@ -250,7 +250,7 @@ func (s *Service) postSources(doc domain.ResultsDocument) (map[string]postSource
 	}
 	sources := map[string]postSource{}
 	for _, r := range doc.Students {
-		if resultComplete(r) {
+		if resultComplete(r) || s.Skip[r.StudentRef] {
 			continue
 		}
 		st, e := store.Resolve(s.Client.Origin(), r.StudentRef)
