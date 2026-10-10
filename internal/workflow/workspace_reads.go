@@ -105,7 +105,9 @@ func (s *Service) PullItem(ctx context.Context, nickname, query string) (string,
 	if err != nil {
 		return "", err
 	}
-	if reason := UnsupportedAssignment(a); reason != "" {
+	// A New Quiz is pulled only so a rubric can be attached; PlanEdit refuses
+	// updates to it.
+	if reason := UnsupportedAssignment(a); reason != "" && !a.NewQuiz {
 		return "", fmt.Errorf("assignment %d: %s", a.ID, reason)
 	}
 	snapshot, err := Snapshot(a, s.Client.Origin())

@@ -1,18 +1,22 @@
-# New Quiz written work: whole-quiz feedback (plan)
+# New Quiz written work: rubric-scored feedback (plan)
 
-2026-10-10. **Teacher decision:** for now CE-SE gives **whole-quiz commentary** on New Quiz written work. **The teacher enters the per-item points** in SpeedGrader. CE-SE writes no item scores, no rubric assessment and no grade for these quizzes. This replaces the earlier five-question probe plan (item-score writes, rubric carrier, overall-grade honesty, participant fixtures): none of it is needed for this scope. The rubric pre-check result stays on record in `docs/engine-capabilities.md`.
+2026-10-10. **Teacher decisions:** CE-SE gives each student a **feedback comment that includes the agent's rubric scores** for the written items (ECR/SCR), visible to the student; that information matters to them. **The teacher enters the item points** in SpeedGrader. A rubric attached to the New Quiz is important for ECR/SCRs: `pull-item` + `attach-rubric` now supports New Quiz assignments (local tests; see `docs/engine-capabilities.md`). Item-score writes stay out of scope (no public API). Writing the rubric assessment onto the New Quiz submission is question C below. The rubric pre-check result stays on record in `docs/engine-capabilities.md`.
+
+**Probe target:** CS8 New Quiz assignment **3698192** (https://pearland.instructure.com/courses/121046/assignments/3698192), made and assigned by the teacher, **waiting for a student response**. Nothing below runs until that response exists.
 
 ## What the feature is
 
-The teacher asks the agent to look at students' written responses in a New Quiz and leave feedback. The agent reads each response, assesses it, and the teacher reviews on the review page. Post writes one **submission comment per student** on the quiz's assignment, in the teacher's voice, and nothing else. No grade is touched. Review-before-post still applies, and `SCORING-RULES.md` still governs the comment text (honest, no invented points).
+The teacher asks the agent to look at students' written responses in a New Quiz and leave feedback. The agent reads each response, assesses it, and the teacher reviews on the review page. Post writes one **submission comment per student** on the quiz's assignment, in the teacher's voice: the computed rubric assessment and compact per-criterion scores first (the same order as assignment feedback), then glows and grows. No grade is touched. Review-before-post still applies, and `SCORING-RULES.md` governs the scores (honest, real criteria, exact arithmetic). The scoring basis is the attached Canvas rubric when present; otherwise the agent builds `scoring_basis` from each written item's `rubric_hint` in the quiz file the Engine recorded (`<quiz-file>.cse.json` links the quiz to its file), so the rubric written at authoring time drives scoring. Because the teacher enters item points separately, the review page should show the comment's scores next to each response so the teacher can type them in.
 
-## Two questions the Engine needs answered
+## Questions the Engine needs answered
 
-Both run against a **real New Quiz that already has student responses**; neither needs a fixture, a participant, or a publish.
+A and B run against a **real New Quiz that already has student responses**; neither needs a fixture, a participant, or a publish.
 
 **A. Can CE-SE read the responses?** Read-only, teacher's real quiz. Try, cheapest first: (a) REST submissions on the quiz assignment with `include[]=submission_history`; (b) the Student Analysis report, JSON (`POST /api/quiz/v1/courses/:c/quizzes/:a/reports`, then poll); (c) GraphQL on the submission. Record per source: essay text present, file-upload response present and downloadable, attempt number, student identity, errors. If none returns the written text, stop: the fallback is feedback from responses the teacher pastes in.
 
 **B. Does an ordinary submission comment work on a New Quiz submission?** The teacher approves one specific comment on one specific real submission; it is the normal REST comment the Engine already posts for assignments. Check it lands on the intended attempt, shows in SpeedGrader, and that the quiz grade is untouched. The teacher can delete it afterwards in SpeedGrader. Skip B if the teacher prefers: it is the same call the Engine already makes for assignments, so the risk is only quiz-specific attempt targeting.
+
+**C. Can a rubric assessment be written on a New Quiz submission without touching the quiz grade?** Only if A succeeds and the quiz has an attached rubric (independent, `use_for_grading` false). One teacher-approved assessment on one real submission; read back the rubric assessment and confirm the quiz score is unchanged. If it fails or moves the score, the comment alone carries the rubric scores.
 
 ## Prior art (original CanvasExpert)
 
@@ -24,15 +28,15 @@ The original concluded Canvas has **no public API for writing New Quiz item scor
 ## Engine changes if A succeeds
 
 - `UnsupportedAssignment` (`internal/workflow/canvas_reads.go`) currently skips every quiz assignment ("quizzes aren't supported yet"). New Quiz assignments (submission type `external_tool`, `is_quiz_lti_assignment`) need a **comment-only** path: pull written responses (per attempt, with student identity checks), and a results mode that posts comments and never a grade. The existing grade-posting assignment path stays as is.
-- Playbook: when to use this (New Quiz written items), that the teacher enters item points, and that CE-SE never claims a score for these quizzes.
+- Playbook: when to use this (New Quiz written items), the rubric source (Canvas rubric, else `rubric_hint`), that the comment shows the rubric scores, and that the teacher enters item points in SpeedGrader.
 - Capabilities page and `docs/engine-capabilities.md` updated together, with evidence levels kept apart.
 
 ## Rules
 
-Read-only against the teacher's real quizzes until the teacher approves a specific comment. Probes go through `cse` and `cse-probe`, not the OG `canvas-expert` MCP. A temporary diagnostic program may print status and body only, never the token or student names, and is deleted afterwards. No grade, rubric or item-score writes in this scope.
+Read-only against the teacher's real quizzes until the teacher approves a specific comment. Probes go through `cse` and `cse-probe`, not the OG `canvas-expert` MCP. A temporary diagnostic program may print status and body only, never the token or student names, and is deleted afterwards. No grade or item-score writes in this scope; a rubric assessment write only as question C, on one approved submission.
 
 ## Teacher input needed
 
-The course and name or ID of one real New Quiz that has written (essay or upload) responses, for question A.
+None for now: quiz 3698192 is the target once a student responds. Tell the agent when it has a response.
 
 Optional, independent of A and B: open probe quiz 3698183 (CS8, unpublished) in Build, then Preview, to see whether students get the word limits and accepted file types enforced. Record the result on the Capabilities page and in `docs/engine-capabilities.md`.

@@ -15,7 +15,7 @@ import (
 
 func reviewModelFixture() workflow.ReviewModel {
 	return workflow.ReviewModel{Kind: "Assignment scores", Title: "Essay", Cards: []workflow.ReviewCard{
-		{Ref: "s-a", Attempt: 1, Total: "9 / 10", Comment: "Assessment: 9 / 10\n\nNice <b>work</b>", TeacherNote: "private-note", Digest: "d1"},
+		{Ref: "s-a", Attempt: 1, Total: "9 / 10", Comment: "Assessment: 9 / 10\n\nNice <b>work</b>", TeacherNote: "private-note", Late: "late 1d 3h", LateBasis: "skipped Mon 10/12 holiday", Digest: "d1"},
 		{Ref: "s-b", Attempt: 1, Total: "5 / 10", Comment: "Needs more", Digest: "d2"},
 		{Ref: "s-c", Attempt: 1, Hold: "unreadable evidence", Digest: "d3"},
 	}}
@@ -50,7 +50,7 @@ func TestReviewPageShowsPlainTextAndMarksPrivateNotes(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/review", nil))
 	body := w.Body.String()
-	if w.Code != 200 || !strings.Contains(body, "Nice &lt;b&gt;work&lt;/b&gt;") || !strings.Contains(body, "Teacher only (not posted)") || !strings.Contains(body, "Held, will not post: unreadable evidence") {
+	if w.Code != 200 || !strings.Contains(body, "Nice &lt;b&gt;work&lt;/b&gt;") || !strings.Contains(body, "Teacher only (not posted)") || !strings.Contains(body, "skipped Mon 10/12 holiday") || !strings.Contains(body, "Held, will not post: unreadable evidence") {
 		t.Fatal(body)
 	}
 }

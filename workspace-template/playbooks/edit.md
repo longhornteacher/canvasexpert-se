@@ -1,31 +1,21 @@
 # Edit an existing assignment
 
-Canvas Live is authoritative. Pull the current assignment before proposing or applying an edit so the draft begins with current HTML, settings, rubric, and identity.
+Canvas Live is authoritative, so always start from a fresh pull. What the teacher's words mean and the review page are in `AGENTS.md`.
 
-## Pull and edit
-
-Use the configured course nickname and a unique title or Canvas link:
+## Pull, edit, push
 
 ```powershell
 .\cse.cmd pull-item <course> <title-or-link>
 ```
 
-If more than one assignment matches, choose using the returned candidates with the teacher. Do not guess. Edit the pulled document while preserving its version, assignment identity, observed revision details, and fields the teacher did not ask to change. Preserve Canvas HTML carefully.
+If several assignments match, choose from the returned candidates with the teacher; don't guess. Edit the pulled file, changing only what the teacher asked. Keep its identity, `observed` baseline and the Canvas HTML you aren't changing.
 
-## Push the update
+Then `.\cse.cmd review <pulled-file>` (or, when review is skipped, `.\cse.cmd push <pulled-file>`). The review page reads Canvas at that moment and shows, for each changed field, what is in Canvas now and what it becomes. If Canvas changed those fields since your pull, it says so in red and nothing can be applied: pull again and reapply the edit to the new version. `push` rechecks the same way and keeps your unsent edit when it holds.
 
-After making the requested changes, use the current build's help to confirm syntax, then run:
+## Attach a rubric
 
-```powershell
-.\cse.cmd push <pulled-file>
-```
+Use this when the teacher wants a new rubric on an assignment or New Quiz that has none (for a quiz, typically its ECR/SCR written items). Pull it, confirm the pulled `observed` has no rubric, change only `operation` to `attach-rubric`, and add `rubric` with `use_for_grading: false` and its criteria, maxima, descriptions and any ratings. Use local keys for the new criteria and ratings; Canvas assigns real IDs. Then `push` the file; rubric attachments don't go through the review page, but if the rubric design is an open question, show it in a preview first.
 
-The update rechecks the live item before writing and sends the requested fields while preserving unrelated current fields. A live change to the content being replaced can require a fresh pull; keep the unsent edit and reapply it to the new version.
+For a New Quiz, build criteria from each written item's `rubric_hint` in the quiz file when there is one, and make each item's criteria total that item's points so rubric scores match what the teacher enters in SpeedGrader. A pulled New Quiz accepts only `attach-rubric`; the Engine refuses any other edit to it, so change quiz content in Canvas.
 
-## Attach a rubric to an assignment without one
-
-When the teacher requests a new rubric on an existing assignment, first pull the assignment and confirm its `observed` baseline has no rubric. Keep the pulled identity, title, points, submission types, dates, publication state, observed baseline, and exact HTML body. Change only `operation` to `attach-rubric` and add the desired `rubric` with `use_for_grading: false`. Supply its criteria, maxima, descriptions, and any ratings; local keys identify newly authored criteria/ratings, while Canvas assigns their live IDs. Then run the same `push <pulled-file>` command.
-
-This operation creates an independent rubric association and preserves the assignment's existing point scale and settings, including publication. It refuses an already attached rubric and does not edit a shared rubric or toggle an existing grading setting. Returned rubric/association IDs and outcomes are saved under `created`; retry the same document to resolve an uncertain attachment against its exact live definition. An absent lookup does not authorize another attachment, and replaying a completed attachment performs no remote work. Pull again before scoring so the packet contains Canvas's real criterion/rating IDs.
-
-“Show me first” means prepare the edit and stop before pushing. A direct request to update sets what gets written, and by default you first run `.\cse.cmd review <edit-file>` in the background (for `operation: update`; rubric attachments are not previewed and still push directly). Open the address it prints in the desktop app's browser pane and tell the teacher in one line the edit is ready to review; nothing is written yet. The page reads Canvas just now and shows, for each field that changes, what is in Canvas and what it becomes; if Canvas changed those fields after you pulled, it says so in red and nothing can be applied, so pull again and redo the edit. The teacher clicks Apply edit, or Revise with notes and Send revisions only; on revisions change only what the notes ask and run it again. The teacher skips review by saying so for the task (“just apply it”). Write no preview of your own. Report what succeeded and any held or incomplete work.
+The attachment keeps the assignment's points and settings and never edits or replaces an existing or shared rubric; an assignment that already has one is refused. If the outcome is uncertain, rerun the same file: it resolves against the live rubric and never attaches twice. Pull again before scoring so the packet has Canvas's real criterion and rating IDs.

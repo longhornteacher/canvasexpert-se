@@ -90,6 +90,56 @@ func TestAttachRubricPreservesExistingAssignmentAndCompletedReplay(t *testing.T)
 }
 func decimalNumber(n json.Number) domain.Decimal { return domain.MustDecimal(n.String()) }
 
+func TestNewQuizPullsForRubricAttachmentOnly(t *testing.T) {
+	live := attachmentBaseline()
+	live.NewQuiz = true
+	live.SubmissionTypes = []string{"external_tool"}
+	live.Points = json.Number("15")
+	writes := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/rubrics") {
+			writes++
+			installFixtureRubric(&live)
+			_, _ = w.Write([]byte(`{"rubric":{"id":20},"rubric_association":{"id":30}}`))
+			return
+		}
+		if r.Method != "GET" {
+			t.Errorf("New Quiz attachment wrote assignment settings: %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(live)
+	})
+	path, e := s.PullItem(context.Background(), "TEST", "10")
+	if e != nil {
+		t.Fatal(e)
+	}
+	var doc domain.AssignmentDocument
+	body, e := workspace.ReadDocument(path, &doc)
+	if e != nil {
+		t.Fatal(e)
+	}
+	doc.Title = "Renamed"
+	if e = workspace.WriteDocument(path, doc, body); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Push(context.Background(), path); e == nil || !strings.Contains(e.Error(), "New Quiz") {
+		t.Fatalf("New Quiz update was not refused: %v", e)
+	}
+	doc.Title = live.Name
+	doc.Operation = "attach-rubric"
+	// Matches the fixture rubric Canvas reports back after the POST.
+	doc.Rubric = &domain.Rubric{Title: "Evidence", Criteria: []domain.Criterion{{ID: "draft-quality", Description: "Evidence", Points: domain.MustDecimal("100.0"), Ratings: []domain.Rating{{ID: "draft-full", Description: "Complete", Points: domain.MustDecimal("100")}, {ID: "draft-empty", Description: "Missing", Points: domain.MustDecimal("0")}}}}}
+	if e = workspace.WriteDocument(path, doc, body); e != nil {
+		t.Fatal(e)
+	}
+	report, e := s.Push(context.Background(), path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if report.Status != "completed" || writes != 1 || report.Resources.RubricID != 20 {
+		t.Fatalf("New Quiz rubric not attached: %+v", report)
+	}
+}
+
 func TestAttachRubricUncertainResponseRecoversGeneratedIDsWithoutReplay(t *testing.T) {
 	for _, visible := range []bool{true, false} {
 		t.Run(map[bool]string{true: "visible", false: "absent"}[visible], func(t *testing.T) {

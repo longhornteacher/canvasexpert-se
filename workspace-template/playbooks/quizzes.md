@@ -1,32 +1,31 @@
 # Create a New Quiz
 
-Use this playbook for an auto-scored quiz in Canvas New Quizzes. Written-response work you will grade by hand belongs in an ordinary Assignment (`authoring.md`). Canvas Live is authoritative.
+Use this for any Canvas New Quiz: auto-scored items, written items (`ESSAY`, `FILEUPLOAD`), or a mix such as multiple choice plus constructed responses. What the teacher's words mean and the review page are in `AGENTS.md`.
 
 ## Write the quiz in QuizForge format
 
-Quizzes are authored in the QuizForge v3.0-json format, the same `<QUIZFORGE_JSON>` file QuizForge uses. If the teacher has QuizForge's authoring modules (`QuizForge_Base.md` and the ELA/stimulus references), follow them for question design, rationales, tiers and stimulus use; `.\cse.cmd help formats` ("New Quiz file") lists what this Engine accepts and where it differs. You write the questions, distractors, rationales and points; the Engine handles IDs, scoring structures and the Canvas calls. Differences to remember:
+Write the quiz as a QuizForge v3.0-json file (`<QUIZFORGE_JSON>`). If the teacher has QuizForge's authoring modules (`QuizForge_Base.md` and the ELA/stimulus references), follow them for question design, rationales and stimulus use; `help formats` ("New Quiz file") lists what the Engine accepts and where it differs. You write questions, distractors, rationales and points; the Engine handles IDs, scoring structures and Canvas calls. Save the file in the course's `drafts/` folder.
 
-- Give every scored item an explicit `points` value that the teacher chose or approved. The Engine will not invent points.
+- Give every scored item an explicit `points` value the teacher chose or approved. The Engine won't invent points.
 - Put `stimulus_id` on every item attached to a stimulus, including items inside a STIMULUS..STIMULUS_END span.
-- Keep quiz HTML to what `.\cse.cmd help fields` records as kept; the Engine sends it unfiltered.
-- Show code as `<pre><code>...</code></pre>`; the Engine colors it (Monokai, Python rules; add `class="language-html"` or similar on the `<code>` tag for other languages to keep it uncolored). Put TEKS codes in an item's `metadata.teks`. The Engine adds the label.
-- Quiz and assignment settings (time limit, attempts, due date, publication, module) go in `metadata.canvas`.
-- `ESSAY` and `FILEUPLOAD` items are allowed in a New Quiz (optional `word_limit_min`/`word_limit_max`; `accepted_formats`). Teacher notes such as `rubric_hint` are never sent to students. The teacher grades written responses in SpeedGrader: CE-SE has no score-write path for New Quiz written items yet. Say so when you create one.
+- Keep HTML to what `help fields` records as kept; the Engine sends it unfiltered. Show code as `<pre><code>...</code></pre>` (colored as Python; add `class="language-html"` or similar to leave it uncolored). Put TEKS codes in `metadata.teks`.
+- Quiz settings (time limit, attempts, due date, publication, module) go in `metadata.canvas`.
+- Written items: `ESSAY` takes optional `word_limit_min`/`word_limit_max`; `FILEUPLOAD` takes optional `accepted_formats`. Write a `rubric_hint` for each ECR/SCR: it is never sent to students, and it becomes the quiz rubric and the scoring basis later.
 
-Save the file in the course `drafts/` area.
+## Review and create
 
-## Create or resume
+Run `.\cse.cmd review <quiz-file> <course>`; when the teacher clicks Create, the Engine pushes the quiz. With review skipped, run `.\cse.cmd push-quiz <course> <quiz-file>`. The quiz stays unpublished unless `metadata.canvas.published` is true.
 
-```powershell
-.\cse.cmd push-quiz <course> <quiz-file>
-```
+The Engine records the quiz ID in `<quiz-file>.cse.json`. If it reports `partial`, fix the named problem and rerun the same file; it adds only the missing items. If it refuses because a quiz with that title exists, ask the teacher whether it is an unfinished earlier push (resume it) or a different quiz (rename this one).
 
-"Draft" means write the file and stop. A request to create the quiz sets what gets pushed. Review before creating (default). Before the first create, run `review <quiz-file> <course>` in the background, open the address it prints in the desktop app's browser pane, and tell the teacher in one line that the quiz is ready to review; nothing is written to Canvas yet. Write no preview of your own. The page shows the content as the Engine will write it (HTML fields in sandboxed frames, answer keys behind a teacher-only toggle) and its stated limits; it does not simulate Canvas's student view. The teacher approves and clicks Create, or clicks Revise with notes and Send revisions only. The command exits then and prints what happened; on revisions, change only what the notes ask and run it again.  The teacher skips this by saying so for the task (“just create it”, “skip the review”). Resuming a partially created item does not need a review.  The quiz stays unpublished unless `metadata.canvas.published` is true. The Engine records the quiz ID in `<quiz-file>.cse.json`. If it reports `partial`, fix the named problem and rerun the same file: it adds only the missing items. Do not delete the `.cse.json` file to "retry". If it refuses because a quiz with that title exists, ask the teacher whether it is an unfinished earlier push (resume it) or a different quiz (rename this one).
+## Written items: rubric and grading
+
+When the quiz has ECR/SCR items, offer to attach a rubric after it is created: follow "Attach a rubric" in `edit.md`, building the criteria from the `rubric_hint`s. The teacher enters the points for written items in SpeedGrader; CE-SE can't pull New Quiz responses for scoring yet. Say both when you create the quiz.
 
 ## What to tell the teacher
 
-Report the quiz URL, the point total, and whether it is published. New Quizzes cannot be opened as Canvas's Test Student (it errors), so a student-side check needs the editor's Build, then Preview, or a real enrolled account. The Engine has verified the stored items and settings through the Canvas API, not what a student sees.
+Report the quiz URL, the point total, and whether it is published. New Quizzes can't be opened as Canvas's Test Student, so a student-side check needs the editor's Build, then Preview, or a real enrolled account. The Engine verified the stored items and settings through the Canvas API, not what a student sees.
 
 ## Differentiated hub for a quiz
 
-Hub is the only differentiation style (the Bridge was declined). Use it when the teacher wants tier supports for one whole-class quiz: add `"differentiation": "hub"` and `tiers` (`label`, `tag`, `supports` HTML). In ELA7 the tags are Silver, Red and Blue (Support, Core, Accelerate); put the exact Canvas tag name in each tier's `tag`. Put the shared instructions and hints for everyone in the quiz `instructions`, with one `{{tier:LABEL}}` link per tier. Tier content scaffolds the same standard; it does not lower it. The teacher manages the tags and their members in Canvas. If a tag does not exist, the Engine still creates the page restricted to nobody and prints a teacher action naming the page and tag; relay it. Pages publish only with the quiz. A title collision with an existing page stops the push before anything is created. Students in other tiers see all links but get Canvas's access-denied page for theirs. The links sit in the quiz instructions.
+Use the hub for tier supports around one whole-class quiz: add `"differentiation": "hub"` and `tiers` (`label`, exact Canvas `tag`, `supports` HTML; in ELA7 the tags are Silver, Red, Blue for Support, Core, Accelerate). Put shared instructions and hints in the quiz `instructions`, with one `{{tier:LABEL}}` link per tier. Tier content scaffolds the same standard; it doesn't lower it. If a tag doesn't exist, the page is created restricted to nobody and the Engine prints a teacher action naming the page and tag; relay it. Pages publish only with the quiz. A page title that already exists stops the push before anything is created. Students in other tiers see every link but get Canvas's access-denied page for the others.

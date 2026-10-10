@@ -108,6 +108,7 @@ button.primary{background:#166534;color:#fff;border-color:#166534}.err{backgroun
 {{if .Hold}}<div class="hold">Held: {{.Hold}}</div>{{end}}{{if .Comment}}<div class="comment">{{.Comment}}</div><div class="sub">Canvas shows this to the student as one paragraph.</div>{{end}}
 {{if .TeacherNote}}<div class="private"><b>Teacher only</b><br>{{.TeacherNote}}</div>{{end}}</div>{{end}}
 {{if .TeacherNote}}<div class="private"><b>Teacher only (not posted)</b><br>{{.TeacherNote}}</div>{{end}}
+{{if .LateBasis}}<div class="private"><b>Lateness, teacher only (not posted)</b><br>{{.LateBasis}}</div>{{end}}
 {{if and (not .Hold) (not .Done)}}<div class="choice"><label><input type="radio" name="status_{{.Index}}" value="approved"{{if ne .Status "revise"}} checked{{end}}> Approved</label>
 <label><input type="radio" name="status_{{.Index}}" value="revise"{{if eq .Status "revise"}} checked{{end}}> Revise</label></div>
 <textarea name="note_{{.Index}}" placeholder="What should the agent change?">{{.Note}}</textarea>{{end}}

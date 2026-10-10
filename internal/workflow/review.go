@@ -43,6 +43,7 @@ type ReviewCard struct {
 	Key                   string // teacher-only answer key, shown behind a toggle
 	TeacherNote           string
 	Late                  string
+	LateBasis             string // agent's private lateness reasoning, teacher only
 	Hold                  string // reason this student will not post
 	Done                  bool   // already posted
 	Digest                string
@@ -182,6 +183,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			c.TeacherNote = g.TeacherNote
 			if g.LateTiming != nil {
 				c.Late = lateSummary(*g.LateTiming)
+				c.LateBasis = g.LateTiming.Basis
 			}
 			feedback = g.Feedback
 			if v.Assessment != nil {

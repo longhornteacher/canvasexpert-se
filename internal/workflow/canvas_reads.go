@@ -57,6 +57,7 @@ type Assignment struct {
 	Anonymous       bool        `json:"anonymous_grading"`
 	Moderated       bool        `json:"moderated_grading"`
 	QuizID          *int64      `json:"quiz_id"`
+	NewQuiz         bool        `json:"is_quiz_lti_assignment"`
 	Rubric          []Criterion `json:"rubric"`
 	RubricSettings  struct {
 		ID       int64       `json:"id"`

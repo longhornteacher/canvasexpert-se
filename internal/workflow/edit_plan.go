@@ -23,6 +23,11 @@ func PlanEdit(doc domain.AssignmentDocument, html string) (map[string]any, error
 		return nil, fmt.Errorf("edit requires a freshly pulled assignment")
 	}
 	base := doc.Observed
+	for _, t := range base.SubmissionTypes {
+		if t == "external_tool" {
+			return nil, fmt.Errorf("a New Quiz can only gain a rubric here (operation: attach-rubric); edit the quiz itself in Canvas")
+		}
+	}
 	if !sameRubric(doc.Rubric, base.Rubric) {
 		return nil, fmt.Errorf("editing an existing rubric's criteria isn't supported yet; keep the pulled rubric")
 	}

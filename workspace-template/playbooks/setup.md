@@ -1,43 +1,12 @@
 # Set up a workspace
 
-Use this playbook once for each workspace and on each computer that will use CanvasExpert-SE. The files sync with the workspace; the Canvas credential is per machine.
+Do this once per workspace and once on each computer. The files sync with the workspace; the Canvas credential stays on each machine.
 
-## 0. Link the program (once per computer)
+1. **Link the program.** On each computer, the teacher double-clicks `webui.cmd` in the program folder once. If `.\cse.cmd` later says the program is not linked, ask the teacher to do this.
+2. **Check the Engine.** In a terminal at the workspace folder, run `.\cse.cmd --help` and `.\cse.cmd version`.
+3. **Connect this computer.** Run `.\cse.cmd setup` and have the teacher enter the Canvas address and access token in the local form it opens (if the browser doesn't open, use the printed local address). The token goes to Windows Credential Manager. Never let it be pasted into the terminal, a prompt, a file or a note.
+4. **Configure courses.** `.\cse.cmd courses` lists the courses and IDs. Put the teacher's nicknames and `current` flags in `context/courses.md` (field reference in `help formats`); don't infer nicknames from Canvas titles. Mark as current only the courses a "scoring session" should scan.
+5. **Student notes.** `.\cse.cmd students` changes aliases and monitored status. Teacher-written accommodations and notes go in `context/students.md`, tied unambiguously to a student and course; real names are fine there.
+6. **School calendar.** Have the teacher check `context/school-calendar.md`; lateness depends on it.
 
-The program lives in its own folder, separate from this synced workspace. On each computer, the teacher double-clicks `webui.cmd` in the program folder once. That records where the program is. If `.\cse.cmd` reports that the program is not linked, ask the teacher to do this.
-
-## 1. Check the Engine (`.\cse.cmd`)
-
-Open a terminal in the workspace folder and inspect the available commands:
-
-```powershell
-.\cse.cmd --help
-```
-
-`cse.cmd` supplies this workspace automatically. For example:
-
-```powershell
-.\cse.cmd setup
-```
-
-Run `version` to see the program's version and build information.
-
-## 2. Connect this computer
-
-Run `setup` and follow the local form to enter the Canvas origin and personal access token. Do not paste the token into the terminal, an agent prompt, a file, or a note. Setup validates the credential and stores it in Windows Credential Manager without displaying it. If the browser does not open automatically, open the local URL printed by the command.
-
-## 3. Configure courses
-
-Use `courses` to discover courses you can access and their IDs. Then set teacher-selected nicknames and current-course flags in `context/courses.md`; the Engine does not infer nicknames from Canvas titles. Configure only current courses you want a “scoring session” to scan. Use `modules <course>` when an assignment needs a module target. The starter `context/courses.md` shows the version-one configuration shape; run `.\cse.cmd help formats` for the field reference.
-
-## 4. Maintain student notes
-
-Use `students` for alias and monitored-status changes. Put teacher-authored accommodations or useful context in `context/students.md`, associated with an unambiguous student and course. These notes may contain real names and remain in the teacher's synced folder. Never put a PAT there. Agents must not read the private `.cse/` mapping.
-
-## 5. Review the school calendar
-
-Review `context/school-calendar.md` before scoring late work. The agent uses it to work out school-day lateness; update it when the school calendar changes.
-
-## When setup is done
-
-Confirm the workspace is open in the agent and that the Engine can report its version/help. Then read `authoring.md`, `edit.md`, or `score.md` for the task. Setup stores the credential in Windows Credential Manager. Routine supported operations do not depend on workspace certification metadata; follow the task guide for any specific unresolved limitation.
+Then read the playbook for the teacher's task.

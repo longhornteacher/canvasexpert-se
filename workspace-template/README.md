@@ -1,6 +1,6 @@
 # CanvasExpert-SE starter workspace
 
-This folder is a clean starting point for a teacher's CanvasExpert-SE workspace. Use the shipped playbooks for setup, authoring, editing, and scoring; use `cse.cmd --help` when you need the exact command syntax for the installed build.
+This folder is a clean starting point for a teacher's CanvasExpert-SE workspace. Use the shipped playbooks for setup, authoring, editing, New Quizzes, and scoring; use `cse.cmd --help` when you need the exact command syntax for the installed build.
 
 ## Start here
 
@@ -19,7 +19,7 @@ Two folders: the program folder (the Engine plus the starter playbooks; nothing 
 
 New program versions add new files but never change yours. To get the newest version of a playbook, use Your playbooks and context in the hub's Settings, or delete it and reopen the hub.
 
-- `AGENTS.md`, `CLAUDE.md` and `playbooks/` are the agent's instructions: short instructions for setup, authoring, editing, and scoring.
+- `AGENTS.md`, `CLAUDE.md` and `playbooks/` are the agent's instructions: short instructions for setup, authoring, editing, New Quizzes, and scoring.
 - `context/` is your context. `context/courses.md` contains the Canvas instance and configured course nicknames.
 - `context/grading.md` holds teacher feedback preferences and grading context.
 - `context/students.md` is for teacher-authored accommodations and student notes. Keep this starter copy empty of real student information.
