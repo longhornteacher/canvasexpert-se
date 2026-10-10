@@ -113,18 +113,13 @@ type QuizPushReport struct {
 	ItemsTotal   int
 	Published    bool
 	Message      string
-	Engine       string  // "classic" for a Classic Quiz; empty for a New Quiz
-	QuizID       int64   // Classic only; differs from AssignmentID
-	Points       float64 // Classic only: points total Canvas saved
 	Hub          string  // hub tier pages, tags, and teacher actions
 }
 
 // quizSidecar is the resume record beside the quiz file. A New Quiz records its
-// ID as assignment_id; a Classic Quiz records both its quiz_id and the
-// assignment_id Canvas gives it.
+// ID as assignment_id.
 type quizSidecar struct {
 	AssignmentID int64 `json:"assignment_id,omitempty"`
-	QuizID       int64 `json:"quiz_id,omitempty"`
 	// TierPages records hub pages as soon as each exists, so a rerun never duplicates them.
 	TierPages []TierPage `json:"tier_pages,omitempty"`
 }
@@ -163,16 +158,10 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 	if e != nil {
 		return report, e
 	}
-	if q.QuizEngine == "classic" {
-		return s.pushClassicQuiz(ctx, q, set, course.ID, path)
-	}
 	items := q.itemPayloads()
 	report.ItemsTotal = len(items)
 	base := fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes", course.ID)
 	rec := readSidecar(path)
-	if rec.QuizID != 0 {
-		return report, fmt.Errorf("%s records a Classic Quiz, but this file is not quiz_engine classic; set quiz_engine back to classic, or delete %s to author a New Quiz", sidecarPath(path), sidecarPath(path))
-	}
 	id, existing := rec.AssignmentID, 0
 	if id == 0 {
 		var quizzes []struct {
@@ -194,8 +183,19 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 			total += it["item"].(map[string]any)["points_possible"].(float64)
 		}
 		quiz["points_possible"] = total
-		if q.Instructions != "" {
-			quiz["instructions"] = normalizeStudentText(q.Instructions)
+		instructions := q.Instructions
+		if len(q.Tiers) > 0 {
+			pages, e := s.deliverQuizHub(ctx, q, course.ID, path, false)
+			report.Hub = HubSummary(pages)
+			if e != nil {
+				return report, fmt.Errorf("tier pages were not completed, so the quiz was not created: %w", e)
+			}
+			if instructions, e = BindTierLinks(instructions, pages, course.ID); e != nil {
+				return report, e
+			}
+		}
+		if instructions != "" {
+			quiz["instructions"] = normalizeStudentText(instructions)
 		}
 		var created struct {
 			ID json.Number `json:"id"` // Canvas returns the ID as a string
@@ -207,8 +207,9 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 		if id <= 0 {
 			return report, &canvas.Error{Kind: "uncertain", Uncertain: true}
 		}
-		b, _ := json.Marshal(quizSidecar{AssignmentID: id})
-		if e = os.WriteFile(sidecarPath(path), b, 0o644); e != nil {
+		rec = readSidecar(path) // hub delivery may have recorded tier pages
+		rec.AssignmentID = id
+		if e = writeSidecar(path, rec); e != nil {
 			report.AssignmentID = id
 			return report, fmt.Errorf("quiz %d was created but its ID could not be saved; write {\"assignment_id\": %d} to %s before rerunning", id, id, sidecarPath(path))
 		}
@@ -231,6 +232,16 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 		}
 		report.ItemsAdded++
 	}
+	if len(q.Tiers) > 0 {
+		// Pages are verified again and published only when the quiz itself publishes.
+		pages, e := s.deliverQuizHub(ctx, q, course.ID, path, set.Published)
+		report.Hub = HubSummary(pages)
+		if e != nil {
+			report.Status = "partial"
+			report.Message = "items are in, but the tier pages were not completed; rerun the same file"
+			return report, e
+		}
+	}
 	if e = s.finishQuiz(ctx, course.ID, id, set, &report); e != nil {
 		report.Status = "partial"
 		return report, e
@@ -241,14 +252,12 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 
 func (q QuizForge) scoredIDs() []string {
 	var out []string
-	for _, it := range q.Items {
-		if qfScoredTypes[it.Type] {
-			label := it.Type
-			if it.ID != "" {
-				label = it.ID
-			}
-			out = append(out, label)
+	for _, it := range q.preparedItems() {
+		label := it.Type
+		if it.ID != "" {
+			label = it.ID
 		}
+		out = append(out, label)
 	}
 	return out
 }

@@ -196,13 +196,6 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			setPhase("discovery")
 			report.Assignments = append(report.Assignments, PullAssignmentSummary{Course: course.Nickname, AssignmentID: a.ID, Title: a.Name})
 			summary := &report.Assignments[len(report.Assignments)-1]
-			if a.QuizID != nil && *a.QuizID > 0 {
-				setPhase("fetch")
-				if e := s.pullClassicWork(ctx, course, a, students, active, courseRoster, notes, query != "", builtin, &report, summary); e != nil {
-					return report, e
-				}
-				continue
-			}
 			if reason := UnsupportedAssignment(a); reason != "" {
 				summary.SkipReason = reason
 				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, reason))

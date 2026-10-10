@@ -53,7 +53,7 @@ type reviewCardView struct {
 }
 type reviewLineView struct {
 	workflow.ReviewLine
-	Comment string // classic comments display the way Canvas shows them: one paragraph
+	Comment string // comments display the way Canvas shows them: one paragraph
 }
 
 type reviewHandler struct {

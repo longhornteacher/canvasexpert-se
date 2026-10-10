@@ -22,7 +22,7 @@ type QuizForge struct {
 	Title        string `json:"title"`
 	Instructions string `json:"instructions"`
 	QuizEngine   string `json:"quiz_engine"`
-	// Differentiation "hub" (Classic only) delivers each tier's supports as a
+	// Differentiation "hub" (New Quizzes) delivers each tier's supports as a
 	// restricted Canvas Page linked from instructions via {{tier:LABEL}}.
 	Differentiation string                     `json:"differentiation"`
 	Tiers           []qfTier                   `json:"tiers"`
@@ -51,6 +51,11 @@ type qfItem struct {
 	CaseSensitive bool                       `json:"case_sensitive"`
 	FuzzyMatch    bool                       `json:"fuzzy_match"`
 	Metadata      map[string]json.RawMessage `json:"metadata"`
+	// ESSAY and FILEUPLOAD (student-visible settings only; rubric_hint and
+	// length_guidance are teacher notes and are never sent).
+	WordLimitMin    *int     `json:"word_limit_min"`
+	WordLimitMax    *int     `json:"word_limit_max"`
+	AcceptedFormats []string `json:"accepted_formats"`
 
 	rationale *qfRationale
 }
@@ -101,9 +106,12 @@ func ReadQuizForge(path string) (QuizForge, error) {
 }
 
 func (q *QuizForge) validate() error {
-	classic := q.QuizEngine == "classic"
-	if q.QuizEngine != "" && q.QuizEngine != "new" && !classic {
-		return fmt.Errorf(`quiz_engine must be "new" or "classic" (got %q)`, q.QuizEngine)
+	switch q.QuizEngine {
+	case "", "new":
+	case "classic":
+		return fmt.Errorf("Classic quizzes are retired; remove quiz_engine, because Engine quizzes are New Quizzes")
+	default:
+		return fmt.Errorf(`quiz_engine must be "new" (got %q)`, q.QuizEngine)
 	}
 	if strings.TrimSpace(q.Title) == "" || len(q.Items) == 0 {
 		return fmt.Errorf("quiz needs a title and at least one item")
@@ -138,16 +146,8 @@ func (q *QuizForge) validate() error {
 			continue
 		}
 		writing := it.isWriting()
-		if writing && !classic {
-			return fmt.Errorf("%s: written responses are not New Quiz items; author them as a separate assignment, or set quiz_engine to classic", label)
-		}
 		if !qfScoredTypes[it.Type] && !writing {
 			return fmt.Errorf("%s: unknown type", label)
-		}
-		if classic {
-			if e := it.classicProblem(); e != nil {
-				return fmt.Errorf("%s: %v", label, e)
-			}
 		}
 		scored++
 		if strings.TrimSpace(it.Prompt) == "" && !(it.Type == "ORDERING" && it.Header != "") {
@@ -179,7 +179,7 @@ func (q *QuizForge) validate() error {
 	for i := range q.Items {
 		for j := range q.Rationales {
 			if q.Items[i].ID != "" && q.Items[i].ID == q.Rationales[j].ItemID {
-				if classic && q.Items[i].isWriting() {
+				if q.Items[i].isWriting() {
 					return fmt.Errorf("item %s takes no rationale; remove its rationales entry", q.Items[i].ID)
 				}
 				q.Items[i].rationale = &q.Rationales[j]
@@ -316,7 +316,7 @@ func (it qfItem) isWriting() bool { return it.Type == "ESSAY" || it.Type == "FIL
 
 // preparedItems returns every item students answer, in order, with its
 // stimulus passage inlined and its prompt presented (code blocks, TEKS label).
-// Both engines share it; only a Classic file holds written-response items.
+// Written-response items are included.
 func (q *QuizForge) preparedItems() []qfItem {
 	stim := map[string]string{}
 	for _, it := range q.Items {
@@ -326,7 +326,7 @@ func (q *QuizForge) preparedItems() []qfItem {
 	}
 	var out []qfItem
 	for _, it := range q.Items {
-		if !qfScoredTypes[it.Type] && !(q.QuizEngine == "classic" && it.isWriting()) {
+		if !qfScoredTypes[it.Type] && !it.isWriting() {
 			continue
 		}
 		if it.StimulusID != "" {
@@ -435,9 +435,43 @@ func (it qfItem) build() map[string]any {
 		return it.buildMatching()
 	case "ORDERING":
 		return it.buildOrdering()
+	case "ESSAY":
+		return it.buildEssay()
+	case "FILEUPLOAD":
+		return it.buildFileUpload()
 	default:
 		return it.buildCategorization()
 	}
+}
+
+// Written items have no scoring_data: CE-SE cannot score them; the teacher
+// grades them in SpeedGrader. These payloads are NOT yet checked against
+// Canvas Live (recalled from the New Quizzes Items API).
+func (it qfItem) buildEssay() map[string]any {
+	data := map[string]any{"rce": true, "spell_check": false, "word_count": false, "word_limit_enabled": false}
+	if it.WordLimitMin != nil || it.WordLimitMax != nil {
+		data["word_limit_enabled"], data["word_count"] = true, true
+		if it.WordLimitMin != nil {
+			data["word_limit_min"] = *it.WordLimitMin
+		}
+		if it.WordLimitMax != nil {
+			data["word_limit_max"] = *it.WordLimitMax
+		}
+	}
+	return wrap(map[string]any{"title": it.title("ESSAY"), "item_body": it.Prompt, "interaction_type_slug": "essay",
+		"interaction_data": data, "scoring_algorithm": "None", "feedback": map[string]any{}})
+}
+
+func (it qfItem) buildFileUpload() map[string]any {
+	formats := []string{}
+	for _, f := range it.AcceptedFormats {
+		if f = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(f), ".")); f != "" {
+			formats = append(formats, f)
+		}
+	}
+	data := map[string]any{"files_count": "1", "restrict_count": false, "restrict_types": len(formats) > 0, "valid_types": formats}
+	return wrap(map[string]any{"title": it.title("FILEUPLOAD"), "item_body": it.Prompt, "interaction_type_slug": "file-upload",
+		"interaction_data": data, "scoring_algorithm": "None", "feedback": map[string]any{}})
 }
 
 func (it qfItem) buildChoice() map[string]any {

@@ -48,7 +48,7 @@ type ReviewCard struct {
 	Digest                string
 }
 
-// ReviewLine is one Classic question.
+// ReviewLine is one line within a review card.
 type ReviewLine struct {
 	Name, Score, Comment, TeacherNote, Hold string
 	Done                                    bool
@@ -131,12 +131,10 @@ func BuildReview(root, path string) (ReviewModel, error) {
 		m, e = buildAssignmentReview(path)
 	case "":
 		m, e = buildQuizReview(path)
-	case "classic-quiz-results":
-		m, e = buildClassicReview(root, path)
 	case "results":
 		m, e = buildResultsReview(root, path)
 	default:
-		return ReviewModel{}, fmt.Errorf("review supports results, classic-quiz-results, new assignment and QuizForge quiz files, not %q", kind)
+		return ReviewModel{}, fmt.Errorf("review supports results, new assignment and QuizForge quiz files, not %q", kind)
 	}
 	if e != nil {
 		return m, e
@@ -207,53 +205,6 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			}
 		} else if r.ReviseFeedback != nil {
 			c.Comment = feedback
-		}
-		m.Cards = append(m.Cards, c)
-	}
-	return m, nil
-}
-
-func buildClassicReview(root, path string) (ReviewModel, error) {
-	var doc domain.ClassicQuizResults
-	if _, e := workspace.ReadDocument(path, &doc); e != nil {
-		return ReviewModel{}, e
-	}
-	sources, e := loadClassicSources(root, &doc)
-	if e != nil {
-		return ReviewModel{}, e
-	}
-	m := ReviewModel{Kind: "Classic quiz writing", Title: doc.Assignment.Title}
-	for _, row := range doc.Students {
-		work := sources.Work[row.StudentRef]
-		c := ReviewCard{Ref: row.StudentRef, Alias: work.Alias, Operation: "classic-question-comments", Attempt: row.Attempt.Attempt, TeacherNote: row.TeacherNote, Done: classicStudentComplete(row)}
-		if row.LateTiming != nil {
-			c.Late = lateSummary(*row.LateTiming)
-		}
-		held := 0
-		for _, q := range row.Questions {
-			src, _ := classicWorkQuestion(work.Current, q.QuestionID)
-			l := ReviewLine{Name: src.Name, TeacherNote: q.TeacherNote, Done: classicQuestionDefinite(q.Outcome)}
-			if l.Name == "" {
-				l.Name = fmt.Sprintf("Question %d", q.QuestionID)
-			}
-			switch {
-			case q.Evidence == "unknown":
-				l.Hold = "evidence unknown: " + compactText(q.TeacherNote)
-			case !src.ResponsePresent:
-				l.Hold = "pulled response row unavailable"
-			case q.Score == nil:
-				l.Hold = "no score"
-			default:
-				l.Score = q.Score.String() + " / " + src.PointsPossible.String()
-				l.Comment = domain.ClassicQuestionComment(*q.Score, src.PointsPossible, q.Comment)
-			}
-			if l.Hold != "" {
-				held++
-			}
-			c.Lines = append(c.Lines, l)
-		}
-		if held > 0 && held == len(row.Questions) {
-			c.Hold = "every selected question is held"
 		}
 		m.Cards = append(m.Cards, c)
 	}

@@ -16,7 +16,7 @@ const fieldProbePrefix = "[CSE FIELD PROBE]"
 // stored HTML fields of named probe objects in CS8 in a fresh request.
 func (p *probe) fieldRead(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("field-read course | image-files | page ID | new-quiz ID | classic-quiz ID | assignment ID")
+		return fmt.Errorf("field-read course | image-files | page ID | new-quiz ID | assignment ID")
 	}
 	kind, args := args[0], args[1:]
 	if kind == "course" {
@@ -67,8 +67,6 @@ func (p *probe) fieldRead(ctx context.Context, args []string) error {
 	switch kind {
 	case "new-quiz":
 		objectPath, childPath, titleKey = fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes/%d", courseID, id), fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes/%d/items", courseID, id), "title"
-	case "classic-quiz":
-		objectPath, childPath, titleKey = fmt.Sprintf("/api/v1/courses/%d/quizzes/%d", courseID, id), fmt.Sprintf("/api/v1/courses/%d/quizzes/%d/questions?per_page=100", courseID, id), "title"
 	case "assignment":
 		objectPath, titleKey = fmt.Sprintf("/api/v1/courses/%d/assignments/%d", courseID, id), "name"
 	default:

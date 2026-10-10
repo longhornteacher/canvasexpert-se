@@ -11,7 +11,7 @@ Quizzes are authored in the QuizForge v3.0-json format, the same `<QUIZFORGE_JSO
 - Keep quiz HTML to what `.\cse.cmd help fields` records as kept; the Engine sends it unfiltered.
 - Show code as `<pre><code>...</code></pre>`; the Engine colors it (Monokai, Python rules; add `class="language-html"` or similar on the `<code>` tag for other languages to keep it uncolored). Put TEKS codes in an item's `metadata.teks`. The Engine adds the label.
 - Quiz and assignment settings (time limit, attempts, due date, publication, module) go in `metadata.canvas`.
-- No ESSAY or FILEUPLOAD items. Offer a separate Assignment for the writing portion.
+- `ESSAY` and `FILEUPLOAD` items are allowed in a New Quiz (optional `word_limit_min`/`word_limit_max`; `accepted_formats`). Teacher notes such as `rubric_hint` are never sent to students. The teacher grades written responses in SpeedGrader: CE-SE has no score-write path for New Quiz written items yet. Say so when you create one.
 
 Save the file in the course `drafts/` area.
 
@@ -27,10 +27,6 @@ Save the file in the course `drafts/` area.
 
 Report the quiz URL, the point total, and whether it is published. New Quizzes cannot be opened as Canvas's Test Student (it errors), so a student-side check needs the editor's Build, then Preview, or a real enrolled account. The Engine has verified the stored items and settings through the Canvas API, not what a student sees.
 
-## Classic quizzes (written work in the same quiz)
+## Differentiated hub for a quiz
 
-When the quiz must hold writing (essay or file upload) alongside auto-scored items, set `"quiz_engine": "classic"`. Classic cannot hold ordering or categorization items, FITB word banks, or case-sensitive/fuzzy FITB; the Engine refuses them with a message, so offer the closest supported type. Run the same `push-quiz` command. A Classic quiz resumes when the same file is rerun; if the quiz was deleted in Canvas, delete the `.cse.json` sidecar to start over. To score Classic essay/file-upload responses, use the Classic section of `score.md`: pull the quiz's backing assignment ID, assess its question work, validate, and post the selected question scores/comments. Canvas owns objective scores and quiz totals.
-
-## Differentiated hub for a Classic quiz
-
-Hub is the only differentiation style (the Bridge was declined). Use it when the teacher wants tier supports for one whole-class quiz: add `"differentiation": "hub"` and `tiers` (`label`, `tag`, `supports` HTML). In ELA7 the tags are Silver, Red and Blue (Support, Core, Accelerate); put the exact Canvas tag name in each tier's `tag`. Put the shared instructions and hints for everyone in the quiz `instructions`, with one `{{tier:LABEL}}` link per tier. Tier content scaffolds the same standard; it does not lower it. The teacher manages the tags and their members in Canvas. If a tag does not exist, the Engine still creates the page restricted to nobody and prints a teacher action naming the page and tag; relay it. Pages publish only with the quiz. A title collision with an existing page stops the push before anything is created. Students in other tiers see all links but get Canvas's access-denied page for theirs.
+Hub is the only differentiation style (the Bridge was declined). Use it when the teacher wants tier supports for one whole-class quiz: add `"differentiation": "hub"` and `tiers` (`label`, `tag`, `supports` HTML). In ELA7 the tags are Silver, Red and Blue (Support, Core, Accelerate); put the exact Canvas tag name in each tier's `tag`. Put the shared instructions and hints for everyone in the quiz `instructions`, with one `{{tier:LABEL}}` link per tier. Tier content scaffolds the same standard; it does not lower it. The teacher manages the tags and their members in Canvas. If a tag does not exist, the Engine still creates the page restricted to nobody and prints a teacher action naming the page and tag; relay it. Pages publish only with the quiz. A title collision with an existing page stops the push before anything is created. Students in other tiers see all links but get Canvas's access-denied page for theirs. The links sit in the quiz instructions.

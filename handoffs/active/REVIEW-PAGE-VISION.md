@@ -16,7 +16,7 @@ Desktop or laptop only. No phone layout.
 
 ## Why it fits what exists
 
-- The **results/work file is already the proposal**. The agent writes `classic-quiz-results`, assignment results, and edit plans as plain workspace files; `cse validate` already computes the honest assessment and shows held versus ready students. The review page is a rendering of that, not a new data model.
+- The **results/work file is already the proposal**. The agent writes assignment results and edit plans as plain workspace files; `cse validate` already computes the honest assessment and shows held versus ready students. The review page is a rendering of that, not a new data model.
 - The Engine already runs **temporary loopback pages** that live only while their command runs (`internal/localui`). A `cse review <file>` command is the same shape. No resident service, no database.
 - `playbooks/score.md` already tells the agent to hand-build a "nice preview" with the desktop app's artifact features when a choice is easier to judge by looking. Those previews are agent-authored and ad hoc. The review page replaces them with an Engine-authored one.
 
@@ -64,7 +64,7 @@ Each slice delivers something a teacher can use and has its own short brief. Eac
 
 **0. Decisions.** Resolve the open questions below, especially staging. Amend `ARCHITECTURE.md`, `SCORING-RULES.md`, and the Playbooks for the review-by-default reversal and anything else decided. Output: a short decisions note and doc amendments, not code.
 
-**1. Scoring review.** (Uses `field-limits.md` for the fields it displays: submission comments and Classic question comments. Plain-text fields are the simplest to render faithfully.) `cse review <results-file>` for ordinary assignment results and Classic quiz writing results. Renders per-student cards (scores, computed total, rubric lines, student-facing comment, teacher-only notes marked), held items with reasons, flags. Approve-by-default, Revise with note, Post approved. Post reuses the existing `post` path; it does not duplicate write logic. Stale or changed results file after render means re-render before posting. Local tests plus a human walkthrough on synthetic results.
+**1. Scoring review.** (Uses `field-limits.md` for the fields it displays: submission comments. Plain-text fields are the simplest to render faithfully.) `cse review <results-file>` for ordinary assignment results. Renders per-student cards (scores, computed total, rubric lines, student-facing comment, teacher-only notes marked), held items with reasons, flags. Approve-by-default, Revise with note, Post approved. Post reuses the existing `post` path; it does not duplicate write logic. Stale or changed results file after render means re-render before posting. Local tests plus a human walkthrough on synthetic results.
 
 **2. Revise return and agent loop.** The exit contract above, the Playbook paragraph that tells the agent to run `cse review` by default before posting (and when the teacher has skipped review, to post directly), how to act on revisions, and re-review after the agent revises (changed items marked, unchanged approvals kept). The slice that decides whether the command-exit approach holds.
 

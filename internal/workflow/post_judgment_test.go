@@ -113,3 +113,26 @@ func TestPostFillsAssessmentAndHoldsUnreadableStudentOnly(t *testing.T) {
 		t.Fatal("computed assessment was not saved into the results file")
 	}
 }
+
+func TestPostLeavesSkippedStudentsUntouched(t *testing.T) {
+	live := fixtureAssignment()
+	s, subs := gradingServer(t, &live, 5, 6)
+	path := scoringFiles(t, s, 5, 6)
+	var doc domain.ResultsDocument
+	if _, e := workspace.ReadDocument(path, &doc); e != nil {
+		t.Fatal(e)
+	}
+	skipped := doc.Students[0].StudentRef
+	before := subs[5].EnteredScore.String()
+	s.Skip = map[string]bool{skipped: true}
+	if _, e := s.Post(context.Background(), path); e != nil {
+		t.Fatal(e)
+	}
+	if subs[5].EnteredScore.String() != before {
+		t.Fatal("a skipped student must not be written")
+	}
+	s.Skip = nil
+	if report, e := s.Post(context.Background(), path); e != nil || report.Students[0].Status == "" || subs[5].EnteredScore.String() != "12" {
+		t.Fatal("skipped student must still post later", report, e)
+	}
+}

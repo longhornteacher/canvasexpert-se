@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"fmt"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -99,7 +100,7 @@ func TestQuizForgeRejectsWhatCanvasCannotDo(t *testing.T) {
 		return `{"title":"x","items":[` + item + `]}`
 	}
 	cases := map[string]string{
-		"essay":                  wrap(`{"type":"ESSAY","prompt":"q","points":5}`),
+		"essay with rationale":   `{"title":"x","items":[{"id":"E","type":"ESSAY","prompt":"q","points":5}],"rationales":[{"item_id":"E","rationale":"teacher note"}]}`,
 		"no points":              wrap(`{"type":"TF","prompt":"q","answer":true}`),
 		"two correct MC":         wrap(`{"type":"MC","prompt":"q","points":1,"choices":[{"text":"a","correct":true},{"text":"b","correct":true}]}`),
 		"fitb 0 blanks":          wrap(`{"type":"FITB","prompt":"q","points":1,"accept":["a"]}`),
@@ -178,5 +179,91 @@ func TestPushQuizRefusesDuplicateTitleWithoutResumeRecord(t *testing.T) {
 	})
 	if _, e := s.PushQuiz(t.Context(), "TEST", writeQF(t, qfFixture)); e == nil || !strings.Contains(e.Error(), "77") {
 		t.Fatalf("expected duplicate-title refusal naming the existing quiz, got %v", e)
+	}
+}
+
+// Probe-pending: these payload shapes are recalled from the New Quizzes Items
+// API and have not been checked against Canvas Live.
+func TestNewQuizWrittenItemsShapeProbePending(t *testing.T) {
+	body := `{"title":"Mixed","items":[
+		{"id":"M","type":"MC","prompt":"q","points":2,"choices":[{"text":"a","correct":true},{"text":"b"}]},
+		{"id":"E","type":"ESSAY","prompt":"Explain.","points":5,"rubric_hint":"TEACHER ONLY","length_guidance":"TEACHER ONLY","word_limit_max":300},
+		{"id":"F","type":"FILEUPLOAD","prompt":"Upload.","points":3,"accepted_formats":[".pdf","docx"]}]}`
+	q, e := ReadQuizForge(writeQF(t, body))
+	if e != nil {
+		t.Fatal(e)
+	}
+	ps := q.itemPayloads()
+	if len(ps) != 3 {
+		t.Fatalf("got %d payloads", len(ps))
+	}
+	if got := q.scoredIDs(); strings.Join(got, ",") != "M,E,F" {
+		t.Errorf("labels misaligned: %v", got)
+	}
+	entry := func(i int) map[string]any { return ps[i]["item"].(map[string]any)["entry"].(map[string]any) }
+	essay, up := entry(1), entry(2)
+	data := essay["interaction_data"].(map[string]any)
+	if essay["interaction_type_slug"] != "essay" || essay["scoring_algorithm"] != "None" || essay["scoring_data"] != nil ||
+		data["rce"] != true || data["word_limit_enabled"] != true || data["word_limit_max"] != 300 {
+		t.Errorf("essay shape: %v", essay)
+	}
+	data = up["interaction_data"].(map[string]any)
+	if up["interaction_type_slug"] != "file-upload" || up["scoring_algorithm"] != "None" || data["restrict_types"] != true ||
+		fmt.Sprint(data["valid_types"]) != "[pdf docx]" || data["files_count"] != "1" {
+		t.Errorf("file upload shape: %v", up)
+	}
+	if b, _ := json.Marshal(ps); strings.Contains(string(b), "TEACHER ONLY") {
+		t.Error("teacher-only text reached the payload")
+	}
+}
+
+func TestPushQuizWithWrittenItemsKeepsOrderAndResumes(t *testing.T) {
+	var posted []map[string]any
+	existing := 0
+	failAt := 2
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/api/quiz/v1/courses/1/quizzes":
+			_, _ = io.WriteString(w, `[]`)
+		case r.Method == "POST" && r.URL.Path == "/api/quiz/v1/courses/1/quizzes":
+			_, _ = io.WriteString(w, `{"id":"55"}`)
+		case r.Method == "POST" && r.URL.Path == "/api/quiz/v1/courses/1/quizzes/55/items":
+			if len(posted) == failAt {
+				failAt = -1
+				w.WriteHeader(422)
+				return
+			}
+			var m map[string]any
+			b, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(b, &m)
+			posted = append(posted, m)
+			_, _ = io.WriteString(w, `{"id":"1"}`)
+		case r.Method == "GET" && r.URL.Path == "/api/quiz/v1/courses/1/quizzes/55/items":
+			_, _ = io.WriteString(w, `[`+strings.TrimSuffix(strings.Repeat(`{},`, existing), ",")+`]`)
+		default:
+			w.WriteHeader(404)
+		}
+	})
+	path := writeQF(t, `{"title":"Mixed","items":[
+		{"type":"MC","prompt":"q","points":2,"choices":[{"text":"a","correct":true},{"text":"b"}]},
+		{"id":"E","type":"ESSAY","prompt":"Explain.","points":5},
+		{"id":"F","type":"FILEUPLOAD","prompt":"Upload.","points":3}]}`)
+	report, e := s.PushQuiz(t.Context(), "TEST", path)
+	if e == nil || report.Status != "partial" || report.ItemsAdded != 2 || !strings.Contains(report.Message, "(F)") {
+		t.Fatalf("expected partial naming F, got %+v, %v", report, e)
+	}
+	existing = 2
+	report, e = s.PushQuiz(t.Context(), "TEST", path)
+	if e != nil || report.ItemsAdded != 3 || len(posted) != 3 {
+		t.Fatalf("resume wrong: %+v, %v posted=%d", report, e, len(posted))
+	}
+	slugs, total := []string{}, 0.0
+	for _, p := range posted {
+		it := p["item"].(map[string]any)
+		slugs = append(slugs, it["entry"].(map[string]any)["interaction_type_slug"].(string))
+		total += it["points_possible"].(float64)
+	}
+	if strings.Join(slugs, ",") != "choice,essay,file-upload" || total != 10 {
+		t.Errorf("order/points wrong: %v %v", slugs, total)
 	}
 }

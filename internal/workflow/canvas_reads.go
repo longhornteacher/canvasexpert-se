@@ -109,7 +109,6 @@ type SubmissionComment struct {
 	AuthorID  int64  `json:"author_id"`
 }
 type Submission struct {
-	SubmissionData                []ClassicAnswer        `json:"submission_data"`
 	ID                            int64                  `json:"id"`
 	UserID                        int64                  `json:"user_id"`
 	AssignmentID                  int64                  `json:"assignment_id"`

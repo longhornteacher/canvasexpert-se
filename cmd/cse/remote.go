@@ -131,9 +131,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 	case "push-quiz":
 		report, e := service.PushQuiz(ctx, args[0], file)
-		if report.Engine == "classic" && report.QuizID > 0 {
-			fmt.Fprintf(out, "%s: Classic Quiz %d (assignment %d), %d of %d questions, %v points, published: %t\n%s\n", report.Status, report.QuizID, report.AssignmentID, report.ItemsAdded, report.ItemsTotal, report.Points, report.Published, report.URL)
-		} else if report.AssignmentID > 0 {
+		if report.AssignmentID > 0 {
 			fmt.Fprintf(out, "%s: New Quiz %d, %d of %d items, published: %t\n%s\n", report.Status, report.AssignmentID, report.ItemsAdded, report.ItemsTotal, report.Published, report.URL)
 		}
 		if report.Hub != "" {
@@ -213,11 +211,6 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 					failed++
 				}
 			}
-			for _, r := range report.QuizStudents {
-				if r.Status != "completed" && !skip[r.StudentRef] {
-					failed++
-				}
-			}
 			summary := fmt.Sprintf("%d approved student(s) did not fully complete; run cse validate/post output or rerun review", failed)
 			if failed == 0 {
 				summary = "all approved students completed"
@@ -244,47 +237,15 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	case "post":
 		report, e := service.Post(ctx, file)
 		partial := false
-		if report.Classic {
-			fmt.Fprintln(table, "Student ref\tAttempt\tQuestion\tScore/max\tStatus\tDetails")
-			for _, r := range report.QuizStudents {
-				for _, q := range r.Questions {
-					score := "held"
-					if q.Score != nil {
-						score = q.Score.String() + "/" + q.PointsPossible.String()
-					}
-					fmt.Fprintf(table, "%s\t%d\t%d\t%s\t%s\t%s\n", r.StudentRef, r.Attempt.Attempt, q.QuestionID, score, q.Outcome.Status, compact(q.Outcome.Message))
-				}
-				if r.Late.Status != "not-requested" || r.CanvasState != "" {
-					observation := ""
-					if r.CanvasScore != nil {
-						observation += " observed Canvas score: " + r.CanvasScore.String()
-					}
-					if r.KeptScore != nil {
-						observation += " observed kept_score: " + r.KeptScore.String()
-					}
-					if r.CanvasState != "" {
-						observation += " Canvas state: " + r.CanvasState
-					}
-					if r.Status == "completed" && r.CanvasState == "pending_review" {
-						observation += " (requested scope complete; other writing remains pending review)"
-					}
-					fmt.Fprintf(table, "%s\t%d\tTiming/Canvas observations\t\t%s\t%s%s\n", r.StudentRef, r.Attempt.Attempt, r.Late.Status, compact(r.Late.Message), observation)
-				}
-				if r.Status != "completed" {
-					partial = true
-				}
+		fmt.Fprintln(table, "Student ref\tOperation\tStatus\tRubric\tGrade\tComment\tLate\tDetails")
+		for _, r := range report.Students {
+			comment := r.Outcomes.Comment.Status
+			if r.Operation == "revise-feedback" {
+				comment = r.Revision.Status
 			}
-		} else {
-			fmt.Fprintln(table, "Student ref\tOperation\tStatus\tRubric\tGrade\tComment\tLate\tDetails")
-			for _, r := range report.Students {
-				comment := r.Outcomes.Comment.Status
-				if r.Operation == "revise-feedback" {
-					comment = r.Revision.Status
-				}
-				fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.StudentRef, r.Operation, r.Status, r.Outcomes.Rubric.Status, r.Outcomes.Grade.Status, comment, r.Outcomes.Late.Status, compact(r.Message))
-				if r.Status != "completed" && r.Status != "succeeded" {
-					partial = true
-				}
+			fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.StudentRef, r.Operation, r.Status, r.Outcomes.Rubric.Status, r.Outcomes.Grade.Status, comment, r.Outcomes.Late.Status, compact(r.Message))
+			if r.Status != "completed" && r.Status != "succeeded" {
+				partial = true
 			}
 		}
 		_ = table.Flush()

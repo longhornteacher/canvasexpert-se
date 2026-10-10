@@ -94,9 +94,6 @@ func buildQuizReview(path string) (ReviewModel, error) {
 		return ReviewModel{}, e
 	}
 	engine := "New Quiz"
-	if q.QuizEngine == "classic" {
-		engine = "Classic Quiz"
-	}
 	m := ReviewModel{Kind: engine, Title: q.Title, AllOrNothing: true,
 		Notice: "Item content is shown as the Engine will write it, as text and HTML. This is not a simulation of the Canvas student experience; check that in Canvas Preview or an unpublished quiz."}
 	head := ReviewCard{Ref: "quiz", Alias: q.Title, Operation: "create-quiz",

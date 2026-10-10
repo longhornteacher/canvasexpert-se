@@ -25,7 +25,7 @@ func (t qfTier) pageTitle(quizTitle string) string {
 }
 
 // validateHub checks the declaration before any Canvas write. Hub is the only
-// differentiation style offered, and only for Classic quizzes: one quiz means
+// differentiation style offered, for New Quizzes: one quiz means
 // one gradebook column and the same questions for every student.
 func (q *QuizForge) validateHub() error {
 	tokens := map[string]int{}
@@ -43,9 +43,6 @@ func (q *QuizForge) validateHub() error {
 	}
 	if q.Differentiation != "hub" || len(q.Tiers) == 0 {
 		return fmt.Errorf(`tiers need differentiation: "hub" and at least one tier`)
-	}
-	if q.QuizEngine != "classic" {
-		return fmt.Errorf(`hub tiers are only available for Classic quizzes; set quiz_engine to "classic"`)
 	}
 	labels, titles := map[string]bool{}, map[string]bool{}
 	for i, t := range q.Tiers {

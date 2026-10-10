@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,8 +19,6 @@ type StudentPostReport struct {
 	Revision                               domain.ActionOutcome
 }
 type PostReport struct {
-	Classic      bool
-	QuizStudents []ClassicStudentPostReport
 	Path         string
 	Students     []StudentPostReport
 	Requests     int64
@@ -37,17 +34,6 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 	requests := s.Client.Requests()
 	report.Path = path
 	defer func() { report.Elapsed = time.Since(start); report.Requests = s.Client.Requests() - requests }()
-	b, e := os.ReadFile(path)
-	if e != nil {
-		return report, e
-	}
-	kind, e := workspace.DocumentKind(b)
-	if e != nil {
-		return report, e
-	}
-	if kind == "classic-quiz-results" {
-		return s.postClassicResults(ctx, path)
-	}
 	var doc domain.ResultsDocument
 	body, err := workspace.ReadDocument(path, &doc)
 	if err != nil {
