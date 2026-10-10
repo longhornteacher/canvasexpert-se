@@ -18,6 +18,10 @@ Run `.\cse.cmd review <quiz-file> <course>`; when the teacher clicks Create, the
 
 The Engine records the quiz ID in `<quiz-file>.cse.json`. If it reports `partial`, fix the named problem and rerun the same file; it adds only the missing items. If it refuses because a quiz with that title exists, ask the teacher whether it is an unfinished earlier push (resume it) or a different quiz (rename this one).
 
+## Change question points
+
+`.\cse.cmd quiz-points <course> <quiz>` lists the questions with their positions and points. To change points, add `position=points` pairs, for example `.\cse.cmd quiz-points <course> <quiz> 1=50 2=50`; this works on any New Quiz, including ones the teacher made in Canvas. The teacher's request sets the numbers; no review page. It changes only the questions named and reads them back. Once any student has submitted, it holds without writing, because the scores would change; the teacher changes points in the Canvas quiz editor, which offers regrade choices. If it reports that the items' total and the quiz's total differ, tell the teacher; they set the quiz total in Canvas.
+
 ## Written items: rubric and grading
 
 When the quiz has ECR/SCR items, offer to attach a rubric after it is created: follow "Attach a rubric" in `edit.md`, building the criteria from the `rubric_hint`s. The teacher enters the points for written items in SpeedGrader; CE-SE can't pull New Quiz responses for scoring yet. Say both when you create the quiz.

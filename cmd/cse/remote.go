@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -20,7 +21,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -82,6 +83,36 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	fmt.Fprintf(progress, "%s…\n", cmd)
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	switch cmd {
+	case "quiz-points":
+		changes := map[int]domain.Decimal{}
+		for _, arg := range args[2:] {
+			pos, pts, ok := strings.Cut(arg, "=")
+			n, e := strconv.Atoi(pos)
+			d, de := domain.ParseDecimal(pts)
+			if !ok || e != nil || n <= 0 || de != nil {
+				return fail(inputError(fmt.Errorf("quiz-points changes look like 2=50 (question position = points), got %q", arg)), progress)
+			}
+			changes[n] = d
+		}
+		report, e := service.QuizPoints(ctx, args[0], args[1], changes)
+		if report.AssignmentID > 0 {
+			fmt.Fprintf(out, "%s: New Quiz %d %s\n%s\n", report.Status, report.AssignmentID, report.Title, report.URL)
+			fmt.Fprintln(table, "Position\tType\tPoints\tWas\tQuestion")
+			for _, it := range report.Items {
+				fmt.Fprintf(table, "%d\t%s\t%s\t%s\t%s\n", it.Position, it.Type, it.Points, it.Was, it.Stem)
+			}
+			_ = table.Flush()
+			fmt.Fprintf(out, "Items total %s; quiz worth %s; assignment worth %s; %d changed\n", report.ItemTotal, report.QuizPoints, report.AssignmentPoints, report.Changed)
+		}
+		if report.Message != "" {
+			fmt.Fprintln(out, report.Message)
+		}
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		if report.Status == "held" || report.Status == "partial" {
+			return 3
+		}
 	case "api":
 		return fail(apiGet(ctx, c, args[0], out), progress)
 	case "courses":
