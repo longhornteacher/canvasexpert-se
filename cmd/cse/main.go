@@ -43,20 +43,20 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   validate FILE                 Validate a workspace document locally
   doctor                        Test native dummy credential round trip
   version                       Print version and build information
-  help [formats|examples]       Print this help, the file-format reference, or the synthetic examples (no Canvas requests)
+  help [formats|fields|examples] Print this help, the file-format reference, Canvas field limits, or the synthetic examples (no Canvas requests)
 
 COURSE is an explicit nickname in context/courses.md. FILE paths are relative
 to the workspace unless absolute. Use quotes around paths or titles with spaces.
 ui/setup/students pages exist only while their command runs; Ctrl+C closes them.
 Draft/show-me-first instructions stop before post. A scoring session pulls only.
 Exit codes: 0 success; 2 invalid input; 3 partial/held work; 4 environment/API failure.
-Read the playbooks (playbooks/setup.md, authoring.md, edit.md, score.md, quizzes.md) as needed; use help formats and help examples for file formats.
+Read the playbooks (playbooks/setup.md, authoring.md, edit.md, score.md, quizzes.md) as needed; use help formats and help examples for file formats, help fields for what Canvas keeps in each field.
 `
 
-// printEngineDoc prints the embedded format reference or synthetic examples.
+// printEngineDoc prints the embedded format reference, field limits, or synthetic examples.
 func printEngineDoc(out io.Writer, topic string) error {
-	if topic == "formats" {
-		b, err := embedded.EngineDocs.ReadFile("engine-docs/formats.md")
+	if doc := map[string]string{"formats": "formats.md", "fields": "field-limits.md"}[topic]; doc != "" {
+		b, err := embedded.EngineDocs.ReadFile("engine-docs/" + doc)
 		if err != nil {
 			return err
 		}
@@ -102,7 +102,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		return 2
 	}
 	args = flags.Args()
-	if len(args) > 0 && args[0] == "help" && len(args) == 2 && (args[1] == "formats" || args[1] == "examples") {
+	if len(args) > 0 && args[0] == "help" && len(args) == 2 && (args[1] == "formats" || args[1] == "fields" || args[1] == "examples") {
 		if e := printEngineDoc(out, args[1]); e != nil {
 			return fail(e, progress)
 		}

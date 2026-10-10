@@ -8,6 +8,7 @@ Quizzes are authored in the QuizForge v3.0-json format, the same `<QUIZFORGE_JSO
 
 - Give every scored item an explicit `points` value that the teacher chose or approved. The Engine will not invent points.
 - Put `stimulus_id` on every item attached to a stimulus, including items inside a STIMULUS..STIMULUS_END span.
+- Keep quiz HTML to what `.\cse.cmd help fields` records as kept; the Engine sends it unfiltered.
 - Show code as `<pre><code>...</code></pre>`; the Engine colors it (Monokai, Python rules; add `class="language-html"` or similar on the `<code>` tag for other languages to keep it uncolored). Put TEKS codes in an item's `metadata.teks`. The Engine adds the label.
 - Quiz and assignment settings (time limit, attempts, due date, publication, module) go in `metadata.canvas`.
 - No ESSAY or FILEUPLOAD items. Offer a separate Assignment for the writing portion.

@@ -99,6 +99,17 @@ func TestSyntheticExamplesMatchDocumentSchemas(t *testing.T) {
 	}
 }
 
+func TestMarkdownHTMLRendersEmphasis(t *testing.T) {
+	got, err := MarkdownHTML("Include **two responses** and *one* _conclusion_.\n\n- **Bold** item\n\nKeep 2*3*4, 5 * 3 * 2, snake_case_name, and **unclosed.\n\n[**Read** this](https://example.com/a_b_c*d*)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<p>Include <strong>two responses</strong> and <em>one</em> <em>conclusion</em>.</p><ul><li><strong>Bold</strong> item</li></ul><p>Keep 2*3*4, 5 * 3 * 2, snake_case_name, and **unclosed.</p><p><a href="https://example.com/a_b_c*d*"><strong>Read</strong> this</a></p>`
+	if got != want {
+		t.Fatalf("got %s\nwant %s", got, want)
+	}
+}
+
 func TestMarkdownHTMLRendersOnlyCourseAndWebLinks(t *testing.T) {
 	got, err := MarkdownHTML("- [Silver supports](/courses/1/pages/hub-silver)\n\n[x](javascript:alert(1)) and [site](https://example.com/a?b=1&c=2)")
 	if err != nil {

@@ -8,12 +8,39 @@ import (
 
 func escape(s string) string { return html.EscapeString(s) }
 
-// inlineLink is the one inline construct rendered: [text](destination), limited to
-// Canvas course paths and http(s) URLs so hub links to tier pages work.
+// inlineLink renders [text](destination), limited to Canvas course paths and
+// http(s) URLs so hub links to tier pages work.
 var inlineLink = regexp.MustCompile(`\[([^\[\]]+)\]\((/courses/[0-9]+/pages/[^\s()<>"]+|https?://[^\s()<>"]+)\)`)
 
+// Emphasis: **bold**, *italic*, _italic_. Markers must hug the text, and single
+// markers must not touch letters or digits, so 2*3*4 and snake_case stay as typed.
+var (
+	strongText = regexp.MustCompile(`\*\*([^\s*](?:[^*]*[^\s*])?)\*\*`)
+	emText     = regexp.MustCompile(`(^|[^\pL\pN*_])(?:\*([^\s*](?:[^*]*[^\s*])?)\*|_([^\s_](?:[^_]*[^\s_])?)_)($|[^\pL\pN*_])`)
+)
+
+func emphasis(s string) string {
+	s = strongText.ReplaceAllString(s, `<strong>$1</strong>`)
+	// Repeat because adjacent spans ("*a* _b_") share the boundary character.
+	for next := emText.ReplaceAllString(s, `$1<em>$2$3</em>$4`); next != s; next = emText.ReplaceAllString(s, `$1<em>$2$3</em>$4`) {
+		s = next
+	}
+	return s
+}
+
+// inline escapes s, renders links, and applies emphasis to text but never to a
+// link destination.
 func inline(s string) string {
-	return inlineLink.ReplaceAllString(escape(s), `<a href="$2">$1</a>`)
+	s = escape(s)
+	var out strings.Builder
+	at := 0
+	for _, m := range inlineLink.FindAllStringSubmatchIndex(s, -1) {
+		out.WriteString(emphasis(s[at:m[0]]))
+		out.WriteString(`<a href="` + s[m[4]:m[5]] + `">` + emphasis(s[m[2]:m[3]]) + `</a>`)
+		at = m[1]
+	}
+	out.WriteString(emphasis(s[at:]))
+	return out.String()
 }
 
 var (
@@ -23,9 +50,9 @@ var (
 )
 
 // MarkdownHTML renders a small, safe Markdown subset used for assignment
-// directions: headings, paragraphs, ordered/unordered lists, and fenced code.
-// Raw HTML and inline Markdown syntax are escaped and displayed as text, except
-// [text](destination) links to Canvas course paths or http(s) URLs.
+// directions: headings, paragraphs, ordered/unordered lists, fenced code, bold
+// and italic emphasis, and [text](destination) links to Canvas course paths or
+// http(s) URLs. Raw HTML and other inline Markdown are escaped and shown as text.
 func MarkdownHTML(source string) (string, error) {
 	lines := strings.Split(strings.ReplaceAll(source, "\r\n", "\n"), "\n")
 	var out strings.Builder
