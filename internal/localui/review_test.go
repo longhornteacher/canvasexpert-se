@@ -129,3 +129,20 @@ func TestReviewCreateWholeRefusesPostWithRevisionAndSandboxesFrames(t *testing.T
 		t.Fatal("a created-whole item with a revision must not post", w.Code)
 	}
 }
+
+func TestReviewWholeEditBlockedByHeldCard(t *testing.T) {
+	model := workflow.ReviewModel{Kind: "Edit", Title: "T", AllOrNothing: true, Action: "Apply edit", Cards: []workflow.ReviewCard{{Ref: "edit", Hold: "Canvas changed", Digest: "1"}}}
+	called := false
+	h := &reviewHandler{origin: "http://127.0.0.1:1234", secret: "secret", path: filepath.Join(t.TempDir(), "r.md"), ctx: context.Background(), done: make(chan struct{}),
+		build: func() (workflow.ReviewModel, error) { return model, nil },
+		post:  func(context.Context, map[string]bool) (string, error) { called = true; return "", nil }}
+	f := url.Values{"request_secret": {"secret"}, "token": {model.ReviewDigest()}, "action": {"post"}, "ref_0": {"edit"}}
+	r := httptest.NewRequest(http.MethodPost, h.origin+"/submit", strings.NewReader(f.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Set("Origin", h.origin)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 409 || called || !strings.Contains(w.Body.String(), "Apply edit") {
+		t.Fatal(w.Code, called)
+	}
+}

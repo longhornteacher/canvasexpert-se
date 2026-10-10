@@ -188,7 +188,15 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(e, progress)
 		}
 	case "review":
-		outcome, e := localui.Review(ctx, file, func() (workflow.ReviewModel, error) { return workflow.BuildReview(root, file) }, func(ctx context.Context, skip map[string]bool) (string, error) {
+		outcome, e := localui.Review(ctx, file, func() (workflow.ReviewModel, error) {
+			if b, _ := os.ReadFile(file); documentKind(b) == "assignment" {
+				var doc domain.AssignmentDocument
+				if _, e := workspace.ReadDocument(file, &doc); e == nil && doc.Operation == "update" {
+					return service.BuildEditReview(ctx, file)
+				}
+			}
+			return workflow.BuildReview(root, file)
+		}, func(ctx context.Context, skip map[string]bool) (string, error) {
 			if quizReview {
 				report, e := service.PushQuiz(ctx, args[1], file)
 				return strings.TrimSpace(fmt.Sprintf("%s: quiz %d, %d of %d items. %s %s", report.Status, report.AssignmentID, report.ItemsAdded, report.ItemsTotal, report.URL, report.Message)), e

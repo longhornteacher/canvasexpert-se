@@ -21,6 +21,7 @@ type ReviewModel struct {
 	// AllOrNothing is for content that is created whole (assignment, quiz): Post
 	// needs every card approved, and any revise sends the whole thing back.
 	AllOrNothing bool
+	Action       string // label of the all-or-nothing button; default "Create in Canvas"
 	Cards        []ReviewCard
 }
 

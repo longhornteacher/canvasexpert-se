@@ -38,7 +38,7 @@ func buildAssignmentReview(path string) (ReviewModel, error) {
 		return ReviewModel{}, e
 	}
 	if doc.Operation != "create" {
-		return ReviewModel{}, fmt.Errorf("review of %q assignment documents is not available yet; only operation: create", doc.Operation)
+		return ReviewModel{}, fmt.Errorf("review of %q assignment documents is not available yet; only operation: create; edits are previewed through the credentialed review command", doc.Operation)
 	}
 	if doc.Created != nil && doc.Created.Complete {
 		return ReviewModel{}, fmt.Errorf("this assignment was already created; nothing to review")

@@ -39,6 +39,7 @@ type reviewView struct {
 	Title, Kind, Secret   string
 	Notice                string
 	AllOrNothing          bool
+	Action                string
 	Token, Message, Notes string
 	Approved, Held, Done  int
 }
@@ -91,7 +92,7 @@ button.primary{background:#166534;color:#fff;border-color:#166534}.err{backgroun
 </style><form method="post" action="/submit">
 <header><h1>Review before posting</h1><div class="sub">{{.Kind}} &middot; {{.Title}}</div>
 {{if .Notice}}<p class="sub"><b>Preview limits:</b> {{.Notice}}</p>{{end}}
-<p class="sub">Everything below is approved by default. Click <b>Revise</b> on anything the agent should rework, add a note, then post. Nothing has been written to Canvas yet. Yellow boxes are teacher-only and are never written. {{if not .AllOrNothing}}Text is shown as plain text, the way it will be written.{{else}}This is created whole: every item must be approved, and any Revise sends all of it back.{{end}}</p>
+<p class="sub">Everything below is approved by default. Click <b>Revise</b> on anything the agent should rework, add a note, then post. Nothing has been written to Canvas yet. Yellow boxes are teacher-only and are never written. {{if not .AllOrNothing}}Text is shown as plain text, the way it will be written.{{else}}This goes in as one piece: every item must be approved, and any Revise sends all of it back.{{end}}</p>
 {{if .Message}}<div class="err">{{.Message}}</div>{{end}}</header>
 <input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="token" value="{{.Token}}">
 <main>{{range .Cards}}<section class="card {{if .Hold}}held{{else if eq .Status "revise"}}revise{{end}}{{if .Done}} done{{end}}" data-i="{{.Index}}" data-held="{{if or .Hold .Done}}1{{end}}">
@@ -111,13 +112,13 @@ button.primary{background:#166534;color:#fff;border-color:#166534}.err{backgroun
 <label><input type="radio" name="status_{{.Index}}" value="revise"{{if eq .Status "revise"}} checked{{end}}> Revise</label></div>
 <textarea name="note_{{.Index}}" placeholder="What should the agent change?">{{.Note}}</textarea>{{end}}
 </section>{{end}}</main>
-<footer><div><span id="summary">{{if .AllOrNothing}}Everything approved: create it{{else}}Post {{.Approved}} approved, {{.Held}} held{{end}}</span>
-<button class="primary" id="postbtn" name="action" value="post">{{if .AllOrNothing}}Create in Canvas{{else}}Post approved{{end}}</button><button name="action" value="revise">Send revisions only (post nothing)</button></div></footer>
+<footer><div><span id="summary">{{if .AllOrNothing}}Everything approved: go ahead{{else}}Post {{.Approved}} approved, {{.Held}} held{{end}}</span>
+<button class="primary" id="postbtn" name="action" value="post">{{if .AllOrNothing}}{{if .Action}}{{.Action}}{{else}}Create in Canvas{{end}}{{else}}Post approved{{end}}</button><button name="action" value="revise">Send revisions only (post nothing)</button></div></footer>
 </form><script>
 (function(){function upd(){var a=0,r=0,h=0;document.querySelectorAll('.card').forEach(function(c){
 if(c.dataset.held){h++;return}var s=c.querySelector('input[type=radio]:checked');
 if(s&&s.value==='revise'){r++;c.classList.add('revise')}else{a++;c.classList.remove('revise')}});
-document.getElementById('postbtn').disabled=(r>0&&{{if .AllOrNothing}}true{{else}}false{{end}});document.getElementById('summary').textContent=({{if .AllOrNothing}}r>0?r+' item(s) need revision; creating is off':'Everything approved: create it'{{else}}'Post '+a+' approved, '+h+' held, '+r+' revised'{{end}})}
+document.getElementById('postbtn').disabled=((r>0||h>0)&&{{if .AllOrNothing}}true{{else}}false{{end}});document.getElementById('summary').textContent=({{if .AllOrNothing}}h>0?'held: see the red box; nothing can be written':r>0?r+' item(s) need revision; writing is off':'Everything approved: go ahead'{{else}}'Post '+a+' approved, '+h+' held, '+r+' revised'{{end}})}
 document.addEventListener('change',upd);upd()})();
 </script></html>`))
 
@@ -130,7 +131,7 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 	if err != nil {
 		return reviewView{}, err
 	}
-	v := reviewView{Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
+	v := reviewView{Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
 	for i, c := range model.Cards {
 		cv := reviewCardView{ReviewCard: c, Index: i, Status: "approved"}
 		for _, l := range c.Lines {
@@ -232,7 +233,11 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	out := ReviewOutcome{}
 	skip := map[string]bool{}
 	if model.AllOrNothing && r.PostForm.Get("action") == "post" {
-		for i := range model.Cards {
+		for i, c := range model.Cards {
+			if c.Hold != "" {
+				h.page(w, 409, "Held, nothing was written: "+c.Hold, form)
+				return
+			}
 			if r.PostForm.Get("status_"+strconv.Itoa(i)) == "revise" {
 				h.page(w, 409, "This is created whole, so every item must be approved. Use Send revisions only, or switch the item back to Approved.", form)
 				return
