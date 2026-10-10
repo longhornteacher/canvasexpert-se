@@ -1,3 +1,5 @@
+> **Retired 2026-10-10.** Working sequence completed; results are in docs/engine-capabilities.md.
+
 # Engine validation in CS8
 
 Proposed working sequence, 2026-10-09. Establish the existing Engine before designing MCP.

@@ -3,7 +3,7 @@
 **Date:** 2026-10-10
 **Course:** CS8, course 121046, confirmed live by `cse courses` and a fresh course read as "FUND OF COMPUTER SCIENCE - Beckham"
 **Authorization:** teacher, 2026-10-10, for new unpublished probe objects in CS8 only
-**Brief:** [CANVAS-FIELD-LIMITS-PROBE.md](../handoffs/active/CANVAS-FIELD-LIMITS-PROBE.md). Per-field verdicts live in [field-limits.md](../engine-docs/field-limits.md); this report does not restate them as rules.
+**Brief:** [CANVAS-FIELD-LIMITS-PROBE.md](../handoffs/retired/CANVAS-FIELD-LIMITS-PROBE.md). Per-field verdicts live in [field-limits.md](../engine-docs/field-limits.md); this report does not restate them as rules.
 
 ## Objects created (all unpublished, left for teacher inspection)
 

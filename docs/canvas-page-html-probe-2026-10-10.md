@@ -5,7 +5,7 @@
 **Canvas object:** unpublished page 2266154, `[CSE FIELD PROBE] Page HTML canaries — 2026-10-10`
 **URL:** `https://pearland.instructure.com/courses/121046/pages/cse-field-probe-page-html-canaries-2026-10-10`
 
-> **Correction (2026-10-10, review):** this run wrote and read back through the Canvas rich content editor, not the API. The editor normalizes HTML on save and on reopen, so the findings below describe editor behavior and do not establish what Canvas stores from an Engine (API) write. CE-SE also has no HTML allowlist of its own; the "narrower CE-SE allowlist" below is OG CanvasExpert's. The follow-up API probe is in [the handoff](../handoffs/active/CANVAS-FIELD-LIMITS-PROBE.md).
+> **Correction (2026-10-10, review):** this run wrote and read back through the Canvas rich content editor, not the API. The editor normalizes HTML on save and on reopen, so the findings below describe editor behavior and do not establish what Canvas stores from an Engine (API) write. CE-SE also has no HTML allowlist of its own; the "narrower CE-SE allowlist" below is OG CanvasExpert's. The follow-up API probe is in [the handoff](../handoffs/retired/CANVAS-FIELD-LIMITS-PROBE.md).
 
 ## Scope and method
 

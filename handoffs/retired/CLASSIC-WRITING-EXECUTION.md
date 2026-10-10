@@ -1,3 +1,5 @@
+> **Retired 2026-10-10.** Implemented (a2e2820). Classic Quizzes are being removed; see handoffs/active/CLASSIC-QUIZ-RETIREMENT.md.
+
 # Execution brief: score Classic quiz writing
 
 Prepared 2026-10-09. Audience: a Sol implementation agent, followed by a Luna documentation agent if desired. This brief fixes the design decisions; implement them directly. Preparing this brief does not launch implementation or authorize Canvas Live activity.

@@ -45,4 +45,4 @@ CE-SE has no HTML allowlist of its own. Assignment creates and assignment Hub pa
 
 Render the exact Engine payload. Plain-text fields display as plain text, and the preview copies the display behavior recorded above rather than looking better than Canvas. HTML fields render in a sandbox with scripts off; markup not recorded as kept on that field is flagged "not verified." Make no claims about the student view or the quiz player unless the row records a Live view.
 
-Developer records (in the source repository, not the workspace): `docs/canvas-field-api-probe-2026-10-10.md` for the API probe of quiz and assignment fields, `docs/canvas-page-html-probe-2026-10-10.md` for the editor probe, `handoffs/active/CANVAS-FIELD-LIMITS-PROBE.md` for pending measurements.
+Developer records (in the source repository, not the workspace): `docs/canvas-field-api-probe-2026-10-10.md` for the API probe of quiz and assignment fields, `docs/canvas-page-html-probe-2026-10-10.md` for the editor probe, `handoffs/retired/CANVAS-FIELD-LIMITS-PROBE.md` for pending measurements.

@@ -1,3 +1,5 @@
+> **Retired 2026-10-10.** Slice 0 done; decisions are reflected in ARCHITECTURE.md and the review page (slices 1-4).
+
 # Review page: slice 0 decisions
 
 2026-10-10. Resolves the open questions in [REVIEW-PAGE-VISION.md](REVIEW-PAGE-VISION.md). Documentation only; no code and no review page exists yet.

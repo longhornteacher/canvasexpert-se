@@ -1,3 +1,5 @@
+> **Retired 2026-10-10.** Rationale for Classic quiz writing, now implemented and superseded by handoffs/active/CLASSIC-QUIZ-RETIREMENT.md.
+
 # Quiz and Hub capability plan
 
 2026-10-09. Proposed direction for discussion, not an implementation authorization or execution brief. No Canvas calls or implementation changes were made to prepare this plan.

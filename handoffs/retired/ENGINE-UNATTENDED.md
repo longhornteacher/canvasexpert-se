@@ -1,3 +1,5 @@
+> **Retired 2026-10-10.** Planning result; the run was executed. See ENGINE-UNATTENDED-FINAL.md (active) and docs/engine-capabilities.md.
+
 # Unattended Engine validation and repair
 
 Prepared 2026-10-09. Planning result, not an executed live sweep. Read with `ENGINE-VALIDATION.md`, `ARCHITECTURE.md`, and `SCORING-RULES.md`.

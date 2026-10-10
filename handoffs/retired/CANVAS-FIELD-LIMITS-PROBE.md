@@ -1,3 +1,5 @@
+> **Retired 2026-10-10.** Probe done; results are in engine-docs/field-limits.md. Two optional SpeedGrader checks remain open (see its Done section).
+
 # Canvas field-limits probe
 
 2026-10-10, revised after the page-body probe. Proposal for the remaining probe. The first run is recorded in [the page probe report](../../docs/canvas-page-html-probe-2026-10-10.md) and [the field-limits table](../../engine-docs/field-limits.md). No Playbook change.
