@@ -39,6 +39,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   pull-work [COURSE [ASSIGNMENT]] Pull work; no scope uses current courses
   push-quiz COURSE FILE         Create or resume a New Quiz from a QuizForge file
   post RESULTS_FILE             Post validated grades or selected revisions
+  api PATH                      Read-only Canvas API GET when no command fits; prints the JSON
   validate FILE                 Validate a workspace document locally
   doctor                        Test native dummy credential round trip
   version                       Print version and build information
@@ -195,7 +196,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "push": true, "pull-item": true, "pull-work": true, "post": true, "review": true, "push-quiz": true, "validate": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "push": true, "pull-item": true, "pull-work": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}

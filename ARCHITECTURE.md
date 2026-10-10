@@ -48,7 +48,7 @@ The seed lives in `workspace-template/`; judgment belongs in the playbooks and c
 
 A normal Go function/package is a module. A feature usually adds an operation, command entry point and short playbook. Shared utilities emerge from actual use. Assignment editing shares Canvas transport and workspace I/O but owns its field patch and conflict checks. Feedback revision uses those same mechanics but owns selection and recovery of an exact comment ID. Grading semantics belong with grading, even when several grading functions share them.
 
-Keep the existing layout and useful transport, parsing, identity and arithmetic code. Do not introduce a plugin loader, registry, event bus, job engine, persistence layer, universal policy schema, arbitrary-HTTP agent interface or new agent protocol. Large files alone do not require splitting.
+Keep the existing layout and useful transport, parsing, identity and arithmetic code. Do not introduce a plugin loader, registry, event bus, job engine, persistence layer, universal policy schema, arbitrary-HTTP write interface for the agent (the read-only `cse api PATH` GET is the deliberate exception, decided 2026-10-10: when the Engine gets stuck the agent reads directly, the teacher makes any write in Canvas, and the gap goes in the workspace `context/engine-notes.md` for development) or new agent protocol. Large files alone do not require splitting.
 
 ## Teacher decisions and working behavior
 

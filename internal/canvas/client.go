@@ -25,6 +25,7 @@ type Error struct {
 	Kind      string
 	Status    int
 	Uncertain bool
+	Body      string // Canvas's error response (truncated), shown by cse api
 }
 
 func (e *Error) Error() string {
@@ -229,7 +230,7 @@ func statusError(status int, body []byte, write bool) *Error {
 	if uncertain {
 		kind = "uncertain"
 	}
-	return &Error{Kind: kind, Status: status, Uncertain: uncertain}
+	return &Error{Kind: kind, Status: status, Uncertain: uncertain, Body: string(body)}
 }
 
 // request retries safe reads only. The slot remains occupied through body use.

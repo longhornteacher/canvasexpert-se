@@ -20,7 +20,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -82,6 +82,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	fmt.Fprintf(progress, "%s…\n", cmd)
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	switch cmd {
+	case "api":
+		return fail(apiGet(ctx, c, args[0], out), progress)
 	case "courses":
 		list, e := workflow.Courses(ctx, c)
 		if e != nil {

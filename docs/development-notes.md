@@ -18,6 +18,10 @@ Practical notes for working in this checkout. Authority stays with the root `AGE
 
 `internal/localui/capabilities.go` (status data and review date), [engine-capabilities.md](engine-capabilities.md) (evidence), and `engine-docs/formats.md` (agent-facing formats). Keep Canvas Live evidence, local tests and pending human checks distinct.
 
+## Engine notes from teachers
+
+Workspaces collect Engine gaps in `context/engine-notes.md` (written by the agent when it had to work around the Engine). Ask the teacher for that list when planning; turn real gaps into handoffs and have the teacher delete the fixed lines.
+
 ## Tests
 
 - `workflowFixture` (httptest TLS) in `internal/workflow/workflow_test.go`.

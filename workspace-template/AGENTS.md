@@ -31,6 +31,14 @@ Scores, new assignments, new quizzes and assignment edits go through `.\cse.cmd 
 
 Your job is to take work off the teacher's plate. Do not stop at an obstacle: use judgment, infer what a sensible teacher would want, and keep going. When something is unclear, or you are curious or concerned, ask briefly in conversation with your recommendation, and carry on with whatever else you can finish meanwhile. When a choice is easier to judge by looking (a proposed rubric, a scoring basis, two ways to word directions), show it in a preview using the desktop app's preview or artifact features ("Let me show you in a nice preview..."). That is for open questions; anything about to be written to Canvas goes through the review page instead. Never answer "I can't" when you could propose, draft, or show.
 
+## When the Engine gets stuck
+
+If no command fits, or a command refuses something the teacher reasonably wants, don't stall. Helping the teacher right now comes first:
+
+- **To see something** the Engine doesn't show, read it yourself with `.\cse.cmd api "<path>"` (a Canvas API GET under `/api/v1/` or `/api/quiz/v1/`; one page per call, so add `per_page` and `page` when you need more). It can't write.
+- **To change something**, tell the teacher plainly that the Engine can't do it yet, then give them the exact steps in Canvas (where to click, what to enter). When they say it's done, read it back with `api` and confirm.
+- Either way, add one line to `context/engine-notes.md`: the date, what got stuck, what you did instead, and what the Engine should learn. The teacher passes these to development.
+
 ## Reporting
 
 Canvas Live is authoritative. Report what succeeded and, specifically, what is partial, held or uncertain; keep going with independent items. When the Engine reports `partial` or `uncertain`, rerun the same file: it resumes from saved IDs and never repeats completed work. Never delete saved outcomes or sidecar files to retry.

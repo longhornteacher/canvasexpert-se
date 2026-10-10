@@ -53,7 +53,7 @@ function Test-TemplatePathAllowed {
         $normalizedPath -eq 'cse.cmd' -or
         $normalizedPath -match '^\.claude/settings\.json$' -or
         $normalizedPath -match '^playbooks/[A-Za-z0-9._-]+\.md$' -or
-        $normalizedPath -match '^context/(courses|grading|students|school-calendar)\.md$'
+        $normalizedPath -match '^context/(courses|grading|students|school-calendar|engine-notes)\.md$'
 }
 
 $studentNotesPath = Join-Path $templateRoot 'context/students.md'
