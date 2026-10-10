@@ -1,4 +1,4 @@
-> **Retired 2026-10-10.** Implemented (a2e2820). Classic Quizzes are being removed; see handoffs/active/CLASSIC-QUIZ-RETIREMENT.md.
+> **Retired 2026-10-10.** Implemented (a2e2820). Classic Quizzes are being removed; see handoffs/retired/CLASSIC-QUIZ-RETIREMENT.md.
 
 # Execution brief: score Classic quiz writing
 

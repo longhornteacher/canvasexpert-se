@@ -1,3 +1,5 @@
+> **Retired 2026-10-10.** Slices 0-4 are built (3e29ebd, beab31b, 7f09bf4, 927f436); status and pending human checks live on the Capabilities page and in docs/engine-capabilities.md. Slice 5 is on demand and slice 6 (retirement pass, e.g. the "nice preview" line in playbooks/score.md) is gated on real use; open a new handoff for either when needed. The "no review-page implementation" line below is historical.
+
 # Review page: vision and slices
 
 2026-10-10. Proposal for review by higher-level agents, not an implementation authorization. No review-page implementation has been built. Field limits live in [field-limits.md](../../engine-docs/field-limits.md). This touches Engine (rendering, the review command) and Playbook (when the agent prepares and what it does with revisions).

@@ -1,48 +1,38 @@
-# New Quiz written scoring probe (plan)
+# New Quiz written work: whole-quiz feedback (plan)
 
-2026-10-10. Plan only; nothing here is authorized yet. Answers the one open question in [CLASSIC-QUIZ-RETIREMENT.md](CLASSIC-QUIZ-RETIREMENT.md): **what can CE-SE honestly do with New Quiz written responses?** Probe first, then design. Engine work only if a path survives. Playbook text follows the result.
+2026-10-10. **Teacher decision:** for now CE-SE gives **whole-quiz commentary** on New Quiz written work. **The teacher enters the per-item points** in SpeedGrader. CE-SE writes no item scores, no rubric assessment and no grade for these quizzes. This replaces the earlier five-question probe plan (item-score writes, rubric carrier, overall-grade honesty, participant fixtures): none of it is needed for this scope. The rubric pre-check result stays on record in `docs/engine-capabilities.md`.
 
-## What we already know
+## What the feature is
 
-- Written items exist in `push-quiz` and are stored correctly (CS8 quiz 3698183). The teacher grades them in SpeedGrader today.
-- The original CanvasExpert concluded there is **no public API for New Quiz item scores or per-item feedback**. It never wrote them (`docs/reference/classic-quiz-design.md`, `mutation-reconciliation-map.md`).
-- OG live-probed **draft submission comments** (GraphQL `createSubmissionComment(draftComment: true, attempt: N)`): teacher-only, visible in SpeedGrader, submitted by the teacher. Not observed: second attempts, and file-upload responses.
-- OG reads responses through the Student Analysis report API (`POST /api/quiz/v1/courses/:c/quizzes/:a/reports`, JSON), and saw 502s and no rows for Test Student.
-- New Quizzes cannot open as the built-in Test Student (LTI). **Every submission-dependent step needs a real participant.**
+The teacher asks the agent to look at students' written responses in a New Quiz and leave feedback. The agent reads each response, assesses it, and the teacher reviews on the review page. Post writes one **submission comment per student** on the quiz's assignment, in the teacher's voice, and nothing else. No grade is touched. Review-before-post still applies, and `SCORING-RULES.md` still governs the comment text (honest, no invented points).
 
-## Questions, in order (each has a stop condition)
+## Two questions the Engine needs answered
 
-**Q1. Can CE-SE read written responses?** Needs a participant. Try, cheapest first: (a) REST submissions with `include[]=submission_history` on the quiz assignment; (b) the Student Analysis report, JSON; (c) GraphQL on the submission. Record per source: essay text present, file upload URL present, attempt number, student identity, latency and errors. Stop if none returns essay text: then CE-SE can only prepare a scoring sheet from teacher-pasted responses, and Q2-Q4 matter less.
+Both run against a **real New Quiz that already has student responses**; neither needs a fixture, a participant, or a publish.
 
-**Q2. Can CE-SE write an item score?** No participant needed to start. Teacher opens SpeedGrader on a submitted quiz with the Browser pane's network tool watching (or DevTools) while scoring one essay. Record the request the UI makes and its auth (LTI JWT versus the teacher API token). If it only accepts the LTI session, **item scores are not writable by CE-SE**; stop, record, do not try to forge the session.
+**A. Can CE-SE read the responses?** Read-only, teacher's real quiz. Try, cheapest first: (a) REST submissions on the quiz assignment with `include[]=submission_history`; (b) the Student Analysis report, JSON (`POST /api/quiz/v1/courses/:c/quizzes/:a/reports`, then poll); (c) GraphQL on the submission. Record per source: essay text present, file-upload response present and downloadable, attempt number, student identity, errors. If none returns the written text, stop: the fallback is feedback from responses the teacher pastes in.
 
-**Q3. Is a rubric the carrier?** Candidate path, untested anywhere: attach a rubric (one criterion per written item) to the New Quiz assignment, then write the rubric assessment and grade through the Engine's existing rubric path. **Pre-check done 2026-10-10 (CS8, REST, no participant):** Canvas accepted a rubric (id 71836, criteria Essay 1/Essay 2/File upload, 12 points) and association 130475 on quiz 3698183's assignment. The assignment stayed at 15 points, `use_rubric_for_grading` false, quiz still `external_tool`. Not yet known: a rubric assessment written against a real attempt, and `use_for_grading: true` was not tried. Rubric 71836 stays on the unpublished probe quiz (no delete command). Still to check with a participant: With a participant: does the written rubric assessment coexist with the quiz's own auto-scored points, or does one overwrite the other, and what does the student see?
+**B. Does an ordinary submission comment work on a New Quiz submission?** The teacher approves one specific comment on one specific real submission; it is the normal REST comment the Engine already posts for assignments. Check it lands on the intended attempt, shows in SpeedGrader, and that the quiz grade is untouched. The teacher can delete it afterwards in SpeedGrader. Skip B if the teacher prefers: it is the same call the Engine already makes for assignments, so the risk is only quiz-specific attempt targeting.
 
-**Q4. Is an overall grade write honest and stable?** With a participant who has auto-scored MC points plus written items: write the assignment grade through REST. Does New Quizzes overwrite it later (open the attempt, regrade, a second attempt, or auto-regrade)? Does SpeedGrader show a quiz total that disagrees with the item breakdown? **Do not leave a grade that misstates item scores**; the probe grade is on the participant's synthetic attempt only and is reset afterwards.
+## Prior art (original CanvasExpert)
 
-**Q5. Drafts on a real attempt.** Re-check GraphQL draft comments with attempt 1 and attempt 2 on a real New Quiz attempt, including a file-upload response, and what the student sees after posting.
+The original concluded Canvas has **no public API for writing New Quiz item scores or per-item feedback**, and told teachers to grade New Quiz writing in Canvas. Useful for A and B:
 
-## Fixture
+- **Student Analysis report** (A, option b): OG read responses this way, or from the UI's CSV download (`api/powergrader/new_quiz_fetch.py`). It saw transient 502s and **no rows for Test Student submissions**, so probe with real student work.
+- **Draft comments** (alternative for B): GraphQL `createSubmissionComment(draftComment: true, attempt: N)` creates a teacher-only draft the teacher finalizes in SpeedGrader. Live-probed by OG (`docs/reference/classic-quiz-design.md`, "New Quiz draft comments"). Consider it if the teacher wants to see comments in SpeedGrader before students do.
 
-- New unpublished `[CSE FIELD PROBE]` quiz in CS8 pushed through `cse push-quiz`: one MC (1 pt), one essay (5), one file upload (3), **two attempts allowed**, result viewing set. Existing probe quiz 3698183 can serve Q3 pre-check only.
-- To take it, the quiz must be published and visible to one participant only (teacher-created override or due-date visibility). **Teacher decides and does the publish and participant steps**; the Engine never publishes without explicit authorization. Participant is disposable, identified by alias, and the teacher reads nothing private.
-- Participant submits twice: attempt 1 (short essay, small text file), attempt 2 (revised essay). Teacher scores one essay by hand in SpeedGrader between attempts, so Q2 has something to observe.
+## Engine changes if A succeeds
+
+- `UnsupportedAssignment` (`internal/workflow/canvas_reads.go`) currently skips every quiz assignment ("quizzes aren't supported yet"). New Quiz assignments (submission type `external_tool`, `is_quiz_lti_assignment`) need a **comment-only** path: pull written responses (per attempt, with student identity checks), and a results mode that posts comments and never a grade. The existing grade-posting assignment path stays as is.
+- Playbook: when to use this (New Quiz written items), that the teacher enters item points, and that CE-SE never claims a score for these quizzes.
+- Capabilities page and `docs/engine-capabilities.md` updated together, with evidence levels kept apart.
 
 ## Rules
 
-CS8 only. Own `[CSE FIELD PROBE]` objects only. Probes go through `cse` and `cse-probe`, not the OG `canvas-expert` MCP. A temporary diagnostic program may print status and body only, never the token, and is deleted afterwards. No delete or course-policy writes. Record each result with its evidence level (Canvas Live API storage, rendering by human view, local tests) in `docs/engine-capabilities.md` and `internal/localui/capabilities.go` together.
-
-## Decision after the probe
-
-| Result | CE-SE does |
-|---|---|
-| Q1 readable, Q2 or Q3 writable and Q4 stable | Pull responses, assess, write item scores or rubric assessment, post the honest computed grade through the review page |
-| Q1 readable, nothing safely writable | Pull and assess; post teacher-only **draft comments** (Q5) plus a scoring sheet; the teacher finalizes in SpeedGrader |
-| Q1 not readable | Scoring sheet from teacher-supplied responses only; keep written items for authoring |
-
-Whichever row wins, the review-before-post default and the rule never to post a grade that misstates item scores still apply.
+Read-only against the teacher's real quizzes until the teacher approves a specific comment. Probes go through `cse` and `cse-probe`, not the OG `canvas-expert` MCP. A temporary diagnostic program may print status and body only, never the token or student names, and is deleted afterwards. No grade, rubric or item-score writes in this scope.
 
 ## Teacher input needed
 
-1. A disposable participant (or the teacher's own second account) able to take a New Quiz in CS8.
-2. Permission for the temporary publish limited to that participant, and who does it.
+The course and name or ID of one real New Quiz that has written (essay or upload) responses, for question A.
+
+Optional, independent of A and B: open probe quiz 3698183 (CS8, unpublished) in Build, then Preview, to see whether students get the word limits and accepted file types enforced. Record the result on the Capabilities page and in `docs/engine-capabilities.md`.

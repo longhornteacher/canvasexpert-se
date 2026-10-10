@@ -1,4 +1,4 @@
-> **Retired 2026-10-10.** Rationale for Classic quiz writing, now implemented and superseded by handoffs/active/CLASSIC-QUIZ-RETIREMENT.md.
+> **Retired 2026-10-10.** Rationale for Classic quiz writing, now implemented and superseded by handoffs/retired/CLASSIC-QUIZ-RETIREMENT.md.
 
 # Quiz and Hub capability plan
 

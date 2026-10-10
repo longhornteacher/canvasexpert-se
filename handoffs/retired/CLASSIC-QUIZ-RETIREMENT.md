@@ -1,6 +1,8 @@
+> **Retired 2026-10-10.** Classic Quizzes are removed. The remaining open item (New Quiz written responses) and its prior-art facts moved to handoffs/active/NEW-QUIZ-SCORING-PROBE.md, which replaced the scoring probe described below with whole-quiz commentary.
+
 # New Quiz written responses: scoring (open)
 
-**Status, 2026-10-10.** Classic Quizzes are removed from CE-SE for good: the Go code, tests, docs and records are gone (only the `push-quiz` refusal that says they are retired remains), and Canvas had already migrated every Classic quiz to New Quizzes. Written items (`ESSAY`, `FILEUPLOAD` in `push-quiz`) and Hub on New Quizzes are done locally (item payloads probed in CS8 on 2026-10-10, API storage only; see docs/engine-capabilities.md). **The ONLY open item is scoring New Quiz written responses**, plus an optional human Build, then Preview of quiz 3698183 to see the word limits and file types enforced. Migrated IDs and gradebook columns are not this project's concern.
+**Status, 2026-10-10.** Classic Quizzes are removed from CE-SE for good: the Go code, tests, docs and records are gone (only the `push-quiz` refusal that says they are retired remains), and Canvas had already migrated every Classic quiz to New Quizzes. Written items (`ESSAY`, `FILEUPLOAD` in `push-quiz`) and Hub on New Quizzes are done locally (item payloads probed in CS8 on 2026-10-10, API storage only; see docs/engine-capabilities.md). **The ONLY open item is New Quiz written responses. Decided scope: whole-quiz commentary only; the teacher enters per-item points. See [NEW-QUIZ-SCORING-PROBE.md](NEW-QUIZ-SCORING-PROBE.md).** (Originally: scoring), plus an optional human Build, then Preview of quiz 3698183 to see the word limits and file types enforced. Migrated IDs and gradebook columns are not this project's concern.
 
 ## Open item: scoring New Quiz written responses
 
