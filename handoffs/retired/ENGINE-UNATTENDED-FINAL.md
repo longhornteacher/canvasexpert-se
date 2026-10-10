@@ -1,3 +1,5 @@
+> **Retired 2026-10-10.** Closed without the human finish: the ordinary-student completion/resubmission check stays pending human validation on the Capabilities page ("The next useful milestone"); the steps below remain a usable script for it. The fixture inventory moved to docs/cs8-test-objects.md.
+
 # Engine unattended finish
 
 2026-10-09. The authorized unattended run used the isolated `.test-workspaces/engine-unattended-20261009/` workspace and synthetic Canvas built-in Test Student only. See [capability record](../../docs/engine-capabilities.md) for verified behavior, build identity, evidence and limits.

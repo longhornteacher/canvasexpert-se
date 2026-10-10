@@ -1,3 +1,5 @@
+> **Retired 2026-10-10.** Built and recorded in docs/engine-capabilities.md; known gaps are on the Capabilities page. Working notes and prior art moved to docs/development-notes.md; left-over CS8 quizzes are in docs/cs8-test-objects.md.
+
 # Quizzes and Hub differentiation: handoff to Codex
 
 2026-10-09. Everything below is **Engine** work (Go) plus the matching **Playbook** text. Read `AGENTS.md` and `ARCHITECTURE.md` first; this file does not override them. Build state at handoff: `go build ./... && go vet ./cmd/... ./internal/... && go test ./cmd/... ./internal/...` all pass.

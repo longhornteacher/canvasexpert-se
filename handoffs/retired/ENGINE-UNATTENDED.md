@@ -1,4 +1,4 @@
-> **Retired 2026-10-10.** Planning result; the run was executed. See ENGINE-UNATTENDED-FINAL.md (active) and docs/engine-capabilities.md.
+> **Retired 2026-10-10.** Planning result; the run was executed. See ENGINE-UNATTENDED-FINAL.md (retired) and docs/engine-capabilities.md.
 
 # Unattended Engine validation and repair
 

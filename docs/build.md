@@ -39,3 +39,5 @@ The hub stays open until you press Quit or Ctrl+C. It tries port 47831 first, so
 The **Capabilities** page (`/capabilities`) shows the recorded green/yellow/red Canvas Live feature map, evidence limits, and review date. It is linked from Home and the shared navigation and works without a configured workspace or Canvas connection. Keep its status data in `internal/localui/capabilities.go` aligned with [engine-capabilities.md](engine-capabilities.md).
 
 New pages go in `internal/localui` and are routed from `Hub.ServeHTTP`; every form must pass the hub's Host/Origin/secret checks.
+
+Working notes for developing in this checkout (shell quirks, live-read rules, test fixtures, quiz prior art) are in [development-notes.md](development-notes.md).

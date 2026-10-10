@@ -113,5 +113,5 @@ The execution brief is ready for a Sol implementation owner, with an optional su
 
 ## Source basis
 
-- CE-SE: `AGENTS.md`, `ARCHITECTURE.md`, `SCORING-RULES.md`, `handoffs/active/QUIZZES-HUB-CODEX.md`, relevant workflow/domain source, `docs/engine-capabilities.md`, and scoring/quiz Playbooks.
+- CE-SE: `AGENTS.md`, `ARCHITECTURE.md`, `SCORING-RULES.md`, `handoffs/retired/QUIZZES-HUB-CODEX.md`, relevant workflow/domain source, `docs/engine-capabilities.md`, and scoring/quiz Playbooks.
 - OG CE: `docs/reference/classic-quiz-design.md`, `docs/reference/assignment-differentiation-design.md`, and `api/README.md` recorded Canvas findings. Historical observations were read locally; no new Canvas/API behavior was verified for this plan.
