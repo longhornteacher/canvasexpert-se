@@ -24,7 +24,7 @@ Preserve useful content and teacher intent rather than byte equality of unrelate
 
 Rule of thumb: if it needs judgment, it goes in a playbook or the context; if it needs Canvas access, exact identity or exact math, it goes in the Engine.
 
-One folder by default. A teacher unzips one **CanvasExpert-SE** folder, points their agent at it and talks; setup happens in conversation and they never edit files. The folder is the **workspace**, with the Engine in `engine/`; the Engine carries the **starter playbooks and context**. The workspace holds the **teacher's playbooks and context** (started from the seed, theirs to change) and student information (`.cse/`, `courses/`). New program versions add missing seed files and never change the teacher's. A synced workspace may instead keep the program in a separate per-machine **program folder**; the workspace's `cse.cmd` prefers `engine/` and otherwise uses that linked program.
+One folder by default. A teacher unzips one **CanvasExpert-SE** folder, points their agent at it and talks; setup happens in conversation and they never edit files. The folder is the **workspace**, with the Engine in `engine/`, and it lives on the local drive because district OneDrive sync blocks executables; the Engine carries the **starter playbooks and context**. The workspace holds the **teacher's playbooks and context** (started from the seed, theirs to change) and student information (`.cse/`, `courses/`). New program versions add missing seed files and never change the teacher's. A synced workspace may instead keep the program in a separate per-machine **program folder**; the workspace's `cse.cmd` prefers `engine/` and otherwise uses that linked program.
 
 ## Spine and operation boundaries
 

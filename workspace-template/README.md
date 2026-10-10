@@ -19,6 +19,6 @@ That's it. You don't need to edit anything here yourself; ask the agent instead.
 
 New program versions add new files but never change yours. To get the newest version of a playbook, use "Your playbooks and context" in the hub's Settings.
 
-## Keeping this folder in OneDrive or another synced folder
+## Keep this folder on your computer
 
-That's fine. If you'd rather keep the program out of the synced folder (for example, so each computer keeps its own copy), delete `engine/`, unzip the separate program download somewhere else on each computer, and double-click its `webui.cmd` once; `cse.cmd` then finds that program instead.
+Keep this folder on your computer's own drive, not in OneDrive or another synced folder: many districts block syncing programs, so the `engine` folder would not arrive on your other computers. To use another computer, unzip CanvasExpert-SE there too and ask the agent to set it up.
