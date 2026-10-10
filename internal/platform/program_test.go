@@ -35,4 +35,8 @@ func TestOverlaps(t *testing.T) {
 	if !Overlaps(root, inner) || !Overlaps(inner, root) || !Overlaps(inner, inner) || Overlaps(inner, sibling) {
 		t.Fatal("overlap detection wrong")
 	}
+	engine := filepath.Join(root, BundledEngineDir)
+	if !SeparateFrom(root, engine) || SeparateFrom(engine, root) || SeparateFrom(root, inner) || !SeparateFrom(inner, sibling) || !SeparateFrom(root, "") {
+		t.Fatal("bundled engine rule wrong")
+	}
 }

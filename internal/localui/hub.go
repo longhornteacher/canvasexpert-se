@@ -38,7 +38,7 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><htm
 <div class="card"><h2>Courses</h2>{{if .Root}}<p><b>{{.ActiveCourses}}</b> active</p><a class="go" href="/courses">Pick active courses &rarr;</a>{{else}}<p>Choose a workspace in Settings to get started.</p><a class="go" href="/settings">Open Settings &rarr;</a>{{end}}</div>
 <div class="card"><h2>Students</h2>{{if .Root}}<p><b>{{.Students}}</b> known, <b>{{.Monitored}}</b> monitored</p><a class="go" href="/students">Open students &rarr;</a>{{else}}<p>Choose a workspace in Settings to get started.</p>{{end}}</div>
 <div class="card"><h2>Playbooks &amp; context</h2><p>Feedback voice, how each job is done, and your starter files.</p><a class="go" href="/settings">Open Settings &rarr;</a></div>
-<div class="card"><h2>New here?</h2><p>Two folders, one program, your private workspace.</p><a class="go" href="/how">See how it works &rarr;</a></div>
+<div class="card"><h2>New here?</h2><p>One folder: the Engine, your playbooks and your private student information.</p><a class="go" href="/how">See how it works &rarr;</a></div>
 <div class="card"><h2>Capabilities</h2><p>Green, yellow, and red lights for what CE-SE can do with Canvas Live.</p><a class="go" href="/capabilities">See the capability map &rarr;</a></div>
 </div>
 <div popover id="pat-help"><h2>Get a Canvas access token</h2><ol><li>Sign in to Canvas in your browser.</li><li>Click your profile picture (or <b>Account</b>), then <b>Settings</b>.</li><li>Scroll to <b>Approved Integrations</b> and click <b>+ New Access Token</b>.</li><li>Purpose: <code>CanvasExpert SE</code>. Leave the expiry blank, or pick a date you'll remember.</li><li>Click <b>Generate Token</b> and copy it right away. Canvas shows it only once.</li><li>Back here, choose <b>Connect Canvas</b> and paste it. It is kept in Windows Credential Manager, not in a file.</li></ol><p>If your district hides this option, ask your Canvas admin for a teacher access token.</p><button type="button" class="small" popovertarget="pat-help" popovertargetaction="hide">Close</button></div>
@@ -49,8 +49,8 @@ var settingsTemplate = template.Must(template.New("settings").Parse(`<!doctype h
 {{if .ConfirmPath}}<div class="card"><h2>Set up a workspace here?</h2><p><code>{{.ConfirmPath}}</code></p><p>This folder has {{.ConfirmCount}} items and is not a workspace yet. I will add the starter files only; nothing existing is changed or overwritten.</p><form method="post" action="/workspace"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="path" value="{{.ConfirmPath}}"><input type="hidden" name="confirm" value="1"><button type="submit">Yes, set it up</button></form></div>{{end}}
 <div class="cards">
 <div class="card"><h2>Canvas</h2>{{if .Connected}}<span class="pill on">connected</span><p><code>{{.CanvasOrigin}}</code></p>{{if .CanvasUser}}<p>Signed in as <b>{{.CanvasUser}}</b></p>{{end}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" class="small">Test connection</button></form>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a>{{if .Connected}}<details class="forget"><summary>Forget token on this computer</summary><form method="post" action="/canvas/forget"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="confirm" required> Yes, remove it. I can reconnect later.</label><button type="submit" class="small danger">Remove token</button></form></details>{{end}}</div>
-<div class="card"><h2>Engine (program folder)</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>The machinery plus the starter playbooks. Nothing private.</p></div>
-<div class="card"><h2>Your workspace</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Your playbooks, context and student information.</p>{{else}}<span class="pill off">none</span><p>Choose your synced workspace folder below.</p>{{end}}</div>
+<div class="card"><h2>Engine</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>The machinery plus the starter playbooks. Nothing private.</p></div>
+<div class="card"><h2>Your workspace</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Your playbooks, context and student information.</p>{{else}}<span class="pill off">none</span><p>Choose your workspace folder below.</p>{{end}}</div>
 </div>
 <label for="path">Workspace folder (your synced, private one)</label>
 <div class="inline"><form method="post" action="/browse"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Browse&hellip;</button></form>
@@ -374,8 +374,8 @@ func (h *Hub) chooseWorkspace(w http.ResponseWriter, raw string, confirmed bool)
 	case !filepath.IsAbs(path):
 		h.settings(w, 400, "Use a full folder path such as C:\\Users\\you\\OneDrive\\Workspace.", "")
 		return
-	case h.programDir != "" && platform.Overlaps(path, h.programDir):
-		h.settings(w, 400, "The workspace and the program must be separate folders. Pick your synced workspace, not the program folder or one containing it.", "")
+	case !platform.SeparateFrom(path, h.programDir):
+		h.settings(w, 400, "The workspace and the program must be separate folders (or the program must be the workspace's own engine folder). Pick your workspace, not the program folder or one containing it.", "")
 		return
 	}
 	if root, err := workspace.ResolveRoot(path, ""); err == nil {
@@ -476,14 +476,14 @@ func RunHub(ctx context.Context, root, version string, output io.Writer) error {
 		return "Workspace settings now use this Canvas address."
 	}
 	switch {
-	case root != "" && platform.Overlaps(root, hub.programDir):
-		_, _ = fmt.Fprintln(output, "Ignoring that workspace: it overlaps the program folder. Choose a separate synced workspace in the hub.")
+	case root != "" && !platform.SeparateFrom(root, hub.programDir):
+		_, _ = fmt.Fprintln(output, "Ignoring that workspace: it overlaps the program folder. Choose a separate workspace in the hub.")
 	case root != "":
 		hub.root = root
 		hub.rememberRoot()
 	case hub.stateFile != "":
 		if b, err := os.ReadFile(hub.stateFile); err == nil {
-			if remembered, err := workspace.ResolveRoot(strings.TrimSpace(string(b)), ""); err == nil && !platform.Overlaps(remembered, hub.programDir) {
+			if remembered, err := workspace.ResolveRoot(strings.TrimSpace(string(b)), ""); err == nil && platform.SeparateFrom(remembered, hub.programDir) {
 				hub.root = remembered
 				hub.seedNotice = addMissingSeed(remembered)
 			}

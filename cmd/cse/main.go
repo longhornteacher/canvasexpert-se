@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	_ "time/tzdata"
 
 	embedded "canvasexpertse"
@@ -173,7 +174,9 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			if err != nil {
 				return fail(inputError(err), progress)
 			}
-			origin = config.Instance
+			if !strings.Contains(config.Instance, "canvas.example.edu") {
+				origin = config.Instance
+			}
 		} else if *rootOpt != "" {
 			return fail(inputError(rootErr), progress)
 		}

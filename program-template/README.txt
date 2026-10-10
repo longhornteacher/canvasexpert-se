@@ -1,10 +1,13 @@
 CanvasExpert-SE program folder
 ==============================
 
-This is the program folder: the CE-SE Engine (the machinery that works with Canvas) plus
-a starter Playbook. Nothing private lives here. Keep it separate from your synced
-workspace folder, which holds your Playbook (how the agent behaves: guides, settings)
-and your student information.
+This is the separate program folder: the CE-SE Engine (the machinery that works with
+Canvas) plus a starter Playbook. Nothing private lives here.
+
+Most teachers don't need it: the main CanvasExpert-SE download already has the Engine
+inside its engine folder. Use this only if you keep your workspace in a synced folder
+and want the program stored outside it, on each computer. Then delete the workspace's
+engine folder so its cse.cmd uses this program instead.
 
 1. Unzip this somewhere that is NOT your synced workspace, for example
    C:\Users\<you>\CanvasExpert-SE-program.

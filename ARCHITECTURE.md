@@ -24,7 +24,7 @@ Preserve useful content and teacher intent rather than byte equality of unrelate
 
 Rule of thumb: if it needs judgment, it goes in a playbook or the context; if it needs Canvas access, exact identity or exact math, it goes in the Engine.
 
-Two folders. The **program folder** holds the Engine, which carries the **starter playbooks and context**. The teacher's synced **workspace** holds the **teacher's playbooks and context** (started from the seed, theirs to change) and student information (`.cse/`, `courses/`). New program versions add missing seed files and never change the teacher's.
+One folder by default. A teacher unzips one **CanvasExpert-SE** folder, points their agent at it and talks; setup happens in conversation and they never edit files. The folder is the **workspace**, with the Engine in `engine/`; the Engine carries the **starter playbooks and context**. The workspace holds the **teacher's playbooks and context** (started from the seed, theirs to change) and student information (`.cse/`, `courses/`). New program versions add missing seed files and never change the teacher's. A synced workspace may instead keep the program in a separate per-machine **program folder**; the workspace's `cse.cmd` prefers `engine/` and otherwise uses that linked program.
 
 ## Spine and operation boundaries
 
@@ -65,7 +65,7 @@ Keep the existing layout and useful transport, parsing, identity and arithmetic 
 
 ## Workspace and platform
 
-Windows 11, standard user, no installer/admin/runtime requirement for teachers. Go builds a portable executable; platform/distribution checks are ordinary release work, not workspace certifications. Program and synced district workspace are separate. A per-machine program link backs workspace cse.cmd; whenever the hub opens a workspace, the embedded Playbook seed adds missing files without overwriting work. Temporary loopback UI exists only while its command runs. No resident service or database.
+Windows 11, standard user, no installer/admin/runtime requirement for teachers. Go builds a portable executable; platform/distribution checks are ordinary release work, not workspace certifications. The default package is one folder with the Engine in `engine/`; a synced workspace may keep the program separate, backed by a per-machine program link; whenever the hub opens a workspace, the embedded Playbook seed adds missing files without overwriting work. Temporary loopback UI exists only while its command runs. No resident service or database.
 
 PAT and Canvas origin live in per-machine Windows Credential Manager. Never expose the PAT in files, logs, output or agent context. Private student mapping stays in .cse/students.csv and out of ordinary agent reads. Stable student references target persisted work; aliases decorate filenames/metadata and remain editable. Real names are allowed in student writing and teacher notes; do not scrub writing. Expand intentional name placeholders only, and keep teacher-only notes out of student feedback.
 

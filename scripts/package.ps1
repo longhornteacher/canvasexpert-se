@@ -10,7 +10,9 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $templateRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'workspace-template'))
 $binaryPath = [IO.Path]::GetFullPath((Join-Path $repoRoot 'dist/cse.exe'))
 $distRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'dist'))
-$packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE-Workspace-0.1b.zip'))
+# Single-folder package: the starter workspace with the Engine in engine\. Extracting it
+# with Windows' Extract All gives a CanvasExpert-SE folder the teacher points the agent at.
+$packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE.zip'))
 $programPackagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE-Program-0.1b-windows-amd64.zip'))
 $pathSeparator = [IO.Path]::DirectorySeparatorChar
 
@@ -134,10 +136,18 @@ try {
         $expectedEntries.Add($relativePath)
     }
 
-    # The program is a separate package. The synced workspace must never contain it.
-    if (@($expectedEntries | Where-Object { $_ -match '\.exe$|^cse/' }).Count -gt 0) {
-        throw 'The workspace package must not contain the program.'
+    # The template itself never contains a program; the bundle adds exactly one below.
+    if (@($expectedEntries | Where-Object { $_ -match '\.exe$|^(cse|engine)/' }).Count -gt 0) {
+        throw 'The workspace template must not contain the program.'
     }
+    if ($expectedEntries -contains 'webui.cmd') {
+        throw 'The workspace template must not contain webui.cmd; the bundle adds it.'
+    }
+    New-Item -ItemType Directory -Path (Join-Path $stageRoot 'engine') | Out-Null
+    Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $stageRoot 'engine/cse.exe')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'program-template/workspace-webui.cmd') -Destination (Join-Path $stageRoot 'webui.cmd')
+    $expectedEntries.Add('engine/cse.exe')
+    $expectedEntries.Add('webui.cmd')
 
     $stagedFiles = @(Get-ChildItem -LiteralPath $stageRoot -Force -Recurse -File)
     $stagedEntries = @($stagedFiles | ForEach-Object { $_.FullName.Substring(($stageRoot.TrimEnd('\', '/') + $pathSeparator).Length).Replace('\', '/') })
@@ -169,6 +179,9 @@ try {
         if ($archiveFiles -notcontains 'cse.cmd') {
             throw 'Archive is missing the cse.cmd launcher.'
         }
+        if ($archiveFiles -notcontains 'engine/cse.exe' -or $archiveFiles -notcontains 'webui.cmd') {
+            throw 'Archive is missing the bundled engine or webui.cmd.'
+        }
         if ($archiveFiles -notcontains 'context/courses.md') {
             throw 'Archive is missing context/courses.md.'
         }
@@ -194,7 +207,8 @@ try {
     Write-Host "Packaged $packagePath"
     Write-Host "SHA256 $hash"
 
-    # Program package: executable, hub launcher and a short README. No private or workspace files.
+    # Separate program package for a synced workspace that keeps the program elsewhere.
+    # Executable, hub launcher and a short README. No private or workspace files.
     $programStageRoot = [IO.Path]::GetFullPath((Join-Path $tempRoot "$stageName-program"))
     if (-not $programStageRoot.StartsWith($stagePrefix, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Program staging path is outside the system temp directory: $programStageRoot"

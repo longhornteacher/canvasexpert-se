@@ -19,16 +19,16 @@ To create the distributable starter workspace:
 .\scripts\package.ps1 -GoExecutable '.\.tools\go1.27.1\go\bin\go.exe'
 ```
 
-Packaging rebuilds first and writes two ZIPs to `dist/`, each with its SHA-256 hash printed. The build produces the Engine (`cse.exe`, in the program ZIP); the workspace ZIP carries the starter playbooks plus starter teacher context:
+Packaging rebuilds first and writes two ZIPs to `dist/`, each with its SHA-256 hash printed:
 
-- `CanvasExpert-SE-Program-0.1b-windows-amd64.zip`: `cse.exe`, `webui.cmd` and `README.txt` (from `program-template/`). It is unzipped per machine and is not synced.
-- `CanvasExpert-SE-Workspace-0.1b.zip`: the allowlisted `workspace-template` files, including the `cse.cmd` launcher and the hidden `.claude/settings.json` rule. It contains no program, so it is safe to place in a synced folder. Example files are accepted only when their content explicitly labels them synthetic. The starter settings files must retain their empty-template markers; private `.cse` state, pulled course data, scoring files, build caches, and compiler files are not package inputs. Course configuration lives at `context/courses.md`, the same path the Engine uses to recognize a workspace.
+- `CanvasExpert-SE.zip`: the single-folder package colleagues get. It holds the allowlisted `workspace-template` files (including the `cse.cmd` launcher and the hidden `.claude/settings.json` rule), the Engine at `engine/cse.exe`, and `webui.cmd` (from `program-template/workspace-webui.cmd`) at its root. It has no top-level folder, so Windows' Extract All produces a `CanvasExpert-SE` folder that is the workspace. Example files are accepted only when their content explicitly labels them synthetic. The starter settings files must retain their empty-template markers; private `.cse` state, pulled course data, scoring files, build caches, and compiler files are not package inputs. Course configuration lives at `context/courses.md`, the same path the Engine uses to recognize a workspace.
+- `CanvasExpert-SE-Program-0.1b-windows-amd64.zip`: `cse.exe`, `webui.cmd` and `README.txt` (from `program-template/`), for a synced workspace that keeps the program in a separate per-machine folder.
 
 ZIP entries are written with forward slashes by the script itself, because Windows PowerShell 5.1's `CreateFromDirectory` writes backslashes.
 
-On each computer: unzip the program somewhere outside the synced workspace, double-click `webui.cmd` once (it runs `cse link`, recording the program's location under `%LOCALAPPDATA%\CanvasExpert-SE`), then use the hub or `.\cse.cmd COMMAND` from the workspace. The hub refuses a workspace that overlaps the program folder.
+Colleagues unzip `CanvasExpert-SE.zip`, point their agent at the folder and talk; the agent runs setup (`playbooks/setup.md`). The workspace's `cse.cmd` runs `engine\cse.exe` when present. Otherwise it uses the program recorded by `cse link` under `%LOCALAPPDATA%\CanvasExpert-SE` (the separate program folder's `webui.cmd` runs `cse link`). The hub refuses a workspace that overlaps the program folder, except when the program is that workspace's own `engine` folder.
 
-The packaged executable is intended to run without a Go or other language runtime installed on the teacher's computer. A successful source build or ZIP inspection verifies the local build and package, not every possible Canvas response or district configuration. Use current API responses and the task guides; see [0.1b-evidence.md](0.1b-evidence.md) for historical observations, not operation prerequisites. Workspace commands use the explicit workspace option, for example `.\cse\cse.exe --workspace . --help` when run from the packaged workspace root.
+The packaged executable is intended to run without a Go or other language runtime installed on the teacher's computer. A successful source build or ZIP inspection verifies the local build and package, not every possible Canvas response or district configuration. Use current API responses and the task guides; see [0.1b-evidence.md](0.1b-evidence.md) for historical observations, not operation prerequisites. Workspace commands use the explicit workspace option, for example `.\engine\cse.exe --workspace . --help` when run from the packaged workspace root.
 
 ## Local web pages (the hub)
 

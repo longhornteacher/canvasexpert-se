@@ -61,6 +61,23 @@ func Overlaps(a, b string) bool {
 	return within(a, b) || within(b, a)
 }
 
+// BundledEngineDir is where the single-folder package keeps the Engine inside
+// the workspace.
+const BundledEngineDir = "engine"
+
+// Bundled reports whether programDir is the workspace's own engine folder.
+func Bundled(workspace, programDir string) bool {
+	w, err1 := filepath.Abs(filepath.Join(workspace, BundledEngineDir))
+	p, err2 := filepath.Abs(programDir)
+	return err1 == nil && err2 == nil && strings.EqualFold(filepath.Clean(w), filepath.Clean(p))
+}
+
+// SeparateFrom reports whether a workspace may be used with the program in
+// programDir: the folders are separate, or the program is the bundled engine.
+func SeparateFrom(workspace, programDir string) bool {
+	return programDir == "" || !Overlaps(workspace, programDir) || Bundled(workspace, programDir)
+}
+
 func within(parent, child string) bool {
 	p, err1 := filepath.Abs(parent)
 	c, err2 := filepath.Abs(child)

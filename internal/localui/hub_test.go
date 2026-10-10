@@ -90,6 +90,11 @@ func TestHubRefusesWorkspaceOverlappingProgram(t *testing.T) {
 	if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {root}}, h.origin); w.Code != 400 || h.root != "" {
 		t.Fatalf("program inside workspace accepted: %d", w.Code)
 	}
+	h.programDir = filepath.Join(root, "engine")
+	if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {root}}, h.origin); w.Code != 200 || h.root == "" {
+		t.Fatalf("bundled engine folder rejected: %d", w.Code)
+	}
+	h.root = ""
 	h.programDir = t.TempDir()
 	if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {root}}, h.origin); w.Code != 200 || h.root == "" {
 		t.Fatalf("separate folders rejected: %d", w.Code)
