@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -19,7 +20,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 1}, "push-quiz": {2, 2}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -35,7 +36,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 		file = p
 	}
-	if cmd == "push" || cmd == "post" || cmd == "review" {
+	quizReview := cmd == "review" && len(args) == 2
+	if cmd == "push" || cmd == "post" || (cmd == "review" && !quizReview) {
 		p, e := documentPath(root, args[0])
 		if e != nil {
 			return fail(inputError(e), progress)
@@ -44,6 +46,16 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if e = validateDocument(file, root); e != nil {
 			return fail(inputError(e), progress)
 		}
+	}
+	if quizReview {
+		p, e := documentPath(root, args[0])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		if _, e = workflow.ReadQuizForge(p); e != nil {
+			return fail(inputError(e), progress)
+		}
+		file = p
 	}
 	var config domain.CourseConfig
 	if _, e := workspace.ReadDocument(filepath.Join(root, "context", "courses.md"), &config); e != nil {
@@ -177,6 +189,14 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 	case "review":
 		outcome, e := localui.Review(ctx, file, func() (workflow.ReviewModel, error) { return workflow.BuildReview(root, file) }, func(ctx context.Context, skip map[string]bool) (string, error) {
+			if quizReview {
+				report, e := service.PushQuiz(ctx, args[1], file)
+				return strings.TrimSpace(fmt.Sprintf("%s: quiz %d, %d of %d items. %s %s", report.Status, report.AssignmentID, report.ItemsAdded, report.ItemsTotal, report.URL, report.Message)), e
+			}
+			if b, _ := os.ReadFile(file); documentKind(b) == "assignment" {
+				report, e := service.Push(ctx, file)
+				return strings.TrimSpace(fmt.Sprintf("%s: %s %s", report.Status, report.URL, report.Message)), e
+			}
 			service.Skip = skip
 			report, e := service.Post(ctx, file)
 			failed := 0
@@ -281,3 +301,5 @@ func workflowError(e error) error {
 	}
 	return inputError(e)
 }
+
+func documentKind(b []byte) string { k, _ := workspace.DocumentKind(b); return k }

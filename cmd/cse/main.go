@@ -43,7 +43,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   validate FILE                 Validate a workspace document locally
   doctor                        Test native dummy credential round trip
   version                       Print version and build information
-  review RESULTS-FILE  Open a local page where the teacher reviews scores, revises some, and posts the approved ones; exits when finished and prints what was posted, revised and held
+  review FILE [COURSE]  Open a local page where the teacher reviews scores (results file), a new assignment (create document) or a quiz (QuizForge file plus COURSE), revises some, and posts or creates the approved ones; exits when finished and prints what was posted, revised and held
   help [formats|fields|examples] Print this help, the file-format reference, Canvas field limits, or the synthetic examples (no Canvas requests)
 
 COURSE is an explicit nickname in context/courses.md. FILE paths are relative

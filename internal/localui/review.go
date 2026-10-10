@@ -37,6 +37,8 @@ type ReviewPoster func(ctx context.Context, skip map[string]bool) (string, error
 type reviewView struct {
 	Cards                 []reviewCardView
 	Title, Kind, Secret   string
+	Notice                string
+	AllOrNothing          bool
 	Token, Message, Notes string
 	Approved, Held, Done  int
 }
@@ -65,7 +67,7 @@ type reviewHandler struct {
 
 var reviewTemplate = template.Must(template.New("review").Funcs(template.FuncMap{"inc": func(i int) int { return i + 1 }}).Parse(`<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Review before posting</title><style>
+<title>Review before writing to Canvas</title><style>
 body{font:15px/1.45 system-ui,Segoe UI,sans-serif;margin:0;background:#f3f4f6;color:#111}
 header,main,footer{max-width:60rem;margin:0 auto;padding:1rem}
 h1{font-size:1.4rem;margin:.2rem 0}.sub{color:#555}
@@ -77,6 +79,8 @@ h1{font-size:1.4rem;margin:.2rem 0}.sub{color:#555}
 pre,.comment{white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.5rem .7rem;margin:.4rem 0;font:inherit}
 .private{background:#fef9c3;border:1px dashed #a16207;border-radius:6px;padding:.4rem .7rem;margin:.4rem 0}
 .private b{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
+iframe{width:100%;height:16rem;border:1px solid #cbd5e1;background:#fff;resize:vertical}
+.facts th{text-align:left;font-weight:600;padding-right:1rem;vertical-align:top}
 .hold{color:#7f1d1d;font-weight:600}.q{border-top:1px solid #e2e8f0;margin-top:.5rem;padding-top:.4rem}
 .choice label{margin-right:1rem}textarea{width:100%;min-height:3.2rem;font:inherit;display:none}
 .card.revise textarea{display:block}
@@ -86,14 +90,18 @@ button{font:inherit;padding:.5rem 1rem;border-radius:6px;border:1px solid #47556
 button.primary{background:#166534;color:#fff;border-color:#166534}.err{background:#fee2e2;border:1px solid #b91c1c;padding:.5rem .8rem;border-radius:6px}
 </style><form method="post" action="/submit">
 <header><h1>Review before posting</h1><div class="sub">{{.Kind}} &middot; {{.Title}}</div>
-<p class="sub">Everything below is approved by default. Click <b>Revise</b> on anything the agent should rework, add a note, then post. Nothing has been written to Canvas yet. Yellow boxes are teacher-only and are never posted. Text is shown as plain text, the way it will be written.</p>
+{{if .Notice}}<p class="sub"><b>Preview limits:</b> {{.Notice}}</p>{{end}}
+<p class="sub">Everything below is approved by default. Click <b>Revise</b> on anything the agent should rework, add a note, then post. Nothing has been written to Canvas yet. Yellow boxes are teacher-only and are never written. {{if not .AllOrNothing}}Text is shown as plain text, the way it will be written.{{else}}This is created whole: every item must be approved, and any Revise sends all of it back.{{end}}</p>
 {{if .Message}}<div class="err">{{.Message}}</div>{{end}}</header>
 <input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="token" value="{{.Token}}">
 <main>{{range .Cards}}<section class="card {{if .Hold}}held{{else if eq .Status "revise"}}revise{{end}}{{if .Done}} done{{end}}" data-i="{{.Index}}" data-held="{{if or .Hold .Done}}1{{end}}">
 <input type="hidden" name="ref_{{.Index}}" value="{{.Ref}}">
-<div class="top"><span class="ref">{{if .Alias}}{{.Alias}} &middot; {{end}}{{.Ref}}</span><span>attempt {{.Attempt}}</span>{{if .Total}}<span class="total">{{.Total}}</span>{{end}}
+<div class="top"><span class="ref">{{if .Alias}}{{.Alias}} &middot; {{end}}{{.Ref}}</span>{{if .Attempt}}<span>attempt {{.Attempt}}</span>{{end}}{{if .Total}}<span class="total">{{.Total}}</span>{{end}}
 {{if .Late}}<span class="tag warn">{{.Late}}</span>{{end}}{{if .Done}}<span class="tag">already posted</span>{{end}}{{if .ChangedSinceRv}}<span class="tag warn">changed since you asked for a revision</span>{{end}}</div>
 {{if .Hold}}<p class="hold">Held, will not post: {{.Hold}}</p>{{end}}
+{{if .Facts}}<table class="facts">{{range .Facts}}<tr><th>{{.Label}}</th><td>{{.Value}}</td></tr>{{end}}</table>{{end}}
+{{range .Frames}}<div class="sub">{{.Label}}</div><iframe sandbox srcdoc="{{.HTML}}" title="{{.Label}}"></iframe>{{end}}
+{{if .Key}}<details class="private"><summary><b>Answer key (teacher only)</b></summary><pre>{{.Key}}</pre></details>{{end}}
 {{if .Comment}}<pre>{{.Comment}}</pre>{{end}}
 {{range .Lines}}<div class="q"><b>{{.Name}}</b>{{if .Score}} &middot; {{.Score}}{{end}}{{if .Done}} <span class="tag">posted</span>{{end}}
 {{if .Hold}}<div class="hold">Held: {{.Hold}}</div>{{end}}{{if .Comment}}<div class="comment">{{.Comment}}</div><div class="sub">Canvas shows this to the student as one paragraph.</div>{{end}}
@@ -103,13 +111,13 @@ button.primary{background:#166534;color:#fff;border-color:#166534}.err{backgroun
 <label><input type="radio" name="status_{{.Index}}" value="revise"{{if eq .Status "revise"}} checked{{end}}> Revise</label></div>
 <textarea name="note_{{.Index}}" placeholder="What should the agent change?">{{.Note}}</textarea>{{end}}
 </section>{{end}}</main>
-<footer><div><span id="summary">Post {{.Approved}} approved, {{.Held}} held</span>
-<button class="primary" name="action" value="post">Post approved</button><button name="action" value="revise">Send revisions only (post nothing)</button></div></footer>
+<footer><div><span id="summary">{{if .AllOrNothing}}Everything approved: create it{{else}}Post {{.Approved}} approved, {{.Held}} held{{end}}</span>
+<button class="primary" id="postbtn" name="action" value="post">{{if .AllOrNothing}}Create in Canvas{{else}}Post approved{{end}}</button><button name="action" value="revise">Send revisions only (post nothing)</button></div></footer>
 </form><script>
 (function(){function upd(){var a=0,r=0,h=0;document.querySelectorAll('.card').forEach(function(c){
 if(c.dataset.held){h++;return}var s=c.querySelector('input[type=radio]:checked');
 if(s&&s.value==='revise'){r++;c.classList.add('revise')}else{a++;c.classList.remove('revise')}});
-document.getElementById('summary').textContent='Post '+a+' approved, '+h+' held, '+r+' revised'}
+document.getElementById('postbtn').disabled=(r>0&&{{if .AllOrNothing}}true{{else}}false{{end}});document.getElementById('summary').textContent=({{if .AllOrNothing}}r>0?r+' item(s) need revision; creating is off':'Everything approved: create it'{{else}}'Post '+a+' approved, '+h+' held, '+r+' revised'{{end}})}
 document.addEventListener('change',upd);upd()})();
 </script></html>`))
 
@@ -122,7 +130,7 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 	if err != nil {
 		return reviewView{}, err
 	}
-	v := reviewView{Title: model.Title, Kind: model.Kind, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
+	v := reviewView{Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
 	for i, c := range model.Cards {
 		cv := reviewCardView{ReviewCard: c, Index: i, Status: "approved"}
 		for _, l := range c.Lines {
@@ -171,7 +179,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; frame-src about:")
 	if "http://"+r.Host != h.origin {
 		http.Error(w, "Not found", 404)
 		return
@@ -223,6 +231,14 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	out := ReviewOutcome{}
 	skip := map[string]bool{}
+	if model.AllOrNothing && r.PostForm.Get("action") == "post" {
+		for i := range model.Cards {
+			if r.PostForm.Get("status_"+strconv.Itoa(i)) == "revise" {
+				h.page(w, 409, "This is created whole, so every item must be approved. Use Send revisions only, or switch the item back to Approved.", form)
+				return
+			}
+		}
+	}
 	for i, c := range model.Cards {
 		if r.PostForm.Get("ref_"+strconv.Itoa(i)) != c.Ref {
 			http.Error(w, "Form does not match the results file", 400)

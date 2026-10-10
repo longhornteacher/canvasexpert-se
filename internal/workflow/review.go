@@ -17,8 +17,18 @@ import (
 // post would write, plus holds and teacher-only notes (marked as such).
 type ReviewModel struct {
 	Kind, Title string
-	Cards       []ReviewCard
+	Notice      string // fidelity limits shown at the top of the page
+	// AllOrNothing is for content that is created whole (assignment, quiz): Post
+	// needs every card approved, and any revise sends the whole thing back.
+	AllOrNothing bool
+	Cards        []ReviewCard
 }
+
+// ReviewFact is one labelled setting shown on a card.
+type ReviewFact struct{ Label, Value string }
+
+// ReviewFrame is an HTML field shown the way Canvas keeps it: sandboxed, no scripts, no page styling.
+type ReviewFrame struct{ Label, HTML string }
 
 // ReviewCard is one student. Digest changes whenever anything shown changes.
 type ReviewCard struct {
@@ -27,6 +37,9 @@ type ReviewCard struct {
 	Total                 string // computed assessment, e.g. "18.5 / 20"
 	Comment               string // exact plain text that will be posted (ordinary results)
 	Lines                 []ReviewLine
+	Facts                 []ReviewFact
+	Frames                []ReviewFrame
+	Key                   string // teacher-only answer key, shown behind a toggle
 	TeacherNote           string
 	Late                  string
 	Hold                  string // reason this student will not post
@@ -103,18 +116,26 @@ func BuildReview(root, path string) (ReviewModel, error) {
 	if e != nil {
 		return ReviewModel{}, e
 	}
-	kind, e := workspace.DocumentKind(b)
-	if e != nil {
-		return ReviewModel{}, e
+	// A QuizForge file has no document header; any file with one is a workspace document.
+	kind, kindErr := workspace.DocumentKind(b)
+	if kindErr != nil && !strings.Contains(string(b), "QUIZFORGE_JSON") && !strings.HasPrefix(strings.TrimSpace(string(b)), "{") {
+		return ReviewModel{}, kindErr
+	}
+	if kindErr != nil {
+		kind = ""
 	}
 	var m ReviewModel
 	switch kind {
+	case "assignment":
+		m, e = buildAssignmentReview(path)
+	case "":
+		m, e = buildQuizReview(path)
 	case "classic-quiz-results":
 		m, e = buildClassicReview(root, path)
 	case "results":
 		m, e = buildResultsReview(root, path)
 	default:
-		return ReviewModel{}, fmt.Errorf("review supports results and classic-quiz-results files, not %q", kind)
+		return ReviewModel{}, fmt.Errorf("review supports results, classic-quiz-results, new assignment and QuizForge quiz files, not %q", kind)
 	}
 	if e != nil {
 		return m, e

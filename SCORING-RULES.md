@@ -14,4 +14,4 @@ Canvas exclusively calculates late point penalties. The agent determines latenes
 
 Classic quiz writing uses bounded direct question assessments and question comments for selected essay/file-upload responses on the current finished attempt. Canvas owns objective scores and quiz totals. This operation does not write an assignment rubric assessment or a separate submission comment; an existing rubric is context for the agent. Ordinary assignment scoring policy remains as described above.
 
-Posting gate (decided 2026-10-10, built for scoring): scores are reviewed by the teacher on the review page before posting unless the teacher explicitly skips review. Review changes when posting happens, never what is posted: the page shows the same computed assessment `post` will write.
+Posting gate (decided 2026-10-10, built for scoring, new assignments and quizzes): scores are reviewed by the teacher on the review page before posting unless the teacher explicitly skips review. Review changes when posting happens, never what is posted: the page shows the same computed assessment `post` will write.

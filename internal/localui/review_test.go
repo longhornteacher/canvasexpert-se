@@ -104,3 +104,28 @@ func TestReviewRejectsWrongSecret(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 }
+
+func TestReviewCreateWholeRefusesPostWithRevisionAndSandboxesFrames(t *testing.T) {
+	model := workflow.ReviewModel{Kind: "New assignment", Title: "T", AllOrNothing: true, Notice: "limits", Cards: []workflow.ReviewCard{
+		{Ref: "a", Frames: []workflow.ReviewFrame{{Label: "Directions", HTML: "<p onclick=x>Hi</p>"}}, Key: "B", Digest: "1"},
+		{Ref: "b", Digest: "2"}}}
+	called := false
+	h := &reviewHandler{origin: "http://127.0.0.1:1234", secret: "secret", path: filepath.Join(t.TempDir(), "r.md"), ctx: context.Background(), done: make(chan struct{}),
+		build: func() (workflow.ReviewModel, error) { return model, nil },
+		post:  func(context.Context, map[string]bool) (string, error) { called = true; return "", nil }}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/review", nil))
+	body := w.Body.String()
+	if !strings.Contains(body, `<iframe sandbox srcdoc="&lt;p onclick=x&gt;Hi`) || !strings.Contains(body, "Answer key (teacher only)") || !strings.Contains(body, "Create in Canvas") {
+		t.Fatal(body)
+	}
+	f := url.Values{"request_secret": {"secret"}, "token": {model.ReviewDigest()}, "action": {"post"}, "ref_0": {"a"}, "ref_1": {"b"}, "status_0": {"revise"}, "status_1": {"approved"}}
+	r := httptest.NewRequest(http.MethodPost, h.origin+"/submit", strings.NewReader(f.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Set("Origin", h.origin)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 409 || called || h.outcome != nil {
+		t.Fatal("a created-whole item with a revision must not post", w.Code)
+	}
+}
