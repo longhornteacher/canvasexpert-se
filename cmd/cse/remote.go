@@ -358,7 +358,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 		fmt.Fprintf(out, "Review finished. Outcome: %s\n", outcome.Status)
-		if outcome.PostSummary != "" {
+		if outcome.PostSummary != "" && outcome.Status != "completed" {
 			fmt.Fprintln(out, "Post:", outcome.PostSummary)
 		}
 		fmt.Fprintln(out, "Results:", outcome.Path)

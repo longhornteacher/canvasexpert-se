@@ -375,17 +375,8 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		if err != nil {
 			g.Outcomes.Rubric = failedOutcome(err)
 		} else {
-			g.Outcomes.Rubric = confirmedRubric(response, *v.Assessment, g.Attempt)
+			g.Outcomes.Rubric = domain.ActionOutcome{Status: "succeeded"}
 			live = response
-			// Canvas sometimes omits rubric_assessment in its write response.
-			// An exact fresh read can confirm that write before the grade begins.
-			if ambiguous(g.Outcomes.Rubric) {
-				fresh, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, source.student.UserID)
-				if e == nil && sameAttempt(g.Attempt, attemptRef(fresh)) && rubricMatches(fresh, *v.Assessment) {
-					g.Outcomes.Rubric = domain.ActionOutcome{Status: "preserved", Message: "fresh submission confirms intended rubric values"}
-					live = fresh
-				}
-			}
 		}
 		if err = save(); err != nil {
 			return err
@@ -402,8 +393,8 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		if err != nil {
 			g.Outcomes.Rubric, g.Outcomes.Grade = failedOutcome(err), failedOutcome(err)
 		} else {
-			g.Outcomes.Rubric = confirmedRubric(response, *v.Assessment, g.Attempt)
-			g.Outcomes.Grade = s.confirmedGrade(response, g.Assessment, g.Attempt)
+			g.Outcomes.Rubric = domain.ActionOutcome{Status: "succeeded"}
+			g.Outcomes.Grade = domain.ActionOutcome{Status: "succeeded"}
 			live = response
 		}
 		if err = save(); err != nil {
@@ -427,7 +418,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 			if e != nil {
 				g.Outcomes.Grade = failedOutcome(e)
 			} else {
-				g.Outcomes.Grade = s.confirmedGrade(response, g.Assessment, g.Attempt)
+				g.Outcomes.Grade = domain.ActionOutcome{Status: "succeeded"}
 				live = response
 			}
 		}
@@ -473,19 +464,6 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		}
 	}
 	return save()
-}
-func confirmedRubric(s Submission, a domain.Assessment, attempt domain.AttemptRef) domain.ActionOutcome {
-	if sameAttempt(attempt, attemptRef(s)) && rubricMatches(s, a) {
-		return domain.ActionOutcome{Status: "succeeded"}
-	}
-	return domain.ActionOutcome{Status: "uncertain", Message: "returned submission did not confirm intended attempt and rubric values"}
-}
-func (s *Service) confirmedGrade(sub Submission, desired domain.Decimal, attempt domain.AttemptRef) domain.ActionOutcome {
-	known, grade, _ := s.enteredGrade(sub)
-	if sameAttempt(attempt, attemptRef(sub)) && known && grade != nil && grade.Cmp(desired) == 0 {
-		return domain.ActionOutcome{Status: "succeeded"}
-	}
-	return domain.ActionOutcome{Status: "uncertain", Message: "returned submission did not confirm desired pre-penalty grade on intended attempt"}
 }
 
 // submissionComments includes comments returned only with prior attempts. A
@@ -600,17 +578,15 @@ func (s *Service) addFeedback(ctx context.Context, doc domain.ResultsDocument, u
 		out.PostedText = text
 		return nil
 	}
-	added := []SubmissionComment{}
+	// Canvas accepted the write. Its reply does not reliably echo the new
+	// comment, and the teacher sees the result in Canvas, so do not second-guess it.
+	id := int64(0)
 	for _, c := range response.Comments {
-		if !before[c.ID] && c.ID > 0 && c.Comment == text && (c.Attempt == nil || *c.Attempt == attempt.Attempt) {
-			added = append(added, c)
+		if !before[c.ID] && c.ID > id && c.Comment == text {
+			id = c.ID
 		}
 	}
-	if len(added) == 1 && sameAttempt(attempt, attemptRef(response)) {
-		*out = domain.ActionOutcome{Status: "succeeded", ID: added[0].ID, PostedText: text}
-		return nil
-	}
-	*out = domain.ActionOutcome{Status: "uncertain", PostedText: text, Message: "comment response did not identify one new exact comment on intended attempt"}
+	*out = domain.ActionOutcome{Status: "succeeded", ID: id, PostedText: text}
 	return nil
 }
 

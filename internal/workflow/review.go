@@ -38,6 +38,7 @@ type ReviewCard struct {
 	Attempt               int
 	Total                 string // computed assessment, e.g. "18.5 / 20"
 	Comment               string // exact plain text that will be posted (ordinary results)
+	Submission            string // the student's work for this attempt, so feedback is judged against it
 	Lines                 []ReviewLine
 	Facts                 []ReviewFact
 	Frames                []ReviewFrame
@@ -221,6 +222,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 	}
 	// Aliases and first names come from the packet and the private student store; both are best effort.
 	aliases := map[string]string{}
+	works := map[string]domain.StudentWorkDocument{}
 	if packetPath, e := workspace.ConstrainPath(root, doc.Packet); e == nil {
 		var packet domain.PacketDocument
 		if _, e = workspace.ReadDocument(packetPath, &packet); e == nil {
@@ -229,6 +231,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 					var work domain.StudentWorkDocument
 					if _, e = workspace.ReadDocument(p, &work); e == nil {
 						aliases[work.StudentRef] = work.Alias
+						works[work.StudentRef] = work
 					}
 				}
 			}
@@ -257,6 +260,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			c.Attempt = r.ReviseFeedback.Attempt.Attempt
 			feedback = r.ReviseFeedback.Feedback
 		}
+		c.Submission = submissionText(works[r.StudentRef], c.Attempt)
 		if store != nil {
 			if st, e := store.Resolve(doc.Assignment.Instance, r.StudentRef); e == nil {
 				feedback = workspace.ReplaceStudentName(feedback, st)
@@ -275,6 +279,30 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 		m.Cards = append(m.Cards, c)
 	}
 	return m, nil
+}
+
+// submissionText returns what the student wrote for one attempt, from the
+// pulled work, so the teacher sees the evidence beside the feedback.
+func submissionText(w domain.StudentWorkDocument, attempt int) string {
+	pick := func(a domain.AttemptWork) string {
+		text := strings.TrimSpace(a.ReadableText)
+		if text == "" {
+			text = "(no typed text in this attempt)"
+		}
+		for _, f := range a.Attachments {
+			text += "\n[attachment: " + f.Name + "]"
+		}
+		return text
+	}
+	if w.Current.Ref.Attempt == attempt {
+		return pick(w.Current)
+	}
+	for _, a := range w.Prior {
+		if a.Ref.Attempt == attempt {
+			return pick(a)
+		}
+	}
+	return ""
 }
 
 func compactText(s string) string { return strings.Join(strings.Fields(s), " ") }

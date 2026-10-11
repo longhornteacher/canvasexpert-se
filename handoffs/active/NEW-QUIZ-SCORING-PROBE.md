@@ -40,3 +40,15 @@ Read-only against the teacher's real quizzes until the teacher approves a specif
 None for now: quiz 3698192 is the target once a student responds. Tell the agent when it has a response.
 
 Optional, independent of A and B: open probe quiz 3698183 (CS8, unpublished) in Build, then Preview, to see whether students get the word limits and accepted file types enforced. Record the result on the Capabilities page and in `docs/engine-capabilities.md`.
+
+## Probe result 2026-10-11 (question A answered; B and C pending)
+
+Target: CS8 New Quiz assignment 3698192, one real student attempt (ESSAY + FILEUPLOAD, independent rubric attached, `use_rubric_for_grading` false).
+
+- **REST submissions** (`include[]=submission_history`): shell only. `body` is null, `workflow_state: pending_review`, no response text. Not a source.
+- **New Quizzes GET** (`/api/quiz/v1/.../quizzes/:a` and `/items`): items, points and item ids are readable; there is no readable submissions or reports listing (404).
+- **Student Analysis report: works.** `POST /api/quiz/v1/courses/:c/quizzes/:a/reports` with JSON `{"quiz_report":{"report_type":"student_analysis","format":"json"}}` returns a progress object; polling reached `completed` in about 7 s with `results.url`. That URL is a pre-signed `inst-fs` file on a different host, so the Engine's same-origin client cannot fetch it as is (a plain GET of the signed URL returned 200 JSON).
+- **Row shape:** `student_data` carries Canvas user `id` (matches the REST submission `user_id`), `attempt`, `submitted_at`; `item_responses[]` carries `item_id`, `item_type`, `answer`, `score`. Essay `answer` is HTML (readable text recovered). **File upload `answer` is only the filename**; contents were not read, so a file-upload item cannot be scored honestly from the report alone.
+- Item ids in the report match `/items` entry ids, so responses join to the rubric criteria and prompts.
+
+Evidence level: Canvas Live API read, one student. Not yet shown: comment landing on a New Quiz submission (B), rubric assessment write without moving the quiz score (C), file-upload download.

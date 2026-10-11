@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workflow"
 )
 
@@ -109,7 +110,8 @@ button.primary{background:#166534;color:#fff;border-color:#166534}.err{backgroun
 {{if .Facts}}<table class="facts">{{range .Facts}}<tr><th>{{.Label}}</th><td>{{.Value}}</td></tr>{{end}}</table>{{end}}
 {{range .Frames}}<div class="sub">{{.Label}}</div><iframe sandbox srcdoc="{{.HTML}}" title="{{.Label}}"></iframe>{{end}}
 {{if .Key}}<details class="private"><summary><b>Answer key (teacher only)</b></summary><pre>{{.Key}}</pre></details>{{end}}
-{{if .Comment}}<pre>{{.Comment}}</pre>{{end}}
+{{if .Submission}}<div class="sub"><b>Student submission</b></div><pre class="work">{{.Submission}}</pre>{{end}}
+{{if .Comment}}<div class="sub"><b>Feedback to be posted</b></div><pre>{{.Comment}}</pre>{{end}}
 {{range .Lines}}<div class="q"><b>{{.Name}}</b>{{if .Score}} &middot; {{.Score}}{{end}}{{if .Done}} <span class="tag">posted</span>{{end}}
 {{if .Hold}}<div class="hold">Held: {{.Hold}}</div>{{end}}{{if .Comment}}<div class="comment">{{.Comment}}</div><div class="sub">Canvas shows this to the student as one paragraph.</div>{{end}}
 {{if .TeacherNote}}<div class="private"><b>Teacher only</b><br>{{.TeacherNote}}</div>{{end}}</div>{{end}}
@@ -340,7 +342,8 @@ func Review(ctx context.Context, path string, build func() (workflow.ReviewModel
 		_ = server.Close()
 	}()
 	_, _ = fmt.Fprintf(output, "Open the local review page: %s/review\n", origin)
-	// The page is not opened for you: the agent shows it in the desktop app's browser pane (or the teacher opens the URL).
+	// Open the page for the teacher; the printed address is only a fallback.
+	_ = platform.OpenBrowser(origin + "/review")
 	select {
 	case <-h.done:
 		h.mu.Lock()
