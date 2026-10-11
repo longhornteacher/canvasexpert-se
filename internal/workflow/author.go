@@ -145,7 +145,7 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 			return report, nil
 		}
 	}
-	html, err := render.MarkdownHTML(bound)
+	html, err := render.TeachingHTML(bound, doc.BodyFormat)
 	if err != nil {
 		return report, err
 	}
@@ -203,6 +203,7 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 			c.AssignmentID = a.ID
 			c.URL = a.HTMLURL
 			c.Assignment = domain.ActionOutcome{Status: "succeeded", ID: a.ID}
+			c.SavedHTML = a.Description
 		}
 		if err = save(); err != nil {
 			return report, fmt.Errorf("Canvas assignment exists but local metadata could not be saved: %w", err)
@@ -438,6 +439,9 @@ func createFields(d domain.AssignmentDocument, html string) map[string]any {
 	return map[string]any{"name": d.Title, "description": html, "points_possible": d.Points, "grading_type": "points", "submission_types": d.SubmissionTypes, "due_at": d.DueAt, "unlock_at": d.UnlockAt, "lock_at": d.LockAt, "published": false}
 }
 func sameCreateCore(a Assignment, d domain.AssignmentDocument, html string) bool {
+	if d.Created != nil && d.Created.SavedHTML != "" {
+		html = d.Created.SavedHTML // Canvas's confirmed normalization, persisted on create.
+	}
 	p, e := domain.ParseDecimal(a.Points.String())
 	return e == nil && p.Cmp(d.Points) == 0 && a.Name == d.Title && academicHTML(a.Description) == academicHTML(html) && a.GradingType == "points" && !a.Anonymous && !a.Moderated && (a.GroupCategoryID == nil || *a.GroupCategoryID == 0) && reflect.DeepEqual(a.SubmissionTypes, d.SubmissionTypes) && sameDate(a.DueAt, d.DueAt) && sameDate(a.UnlockAt, d.UnlockAt) && sameDate(a.LockAt, d.LockAt)
 }

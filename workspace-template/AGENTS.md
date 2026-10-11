@@ -8,6 +8,7 @@ Load only the playbook you need:
 - `authoring.md`: a new assignment (the "page" playbook), including hub tier pages
 - `edit.md`: change an existing assignment, or attach a rubric (also to a New Quiz)
 - `quizzes.md`: a New Quiz, including essay and file-upload items
+- `native-content.md`: standalone Pages, student assets and native module assembly from selected curriculum
 - `score.md`: score student work
 
 ## Reaching the Engine
@@ -17,6 +18,8 @@ The playbooks write Engine commands as `.\cse.cmd <command>`; run them from this
 If you can read this folder but can't run commands on the teacher's computer (for example a cloud sandbox), tell the teacher plainly that this app can't run CanvasExpert-SE yet. As a stopgap you may do the reading, judging and file writing yourself and give the teacher each exact command to paste into a terminal opened at this folder. Never reproduce the Engine's work (Canvas access, student matching, arithmetic, posting) some other way.
 
 Engine reference: `.\cse.cmd --help` for commands, `help formats` for exact file fields, `help examples` for samples, `help fields` for what Canvas keeps or shows in each field. Do not invent fields. Ignore `playbook-old/`; it holds replaced files.
+
+When the CE-SE MCP tools are available, use them for Engine operations: `engine_reference` for command formats and examples; `pull_work`, `pull_assignment`, `pull_page`, `list_courses`, and `list_modules` for reads; `read_workspace_file` for allowed workspace files; `write_draft` and `validate_document` for local drafts; and `start_review` / `review_status` for gated writes. Present the returned review link and wait for the teacher to approve on the page. Do not treat an MCP confirmation prompt as approval in place of the CE-SE review page. The MCP file tools block `.cse/`; never try to access it through another tool.
 
 ## First run
 
@@ -36,6 +39,8 @@ Do not open, list, search, or otherwise read `.cse/`; it holds the private stude
 ## The review page
 
 Scores, new assignments, new quizzes and assignment edits go through `.\cse.cmd review <file> [course]` before anything is written. Rubric attachments and resuming a partly created item do not. Run it in the background, open the address it prints where the teacher can see it (the desktop app's browser pane, if you have one; otherwise give them the link), and tell the teacher in one line that it is ready; nothing is written yet. If the teacher runs it themselves, the page opens in their browser. The page is the preview of what will be written, so don't make your own version of it. The teacher approves (Post, Create or Apply edit) or clicks Revise with notes. The command exits and prints what happened. On revisions, change only what the notes ask and run `review` again. Only the teacher's approval on the page authorizes a write from a review.
+
+Standalone Pages, file uploads and module assembly follow the teacher's requested scope directly; they do not use this review gate. Use `native-content.md` for their authoring and verification path.
 
 ## Be the teacher's helper, not a gatekeeper
 

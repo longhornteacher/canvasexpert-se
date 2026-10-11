@@ -43,12 +43,18 @@ func buildAssignmentReview(path string) (ReviewModel, error) {
 	if doc.Created != nil && doc.Created.Complete {
 		return ReviewModel{}, fmt.Errorf("this assignment was already created; nothing to review")
 	}
-	directions, e := render.MarkdownHTML(previewTierLinks(body))
+	directions, e := render.TeachingHTML(previewTierLinks(body), doc.BodyFormat)
 	if e != nil {
 		return ReviewModel{}, e
 	}
 	m := ReviewModel{Kind: "New assignment", Title: doc.Title, AllOrNothing: true,
 		Notice: "Directions are shown as the Engine will write them to Canvas. Canvas's own editor styling and student view are not simulated."}
+	if doc.BodyFormat == "html" {
+		// Source is escaped inside the existing sandboxed frame: agent-authored
+		// HTML cannot introduce active content or external requests into review.
+		directions = "<pre>" + html.EscapeString(directions) + "</pre>"
+		m.Notice = "The directions below are escaped HTML source, not a visual preview. Canvas may normalize this HTML; verify saved content and student rendering in Canvas after creation."
+	}
 	card := ReviewCard{Ref: "assignment", Alias: doc.Title, Operation: "create-assignment", Total: doc.Points.String() + " points",
 		Facts: []ReviewFact{
 			fact("Course", doc.Course), fact("Submission", strings.Join(doc.SubmissionTypes, ", ")),
@@ -58,6 +64,9 @@ func buildAssignmentReview(path string) (ReviewModel, error) {
 		Frames: []ReviewFrame{{Label: "Directions (HTML field)", HTML: directions}}}
 	if doc.ModuleID > 0 {
 		card.Facts = append(card.Facts, fact("Module", fmt.Sprint(doc.ModuleID)))
+	}
+	if doc.Created != nil && doc.Created.URL != "" {
+		card.Facts = append(card.Facts, fact("Canvas preview", doc.Created.URL))
 	}
 	if doc.Rubric != nil {
 		var parts []string

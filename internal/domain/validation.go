@@ -93,6 +93,12 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 	if d.Operation != "create" && d.Operation != "update" && d.Operation != "attach-rubric" {
 		return fmt.Errorf("operation must be create, update, or attach-rubric")
 	}
+	if e := ValidateBodyFormat(d.BodyFormat); e != nil {
+		return e
+	}
+	if d.Operation != "create" && d.BodyFormat != "" && d.BodyFormat != "html" {
+		return fmt.Errorf("existing assignment documents use HTML; body_format must be html or omitted")
+	}
 	if !validNickname(d.Course) || strings.TrimSpace(d.Title) == "" || !d.Points.IsSet() || d.Points.Sign() < 0 {
 		return fmt.Errorf("safe course nickname, title, and nonnegative points required")
 	}

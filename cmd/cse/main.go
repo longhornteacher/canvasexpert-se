@@ -17,6 +17,7 @@ import (
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/localui"
+	"canvasexpertse/internal/mcpserver"
 	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workspace"
 )
@@ -25,17 +26,21 @@ var version = "0.1b"
 var revision = "development"
 var builtAt = "unrecorded"
 
-const help = `CanvasExpert-SE 0.1b — the Engine: Canvas assignments and scoring
+const help = `CanvasExpert-SE 0.1b — the Engine: Canvas content authoring and scoring
 
 Usage: cse [--workspace PATH] COMMAND [ARGS]
 
   ui                            Open the local hub: Canvas setup, students, more
+  mcp                           Run the local MCP adapter over stdio
   link                          Record this program's location for workspace cse.cmd
   setup                         Connect Canvas privately on this machine
   students                      Edit student aliases and monitored status
   courses                       Discover authorized teacher courses
   modules COURSE                List a configured course's modules
-  push FILE                     Create/resume or update an assignment
+  push FILE                     Create/resume assignments, Pages or modules; update pulled content
+  pull-page COURSE ID|LINK       Pull exact Page HTML and baseline for editing
+  upload-file COURSE FILE --access course|hidden|locked [--folder ID] [--receipt PATH] [--new-upload]
+                                Upload a course asset and save a reusable receipt
   pull-item COURSE TITLE|ID|LINK Pull actual assignment HTML for editing
   pull-work [COURSE [ASSIGNMENT]] Pull work; no scope uses current courses
   push-quiz COURSE FILE         Create or resume a New Quiz from a QuizForge file
@@ -53,7 +58,7 @@ to the workspace unless absolute. Use quotes around paths or titles with spaces.
 ui/setup/students pages exist only while their command runs; Ctrl+C closes them.
 Draft/show-me-first instructions stop before post. A scoring session pulls only.
 Exit codes: 0 success; 2 invalid input; 3 partial/held work; 4 environment/API failure.
-Read the playbooks (playbooks/setup.md, authoring.md, edit.md, score.md, quizzes.md) as needed; use help formats and help examples for file formats, help fields for what Canvas keeps in each field.
+Read the playbooks (playbooks/setup.md, authoring.md, native-content.md, edit.md, score.md, quizzes.md) as needed; use help formats and help examples for file formats, help fields for what Canvas keeps in each field.
 `
 
 // printEngineDoc prints the embedded format reference, field limits, or synthetic examples.
@@ -117,6 +122,16 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 	}
 	cmd := args[0]
 	args = args[1:]
+	if cmd == "mcp" {
+		if len(args) != 0 {
+			return fail(inputError(fmt.Errorf("mcp takes no arguments")), progress)
+		}
+		root, e := workspace.ResolveRoot(*rootOpt, "")
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		return fail(mcpserver.Run(ctx, root), progress)
+	}
 	if cmd == "version" {
 		if len(args) != 0 {
 			return fail(inputError(fmt.Errorf("version takes no arguments")), progress)
@@ -200,7 +215,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "push": true, "pull-item": true, "pull-work": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "push": true, "pull-page": true, "upload-file": true, "pull-item": true, "pull-work": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -303,6 +318,10 @@ func validateDocument(path string, roots ...string) error {
 	switch kind {
 	case "assignment":
 		target = &domain.AssignmentDocument{}
+	case "page":
+		target = &domain.PageDocument{}
+	case "module":
+		target = &domain.ModuleDocument{}
 	case "results":
 		target = &domain.ResultsDocument{}
 	case "packet":
@@ -318,7 +337,7 @@ func validateDocument(path string, roots ...string) error {
 		case "students.md":
 			target = &domain.StudentNotes{}
 		default:
-			return fmt.Errorf("unsupported document kind; expected assignment, results, packet, or student-work")
+			return fmt.Errorf("unsupported document kind; expected assignment, page, module, results, packet, or student-work")
 		}
 	}
 	if kindErr != nil && kind != "" {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -21,12 +22,21 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-page": {2, 2}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
 	}
 	var file string
+	var uploadOptions workflow.CourseUploadOptions
+	var uploadSource string
+	if cmd == "upload-file" {
+		var e error
+		uploadSource, uploadOptions, e = parseCourseUpload(root, args)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+	}
 	if cmd == "push-quiz" {
 		p, e := documentPath(root, args[1])
 		if e != nil {
@@ -46,6 +56,20 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		file = p
 		if e = validateDocument(file, root); e != nil {
 			return fail(inputError(e), progress)
+		}
+		b, e := os.ReadFile(file)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		kind := documentKind(b)
+		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "module" {
+			return fail(inputError(fmt.Errorf("push supports assignment, page, or module documents")), progress)
+		}
+		if cmd == "post" && kind != "results" {
+			return fail(inputError(fmt.Errorf("post requires a results document")), progress)
+		}
+		if cmd == "review" && kind != "assignment" && kind != "results" {
+			return fail(inputError(fmt.Errorf("review supports assignments and results; Pages and modules use cse push directly")), progress)
 		}
 	}
 	if quizReview {
@@ -83,6 +107,33 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	fmt.Fprintf(progress, "%s…\n", cmd)
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	switch cmd {
+	case "upload-file":
+		report, e := service.UploadCourseFile(ctx, args[0], uploadSource, uploadOptions)
+		fmt.Fprintf(out, "%s: %s\n", report.Status, report.Path)
+		if report.Receipt.File.ID > 0 {
+			fmt.Fprintf(out, "Canvas file %d: %s (%d bytes, %s)\n%s\n", report.Receipt.File.ID, report.Receipt.File.DisplayName, report.Receipt.File.Size, report.Receipt.File.ContentType, report.Receipt.URL)
+			f := report.Receipt.File
+			fmt.Fprintf(out, "Access requested: %s; actual locked: %s, hidden: %s, visibility: %s, upload status: %s, lock at: %s, unlock at: %s\n", report.Receipt.Access, optionalBool(f.Locked), optionalBool(f.Hidden), knownText(f.VisibilityLevel), knownText(f.UploadStatus), knownText(f.LockAt), knownText(f.UnlockAt))
+		}
+		if report.Message != "" {
+			fmt.Fprintln(out, report.Message)
+		}
+		if e != nil {
+			if report.Status == "held" {
+				fmt.Fprintln(progress, e)
+				return 3
+			}
+			return fail(workflowError(e), progress)
+		}
+		if report.Status != "completed" {
+			return 3
+		}
+	case "pull-page":
+		p, e := service.PullPage(ctx, args[0], args[1])
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, p)
 	case "quiz-points":
 		changes := map[int]domain.Decimal{}
 		for _, arg := range args[2:] {
@@ -146,6 +197,43 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 		fmt.Fprintln(out, p)
 	case "push":
+		b, _ := os.ReadFile(file)
+		if kind := documentKind(b); kind == "page" {
+			report, e := service.PushPage(ctx, file)
+			fmt.Fprintf(out, "%s: Page %d %s\n", report.Status, report.PageID, report.Path)
+			if report.URL != "" {
+				fmt.Fprintln(out, report.URL)
+			}
+			if report.Message != "" {
+				fmt.Fprintln(out, report.Message)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" && report.Status != "succeeded" {
+				return 3
+			}
+			return 0
+		} else if kind == "module" {
+			report, e := service.PushModule(ctx, file)
+			fmt.Fprintf(out, "%s: module %d, %d of %d entries, published: %t\n%s\n", report.Status, report.ModuleID, report.ItemsAdded, report.ItemsTotal, report.Published, file)
+			for _, item := range report.Items {
+				fmt.Fprintf(out, "Entry %d %s %d: item %d, %s %s\n", item.Index+1, item.Type, item.ContentID, item.ModuleItemID, item.Outcome.Status, item.Outcome.Message)
+			}
+			if report.ChildAccess != "" {
+				fmt.Fprintln(out, report.ChildAccess)
+			}
+			if report.Message != "" {
+				fmt.Fprintln(out, report.Message)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" && report.Status != "succeeded" {
+				return 3
+			}
+			return 0
+		}
 		report, e := service.Push(ctx, file)
 		if report.Status != "" {
 			fmt.Fprintf(out, "%s: %s\n", report.Status, report.Path)
@@ -305,3 +393,52 @@ func workflowError(e error) error {
 }
 
 func documentKind(b []byte) string { k, _ := workspace.DocumentKind(b); return k }
+
+func optionalBool(value *bool) string {
+	if value == nil {
+		return "unknown"
+	}
+	return strconv.FormatBool(*value)
+}
+func knownText(value string) string {
+	if value == "" {
+		return "not reported"
+	}
+	return value
+}
+
+func parseCourseUpload(root string, args []string) (string, workflow.CourseUploadOptions, error) {
+	var opts workflow.CourseUploadOptions
+	if len(args) < 3 {
+		return "", opts, fmt.Errorf("upload-file requires COURSE FILE --access course|hidden|locked")
+	}
+	flags := flag.NewFlagSet("upload-file", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	flags.StringVar(&opts.Access, "access", "", "file access: course, hidden (links work), or locked")
+	flags.Int64Var(&opts.FolderID, "folder", 0, "existing course folder ID")
+	flags.StringVar(&opts.ReceiptPath, "receipt", "", "local receipt path")
+	flags.BoolVar(&opts.NewUpload, "new-upload", false, "explicitly upload new bytes without replacing a live file")
+	if e := flags.Parse(args[2:]); e != nil {
+		return "", opts, e
+	}
+	if flags.NArg() != 0 || opts.FolderID < 0 || (opts.Access != "course" && opts.Access != "hidden" && opts.Access != "locked") {
+		return "", opts, fmt.Errorf("upload-file requires --access course|hidden|locked and an optional positive --folder ID")
+	}
+	resolve := func(path string) (string, error) {
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(root, path)
+		}
+		return filepath.Abs(path)
+	}
+	source, e := resolve(args[1])
+	if e != nil {
+		return "", opts, e
+	}
+	if opts.ReceiptPath != "" {
+		opts.ReceiptPath, e = resolve(opts.ReceiptPath)
+		if e != nil {
+			return "", opts, e
+		}
+	}
+	return source, opts, nil
+}

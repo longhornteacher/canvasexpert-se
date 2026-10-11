@@ -2,6 +2,8 @@
 
 Use this for any Canvas New Quiz: auto-scored items, written items (`ESSAY`, `FILEUPLOAD`), or a mix such as multiple choice plus constructed responses. What the teacher's words mean and the review page are in `AGENTS.md`.
 
+For curriculum conversion, student file assets and placing an existing quiz into a native module, read `native-content.md`. Use the returned New Quiz assignment ID for a module Assignment entry.
+
 ## Write the quiz in QuizForge format
 
 Write the quiz as a QuizForge v3.0-json file (`<QUIZFORGE_JSON>`). If the teacher has QuizForge's authoring modules (`QuizForge_Base.md` and the ELA/stimulus references), follow them for question design, rationales and stimulus use; `help formats` ("New Quiz file") lists what the Engine accepts and where it differs. You write questions, distractors, rationales and points; the Engine handles IDs, scoring structures and Canvas calls. Save the file in the course's `drafts/` folder.

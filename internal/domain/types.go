@@ -110,6 +110,7 @@ type CreatedResources struct {
 	TierPages           []TierPage    `yaml:"tier_pages,omitempty"`
 	StartedAt           string        `yaml:"create_started_at,omitempty"`
 	IntendedHTML        string        `yaml:"intended_html,omitempty"`
+	SavedHTML           string        `yaml:"saved_html,omitempty"`
 	AssignmentID        int64         `yaml:"assignment_id,omitempty"`
 	RubricID            int64         `yaml:"rubric_id,omitempty"`
 	RubricAssociationID int64         `yaml:"rubric_association_id,omitempty"`
@@ -130,6 +131,7 @@ type AssignmentDocument struct {
 	CourseID        int64               `yaml:"course_id,omitempty"`
 	AssignmentID    int64               `yaml:"assignment_id,omitempty"`
 	Title           string              `yaml:"title"`
+	BodyFormat      string              `yaml:"body_format,omitempty"`
 	Points          Decimal             `yaml:"points"`
 	SubmissionTypes []string            `yaml:"submission_types"`
 	DueAt           *string             `yaml:"due_at,omitempty"`

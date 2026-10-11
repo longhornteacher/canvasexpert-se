@@ -6,7 +6,7 @@ What the teacher's words mean and the review page are in `AGENTS.md`.
 
 Ask only for missing details that matter: course, title, directions, points, due and availability dates, submission type, module, publication, rubric. `.\cse.cmd courses` lists course nicknames and `.\cse.cmd modules <course>` lists module targets.
 
-Write a Markdown draft in the course's `drafts/` folder using the fields in `help formats`. Put the teaching content in the body. The renderer handles headings, paragraphs, lists, bold, italic, links and fenced code; raw HTML shows as escaped text.
+Write a draft in the course's `drafts/` folder using the fields in `help formats`. Put the teaching content in the body. The default Markdown renderer handles headings, paragraphs, lists, bold, italic, links and fenced code; raw HTML shows as escaped text. Use `body_format: html` explicitly for authored tables, images and Canvas file links. The local review shows HTML as escaped source; verify its saved appearance in Canvas. For standalone Pages, asset uploads and module assembly, read `native-content.md`.
 
 ## Review and create
 
