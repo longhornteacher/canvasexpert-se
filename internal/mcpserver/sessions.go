@@ -282,7 +282,7 @@ func (t *reviewTask) status() (TextOutput, error) {
 		}
 		message := "Ask the teacher to open " + t.url + ". " + identity
 		if t.kind == "review" {
-			message += ". No Canvas changes occur unless the teacher approves on the page."
+			message = "The review page is opening in the teacher's browser; fallback address " + t.url + ". " + identity + ". No Canvas changes occur unless the teacher approves on the page."
 		} else {
 			message += ". This page is private to the teacher; do not read its contents through MCP."
 		}
