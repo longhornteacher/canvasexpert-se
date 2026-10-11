@@ -238,7 +238,11 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 		}
 	}
 	store, _ := workspace.OpenStudents(root)
-	m := ReviewModel{Kind: "Assignment scores", Title: doc.Assignment.Title}
+	kind := "Assignment scores"
+	if doc.Assignment.NewQuiz {
+		kind = "New Quiz comments"
+	}
+	m := ReviewModel{Kind: kind, Title: doc.Assignment.Title}
 	for i, r := range doc.Students {
 		v := validated[i]
 		c := ReviewCard{Ref: r.StudentRef, Alias: aliases[r.StudentRef], Operation: r.Operation, Hold: v.Hold, Done: resultComplete(r)}
@@ -259,6 +263,9 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 		case r.ReviseFeedback != nil:
 			c.Attempt = r.ReviseFeedback.Attempt.Attempt
 			feedback = r.ReviseFeedback.Feedback
+		case r.CommentOnly != nil:
+			c.Attempt = r.CommentOnly.Attempt.Attempt
+			feedback = r.CommentOnly.Feedback
 		}
 		c.Submission = submissionText(works[r.StudentRef], c.Attempt)
 		if store != nil {
@@ -275,6 +282,18 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			}
 		} else if r.ReviseFeedback != nil {
 			c.Comment = feedback
+		} else if r.CommentOnly != nil && doc.Basis() != nil {
+			computed, e := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, r.CommentOnly.Components, doc.Assignment.Points)
+			if e != nil {
+				c.Hold = e.Error()
+			} else {
+				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: true})
+				if e != nil {
+					c.Hold = e.Error()
+				} else {
+					c.Comment = text
+				}
+			}
 		}
 		m.Cards = append(m.Cards, c)
 	}
@@ -286,11 +305,32 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 func submissionText(w domain.StudentWorkDocument, attempt int) string {
 	pick := func(a domain.AttemptWork) string {
 		text := strings.TrimSpace(a.ReadableText)
+		for _, response := range a.WrittenResponses {
+			label := response.Prompt
+			if label == "" {
+				label = "item " + response.ItemID
+			}
+			answer := response.Text
+			if answer == "" {
+				answer = render.HTMLText(response.HTML)
+			}
+			if text != "" {
+				text += "\n"
+			}
+			text += "[" + label + "]\n" + answer
+		}
 		if text == "" {
 			text = "(no typed text in this attempt)"
 		}
 		for _, f := range a.Attachments {
 			text += "\n[attachment: " + f.Name + "]"
+		}
+		for _, f := range a.WrittenFiles {
+			text += "\n[New Quiz file: " + f.Name + ", " + f.Status
+			if f.Reason != "" {
+				text += ": " + f.Reason
+			}
+			text += "]"
 		}
 		return text
 	}

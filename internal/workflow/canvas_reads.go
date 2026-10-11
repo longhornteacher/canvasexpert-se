@@ -271,11 +271,14 @@ func UnsupportedAssignment(a Assignment) string {
 	if a.GroupCategoryID != nil && *a.GroupCategoryID != 0 {
 		return "group submissions aren't supported yet"
 	}
-	if a.QuizID != nil {
+	if a.QuizID != nil && !a.NewQuiz {
 		return "quizzes aren't supported yet"
 	}
 	if a.GradingType != "points" && a.GradingType != "percent" {
 		return "requires numeric points or percent grading"
+	}
+	if a.NewQuiz {
+		return ""
 	}
 	if len(a.SubmissionTypes) == 0 {
 		return "no supported submission mode"

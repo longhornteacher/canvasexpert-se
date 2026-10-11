@@ -1,8 +1,12 @@
-# New Quiz written work: reading responses and uploaded files (spec, not built)
+# New Quiz written work: reading responses and uploaded files
 
-Status: **specification; the file-download chain is verified live once (see below); nothing here is implemented in the Engine.** Written by request on 2026-10-11 after the CS8 probe of New Quiz 3698192 (one student attempt: ESSAY plus FILEUPLOAD, independent rubric attached). See the dated results at the end of [the probe handoff](../handoffs/active/NEW-QUIZ-SCORING-PROBE.md).
+Status (2026-10-11): **parts 1–3 are implemented with local tests; the Engine/MCP paths have not been validated live.** Earlier Canvas Live hand-runs on CS8 quiz 3698192 covered one student's typed response, one byte-exact DOCX download, and one comment post. Those runs are evidence for the APIs, not proof that the new Engine implementation works against Canvas. See the dated results at the end of [the probe handoff](../handoffs/active/NEW-QUIZ-SCORING-PROBE.md).
 
 Design stance (teacher decision): keep the Engine lean. A mechanistic step that worked in development testing is treated as working until Canvas or the teacher says otherwise. No read-backs, confirmation reports or retry frameworks after a write.
+
+### Engine implementation status
+
+The three parts below are now implemented with focused local tests. `pull-work COURSE QUIZ_ID` must name a New Quiz explicitly. The pull writes typed essay responses into the pseudonymized student-work packet and downloads upload bytes into its `students/<student_ref>/files/attempt-N/` directory. File results have `downloaded` or `not-retrieved` status; downloads are capped at 50 MB per file and 500 MB per pull. The native transport sends the Canvas PAT only to Canvas, sends derived tokens only to the validated HTTPS backend and quiz hosts, and sends no authorization on the signed file GET. The Results schema supports `operation: comment-only`; validation rejects grade payloads on that operation and rejects grade mode for New Quiz snapshots. Review renders criterion scores without an aggregate assessment, and the post branch writes only the attempt-scoped comment. All of these Engine behaviors remain **local tests only**; current MCP and live Engine verification remain pending.
 
 ## Goal
 
@@ -16,18 +20,20 @@ When the teacher asks to score a New Quiz's written items, the agent reads each 
 4. Essay `answer` is HTML. File-upload `answer` is **only the filename** (for example `I like dogs.docx`).
 5. Plain REST submissions for the quiz assignment carry no response text (`body` is null).
 
-## Part 1: responses (no file bytes). Small and safe to build first
+## Part 1: responses and Student Analysis report
 
-- Add New Quiz assignments (`is_quiz_lti_assignment`) to `pull-work` instead of skipping them in `UnsupportedAssignment`.
-- Fetch the report as above. The Engine's client is same-origin only; the signed results URL needs one narrow helper that GETs exactly the `results.url` returned by Canvas, over HTTPS, with **no** Canvas credential attached.
-- Write the same student-work packet the Engine already writes: pseudonymized `student_ref`, attempt, submitted_at, one readable-text block per written item labelled by item prompt and id. Join to prompts via `/items`.
-- Identity: match `student_data.id` to the enrolled student the Engine already resolves; if it does not match, skip that student with a one-line reason.
-- Scoring basis: the attached Canvas rubric when present, else each item's `rubric_hint` from the quiz file (as in the probe handoff).
-- Output is a **comment-only** results mode: one submission comment per student on the quiz assignment (the ordinary REST comment, `attempt` set), computed rubric lines first, then the agent's glows and grows. No grade write. Review-before-post applies. After the teacher approves, the Engine writes and reports once; no read-back.
+- `pull-work COURSE QUIZ_ID` accepts New Quiz assignments only when explicitly named; broad class pulls skip them.
+- The Engine launches Student Analysis, polls its progress, gets the signed result file over HTTPS with no authorization header, and joins essay answers to prompts from `/items`.
+- The packet keeps the pseudonymized `student_ref`, attempt and submit time, with written responses labelled by prompt and item id.
+- Identity: `student_data.id` must match the enrolled submission's user id and the attempt must match; otherwise that student is skipped with a one-line reason.
+- Scoring basis: the attached Canvas rubric when present, else the teacher's `scoring_basis`; quiz-file `rubric_hint`s guide the agent's judgment.
+- Output is a **comment-only** results mode: one submission comment per student on the quiz assignment (ordinary REST comment, `attempt` set), criterion lines first, then the agent's glows and grows. It has no aggregate assessment line and cannot carry grade, rubric-assessment or late actions. Review-before-post applies. After the teacher approves, the Engine writes and reports once; no read-back.
 
-Still to prove with the teacher's approval of one specific comment: the comment lands on the intended attempt of a New Quiz submission and the quiz score is untouched (question B).
+The new Engine path still needs MCP and Canvas Live validation to establish attempt placement and verify the quiz score remains untouched. The prior hand-run is API evidence only.
 
 ## Part 2: uploaded files. Engine downloads the bytes; the agent opens and reads them
+
+Implementation status: the Engine native transport and pull integration have local fake-server tests. The hand-run below remains separate Canvas Live evidence and does not validate the Engine implementation.
 
 Decision (teacher, 2026-10-11): the Engine's only job is to **download the file exactly as uploaded** into the student's pulled-work folder. It does not convert, extract, parse or score. The agent opens DOCX, PDF, images and so on with its own tools.
 
@@ -43,8 +49,8 @@ Inputs already known from plain REST (`GET /api/v1/courses/:c/assignments/:a/sub
 4. `POST <backend_url>/api/native/launch`, headers `Authorization: Bearer <workflow JWT>`, `X-Domain: <Canvas host>`; body `{"params": <params>, "signature": <signature>}`. Response gives the native token (`token`/`jwt`/`access_token`) and `entry_path.resourceId`.
 5. `GET <backend_url>/api/assignments/<resourceId>/participants?no_pagination=true`, `Authorization: Bearer <native token>`. Each participant has `canvas_user_id` and `participant_sessions[]`. Match `canvas_user_id` to the Canvas user id. (Skippable if the REST `participant_session_id` is trusted.)
 6. `GET <backend_url>/api/participant_sessions/<PS>/results`, native token. Response gives `quiz_host`, `result_token`, and the quiz session id (`quiz_api_quiz_session_id`, older shapes `quiz_session_id`).
-7. `GET <quiz_host>/api/quiz_sessions/<QS>`, headers `Authorization: <result_token>`, `AuthType: Signature`. Response has `authoritative_result.id` and `authoritative_result.attempt`. **Require the attempt to equal the attempt being pulled**; otherwise skip that student.
-8. `GET <quiz_host>/api/quiz_sessions/<QS>/results/<result id>/session_item_results`, same signature headers. For each file-upload item, `scored_data.value[]` is a list of `{name, url, size, id}`.
+7. `GET <quiz_host>/api/quiz_sessions/<QS>`, headers `Authorization: <result_token>`, `AuthType: Signature`. The authoritative result supplies its id; the attempt number is not reliable here.
+8. `GET <quiz_host>/api/quiz_sessions/<QS>/results/<result id>/session_item_results`, same signature headers. For each requested file-upload item, `scored_data.value[]` is a list of `{name, url, size, id}`. Require the item result's attempt to equal the attempt being pulled; otherwise skip those files.
 9. Download each `url` with a plain HTTPS GET and **no authorization header** (the URL is pre-signed). Stream to `<name>.partial`, then rename. Remove the partial on any failure.
 
 Steps 1 to 4 carry credential-derived tokens to the New Quizzes backend, and 6 to 8 to the quiz host. That is the sensitive part.

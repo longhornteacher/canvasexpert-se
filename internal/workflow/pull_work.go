@@ -198,6 +198,13 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			setPhase("discovery")
 			report.Assignments = append(report.Assignments, PullAssignmentSummary{Course: course.Nickname, AssignmentID: a.ID, Title: a.Name})
 			summary := &report.Assignments[len(report.Assignments)-1]
+			// New Quiz written work is intentionally available only through an
+			// explicit assignment-scoped pull.
+			if a.NewQuiz && query == "" {
+				summary.SkipReason = "New Quiz written work requires an explicit assignment pull"
+				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, summary.SkipReason))
+				continue
+			}
 			if reason := UnsupportedAssignment(a); reason != "" {
 				summary.SkipReason = reason
 				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, reason))
@@ -223,7 +230,11 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				if sub.Missing || sub.SubmittedAt == nil || sub.Attempt < 1 {
 					summary.Missing++
 				}
-				if why := unsupportedSubmission(sub); why != "" {
+				why := unsupportedSubmission(sub)
+				if a.NewQuiz {
+					why = unsupportedNewQuizSubmission(sub)
+				}
+				if why != "" {
 					if sub.Excused {
 						summary.Excused++
 					} else if sub.SubmittedAt != nil && sub.Attempt >= 1 {
@@ -268,8 +279,20 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			if e != nil {
 				return report, e
 			}
+			var newQuizRows map[int64]newQuizRow
+			var newQuizDownloadBudget int64
+			if a.NewQuiz {
+				newQuizRows, e = newQuizResponses(ctx, s.Client, course.ID, a.ID)
+				if e != nil {
+					return report, fmt.Errorf("read New Quiz written responses: %w", e)
+				}
+			}
 			for _, d := range fetched {
-				if why := unsupportedSubmission(d); why != "" {
+				why := unsupportedSubmission(d)
+				if a.NewQuiz {
+					why = unsupportedNewQuizSubmission(d)
+				}
+				if why != "" {
 					summary.Unsupported++
 					report.Skipped = append(report.Skipped, fmt.Sprintf("assignment %d: %s", a.ID, why))
 					continue
@@ -302,6 +325,16 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				doc.Current, e = s.attemptWork(ctx, relDir, st.Ref, sub)
 				if e != nil {
 					return report, e
+				}
+				if a.NewQuiz {
+					row, ok := newQuizRows[sub.UserID]
+					if !ok || row.Attempt != sub.Attempt {
+						report.Skipped = append(report.Skipped, fmt.Sprintf("assignment %d: New Quiz report identity/attempt did not match enrolled submission", a.ID))
+						continue
+					}
+					doc.Current.WrittenResponses = row.Responses
+					doc.Current.WrittenFiles = s.downloadNewQuizFiles(ctx, relDir, st.Ref, sub.UserID, course.ID, a.ID, sub.Attempt, row, &newQuizDownloadBudget)
+					doc.Current.Ref.SubmittedAt = row.SubmittedAt
 				}
 				seen := map[int]bool{sub.Attempt: true}
 				for _, prior := range sub.History {

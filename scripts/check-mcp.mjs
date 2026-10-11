@@ -94,7 +94,7 @@ try {
   await call('validate_document', { path: 'courses/assignment.md' });
   if (review) {
     const started = await call('start_review', { path: 'courses/assignment.md', course: 'CS8' }, false, true);
-    assert.equal(started.state, 'pending');
+    assert.equal(started.state, 'pending', JSON.stringify(started));
     const url = started.url;
     assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/review$/);
     const id = started.review_id;

@@ -507,3 +507,36 @@ func (c *Client) Download(ctx context.Context, rawURL string, dst io.Writer) err
 		return nil
 	})
 }
+
+// DownloadUnauthenticated fetches a Canvas supplied signed URL without ever
+// attaching the Canvas PAT, including on same-origin URLs and redirects.
+func (c *Client) DownloadUnauthenticated(ctx context.Context, rawURL string, dst io.Writer) error {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" || dst == nil {
+		return &Error{Kind: "validation"}
+	}
+	hc := &http.Client{Transport: c.http.Transport, Timeout: 45 * time.Second}
+	hc.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 || req.URL.Scheme != "https" || req.URL.User != nil {
+			return &Error{Kind: "validation"}
+		}
+		req.Header.Del("Authorization")
+		return nil
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return &Error{Kind: "validation"}
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return &Error{Kind: "transport"}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return &Error{Kind: "validation", Status: resp.StatusCode}
+	}
+	if _, err = io.Copy(dst, resp.Body); err != nil {
+		return &Error{Kind: "transport"}
+	}
+	return nil
+}

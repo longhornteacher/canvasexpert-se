@@ -19,10 +19,10 @@ type StudentPostReport struct {
 	Revision                               domain.ActionOutcome
 }
 type PostReport struct {
-	Path         string
-	Students     []StudentPostReport
-	Requests     int64
-	Elapsed      time.Duration
+	Path     string
+	Students []StudentPostReport
+	Requests int64
+	Elapsed  time.Duration
 }
 type postSource struct {
 	student workspace.Student
@@ -103,7 +103,13 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 			continue
 		}
 		if v.Hold != "" {
-			holdGrade(r.Grade, v.Hold)
+			if r.Grade != nil {
+				holdGrade(r.Grade, v.Hold)
+			} else if r.CommentOnly != nil {
+				holdOutcome(&r.CommentOnly.Outcome, v.Hold)
+			} else if r.ReviseFeedback != nil {
+				holdOutcome(&r.ReviseFeedback.Outcome, v.Hold)
+			}
 			if err = save(); err != nil {
 				return report, err
 			}
@@ -118,11 +124,21 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 			report.Students = append(report.Students, postReport(*r))
 			continue
 		}
+		if r.Operation == "comment-only" && !basisMatches {
+			holdOutcome(&r.CommentOnly.Outcome, "assignment/rubric basis changed; pull-work for reassessment")
+			if err = save(); err != nil {
+				return report, err
+			}
+			report.Students = append(report.Students, postReport(*r))
+			continue
+		}
 		source := sources[r.StudentRef]
 		live, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, source.student.UserID)
 		if e != nil {
 			if r.Grade != nil {
 				holdGrade(r.Grade, e.Error())
+			} else if r.CommentOnly != nil {
+				holdOutcome(&r.CommentOnly.Outcome, e.Error())
 			} else {
 				holdOutcome(&r.ReviseFeedback.Outcome, e.Error())
 			}
@@ -137,6 +153,11 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		}
 		if r.Operation == "revise-feedback" {
 			err = s.postRevision(ctx, &doc, r, v, source, live, save)
+		} else if r.Operation == "comment-only" {
+			if !liveAssignment.NewQuiz {
+				return report, fmt.Errorf("live assignment is no longer a New Quiz")
+			}
+			err = s.postCommentOnly(ctx, &doc, r, v, source, live, save)
 		} else {
 			err = s.postGrade(ctx, &doc, r, v, source, live, coupledRubric, save)
 		}
@@ -148,9 +169,65 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 	return report, nil
 }
 
+func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocument, row *domain.StudentResult, v domain.ValidatedStudent, source postSource, live Submission, save func() error) error {
+	c := row.CommentOnly
+	if live.UserID != source.student.UserID || live.AssignmentID != doc.Assignment.AssignmentID {
+		return fmt.Errorf("live submission identity disagrees with requested target")
+	}
+	if !sameAttempt(c.Attempt, attemptRef(live)) {
+		holdOutcome(&c.Outcome, "new submission attempt since pull; pull-work for this student")
+		return save()
+	}
+	computed, err := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, c.Components, doc.Assignment.Points)
+	if err != nil {
+		return err
+	}
+	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: true})
+	if err != nil {
+		return err
+	}
+	var matches int
+	for _, existing := range commentsForAttempt(live, c.Attempt.Attempt) {
+		if existing.Comment == text {
+			matches++
+		}
+	}
+	if matches == 1 {
+		c.Outcome = domain.ActionOutcome{Status: "preserved", PostedText: text, Message: "exact intended text is already present; ownership not assumed"}
+		return save()
+	}
+	if matches > 1 {
+		holdOutcome(&c.Outcome, "multiple exact feedback matches; select the precise comment")
+		c.Outcome.PostedText = text
+		return save()
+	}
+	if ambiguous(c.Outcome) {
+		holdOutcome(&c.Outcome, "comment completion remains uncertain; no exact match on the intended attempt")
+		c.Outcome.PostedText = text
+		return save()
+	}
+	c.Outcome = domain.ActionOutcome{Status: "pending", PostedText: text}
+	if err = save(); err != nil {
+		return err
+	}
+	err = s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"comment": map[string]any{"text_comment": text, "attempt": c.Attempt.Attempt}}, nil)
+	if err != nil {
+		c.Outcome = failedOutcome(err)
+		c.Outcome.PostedText = text
+		return save()
+	}
+	// Canvas accepted the comment. This mode has no grade or rubric write and
+	// deliberately does not read the submission back.
+	c.Outcome = domain.ActionOutcome{Status: "succeeded", PostedText: text}
+	return save()
+}
+
 func resultComplete(r domain.StudentResult) bool {
 	if r.Operation == "grade" {
 		return gradeComplete(r.Grade)
+	}
+	if r.Operation == "comment-only" {
+		return r.CommentOnly != nil && definite(r.CommentOnly.Outcome)
 	}
 	return r.ReviseFeedback != nil && definite(r.ReviseFeedback.Outcome)
 }
@@ -171,6 +248,10 @@ func postReport(r domain.StudentResult) StudentPostReport {
 		}
 	} else if r.ReviseFeedback != nil {
 		p.Revision = r.ReviseFeedback.Outcome
+		p.Status = p.Revision.Status
+		p.Message = p.Revision.Message
+	} else if r.CommentOnly != nil {
+		p.Revision = r.CommentOnly.Outcome
 		p.Status = p.Revision.Status
 		p.Message = p.Revision.Message
 	}
@@ -256,6 +337,10 @@ func (s *Service) postSources(doc domain.ResultsDocument) (map[string]postSource
 				return nil, fmt.Errorf("%s strongest prior is absent from actual pulled history", r.StudentRef)
 			}
 
+		} else if r.CommentOnly != nil {
+			if !sameAttempt(r.CommentOnly.Attempt, work.Current.Ref) {
+				return nil, fmt.Errorf("%s target attempt differs from pulled work", r.StudentRef)
+			}
 		} else {
 			rv := r.ReviseFeedback
 			if !sameAttempt(rv.Attempt, work.Current.Ref) && !hasAttempt(work.Prior, rv.Attempt) {

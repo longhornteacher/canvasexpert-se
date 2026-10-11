@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/render"
 	"canvasexpertse/internal/workspace"
 )
 
@@ -101,5 +102,80 @@ func TestKnownFeedbackCommentWithChangedAttemptHeld(t *testing.T) {
 	}
 	if out.Status != "held" {
 		t.Fatalf("wrong-attempt known comment satisfied feedback: %#v", out)
+	}
+}
+
+func TestNewQuizCommentOnlyWritesOnlyAttemptScopedComment(t *testing.T) {
+	writes, reads := 0, 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" {
+			reads++
+			_ = json.NewEncoder(w).Encode(fixtureAssignment())
+			return
+		}
+		writes++
+		if r.Method != "PUT" || !strings.HasSuffix(r.URL.Path, "/submissions/5") {
+			t.Errorf("unexpected New Quiz write: %s %s", r.Method, r.URL.Path)
+		}
+		var body map[string]map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		comment := body["comment"]
+		if len(body) != 1 || len(comment) != 2 || comment["text_comment"] == "" || comment["attempt"] != float64(2) {
+			t.Errorf("write was not comment-only and attempt-scoped: %#v", body)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	live := fixtureSubmission(5)
+	rubric := domain.Rubric{Title: "Evidence", Criteria: []domain.Criterion{{ID: "c1", Description: "Evidence", Points: domain.MustDecimal("100")}}}
+	doc := &domain.ResultsDocument{Assignment: domain.AssignmentSnapshot{CourseID: 1, AssignmentID: 10, Points: domain.MustDecimal("20"), NewQuiz: true, Rubric: &rubric}, Interpretation: domain.Interpretation{Mapping: "repeated", Rationale: "Each written item uses this rubric.", Components: []domain.Component{{Key: "answer", Label: "Answer", Weight: domain.MustDecimal("1")}}}}
+	row := &domain.StudentResult{Operation: "comment-only", CommentOnly: &domain.CommentOnlyOperation{Attempt: attemptRef(live), Components: []domain.ComponentScore{{Key: "answer", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "c1", Points: domain.MustDecimal("80")}}}}, Feedback: "Explain your evidence."}}
+	validated := domain.ValidatedStudent{Interpretation: doc.Interpretation}
+	source := postSource{student: workspace.Student{UserID: 5}}
+	if err := s.postCommentOnly(context.Background(), doc, row, validated, source, live, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 1 || reads != 0 || row.CommentOnly.Outcome.Status != "succeeded" {
+		t.Fatalf("accepted comment did not finish quietly: writes=%d reads=%d outcome=%#v", writes, reads, row.CommentOnly.Outcome)
+	}
+	currentAttempt := live.Attempt
+	live.Comments = []SubmissionComment{{ID: 72, Comment: row.CommentOnly.Outcome.PostedText, Attempt: &currentAttempt}}
+	if err := s.postCommentOnly(context.Background(), doc, row, validated, source, live, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 1 || row.CommentOnly.Outcome.Status != "preserved" || reads != 0 {
+		t.Fatalf("exact current-attempt duplicate was not preserved: writes=%d reads=%d outcome=%#v", writes, reads, row.CommentOnly.Outcome)
+	}
+}
+
+func TestNewQuizCommentOnlyDuplicateCheckIsAttemptScoped(t *testing.T) {
+	writes := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		writes++
+		w.WriteHeader(http.StatusNoContent)
+	})
+	live := fixtureSubmission(5)
+	attempt := attemptRef(live)
+	rubric := domain.Rubric{Title: "Evidence", Criteria: []domain.Criterion{{ID: "c1", Description: "Evidence", Points: domain.MustDecimal("100")}}}
+	interpretation := domain.Interpretation{Mapping: "repeated", Rationale: "Each written item uses this rubric.", Components: []domain.Component{{Key: "answer", Label: "Answer", Weight: domain.MustDecimal("1")}}}
+	doc := &domain.ResultsDocument{Assignment: domain.AssignmentSnapshot{CourseID: 1, AssignmentID: 10, Points: domain.MustDecimal("20"), NewQuiz: true, Rubric: &rubric}, Interpretation: interpretation}
+	row := &domain.StudentResult{Operation: "comment-only", CommentOnly: &domain.CommentOnlyOperation{Attempt: attempt, Components: []domain.ComponentScore{{Key: "answer", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "c1", Points: domain.MustDecimal("80")}}}}, Feedback: "Explain your evidence."}}
+	computed, _ := domain.ComputeAssessment(rubric, interpretation, row.CommentOnly.Components, doc.Assignment.Points)
+	want, err := render.RenderFeedback(render.FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: row.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: row.CommentOnly.Feedback, OmitAssessment: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	priorAttempt := 1
+	live.Comments = []SubmissionComment{{ID: 71, Comment: want, Attempt: &priorAttempt}}
+	live.History = nil
+	// A copy on another attempt must not suppress the current attempt's comment.
+	validated := domain.ValidatedStudent{Interpretation: interpretation}
+	if err = s.postCommentOnly(context.Background(), doc, row, validated, postSource{student: workspace.Student{UserID: 5}}, live, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 1 || row.CommentOnly.Outcome.Status != "succeeded" {
+		t.Fatalf("different-attempt duplicate incorrectly suppressed current write: writes=%d outcome=%#v", writes, row.CommentOnly.Outcome)
 	}
 }

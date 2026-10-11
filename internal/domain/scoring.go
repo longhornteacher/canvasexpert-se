@@ -303,10 +303,20 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 	}
 	basis := doc.Basis()
 	hasGrade := false
+	hasCommentOnly := false
 	for _, s := range doc.Students {
 		if s.Operation == "grade" {
 			hasGrade = true
 		}
+		if s.Operation == "comment-only" {
+			hasCommentOnly = true
+		}
+	}
+	if hasCommentOnly && !doc.Assignment.NewQuiz {
+		return nil, fmt.Errorf("comment-only results require a New Quiz assignment")
+	}
+	if doc.Assignment.NewQuiz && hasGrade {
+		return nil, fmt.Errorf("New Quiz results are comment-only; grade writes are not supported")
 	}
 	if basis == nil && hasGrade {
 		return nil, fmt.Errorf("assignment has no Canvas rubric: add scoring_basis (your own criteria with ids, descriptions and points) to score it")
@@ -397,6 +407,35 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				}
 			}
 			v.Assessment = &a
+		case "comment-only":
+			if s.Grade != nil || s.ReviseFeedback != nil || s.CommentOnly == nil {
+				return fail(fmt.Errorf("comment-only operation requires comment_only only; grade, rubric, and late writes forbidden"))
+			}
+			if !doc.Assignment.NewQuiz || (doc.Assignment.GradingType != "points" && doc.Assignment.GradingType != "percent") || doc.Assignment.AnonymousGrading || doc.Assignment.ModeratedGrading || doc.Assignment.GroupCategoryID != 0 {
+				return fail(fmt.Errorf("comment-only requires a supported individual New Quiz assignment"))
+			}
+			c := s.CommentOnly
+			if e := validateAttempt(c.Attempt); e != nil {
+				return fail(e)
+			}
+			if basis == nil {
+				return fail(fmt.Errorf("comment-only scores require a Canvas rubric or scoring_basis"))
+			}
+			if _, e := ComputeAssessment(*basis, v.Interpretation, c.Components, doc.Assignment.Points); e != nil {
+				var unknown *UnknownEvidenceError
+				if errors.As(e, &unknown) {
+					v.Hold = "unreadable work for component " + unknown.Component + "; not scored"
+					validated = append(validated, v)
+					continue
+				}
+				return fail(e)
+			}
+			if strings.TrimSpace(c.Feedback) == "" {
+				return fail(fmt.Errorf("conversational feedback required"))
+			}
+			if e := validateOutcome(c.Outcome); e != nil {
+				return fail(e)
+			}
 		case "revise-feedback":
 			if s.Grade != nil || s.ReviseFeedback == nil {
 				return fail(fmt.Errorf("revise-feedback requires revise_feedback only; grade/late writes forbidden"))

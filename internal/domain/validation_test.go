@@ -58,6 +58,27 @@ func TestFeedbackRevisionCannotCarryGradeOrLateActions(t *testing.T) {
 		t.Fatal("revision accepted grade/late data")
 	}
 }
+
+func TestNewQuizResultsAreCommentOnly(t *testing.T) {
+	d := validResults()
+	d.Assignment.NewQuiz = true
+	if _, err := ValidateResults(&d); err == nil || !strings.Contains(err.Error(), "comment-only") {
+		t.Fatalf("New Quiz grade operation accepted: %v", err)
+	}
+	d.Students[0] = StudentResult{StudentRef: "student-a", Operation: "comment-only", CommentOnly: &CommentOnlyOperation{Attempt: d.Students[0].Grade.Attempt, Components: []ComponentScore{criterionScore("a", "80")}, Feedback: "Your evidence supports the claim."}}
+	if _, err := ValidateResults(&d); err != nil {
+		t.Fatalf("valid comment-only operation rejected: %v", err)
+	}
+	d.Students[0].Grade = &GradeOperation{Assessment: MustDecimal("16")}
+	if _, err := ValidateResults(&d); err == nil {
+		t.Fatal("comment-only operation accepted an extra grade payload")
+	}
+	d.Assignment.NewQuiz = false
+	d.Students[0].Grade = nil
+	if _, err := ValidateResults(&d); err == nil || !strings.Contains(err.Error(), "New Quiz") {
+		t.Fatalf("ordinary assignment accepted comment-only mode: %v", err)
+	}
+}
 func TestCreateOutcomesRemainConsistent(t *testing.T) {
 	d := AssignmentDocument{Schema: 1, Kind: "assignment", Operation: "create", Course: "CS8", Title: "Writing", Points: MustDecimal("20"), SubmissionTypes: []string{"online_text_entry"}, Created: &CreatedResources{AssignmentID: 2, Assignment: ActionOutcome{Status: "succeeded", ID: 2}, Publication: ActionOutcome{Status: "preserved"}, Complete: true}}
 	if e := ValidateAssignment(d, "Directions"); e != nil {

@@ -55,7 +55,7 @@ func Snapshot(a Assignment, origin string) (domain.AssignmentSnapshot, error) {
 	if err != nil {
 		return domain.AssignmentSnapshot{}, fmt.Errorf("assignment %d has no valid points possible", a.ID)
 	}
-	v := domain.AssignmentSnapshot{Instance: origin, CourseID: a.CourseID, AssignmentID: a.ID, Title: a.Name, Points: points, DescriptionHTML: a.Description, SubmissionTypes: a.SubmissionTypes, DueAt: a.DueAt, UnlockAt: a.UnlockAt, LockAt: a.LockAt, Published: a.Published, UpdatedAt: a.UpdatedAt}
+	v := domain.AssignmentSnapshot{Instance: origin, CourseID: a.CourseID, AssignmentID: a.ID, Title: a.Name, Points: points, DescriptionHTML: a.Description, SubmissionTypes: a.SubmissionTypes, DueAt: a.DueAt, UnlockAt: a.UnlockAt, LockAt: a.LockAt, Published: a.Published, UpdatedAt: a.UpdatedAt, NewQuiz: a.NewQuiz}
 	v.GradingType = a.GradingType
 	v.AnonymousGrading = a.Anonymous
 	v.ModeratedGrading = a.Moderated

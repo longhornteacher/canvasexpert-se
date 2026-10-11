@@ -21,6 +21,14 @@ Before scoring anyone, identify the required response units from the directions,
 
 ## Assess honestly
 
+### New Quiz written items
+
+`pull-work COURSE QUIZ_ID` supports a New Quiz when the teacher explicitly names its assignment ID. It reads Student Analysis essay responses and attempts to download uploaded files into that packet's `students/<student_ref>/files/attempt-N/` folder; file records include a status and reason when a download is unavailable. Open downloaded files with your normal document tools. A missing or unreadable file is `evidence: unknown`, so hold that student's feedback and continue with other students.
+
+For New Quiz written work, use the attached independent rubric or a `scoring_basis`, then create a `comment-only` result per student. Include the exact pulled `attempt` and `submitted_at`, criterion components, and student-facing `feedback`; do not include a grade operation or late timing. The Engine validates criterion arithmetic, shows the exact whole-assignment comment in review, and posts only that comment after approval. The comment lists criterion scores without an aggregate quiz assessment. The teacher enters per-item points in SpeedGrader. Never write a New Quiz question score or rubric assessment through this workflow.
+
+The New Quiz report and file transport are implemented with local tests; Canvas Live evidence currently comes from a separate one-student, one-file hand-run. Treat any failure to match the report student and attempt as a skipped student, and rely on the pulled file status rather than assuming the upload was retrieved.
+
 - Score a missing required response as missing; don't average only the answered parts. Report missing submissions; don't enter zeros.
 - Unreadable work gets `evidence: unknown`: that student is held, everyone else posts.
 - Compare with the strongest earlier attempt as one whole submission. Never mix parts of attempts or treat a teacher-adjusted grade as proof of stronger work.
@@ -48,4 +56,4 @@ Save the results in the assignment's scoring area. Run `.\cse.cmd validate <resu
 
 The page approves everyone by default and calls out held students. After Revise, fix exactly the noted students and nothing else; the others keep their approval. If the command is interrupted or the teacher says "check revisions", read `<results-file>.review.json` (items with `"status": "revise"`). Never `post` students who were revised or held. Explain each held student specifically.
 
-To confirm an uncertain outcome, rerun the same results file. If read-back still differs, report the specific question; it is not resent automatically. A requested reassessment uses a fresh pull and new results file.
+Before posting, the Engine checks whether the exact comment text is already present to avoid posting an identical comment twice. Once Canvas accepts a write, treat it as done: do not read it back or rerun just to confirm. If Canvas reports a genuine write error, rerun the same results file to resume; completed writes stay complete. A requested reassessment uses a fresh pull and new results file.

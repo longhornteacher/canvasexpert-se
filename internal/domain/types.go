@@ -73,6 +73,7 @@ type AssignmentSnapshot struct {
 	AnonymousGrading bool     `yaml:"anonymous_grading"`
 	ModeratedGrading bool     `yaml:"moderated_grading"`
 	GroupCategoryID  int64    `yaml:"group_category_id,omitempty"`
+	NewQuiz          bool     `yaml:"new_quiz,omitempty"`
 }
 
 // Tier is one differentiated-hub tier of a create document: a supplement page
@@ -172,14 +173,31 @@ type ExistingComment struct {
 	CreatedAt string `yaml:"created_at,omitempty"`
 }
 type AttemptWork struct {
-	Ref              AttemptRef       `yaml:"ref"`
-	BodyHTML         string           `yaml:"body_html,omitempty"`
-	ReadableText     string           `yaml:"readable_text,omitempty"`
-	Attachments      []Attachment     `yaml:"attachments,omitempty"`
-	Late             bool             `yaml:"late"`
-	EffectiveDueAt   string           `yaml:"effective_due_at,omitempty"`
-	EnteredGrade     *Decimal         `yaml:"entered_grade,omitempty"`
-	RubricAssessment []CriterionScore `yaml:"rubric_assessment,omitempty"`
+	Ref              AttemptRef        `yaml:"ref"`
+	BodyHTML         string            `yaml:"body_html,omitempty"`
+	ReadableText     string            `yaml:"readable_text,omitempty"`
+	WrittenResponses []WrittenResponse `yaml:"written_responses,omitempty"`
+	WrittenFiles     []WrittenFile     `yaml:"written_files,omitempty"`
+	Attachments      []Attachment      `yaml:"attachments,omitempty"`
+	Late             bool              `yaml:"late"`
+	EffectiveDueAt   string            `yaml:"effective_due_at,omitempty"`
+	EnteredGrade     *Decimal          `yaml:"entered_grade,omitempty"`
+	RubricAssessment []CriterionScore  `yaml:"rubric_assessment,omitempty"`
+}
+type WrittenResponse struct {
+	ItemID string `yaml:"item_id"`
+	Prompt string `yaml:"prompt,omitempty"`
+	Type   string `yaml:"type"`
+	HTML   string `yaml:"html,omitempty"`
+	Text   string `yaml:"text,omitempty"`
+}
+type WrittenFile struct {
+	ItemID string `yaml:"item_id"`
+	Name   string `yaml:"name"`
+	Path   string `yaml:"path,omitempty"`
+	Size   int64  `yaml:"size,omitempty"`
+	Status string `yaml:"status"`
+	Reason string `yaml:"reason,omitempty"`
 }
 type StudentWorkDocument struct {
 	Schema                 int               `yaml:"schema"`
@@ -274,11 +292,21 @@ type FeedbackRevision struct {
 	Outcome    ActionOutcome       `yaml:"outcome,omitempty"`
 }
 type StudentResult struct {
-	StudentRef     string            `yaml:"student_ref"`
-	Operation      string            `yaml:"operation"`
-	Variant        string            `yaml:"variant,omitempty"`
-	Grade          *GradeOperation   `yaml:"grade,omitempty"`
-	ReviseFeedback *FeedbackRevision `yaml:"revise_feedback,omitempty"`
+	StudentRef     string                `yaml:"student_ref"`
+	Operation      string                `yaml:"operation"`
+	Variant        string                `yaml:"variant,omitempty"`
+	Grade          *GradeOperation       `yaml:"grade,omitempty"`
+	CommentOnly    *CommentOnlyOperation `yaml:"comment_only,omitempty"`
+	ReviseFeedback *FeedbackRevision     `yaml:"revise_feedback,omitempty"`
+}
+
+// CommentOnlyOperation carries per-criterion scores into a New Quiz
+// submission comment. It deliberately has no grade, rubric, or late fields.
+type CommentOnlyOperation struct {
+	Attempt    AttemptRef       `yaml:"attempt"`
+	Components []ComponentScore `yaml:"components"`
+	Feedback   string           `yaml:"feedback"`
+	Outcome    ActionOutcome    `yaml:"outcome,omitempty"`
 }
 type ResultsDocument struct {
 	Schema         int                `yaml:"schema"`

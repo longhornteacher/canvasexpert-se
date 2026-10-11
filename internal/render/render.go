@@ -19,6 +19,7 @@ type FeedbackInput struct {
 	Assessment       domain.Decimal
 	AssignmentPoints domain.Decimal
 	Feedback         string
+	OmitAssessment   bool
 }
 
 // RenderFeedback produces a deterministic Canvas comment. The order is the
@@ -43,8 +44,11 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 	}
 
 	var out strings.Builder
-	fmt.Fprintf(&out, "Assessment: %s / %s", in.Assessment.String(), in.AssignmentPoints.String())
-	out.WriteString("\nCriterion scores:")
+	if !in.OmitAssessment {
+		fmt.Fprintf(&out, "Assessment: %s / %s", in.Assessment.String(), in.AssignmentPoints.String())
+		out.WriteString("\n")
+	}
+	out.WriteString("Criterion scores:")
 	components := make(map[string]domain.ComponentScore, len(in.Components))
 	for _, c := range in.Components {
 		components[c.Key] = c
