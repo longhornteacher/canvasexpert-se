@@ -164,6 +164,9 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 		if e := ValidateRubric(*d.Rubric); e != nil {
 			return e
 		}
+		if (d.Operation == "create" || d.Operation == "attach-rubric") && d.Rubric.UseForGrading {
+			return fmt.Errorf("new rubrics require use_for_grading: false (or omitted): the Engine posts independent rubric assessments and separately computed grades; existing coupled rubrics remain supported")
+		}
 	}
 	if e := validateTiers(d, body); e != nil {
 		return e
@@ -209,9 +212,6 @@ func validateRubricAttachment(d AssignmentDocument, body string) error {
 	}
 	if strings.TrimSpace(d.Rubric.Title) == "" || d.Rubric.ID != 0 || d.Rubric.AssociationID != 0 {
 		return fmt.Errorf("attach-rubric requires a titled new rubric without existing rubric/association IDs")
-	}
-	if d.Rubric.UseForGrading {
-		return fmt.Errorf("attach-rubric requires independent grading: use_for_grading must be false")
 	}
 	if d.ModuleID != 0 || d.UpdateOutcome.Status != "" || d.UpdateOutcome.ID != 0 {
 		return fmt.Errorf("attach-rubric cannot include module placement or assignment update outcomes")

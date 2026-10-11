@@ -74,6 +74,7 @@ func buildAssignmentReview(path string) (ReviewModel, error) {
 			parts = append(parts, fmt.Sprintf("%s (%s)", c.Description, c.Points.String()))
 		}
 		card.Facts = append(card.Facts, fact("Rubric", doc.Rubric.Title+": "+strings.Join(parts, "; ")))
+		card.Facts = append(card.Facts, fact("Rubric grading", "Independent rubric assessments; grades are computed and posted separately (use_for_grading: false)."))
 	}
 	m.Cards = append(m.Cards, card)
 	for _, t := range doc.Tiers {
@@ -103,12 +104,29 @@ func buildQuizReview(path string) (ReviewModel, error) {
 		return ReviewModel{}, e
 	}
 	engine := "New Quiz"
+	effective := set.quizSettings()
+	attempts := "1 (single attempt)"
+	if multi, ok := effective["multiple_attempts"].(map[string]any); ok {
+		attempts = "unlimited"
+		if multi["attempt_limit"] == true {
+			attempts = fmt.Sprint(multi["max_attempts"])
+		}
+		attempts += "; score to keep: " + fmt.Sprint(multi["score_to_keep"])
+	}
+	limit := "none"
+	if effective["has_time_limit"] == true {
+		limit = fmt.Sprintf("%d minutes", effective["session_time_limit_in_seconds"].(int)/60)
+	}
+	results := effective["result_view_settings"].(map[string]any)
 	m := ReviewModel{Kind: engine, Title: q.Title, AllOrNothing: true,
 		Notice: "Item content is shown as the Engine will write it, as text and HTML. This is not a simulation of the Canvas student experience; check that in Canvas Preview or an unpublished quiz."}
+	if len(q.Warnings) > 0 {
+		m.Notice += " Warnings: " + strings.Join(q.Warnings, "; ")
+	}
 	head := ReviewCard{Ref: "quiz", Alias: q.Title, Operation: "create-quiz",
 		Facts: []ReviewFact{fact("Engine", engine), fact("Published", fmt.Sprint(set.Published)),
 			fact("Due", orNotSet(set.DueAt)), fact("Available from", orNotSet(set.UnlockAt)), fact("Until", orNotSet(set.LockAt)),
-			fact("Attempts", fmt.Sprint(set.AllowedAttempts)), fact("Time limit", timeLimit(set)), fact("Results shown to students", fmt.Sprint(!set.HideResults))}}
+			fact("Attempts", attempts), fact("Time limit", limit), fact("Results shown to students", fmt.Sprint(results["display_items"])), fact("Settings", "Effective request to Canvas; not a readback of stored settings")}}
 	if strings.TrimSpace(q.Instructions) != "" {
 		head.Frames = []ReviewFrame{{Label: "Instructions (HTML field)", HTML: previewTierLinks(q.Instructions)}}
 	}
@@ -128,6 +146,9 @@ func buildQuizReview(path string) (ReviewModel, error) {
 			Facts:  []ReviewFact{fact("Type", it.Type)},
 			Frames: []ReviewFrame{{Label: "Question (HTML field)", HTML: p + studentSide(it)}}}
 		card.Key = answerKey(it)
+		if feedback := rationaleReview(it); feedback != "" {
+			card.Frames = append(card.Frames, ReviewFrame{Label: "Student feedback rationales (sent with this question)", HTML: feedback})
+		}
 		m.Cards = append(m.Cards, card)
 	}
 	m.Cards[0].Total = fmt.Sprintf("%g points, %d questions", total, len(m.Cards)-1)
@@ -140,11 +161,28 @@ func orNotSet(s string) string {
 	}
 	return s
 }
-func timeLimit(s QuizSettings) string {
-	if !s.HasTimeLimit {
-		return "none"
+
+func rationaleReview(it qfItem) string {
+	if it.rationale == nil {
+		return ""
 	}
-	return fmt.Sprintf("%d minutes", s.TimeLimitMinutes)
+	var feedback strings.Builder
+	if it.Type == "MC" || it.Type == "MA" {
+		for i, choice := range it.Choices {
+			id := choice.ID
+			if id == "" {
+				id = string(rune('A' + i))
+			}
+			for _, r := range it.rationale.Choices {
+				if r.ID == id && r.Rationale != "" {
+					feedback.WriteString("<p><strong>Choice " + html.EscapeString(id) + "</strong></p>" + para(r.Rationale))
+				}
+			}
+		}
+	} else if it.rationale.Rationale != "" {
+		feedback.WriteString(para(it.rationale.Rationale))
+	}
+	return normalizeStudentText(feedback.String()).(string)
 }
 
 func listHTML(tag string, items []string) string {

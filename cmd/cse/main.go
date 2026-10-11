@@ -101,7 +101,7 @@ func main() {
 func run(ctx context.Context, args []string, out, progress io.Writer) int {
 	flags := flag.NewFlagSet("cse", flag.ContinueOnError)
 	flags.SetOutput(progress)
-	rootOpt := flags.String("workspace", "", "workspace directory")
+	rootOpt := flags.String("workspace", "", "advanced: CE-SE installation directory for a development or extension Engine")
 	if e := flags.Parse(args); e != nil {
 		if errors.Is(e, flag.ErrHelp) {
 			fmt.Fprint(out, help)
@@ -126,7 +126,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		if len(args) != 0 {
 			return fail(inputError(fmt.Errorf("mcp takes no arguments")), progress)
 		}
-		root, e := workspace.ResolveRoot(*rootOpt, "")
+		root, e := runtimeRoot(*rootOpt)
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
@@ -169,7 +169,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		if len(args) != 0 {
 			return fail(inputError(fmt.Errorf("ui takes no arguments")), progress)
 		}
-		uiRoot, rootErr := workspace.ResolveRoot(*rootOpt, "")
+		uiRoot, rootErr := runtimeRoot(*rootOpt)
 		if rootErr != nil && *rootOpt != "" {
 			return fail(inputError(rootErr), progress)
 		}
@@ -180,7 +180,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return fail(inputError(fmt.Errorf("setup takes no arguments")), progress)
 		}
 		origin := ""
-		setupRoot, rootErr := workspace.ResolveRoot(*rootOpt, "")
+		setupRoot, rootErr := runtimeRoot(*rootOpt)
 		var config domain.CourseConfig
 		configBody := ""
 		if rootErr == nil {
@@ -219,7 +219,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
-	root, e := workspace.ResolveRoot(*rootOpt, "")
+	root, e := runtimeRoot(*rootOpt)
 	if e != nil {
 		return fail(inputError(e), progress)
 	}
@@ -345,4 +345,12 @@ func validateDocument(path string, roots ...string) error {
 	}
 	_, e = workspace.ReadDocument(path, target)
 	return e
+}
+
+func runtimeRoot(explicit string) (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return workspace.ResolveRuntimeRoot(explicit, "", exe)
 }

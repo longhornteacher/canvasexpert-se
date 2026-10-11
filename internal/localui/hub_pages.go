@@ -116,7 +116,7 @@ func suggestNickname(code, name string) string {
 
 func (h *Hub) needWorkspace(w http.ResponseWriter) bool {
 	if h.root == "" {
-		h.home(w, 400, "Choose a workspace folder first; courses and students live inside it.", "")
+		h.home(w, 400, "Launch with the CE-SE installation first; for development use cse --workspace PATH ui.", "")
 		return true
 	}
 	return false
@@ -180,7 +180,9 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	origin := ""
-	if c, credErr := platform.LoadCredential(); credErr == nil {
+	if h.savedOriginFn != nil {
+		origin = h.savedOriginFn()
+	} else if c, credErr := platform.LoadCredential(); credErr == nil {
 		origin = c.Origin
 	}
 	if origin != "" && (config.Instance == "" || strings.Contains(config.Instance, starterInstance) || len(config.Courses) == 0) {

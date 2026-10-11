@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"canvasexpertse/internal/domain"
@@ -114,23 +115,15 @@ func digestOf(c ReviewCard) string {
 
 // BuildReview renders a results file without credentials or any Canvas call.
 func BuildReview(root, path string) (ReviewModel, error) {
-	b, e := os.ReadFile(path)
+	kind, e := ReviewInputKind(path)
 	if e != nil {
 		return ReviewModel{}, e
-	}
-	// A QuizForge file has no document header; any file with one is a workspace document.
-	kind, kindErr := workspace.DocumentKind(b)
-	if kindErr != nil && !strings.Contains(string(b), "QUIZFORGE_JSON") && !strings.HasPrefix(strings.TrimSpace(string(b)), "{") {
-		return ReviewModel{}, kindErr
-	}
-	if kindErr != nil {
-		kind = ""
 	}
 	var m ReviewModel
 	switch kind {
 	case "assignment":
 		m, e = buildAssignmentReview(path)
-	case "":
+	case "quiz":
 		m, e = buildQuizReview(path)
 	case "results":
 		m, e = buildResultsReview(root, path)
@@ -144,6 +137,77 @@ func BuildReview(root, path string) (ReviewModel, error) {
 		m.Cards[i].Digest = digestOf(m.Cards[i])
 	}
 	return m, nil
+}
+
+// ReviewInputKind uses the contents, including QuizForge envelopes, rather than
+// filenames or the presence of an optional course argument.
+func ReviewInputKind(path string) (string, error) {
+	b, e := os.ReadFile(path)
+	if e != nil {
+		return "", e
+	}
+	// A QuizForge file has no document header; any file with one is a workspace document.
+	kind, kindErr := workspace.DocumentKind(b)
+	if kindErr != nil && !strings.Contains(string(b), "QUIZFORGE_JSON") && !strings.HasPrefix(strings.TrimSpace(string(b)), "{") {
+		return "", kindErr
+	}
+	if kindErr != nil {
+		kind = "quiz"
+	}
+	return kind, nil
+}
+
+// ValidateReviewInput performs local parsing and the optional wrong-course
+// check before a review process or Canvas connection is opened.
+func ValidateReviewInput(root, path, course string) (string, error) {
+	kind, e := ReviewInputKind(path)
+	if e != nil {
+		return "", e
+	}
+	var nickname string
+	var courseID int64
+	switch kind {
+	case "assignment":
+		var d domain.AssignmentDocument
+		_, e = workspace.ReadDocument(path, &d)
+		nickname, courseID = d.Course, d.CourseID
+		if e == nil && d.Operation != "create" && d.Operation != "update" {
+			e = fmt.Errorf("review supports assignment create or update documents")
+		}
+	case "quiz":
+		if course == "" {
+			return "", fmt.Errorf("QuizForge review requires an explicit course nickname")
+		}
+		_, e = ReadQuizForge(path)
+	case "results":
+		var d domain.ResultsDocument
+		_, e = workspace.ReadDocument(path, &d)
+		courseID = d.Assignment.CourseID
+	default:
+		return "", fmt.Errorf("review supports assignments, results and QuizForge quiz files, not %q", kind)
+	}
+	if e != nil {
+		return "", e
+	}
+	if course != "" {
+		if nickname != "" && !strings.EqualFold(course, nickname) {
+			return "", fmt.Errorf("review course %q differs from document course %q", course, nickname)
+		}
+		if courseID > 0 {
+			var config domain.CourseConfig
+			if _, e = workspace.ReadDocument(filepath.Join(root, "context", "courses.md"), &config); e != nil {
+				return "", e
+			}
+			configured, err := (&Service{Config: config}).Course(course)
+			if err != nil {
+				return "", err
+			}
+			if configured.ID != courseID {
+				return "", fmt.Errorf("review course %q (%d) differs from document course_id %d", course, configured.ID, courseID)
+			}
+		}
+	}
+	return kind, nil
 }
 
 func buildResultsReview(root, path string) (ReviewModel, error) {

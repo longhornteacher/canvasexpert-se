@@ -2,6 +2,7 @@ package localui
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -25,9 +26,9 @@ func reviewTestHandler(t *testing.T, posted *map[string]bool) *reviewHandler {
 	model := reviewModelFixture()
 	return &reviewHandler{origin: "http://127.0.0.1:1234", secret: "secret", path: filepath.Join(t.TempDir(), "results.md"), ctx: context.Background(), done: make(chan struct{}),
 		build: func() (workflow.ReviewModel, error) { return model, nil },
-		post: func(_ context.Context, skip map[string]bool) (string, error) {
+		post: func(_ context.Context, skip map[string]bool) (ReviewPostResult, error) {
 			*posted = skip
-			return "ok", nil
+			return ReviewPostResult{Status: "completed", Summary: "ok"}, nil
 		}}
 }
 
@@ -61,7 +62,7 @@ func TestReviewPostSkipsRevisedAndHeldAndSavesNotes(t *testing.T) {
 	token := reviewModelFixture().ReviewDigest()
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, reviewForm(h, token, "post", url.Values{"status_1": {"revise"}, "note_1": {"too harsh"}}))
-	if w.Code != 200 || h.outcome == nil || !h.outcome.Posted {
+	if w.Code != 200 || h.outcome == nil || h.outcome.Status != "completed" {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	if !skip["s-b"] || !skip["s-c"] || skip["s-a"] {
@@ -89,7 +90,7 @@ func TestReviewRefusesChangedFileAndSendRevisionsPostsNothing(t *testing.T) {
 	}
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, reviewForm(h, reviewModelFixture().ReviewDigest(), "revise", nil))
-	if w.Code != 200 || skip != nil || h.outcome.Posted {
+	if w.Code != 200 || skip != nil || h.outcome.Status != "held" {
 		t.Fatal("send revisions must not post")
 	}
 }
@@ -112,7 +113,10 @@ func TestReviewCreateWholeRefusesPostWithRevisionAndSandboxesFrames(t *testing.T
 	called := false
 	h := &reviewHandler{origin: "http://127.0.0.1:1234", secret: "secret", path: filepath.Join(t.TempDir(), "r.md"), ctx: context.Background(), done: make(chan struct{}),
 		build: func() (workflow.ReviewModel, error) { return model, nil },
-		post:  func(context.Context, map[string]bool) (string, error) { called = true; return "", nil }}
+		post: func(context.Context, map[string]bool) (ReviewPostResult, error) {
+			called = true
+			return ReviewPostResult{Status: "completed"}, nil
+		}}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/review", nil))
 	body := w.Body.String()
@@ -135,7 +139,10 @@ func TestReviewWholeEditBlockedByHeldCard(t *testing.T) {
 	called := false
 	h := &reviewHandler{origin: "http://127.0.0.1:1234", secret: "secret", path: filepath.Join(t.TempDir(), "r.md"), ctx: context.Background(), done: make(chan struct{}),
 		build: func() (workflow.ReviewModel, error) { return model, nil },
-		post:  func(context.Context, map[string]bool) (string, error) { called = true; return "", nil }}
+		post: func(context.Context, map[string]bool) (ReviewPostResult, error) {
+			called = true
+			return ReviewPostResult{Status: "completed"}, nil
+		}}
 	f := url.Values{"request_secret": {"secret"}, "token": {model.ReviewDigest()}, "action": {"post"}, "ref_0": {"edit"}}
 	r := httptest.NewRequest(http.MethodPost, h.origin+"/submit", strings.NewReader(f.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -144,5 +151,26 @@ func TestReviewWholeEditBlockedByHeldCard(t *testing.T) {
 	h.ServeHTTP(w, r)
 	if w.Code != 409 || called || !strings.Contains(w.Body.String(), "Apply edit") {
 		t.Fatal(w.Code, called)
+	}
+}
+
+func TestReviewReportsActualPostOutcomeAndSavedPath(t *testing.T) {
+	for _, status := range []string{"completed", "partial", "held"} {
+		t.Run(status, func(t *testing.T) {
+			var skip map[string]bool
+			h := reviewTestHandler(t, &skip)
+			h.post = func(context.Context, map[string]bool) (ReviewPostResult, error) {
+				var err error
+				if status != "completed" {
+					err = errors.New("synthetic write failure")
+				}
+				return ReviewPostResult{Status: status, Summary: "actual outcome", Path: "archive/assignment.md"}, err
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, reviewForm(h, reviewModelFixture().ReviewDigest(), "post", nil))
+			if w.Code != 200 || h.outcome.Status != status || h.outcome.Path != "archive/assignment.md" {
+				t.Fatalf("status %d: %+v", w.Code, h.outcome)
+			}
+		})
 	}
 }

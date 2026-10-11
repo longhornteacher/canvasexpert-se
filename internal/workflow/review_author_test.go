@@ -45,4 +45,13 @@ func TestAssignmentReviewRendersDirectionsAndRefusesUpdates(t *testing.T) {
 	if err != nil || !m.AllOrNothing || len(m.Cards) == 0 || m.Cards[0].Frames[0].HTML == "" {
 		t.Fatal(m, err)
 	}
+	gradingShown := false
+	for _, f := range m.Cards[0].Facts {
+		if f.Label == "Rubric grading" && strings.Contains(f.Value, "Independent rubric assessments") && strings.Contains(f.Value, "posted separately") {
+			gradingShown = true
+		}
+	}
+	if !gradingShown {
+		t.Fatal("assignment review omitted the effective independent rubric grading behavior")
+	}
 }

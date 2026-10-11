@@ -119,7 +119,7 @@ func DocumentKind(b []byte) (string, error) {
 }
 
 func ParseDocument(b []byte, out any) (string, error) {
-	header, body, _, e := documentHeader(b)
+	header, body, node, e := documentHeader(b)
 	if e != nil {
 		return "", e
 	}
@@ -132,6 +132,21 @@ func ParseDocument(b []byte, out any) (string, error) {
 	strict := yaml.NewDecoder(bytes.NewReader(header))
 	strict.KnownFields(true)
 	if e := strict.Decode(fresh.Interface()); e != nil {
+		var fields *yaml.TypeError
+		if errors.As(e, &fields) {
+			for _, detail := range fields.Errors {
+				if strings.Contains(detail, "field ") && strings.Contains(detail, "not found in type") {
+					hint := "Check accepted fields with engine_reference (formats and examples)."
+					for i := 0; i < len(node.Content[0].Content); i += 2 {
+						if node.Content[0].Content[i].Value == "kind" && node.Content[0].Content[i+1].Value == "results" {
+							hint = "For results, use interpretation.mapping and students[].grade.components; attempt accepts only attempt and submitted_at. See engine_reference formats and examples."
+							break
+						}
+					}
+					return "", fmt.Errorf("%w; %s", e, hint)
+				}
+			}
+		}
 		return "", e
 	}
 	// After the closing delimiter every byte is author/student content. A

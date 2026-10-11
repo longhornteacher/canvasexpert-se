@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -47,8 +48,23 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 		file = p
 	}
-	quizReview := cmd == "review" && len(args) == 2
-	if cmd == "push" || cmd == "post" || (cmd == "review" && !quizReview) {
+	quizReview := false
+	if cmd == "review" {
+		p, e := documentPath(root, args[0])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		course := ""
+		if len(args) > 1 {
+			course = args[1]
+		}
+		kind, e := workflow.ValidateReviewInput(root, p, course)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		file, quizReview = p, kind == "quiz"
+	}
+	if cmd == "push" || cmd == "post" {
 		p, e := documentPath(root, args[0])
 		if e != nil {
 			return fail(inputError(e), progress)
@@ -68,19 +84,6 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if cmd == "post" && kind != "results" {
 			return fail(inputError(fmt.Errorf("post requires a results document")), progress)
 		}
-		if cmd == "review" && kind != "assignment" && kind != "results" {
-			return fail(inputError(fmt.Errorf("review supports assignments and results; Pages and modules use cse push directly")), progress)
-		}
-	}
-	if quizReview {
-		p, e := documentPath(root, args[0])
-		if e != nil {
-			return fail(inputError(e), progress)
-		}
-		if _, e = workflow.ReadQuizForge(p); e != nil {
-			return fail(inputError(e), progress)
-		}
-		file = p
 	}
 	var config domain.CourseConfig
 	if _, e := workspace.ReadDocument(filepath.Join(root, "context", "courses.md"), &config); e != nil {
@@ -252,6 +255,12 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 	case "push-quiz":
 		report, e := service.PushQuiz(ctx, args[0], file)
+		for _, warning := range report.Warnings {
+			fmt.Fprintln(progress, "Warning:", warning)
+		}
+		if report.Path != "" {
+			fmt.Fprintln(out, "Results:", report.Path)
+		}
 		if report.AssignmentID > 0 {
 			fmt.Fprintf(out, "%s: New Quiz %d, %d of %d items, published: %t\n%s\n", report.Status, report.AssignmentID, report.ItemsAdded, report.ItemsTotal, report.Published, report.URL)
 		}
@@ -315,14 +324,17 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				}
 			}
 			return workflow.BuildReview(root, file)
-		}, func(ctx context.Context, skip map[string]bool) (string, error) {
+		}, func(ctx context.Context, skip map[string]bool) (localui.ReviewPostResult, error) {
 			if quizReview {
 				report, e := service.PushQuiz(ctx, args[1], file)
-				return strings.TrimSpace(fmt.Sprintf("%s: quiz %d, %d of %d items. %s %s", report.Status, report.AssignmentID, report.ItemsAdded, report.ItemsTotal, report.URL, report.Message)), e
+				for _, warning := range report.Warnings {
+					fmt.Fprintln(progress, "Warning:", warning)
+				}
+				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: quiz %d, %d of %d items. %s %s", report.Status, report.AssignmentID, report.ItemsAdded, report.ItemsTotal, report.URL, report.Message))}, e
 			}
 			if b, _ := os.ReadFile(file); documentKind(b) == "assignment" {
 				report, e := service.Push(ctx, file)
-				return strings.TrimSpace(fmt.Sprintf("%s: %s %s", report.Status, report.URL, report.Message)), e
+				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: %s %s", report.Status, report.URL, report.Message))}, e
 			}
 			service.Skip = skip
 			report, e := service.Post(ctx, file)
@@ -336,15 +348,20 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			if failed == 0 {
 				summary = "all approved students completed"
 			}
-			return summary, e
+			status := "completed"
+			if failed > 0 || e != nil {
+				status = "partial"
+			}
+			return localui.ReviewPostResult{Status: status, Summary: summary, Path: report.Path}, e
 		}, progress)
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
-		fmt.Fprintf(out, "Review finished. Posted: %t\n", outcome.Posted)
-		if outcome.Posted {
+		fmt.Fprintf(out, "Review finished. Outcome: %s\n", outcome.Status)
+		if outcome.PostSummary != "" {
 			fmt.Fprintln(out, "Post:", outcome.PostSummary)
 		}
+		fmt.Fprintln(out, "Results:", outcome.Path)
 		fmt.Fprintf(out, "Approved (%d): %s\n", len(outcome.Approved), strings.Join(outcome.Approved, ", "))
 		for _, r := range outcome.Revise {
 			fmt.Fprintf(out, "Revise %s: %s\n", r.Ref, r.Note)
@@ -355,6 +372,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if len(outcome.Revise) > 0 {
 			fmt.Fprintln(out, "Revision notes are saved beside the results file; fix those students, then run cse review again.")
 		}
+		encoded, _ := json.Marshal(outcome)
+		fmt.Fprintf(out, "Review result: %s\n", encoded)
 	case "post":
 		report, e := service.Post(ctx, file)
 		partial := false

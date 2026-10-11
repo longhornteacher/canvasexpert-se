@@ -75,7 +75,7 @@ func ValidateInterpretation(r Rubric, in Interpretation) error {
 		return err
 	}
 	if in.Mapping != "repeated" && in.Mapping != "direct" {
-		return fmt.Errorf("mapping must be repeated or direct")
+		return fmt.Errorf("interpretation.mapping must be repeated or direct (results need an interpretation: block with mapping, rationale and components; see help examples)")
 	}
 	if strings.TrimSpace(in.Rationale) == "" || len(in.Components) == 0 {
 		return fmt.Errorf("interpretation requires rationale and components")

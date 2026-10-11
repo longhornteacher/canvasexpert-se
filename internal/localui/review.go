@@ -20,19 +20,25 @@ import (
 )
 
 // ReviewRevision is a card the teacher sent back to the agent.
-type ReviewRevision struct{ Ref, Note string }
+type ReviewRevision struct {
+	Ref  string `json:"ref"`
+	Note string `json:"note"`
+}
 
 // ReviewOutcome is what the agent learns when the teacher finishes reviewing.
 type ReviewOutcome struct {
-	Posted      bool
-	PostSummary string
-	Approved    []string // approved and sent to post (or ready, when not posted)
-	Revise      []ReviewRevision
-	Held        []string // "ref: reason"
+	Status      string           `json:"outcome"` // completed, partial, held
+	PostSummary string           `json:"summary,omitempty"`
+	Path        string           `json:"result_path,omitempty"`
+	Approved    []string         `json:"approved,omitempty"`
+	Revise      []ReviewRevision `json:"revision_notes,omitempty"`
+	Held        []string         `json:"held,omitempty"`
 }
 
-// ReviewPoster posts everything except the skipped student refs and returns a short summary.
-type ReviewPoster func(ctx context.Context, skip map[string]bool) (string, error)
+// ReviewPostResult carries the actual operation outcome and its saved artifact.
+type ReviewPostResult struct{ Status, Summary, Path string }
+
+type ReviewPoster func(ctx context.Context, skip map[string]bool) (ReviewPostResult, error)
 
 type reviewView struct {
 	Cards                 []reviewCardView
@@ -231,7 +237,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	out := ReviewOutcome{}
+	out := ReviewOutcome{Status: "held", Path: h.path}
 	skip := map[string]bool{}
 	if model.AllOrNothing && r.PostForm.Get("action") == "post" {
 		for i, c := range model.Cards {
@@ -274,21 +280,28 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.PostForm.Get("action") == "post" && len(out.Approved) > 0 {
 		ctx, cancel := context.WithTimeout(h.ctx, 10*time.Minute)
 		defer cancel()
-		summary, perr := h.post(ctx, skip)
-		out.Posted = true
-		out.PostSummary = summary
+		result, perr := h.post(ctx, skip)
+		out.Status, out.PostSummary = result.Status, result.Summary
+		if result.Path != "" {
+			out.Path = result.Path
+		}
+		if out.Status == "succeeded" {
+			out.Status = "completed"
+		}
+		if out.Status != "completed" && out.Status != "partial" && out.Status != "held" {
+			out.Status = "partial"
+		}
 		if perr != nil {
-			out.PostSummary = strings.TrimSpace(summary + " post error: " + perr.Error())
+			if out.Status == "completed" {
+				out.Status = "partial"
+			}
+			out.PostSummary = strings.TrimSpace(result.Summary + " post error: " + perr.Error())
 		}
 	}
 	h.outcome = &out
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	msg := fmt.Sprintf("%d approved, %d sent back for revision, %d held.", len(out.Approved), len(out.Revise), len(out.Held))
-	if out.Posted {
-		msg = "Post finished. " + msg + " Results are in the agent's session."
-	} else {
-		msg = "Nothing was posted. " + msg
-	}
+	msg = "Outcome: " + out.Status + ". " + msg + " Results are in the agent's session."
 	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Review finished</title><body style=\"font:16px system-ui;max-width:40rem;margin:3rem auto\"><h1>Review finished</h1><p>"+template.HTMLEscapeString(msg)+"</p><p>You can close this tab.</p></body></html>")
 	close(h.done)
 }

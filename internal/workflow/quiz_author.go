@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 
 	"canvasexpertse/internal/canvas"
@@ -46,7 +48,50 @@ func (q QuizForge) settings() (s QuizSettings, err error) {
 	if err = dec.Decode(&s); err != nil {
 		return s, fmt.Errorf("metadata.canvas is not valid: %v", err)
 	}
+	if !s.AllowMultipleAttempt && (s.AllowedAttempts != nil || s.ScoreToKeep != "" || s.BuildOnLastAttempt || s.AttemptCooldown != 0) {
+		return s, fmt.Errorf("metadata.canvas: allowed_attempts, score_to_keep, build_on_last_attempt and attempt_cooldown require allow_multiple_attempts: true; for one attempt omit these settings and the enabling flag (see engine_reference formats)")
+	}
+	if s.AllowMultipleAttempt {
+		n, e := s.attemptLimit()
+		if e != nil {
+			return s, e
+		}
+		if n == 1 {
+			return s, fmt.Errorf("metadata.canvas: allow_multiple_attempts: true contradicts allowed_attempts: 1; for one attempt omit both settings")
+		}
+		if s.ScoreToKeep != "" && s.ScoreToKeep != "highest" && s.ScoreToKeep != "latest" && s.ScoreToKeep != "average" && s.ScoreToKeep != "first" {
+			return s, fmt.Errorf("metadata.canvas.score_to_keep must be highest, latest, average or first")
+		}
+	}
 	return s, nil
+}
+
+func (s QuizSettings) attemptLimit() (int, error) {
+	if s.AllowedAttempts == nil {
+		return -1, nil
+	}
+	var n int
+	switch v := s.AllowedAttempts.(type) {
+	case float64:
+		if math.Trunc(v) != v || v > float64(math.MaxInt32) {
+			break
+		}
+		n = int(v)
+	case string:
+		if v == "unlimited" {
+			return -1, nil
+		}
+		var err error
+		n, err = strconv.Atoi(v)
+		if err != nil {
+			n = 0
+			break
+		}
+	}
+	if n == -1 || n > 0 {
+		return n, nil
+	}
+	return 0, fmt.Errorf("metadata.canvas.allowed_attempts must be a positive whole number, -1 or \"unlimited\"; see engine_reference formats")
 }
 
 func flag(p *bool, def bool) bool {
@@ -69,15 +114,7 @@ func (s QuizSettings) quizSettings() map[string]any {
 			keep = "highest"
 		}
 		a := map[string]any{"multiple_attempts_enabled": true, "score_to_keep": keep, "build_on_last_attempt": s.BuildOnLastAttempt}
-		n := -1
-		switch v := s.AllowedAttempts.(type) {
-		case float64:
-			n = int(v)
-		case string:
-			if v != "-1" && v != "unlimited" {
-				fmt.Sscan(v, &n)
-			}
-		}
+		n, _ := s.attemptLimit() // settings() validated the authored input.
 		if n > 0 {
 			a["attempt_limit"], a["max_attempts"] = true, n
 		}
@@ -113,7 +150,9 @@ type QuizPushReport struct {
 	ItemsTotal   int
 	Published    bool
 	Message      string
-	Hub          string  // hub tier pages, tags, and teacher actions
+	Hub          string // hub tier pages, tags, and teacher actions
+	Path         string // existing sidecar containing the created quiz ID and resume data
+	Warnings     []string
 }
 
 // quizSidecar is the resume record beside the quiz file. A New Quiz records its
@@ -150,6 +189,7 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 	if e != nil {
 		return report, e
 	}
+	report.Warnings = q.Warnings
 	set, e := q.settings()
 	if e != nil {
 		return report, e
@@ -220,6 +260,7 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 		}
 		existing = len(have)
 	}
+	report.Path = sidecarPath(path)
 	report.AssignmentID = id
 	report.URL = fmt.Sprintf("%s/courses/%d/assignments/%d", s.Client.Origin(), course.ID, id)
 	report.ItemsAdded = existing
@@ -274,13 +315,10 @@ func (s *Service) finishQuiz(ctx context.Context, courseID, id int64, set QuizSe
 	if set.PostToSIS != nil {
 		fields["post_to_sis"] = *set.PostToSIS
 	}
-	if set.Published {
-		fields["published"] = true
-	}
 	if len(fields) > 0 {
 		var a Assignment
 		if e := s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d", courseID, id), map[string]any{"assignment": fields}, &a); e != nil {
-			report.Message = "items are in, but assignment settings (dates, group, publication) were not applied; rerun the same file"
+			report.Message = "items are in, but assignment settings (dates, group) were not applied; rerun the same file"
 			return e
 		}
 		report.Published = a.Published
@@ -292,17 +330,30 @@ func (s *Service) finishQuiz(ctx context.Context, courseID, id int64, set QuizSe
 		}
 		path := fmt.Sprintf("/api/v1/courses/%d/modules/%d/items", courseID, set.ModuleID)
 		if e := s.Client.List(ctx, path+"?per_page=100", &mods); e != nil {
+			report.Message = "items are in, but module placement could not be checked; rerun the same file"
 			return e
 		}
+		placed := false
 		for _, m := range mods {
 			if m.Type == "Assignment" && m.ContentID == id {
-				return nil
+				placed = true
+				break
 			}
 		}
-		if e := s.Client.Write(ctx, "POST", path, map[string]any{"module_item": map[string]any{"type": "Assignment", "content_id": id}}, nil); e != nil {
-			report.Message = "items are in, but module placement failed; rerun the same file"
+		if !placed {
+			if e := s.Client.Write(ctx, "POST", path, map[string]any{"module_item": map[string]any{"type": "Assignment", "content_id": id}}, nil); e != nil {
+				report.Message = "items are in, but module placement failed; rerun the same file"
+				return e
+			}
+		}
+	}
+	if set.Published {
+		var a Assignment
+		if e := s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d", courseID, id), map[string]any{"assignment": map[string]any{"published": true}}, &a); e != nil {
+			report.Message = "items and requested module placement are in, but publication failed; rerun the same file"
 			return e
 		}
+		report.Published = a.Published
 	}
 	return nil
 }

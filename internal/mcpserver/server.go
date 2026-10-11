@@ -1,14 +1,13 @@
 package mcpserver
 
 import (
-	"bufio"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
+
 	"errors"
 	"fmt"
-	"io"
+
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,31 +15,41 @@ import (
 	"sync"
 	"time"
 
+	embedded "canvasexpertse"
+	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/workspace"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const maxWorkspaceFile = 1 << 20
 
-type Server struct {
-	root    string
-	ctx     context.Context
-	mu      sync.Mutex
-	reviews map[string]*reviewTask
-}
+var commandTimeout = 15 * time.Minute
 
-type reviewTask struct {
-	id     string
-	url    string
-	done   chan struct{}
-	mu     sync.Mutex
-	stdout strings.Builder
-	stderr strings.Builder
-	err    error
+type Server struct {
+	root              string
+	ctx               context.Context
+	mu                sync.Mutex
+	reviews           map[string]*reviewTask
+	sessions          map[string]*reviewTask
+	newSessionCommand func([]string) *exec.Cmd
+	sessionReadyWait  time.Duration
 }
 
 type TextOutput struct {
-	Text string `json:"text" jsonschema:"Result text"`
+	Text          string           `json:"text" jsonschema:"Result text"`
+	State         string           `json:"state,omitempty" jsonschema:"Local session state: pending, finished, or failed"`
+	ReviewID      string           `json:"review_id,omitempty"`
+	SessionID     string           `json:"session_id,omitempty"`
+	URL           string           `json:"url,omitempty" jsonschema:"Local page URL; returned only while the session is pending"`
+	Outcome       string           `json:"outcome,omitempty" jsonschema:"Review write outcome: completed, partial, or held"`
+	ResultPath    string           `json:"result_path,omitempty"`
+	RevisionNotes []ReviewRevision `json:"revision_notes,omitempty"`
+}
+
+type ReviewRevision struct {
+	Ref  string `json:"ref"`
+	Note string `json:"note"`
 }
 
 type ReadFileInput struct {
@@ -85,10 +94,22 @@ type ReviewStatusInput struct {
 }
 
 func Run(ctx context.Context, root string) error {
+	server, close := NewServer(ctx, root)
+	defer close()
+	return server.Run(ctx, &mcp.StdioTransport{})
+}
+
+// NewServer creates the same adapter for stdio and in-process transports.
+// Close stops any child review or private UI sessions.
+func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
+	ctx, cancel := context.WithCancel(ctx)
+	if _, err := workspace.Scaffold(root, embedded.WorkspaceTemplate, "workspace-template"); err != nil {
+		fmt.Fprintf(os.Stderr, "Could not add some CE-SE starter files: %v\n", err)
+	}
 	s := &Server{root: root, ctx: ctx, reviews: map[string]*reviewTask{}}
-	server := mcp.NewServer(&mcp.Implementation{Name: "canvasexpert-se", Version: "0.1b"}, nil)
-	addReadTool(server, "list_courses", "List the teacher's configured Canvas courses by nickname and current IDs.", func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (TextOutput, error) {
-		return s.command(ctx, "courses")
+	server := mcp.NewServer(&mcp.Implementation{Name: "canvasexpert-se", Version: "0.1b"}, &mcp.ServerOptions{Instructions: "Before any teacher task, read AGENTS.md using read_workspace_file, then read the relevant playbook. Read list_courses with its default configured source for saved nicknames and current selections; request source canvas only for connection testing or additional course discovery. Treat the structured courses list as setup status and ignore obsolete starter text in a preserved document body. Use engine_reference for Engine commands and file contracts. Keep .cse files and private teacher-only browser pages out of model context. Preserve honest computed grades, unsent work, and the teacher's requested scope. Review is the default for scores, assignment creation/edits, and quiz creation; direct writes follow an explicit teacher request to skip review."})
+	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
+		return s.listCourses(ctx, in)
 	})
 	addReadTool(server, "engine_reference", "Read CE-SE command help, document formats, Canvas field limits, or synthetic examples.", func(ctx context.Context, _ *mcp.CallToolRequest, in HelpInput) (TextOutput, error) {
 		if in.Topic == "" {
@@ -121,12 +142,12 @@ func Run(ctx context.Context, root string) error {
 	addActionTool(server, "pull_page", "Pull an exact Canvas Page and its edit baseline through the CE-SE Engine.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
 		return s.command(ctx, "pull-page", in.Course, in.Query)
 	})
-	addReadTool(server, "read_workspace_file", "Read a workspace instruction, playbook, context file, or course work file. Hidden folders, .cse, and Engine files are blocked.", func(_ context.Context, _ *mcp.CallToolRequest, in ReadFileInput) (TextOutput, error) {
+	addReadTool(server, "read_workspace_file", "Read a root .md/.txt teacher reference, workspace instruction, playbook, context file, or course work file. Hidden folders, .cse, and Engine files are blocked.", func(_ context.Context, _ *mcp.CallToolRequest, in ReadFileInput) (TextOutput, error) {
 		path, err := s.readablePath(in.Path)
 		if err != nil {
 			return TextOutput{}, err
 		}
-		b, err := os.ReadFile(path)
+		b, err := readLimited(path, maxWorkspaceFile)
 		if err != nil {
 			return TextOutput{}, err
 		}
@@ -151,15 +172,27 @@ func Run(ctx context.Context, root string) error {
 	addReadTool(server, "review_status", "Check whether the teacher finished a CE-SE review; returns approval/post outcome or teacher revision notes.", func(_ context.Context, _ *mcp.CallToolRequest, in ReviewStatusInput) (TextOutput, error) {
 		return s.reviewStatus(in.ReviewID)
 	})
-	return server.Run(ctx, &mcp.StdioTransport{})
+	s.registerOperationTools(server)
+	s.registerWorkspaceTools(server)
+	s.registerSessionTools(server)
+	return server, func() { cancel(); s.stopSessions() }
 }
 
 func addReadTool[In any](server *mcp.Server, name, description string, fn func(context.Context, *mcp.CallToolRequest, In) (TextOutput, error)) {
-	addTool(server, name, description, mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}, fn)
+	addTool(server, name, description, mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true, OpenWorldHint: boolPointer(externalTool(name))}, fn)
 }
 
 func addActionTool[In any](server *mcp.Server, name, description string, destructive bool, fn func(context.Context, *mcp.CallToolRequest, In) (TextOutput, error)) {
-	addTool(server, name, description, mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: boolPointer(name == "start_review" || name == "pull_work" || name == "pull_assignment" || name == "pull_page"), ReadOnlyHint: false}, fn)
+	addTool(server, name, description, mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: boolPointer(externalTool(name)), ReadOnlyHint: false}, fn)
+}
+
+func externalTool(name string) bool {
+	switch name {
+	case "list_courses", "list_modules", "pull_work", "pull_assignment", "pull_page", "start_review", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+		return true
+	default:
+		return false
+	}
 }
 
 func boolPointer(v bool) *bool { return &v }
@@ -177,6 +210,9 @@ func (s *Server) command(ctx context.Context, args ...string) (TextOutput, error
 		return TextOutput{}, err
 	}
 	full := append([]string{"--workspace", s.root}, args...)
+	// A stalled Canvas call must not hold the client's tool call forever.
+	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
 	cmd := exec.CommandContext(ctx, exe, full...)
 	var stdout, stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -194,214 +230,36 @@ func (s *Server) command(ctx context.Context, args ...string) (TextOutput, error
 	return TextOutput{Text: result}, nil
 }
 
-func (s *Server) safePath(relative string) (string, error) {
-	clean := filepath.Clean(filepath.FromSlash(strings.ReplaceAll(relative, "\\", "/")))
-	if clean == "." || filepath.IsAbs(clean) {
-		return "", errors.New("expected a workspace-relative path")
-	}
-	for _, part := range strings.Split(filepath.ToSlash(clean), "/") {
-		if strings.HasPrefix(part, ".") {
-			return "", errors.New("hidden workspace paths are not accessible")
-		}
-		if strings.EqualFold(part, "engine") {
-			return "", errors.New("Engine files are not accessible through workspace file tools")
-		}
-	}
-	return workspace.ConstrainPath(s.root, clean)
+type ListCoursesInput struct {
+	Source string `json:"source,omitempty" jsonschema:"configured (default) reads saved selections without Canvas; canvas discovers the live catalog"`
 }
 
-func (s *Server) readablePath(relative string) (string, error) {
-	path, err := s.safePath(relative)
-	if err != nil {
-		return "", err
-	}
-	first := strings.Split(filepath.ToSlash(filepath.Clean(filepath.FromSlash(relative))), "/")[0]
-	if !strings.EqualFold(first, "AGENTS.md") && !strings.EqualFold(first, "CLAUDE.md") && !strings.EqualFold(first, "context") && !strings.EqualFold(first, "playbooks") && !strings.EqualFold(first, "courses") {
-		return "", errors.New("read access is limited to AGENTS.md, CLAUDE.md, context/, playbooks/, and courses/")
-	}
-	return path, nil
+type configuredCourses struct {
+	Source   string          `json:"source"`
+	Root     string          `json:"root"`
+	Instance string          `json:"instance"`
+	Courses  []domain.Course `json:"courses"`
 }
 
-func (s *Server) coursePath(relative string) (string, error) {
-	path, err := s.safePath(relative)
-	if err != nil {
-		return "", err
-	}
-	if !strings.HasPrefix(strings.ToLower(filepath.ToSlash(relative)), "courses/") {
-		return "", errors.New("document path must be under courses/")
-	}
-	return path, nil
-}
-
-func (s *Server) writeDraft(in WriteFileInput) (TextOutput, error) {
-	path, err := s.coursePath(in.Path)
-	if err != nil {
-		return TextOutput{}, err
-	}
-	if len(in.Content) > maxWorkspaceFile {
-		return TextOutput{}, fmt.Errorf("draft exceeds the %d-byte write limit", maxWorkspaceFile)
-	}
-	if !strings.EqualFold(filepath.Ext(path), ".md") && !strings.EqualFold(filepath.Ext(path), ".yaml") && !strings.EqualFold(filepath.Ext(path), ".yml") {
-		return TextOutput{}, errors.New("drafts must use .md, .yaml, or .yml files")
-	}
-	if existing, readErr := os.ReadFile(path); readErr == nil {
-		if in.ExpectedSHA256 == "" {
-			return TextOutput{}, errors.New("file already exists; read it and provide its sha256 to replace it")
+func (s *Server) listCourses(ctx context.Context, in ListCoursesInput) (TextOutput, error) {
+	switch in.Source {
+	case "canvas":
+		return s.command(ctx, "courses")
+	case "", "configured":
+		path, err := s.readablePath("context/courses.md")
+		if err != nil {
+			return TextOutput{}, err
 		}
-		h := sha256.Sum256(existing)
-		if !strings.EqualFold(in.ExpectedSHA256, hex.EncodeToString(h[:])) {
-			return TextOutput{}, errors.New("file changed since it was read; reread it before editing")
+		var config domain.CourseConfig
+		if _, err := workspace.ReadDocument(path, &config); err != nil {
+			return TextOutput{}, err
 		}
-	} else if !os.IsNotExist(readErr) {
-		return TextOutput{}, readErr
-	} else if in.ExpectedSHA256 != "" {
-		return TextOutput{}, errors.New("file no longer exists; omit expected_sha256 to create it again")
-	}
-	if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return TextOutput{}, err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".cse-draft-*")
-	if err != nil {
-		return TextOutput{}, err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if err = tmp.Chmod(0600); err == nil {
-		_, err = io.WriteString(tmp, in.Content)
-	}
-	if closeErr := tmp.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return TextOutput{}, err
-	}
-	if err = os.Rename(tmpName, path); err != nil {
-		return TextOutput{}, err
-	}
-	h := sha256.Sum256([]byte(in.Content))
-	return TextOutput{Text: fmt.Sprintf("Draft saved: %s\nsha256: %x", filepath.ToSlash(in.Path), h)}, nil
-}
-
-func (s *Server) startReview(ctx context.Context, in ReviewInput) (TextOutput, error) {
-	path, err := s.coursePath(in.Path)
-	if err != nil {
-		return TextOutput{}, err
-	}
-	args := []string{"--workspace", s.root, "review", path}
-	if in.Course != "" {
-		args = append(args, in.Course)
-	}
-	exe, err := os.Executable()
-	if err != nil {
-		return TextOutput{}, err
-	}
-	cmd := exec.Command(exe, args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return TextOutput{}, err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return TextOutput{}, err
-	}
-	var nonce [16]byte
-	if _, err = rand.Read(nonce[:]); err != nil {
-		return TextOutput{}, err
-	}
-	task := &reviewTask{id: hex.EncodeToString(nonce[:]), done: make(chan struct{})}
-	s.mu.Lock()
-	for _, current := range s.reviews {
-		select {
-		case <-current.done:
-		default:
-			s.mu.Unlock()
-			return TextOutput{}, errors.New("a CE-SE review is already running; check it with review_status")
+		if config.Courses == nil {
+			config.Courses = []domain.Course{}
 		}
-	}
-	if err = cmd.Start(); err != nil {
-		s.mu.Unlock()
-		return TextOutput{}, err
-	}
-	s.reviews[task.id] = task
-	s.mu.Unlock()
-	stdoutDone := make(chan struct{})
-	go func() { defer close(stdoutDone); _, _ = io.Copy(&task.stdout, stdout) }()
-	urlReady := make(chan string, 1)
-	stderrDone := make(chan struct{})
-	go func() {
-		defer close(stderrDone)
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			line := scanner.Text()
-			task.mu.Lock()
-			task.stderr.WriteString(line + "\n")
-			task.mu.Unlock()
-			const prefix = "Open the local review page: "
-			if strings.HasPrefix(line, prefix) {
-				select {
-				case urlReady <- strings.TrimSpace(strings.TrimPrefix(line, prefix)):
-				default:
-				}
-			}
-		}
-	}()
-	go func() {
-		cmdErr := cmd.Wait()
-		<-stdoutDone
-		<-stderrDone
-		task.mu.Lock()
-		task.err = cmdErr
-		task.mu.Unlock()
-		close(task.done)
-	}()
-	go func() {
-		select {
-		case <-s.ctx.Done():
-			_ = cmd.Process.Kill()
-		case <-task.done:
-		}
-	}()
-	select {
-	case raw := <-urlReady:
-		task.mu.Lock()
-		task.url = raw
-		task.mu.Unlock()
-		return TextOutput{Text: fmt.Sprintf("Review is ready. Ask the teacher to open %s. No Canvas changes occur unless they approve on the page. review_id: %s", raw, task.id)}, nil
-	case <-task.done:
-		if task.err != nil {
-			return TextOutput{}, fmt.Errorf("review exited before the page became ready: %w\n%s", task.err, task.output())
-		}
-		return TextOutput{Text: "Review exited before its page became ready. " + task.output()}, nil
-	case <-ctx.Done():
-		return TextOutput{Text: "Review started; check review_status for review_id " + task.id}, nil
-	case <-time.After(30 * time.Second):
-		return TextOutput{Text: "Review is still starting; check review_status for review_id " + task.id}, nil
-	}
-}
-
-func (t *reviewTask) output() string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return strings.TrimSpace(t.stdout.String() + "\n" + t.stderr.String())
-}
-
-func (s *Server) reviewStatus(id string) (TextOutput, error) {
-	s.mu.Lock()
-	task := s.reviews[id]
-	s.mu.Unlock()
-	if task == nil {
-		return TextOutput{}, errors.New("unknown review_id")
-	}
-	select {
-	case <-task.done:
-		if task.err != nil {
-			return TextOutput{}, fmt.Errorf("review command failed: %w\n%s", task.err, task.output())
-		}
-		return TextOutput{Text: "Review finished.\n" + task.output()}, nil
+		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, Instance: config.Instance, Courses: config.Courses})
+		return TextOutput{Text: string(b)}, err
 	default:
-		task.mu.Lock()
-		url := task.url
-		task.mu.Unlock()
-		return TextOutput{Text: fmt.Sprintf("Review is waiting for the teacher at %s. review_id: %s", url, task.id)}, nil
+		return TextOutput{}, errors.New("source must be configured or canvas")
 	}
 }

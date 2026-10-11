@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func validResults() ResultsDocument {
 	return ResultsDocument{Schema: 1, Kind: "results", Packet: "packet.md", Assignment: AssignmentSnapshot{Instance: "https://school.instructure.com", CourseID: 1, AssignmentID: 2, Title: "Writing", Points: MustDecimal("20"), SubmissionTypes: []string{"online_text_entry"}, GradingType: "points", Rubric: rubricPointer(oneCriterion("100"))}, Interpretation: repeated("1"), Students: []StudentResult{{StudentRef: "student-a", Operation: "grade", Grade: &GradeOperation{Attempt: AttemptRef{Attempt: 2, SubmittedAt: "2026-10-08T12:00:00Z"}, Components: []ComponentScore{criterionScore("a", "80")}, Assessment: MustDecimal("16"), Feedback: "Your evidence supports the claim."}}}}
@@ -68,6 +71,30 @@ func TestCreateOutcomesRemainConsistent(t *testing.T) {
 	d.Rubric = rubricPointer(oneCriterion("100"))
 	if e := ValidateAssignment(d, "Directions"); e == nil {
 		t.Fatal("completed create missing required rubric accepted")
+	}
+}
+
+func TestNewRubricRequiresIndependentGradingWithoutRewritingDraft(t *testing.T) {
+	r := oneCriterion("100")
+	r.UseForGrading = true
+	d := AssignmentDocument{Schema: 1, Kind: "assignment", Operation: "create", Course: "CS8", Title: "Writing", Points: MustDecimal("20"), SubmissionTypes: []string{"online_text_entry"}, Rubric: &r}
+	if err := ValidateAssignment(d, "Directions"); err == nil || !strings.Contains(err.Error(), "use_for_grading: false") || !strings.Contains(err.Error(), "separately computed grades") {
+		t.Fatalf("new coupled rubric was not refused helpfully: %v", err)
+	}
+	if !d.Rubric.UseForGrading {
+		t.Fatal("validation silently rewrote teacher intent")
+	}
+	d.Rubric.UseForGrading = false
+	if err := ValidateAssignment(d, "Directions"); err != nil {
+		t.Fatal(err)
+	}
+	// Existing snapshots, including updates, keep their observed coupling.
+	d.Operation = "update"
+	d.Instance, d.CourseID, d.AssignmentID = "https://school.instructure.com", 1, 2
+	d.Rubric.UseForGrading = true
+	d.Observed = &AssignmentSnapshot{Instance: d.Instance, CourseID: d.CourseID, AssignmentID: d.AssignmentID, Title: d.Title, Points: d.Points, SubmissionTypes: d.SubmissionTypes, Rubric: d.Rubric}
+	if err := ValidateAssignment(d, "Directions"); err != nil {
+		t.Fatalf("existing coupled rubric snapshot rejected: %v", err)
 	}
 }
 func TestCanvasOriginAndCoursePathSafety(t *testing.T) {

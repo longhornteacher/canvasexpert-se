@@ -12,16 +12,19 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 )
 
 var qfEnvelope = regexp.MustCompile(`(?s)<QUIZFORGE_JSON>(.*?)</QUIZFORGE_JSON>`)
 
 type QuizForge struct {
-	Version      string `json:"version"`
-	Title        string `json:"title"`
-	Instructions string `json:"instructions"`
-	QuizEngine   string `json:"quiz_engine"`
+	Version          string          `json:"version"`
+	QuizForgeVersion string          `json:"quizforge_version"`
+	Notes            json.RawMessage `json:"notes"`
+	Title            string          `json:"title"`
+	Instructions     string          `json:"instructions"`
+	QuizEngine       string          `json:"quiz_engine"`
 	// Differentiation "hub" (New Quizzes) delivers each tier's supports as a
 	// restricted Canvas Page linked from instructions via {{tier:LABEL}}.
 	Differentiation string                     `json:"differentiation"`
@@ -29,6 +32,7 @@ type QuizForge struct {
 	Metadata        map[string]json.RawMessage `json:"metadata"`
 	Items           []qfItem                   `json:"items"`
 	Rationales      []qfRationale              `json:"rationales"`
+	Warnings        []string                   `json:"-"`
 }
 
 type qfItem struct {
@@ -53,18 +57,62 @@ type qfItem struct {
 	Metadata      map[string]json.RawMessage `json:"metadata"`
 	// ESSAY and FILEUPLOAD (student-visible settings only; rubric_hint and
 	// length_guidance are teacher notes and are never sent).
-	WordLimitMin    *int     `json:"word_limit_min"`
-	WordLimitMax    *int     `json:"word_limit_max"`
-	AcceptedFormats []string `json:"accepted_formats"`
+	WordLimitMin    *int            `json:"word_limit_min"`
+	WordLimitMax    *int            `json:"word_limit_max"`
+	AcceptedFormats []string        `json:"accepted_formats"`
+	RubricHint      json.RawMessage `json:"rubric_hint"`
+	LengthGuidance  json.RawMessage `json:"length_guidance"`
+	Notes           json.RawMessage `json:"notes"`
 
 	rationale *qfRationale
+	unknown   []string
 }
 
 type qfChoice struct {
-	ID      string `json:"id"`
-	Text    string `json:"text"`
-	Correct bool   `json:"correct"`
+	ID       string          `json:"id"`
+	Text     string          `json:"text"`
+	Correct  bool            `json:"correct"`
+	Metadata json.RawMessage `json:"metadata"`
+	Notes    json.RawMessage `json:"notes"`
+	unknown  []string
 }
+
+func unknownQuizKeys(raw []byte, known string) ([]string, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	allowed := set(known)
+	var unknown []string
+	for key := range fields {
+		if !allowed[key] {
+			unknown = append(unknown, key)
+		}
+	}
+	sort.Strings(unknown)
+	return unknown, nil
+}
+
+func (it *qfItem) UnmarshalJSON(raw []byte) error {
+	type plain qfItem
+	if err := json.Unmarshal(raw, (*plain)(it)); err != nil {
+		return err
+	}
+	var err error
+	it.unknown, err = unknownQuizKeys(raw, "id type prompt points stimulus_id choices answer evaluation pairs distractors items header categories accept answer_mode options case_sensitive fuzzy_match metadata word_limit_min word_limit_max accepted_formats rubric_hint length_guidance notes")
+	return err
+}
+
+func (c *qfChoice) UnmarshalJSON(raw []byte) error {
+	type plain qfChoice
+	if err := json.Unmarshal(raw, (*plain)(c)); err != nil {
+		return err
+	}
+	var err error
+	c.unknown, err = unknownQuizKeys(raw, "id text correct metadata notes")
+	return err
+}
+
 type qfPair struct {
 	Left  string `json:"left"`
 	Right string `json:"right"`
@@ -87,8 +135,8 @@ type qfRationale struct {
 var qfScoredTypes = map[string]bool{"MC": true, "MA": true, "TF": true, "MATCHING": true, "FITB": true, "ORDERING": true, "CATEGORIZATION": true, "NUMERICAL": true}
 
 // ReadQuizForge reads a QuizForge file (envelope or bare JSON) and validates it
-// to the point where the transform cannot fail on shape. Unknown fields are
-// ignored, as the contract allows tool-specific keys.
+// including Canvas settings. Unknown item/choice keys warn; misplaced inline
+// rationales fail rather than silently losing student feedback.
 func ReadQuizForge(path string) (QuizForge, error) {
 	var q QuizForge
 	b, e := os.ReadFile(path)
@@ -102,10 +150,15 @@ func ReadQuizForge(path string) (QuizForge, error) {
 	if e = json.Unmarshal([]byte(strings.TrimSpace(raw)), &q); e != nil {
 		return q, fmt.Errorf("quiz file is not valid QuizForge JSON: %v", e)
 	}
-	return q, q.validate()
+	if e = q.validate(); e != nil {
+		return q, e
+	}
+	_, e = q.settings()
+	return q, e
 }
 
 func (q *QuizForge) validate() error {
+	q.Warnings = nil
 	switch q.QuizEngine {
 	case "", "new":
 	case "classic":
@@ -137,6 +190,20 @@ func (q *QuizForge) validate() error {
 	for i := range q.Items {
 		it := &q.Items[i]
 		label := fmt.Sprintf("item %d (%s %s)", i+1, it.Type, it.ID)
+		for _, key := range it.unknown {
+			if key == "rationale" {
+				return fmt.Errorf("%s: inline rationale is not supported; move it to top-level rationales: [{\"item_id\": %q, \"rationale\": \"...\"}] (MC/MA use choices there); see engine_reference formats/examples", label, it.ID)
+			}
+			q.Warnings = append(q.Warnings, fmt.Sprintf("%s: unknown field %q is ignored; see engine_reference formats/examples", label, key))
+		}
+		for j, choice := range it.Choices {
+			for _, key := range choice.unknown {
+				if key == "rationale" {
+					return fmt.Errorf("%s choice %d (%s): inline rationale is not supported; move it to top-level rationales: [{\"item_id\": %q, \"choices\": [{\"id\": %q, \"rationale\": \"...\"}]}]; see engine_reference formats/examples", label, j+1, choice.ID, it.ID, choice.ID)
+				}
+				q.Warnings = append(q.Warnings, fmt.Sprintf("%s choice %d (%s): unknown field %q is ignored; see engine_reference formats/examples", label, j+1, choice.ID, key))
+			}
+		}
 		switch it.Type {
 		case "STIMULUS":
 			inStimulus = true

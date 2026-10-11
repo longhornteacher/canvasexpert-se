@@ -10,8 +10,7 @@ submission_types:
 published: false
 rubric:
   title: Synthetic evidence rubric
-  use_for_grading: true
-  use_for_grading_known: true
+  use_for_grading: false
   criteria:
     - id: evidence
       description: Evidence

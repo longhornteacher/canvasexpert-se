@@ -1,10 +1,10 @@
 # CanvasExpert-SE
 
-This folder is your CanvasExpert-SE workspace. An AI agent (Claude or ChatGPT, for example) does the work here: scoring student work and creating or editing Canvas assignments and quizzes. You review before anything is posted.
+This folder is your local CanvasExpert-SE installation. An AI agent (Claude or ChatGPT, for example) does the work here: scoring student work and creating or editing Canvas assignments and quizzes. You review before anything is posted.
 
 ## Start here
 
-1. Open this folder in your agent app (in Claude Code or Codex, open it as the project folder).
+1. Connect CE-SE to your agent through MCP, or open this folder as the project in a local agent app. The agent's own synced folder is independent; CE-SE keeps its files here.
 2. Tell the agent what you'd like to do, for example "set me up" or "start a scoring session". The first time, it connects to Canvas with you. You'll paste a Canvas access token into a small local form; it's saved in Windows Credential Manager, never in a file.
 
 That's it. You don't need to edit anything here yourself; ask the agent instead. Double-click `webui.cmd` any time to open the hub, where you can see your courses, students, feedback voice and what CanvasExpert-SE can do.

@@ -205,6 +205,7 @@ try {
     $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "Packaged $packagePath"
     Write-Host "SHA256 $hash"
+    & (Join-Path $PSScriptRoot 'package-mcp.ps1') -BinaryPath $binaryPath
 }
 finally {
     if (Test-Path -LiteralPath $zipTempFullPath -PathType Leaf) {

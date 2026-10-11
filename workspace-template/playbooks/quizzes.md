@@ -6,15 +6,19 @@ For curriculum conversion, student file assets and placing an existing quiz into
 
 ## Write the quiz in QuizForge format
 
-Write the quiz as a QuizForge v3.0-json file (`<QUIZFORGE_JSON>`). If the teacher has QuizForge's authoring modules (`QuizForge_Base.md` and the ELA/stimulus references), follow them for question design, rationales and stimulus use; `help formats` ("New Quiz file") lists what the Engine accepts and where it differs. You write questions, distractors, rationales and points; the Engine handles IDs, scoring structures and Canvas calls. Save the file in the course's `drafts/` folder.
+Read `engine_reference` formats and examples (CLI `help formats` / `help examples`), including the embedded `synthetic-quizforge-mixed.md`, before authoring. Write the quiz as a QuizForge v3.0-json file (`<QUIZFORGE_JSON>` or bare JSON). If the teacher has optional QuizForge design modules (`QuizForge_Base.md` and ELA/stimulus references), use them for educational design; the embedded reference defines what this Engine accepts. You write questions, distractors, rationales and points; the Engine handles IDs, scoring structures and Canvas calls. Save the file in the course's `drafts/` folder.
 
 - Give every scored item an explicit `points` value the teacher chose or approved. The Engine won't invent points.
 - Put `stimulus_id` on every item attached to a stimulus, including items inside a STIMULUS..STIMULUS_END span.
 - Keep HTML to what `help fields` records as kept; the Engine sends it unfiltered. Show code as `<pre><code>...</code></pre>` (colored as Python; add `class="language-html"` or similar to leave it uncolored). Put TEKS codes in `metadata.teks`.
 - Quiz settings (time limit, attempts, due date, publication, module) go in `metadata.canvas`.
+- For one attempt, omit `allowed_attempts` and multiple-attempt settings. For two or more set `allow_multiple_attempts: true` and the desired `allowed_attempts`; omit the limit or use `"unlimited"` for unlimited attempts.
+- TF uses a boolean `answer`. Feedback goes in root `rationales`, keyed by `item_id`; MC/MA entries contain `choices` with matching choice `id` and `rationale`, while TF and other auto-scored entries contain `rationale`. Never put `rationale` inside an item or its choices.
 - Written items: `ESSAY` takes optional `word_limit_min`/`word_limit_max`; `FILEUPLOAD` takes optional `accepted_formats`. Write a `rubric_hint` for each ECR/SCR: it is never sent to students, and it becomes the quiz rubric and the scoring basis later.
 
 ## Review and create
+
+Run `validate_quiz` on the saved draft before review; it checks item shape and settings locally. Correct ignored-field warnings when they affect teacher intent. On review, check the separate student feedback rationales and the effective requested settings with the teacher.
 
 Run `.\cse.cmd review <quiz-file> <course>`; when the teacher clicks Create, the Engine pushes the quiz. With review skipped, run `.\cse.cmd push-quiz <course> <quiz-file>`. The quiz stays unpublished unless `metadata.canvas.published` is true.
 
@@ -30,7 +34,7 @@ When the quiz has ECR/SCR items, offer to attach a rubric after it is created: f
 
 ## What to tell the teacher
 
-Report the quiz URL, the point total, and whether it is published. New Quizzes can't be opened as Canvas's Test Student, so a student-side check needs the editor's Build, then Preview, or a real enrolled account. The Engine verified the stored items and settings through the Canvas API, not what a student sees.
+Report the quiz URL, the point total, publication outcome and returned sidecar path for resumption. Requested module placement completes before publication. New Quizzes can't be opened as Canvas's Test Student, so a student-side check needs the editor's Build, then Preview, or a real enrolled account. Report actual write outcomes: push does not read item feedback or quiz settings back, so do not claim verified stored rationales or student rendering.
 
 ## Differentiated hub for a quiz
 

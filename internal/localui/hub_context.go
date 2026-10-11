@@ -174,5 +174,5 @@ func (h *Hub) forgetCanvas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.canvasUser = ""
-	h.redirect(w, r, "/settings", "Token removed from this computer. Your workspace files are untouched.", "")
+	h.redirect(w, r, "/settings", "Token removed from this computer. Your CE-SE files are untouched.", "")
 }

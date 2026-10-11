@@ -25,7 +25,7 @@ func studentsHub(t *testing.T) (*Hub, string) {
 	if err := os.WriteFile(path, []byte("---\nschema: 1\ninstance: https://school.example\naliases: true\ncourses: []\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.setRoot(root)
+	h.root = root
 	h.listCoursesFn = func(context.Context) ([]workflow.Course, string, error) {
 		return []workflow.Course{{ID: 11, Name: "Computer Science 8", Code: "CS8", State: "available"}, {ID: 22, Name: "Old Course", Code: "OLD", State: "available"}}, "https://school.example", nil
 	}
@@ -161,7 +161,7 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 	}
 	// A new hub session retains course associations and tags while offline.
 	restarted := newTestHub()
-	restarted.setRoot(root)
+	restarted.root = root
 	restarted.rosterFn = func(context.Context, int64) ([]workflow.Enrollment, string, error) {
 		return nil, "", errors.New("offline")
 	}
@@ -203,14 +203,14 @@ func TestStudentsNoActiveCoursesAndTagFailure(t *testing.T) {
 	}
 }
 
-func TestSettingsOwnWorkspaceControlsAndSavePreferences(t *testing.T) {
+func TestSettingsShowInstallationAndSavePreferences(t *testing.T) {
 	h, _ := studentsHub(t)
 	home := hubGet(h, "/").Body.String()
 	if strings.Contains(home, `name="path"`) || strings.Contains(home, "SE = ") || strings.Contains(home, "Command central") || !strings.Contains(home, "CanvasExpert: Special Edition") {
 		t.Fatal("home still contains old branding or workspace controls")
 	}
 	page := hubGet(h, "/settings").Body.String()
-	if !strings.Contains(page, `name="path"`) || !strings.Contains(page, `name="aliases" checked`) || !strings.Contains(page, `href="/setup"`) {
+	if strings.Contains(page, `name="path"`) || !strings.Contains(page, `name="aliases" checked`) || !strings.Contains(page, `href="/setup"`) {
 		t.Fatal("settings missing basic controls")
 	}
 	if w := hubPost(h, "/settings", url.Values{"request_secret": {"nonce"}}, h.origin); w.Code != 303 {

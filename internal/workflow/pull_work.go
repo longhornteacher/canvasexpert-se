@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
+	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/render"
 	"canvasexpertse/internal/workspace"
@@ -262,14 +264,11 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			packet := domain.PacketDocument{Schema: 1, Kind: "packet", Course: course.Nickname, Assignment: snapshot}
 			var detailed []Submission
 			var roster []workspace.Student
-			for _, sub := range candidates {
-				d, e := GetSubmission(ctx, s.Client, course.ID, a.ID, sub.UserID)
-				if e != nil {
-					return report, e
-				}
-				if d.UserID != sub.UserID || d.AssignmentID != a.ID {
-					return report, fmt.Errorf("live submission identity disagrees with requested pull target")
-				}
+			fetched, e := fetchSubmissions(ctx, s.Client, course.ID, a.ID, candidates)
+			if e != nil {
+				return report, e
+			}
+			for _, d := range fetched {
 				if why := unsupportedSubmission(d); why != "" {
 					summary.Unsupported++
 					report.Skipped = append(report.Skipped, fmt.Sprintf("assignment %d: %s", a.ID, why))
@@ -541,4 +540,33 @@ func (s *Service) completedHint(id int64, ref string, sub Submission, snapshot d
 		return nil
 	})
 	return matched
+}
+
+// fetchSubmissions reads each candidate's detailed submission concurrently
+// (the client caps in-flight requests) and returns them in candidate order.
+// The first failure cancels the rest and is the one returned.
+func fetchSubmissions(ctx context.Context, client *canvas.Client, courseID, assignmentID int64, candidates []Submission) ([]Submission, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	out := make([]Submission, len(candidates))
+	var once sync.Once
+	var first error
+	var wg sync.WaitGroup
+	for i, sub := range candidates {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			d, e := GetSubmission(ctx, client, courseID, assignmentID, sub.UserID)
+			if e == nil && (d.UserID != sub.UserID || d.AssignmentID != assignmentID) {
+				e = fmt.Errorf("live submission identity disagrees with requested pull target")
+			}
+			if e != nil {
+				once.Do(func() { first = e; cancel() })
+				return
+			}
+			out[i] = d
+		}()
+	}
+	wg.Wait()
+	return out, first
 }

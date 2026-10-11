@@ -1,7 +1,6 @@
 package localui
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -9,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func newTestHub() *Hub {
@@ -56,7 +54,7 @@ func TestHubRejectsForeignHostAndServesNavigation(t *testing.T) {
 
 func TestHubFormsNeedOriginAndSecret(t *testing.T) {
 	h := newTestHub()
-	for _, path := range []string{"/workspace", "/quit"} {
+	for _, path := range []string{"/settings", "/quit"} {
 		if w := hubPost(h, path, url.Values{"request_secret": {"nonce"}, "path": {"x"}}, "http://attacker.example"); w.Code != 403 {
 			t.Fatalf("%s cross-origin allowed", path)
 		}
@@ -83,115 +81,29 @@ func TestHubQuitSignalsShutdown(t *testing.T) {
 	}
 }
 
-func TestHubRefusesWorkspaceOverlappingProgram(t *testing.T) {
+func TestHubCannotChangeInstallation(t *testing.T) {
 	h := newTestHub()
-	root := makeWorkspace(t)
-	h.programDir = filepath.Join(root, "cse")
-	if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {root}}, h.origin); w.Code != 400 || h.root != "" {
-		t.Fatalf("program inside workspace accepted: %d", w.Code)
-	}
-	h.programDir = filepath.Join(root, "engine")
-	if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {root}}, h.origin); w.Code != 200 || h.root == "" {
-		t.Fatalf("bundled engine folder rejected: %d", w.Code)
-	}
-	h.root = ""
-	h.programDir = t.TempDir()
-	if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {root}}, h.origin); w.Code != 200 || h.root == "" {
-		t.Fatalf("separate folders rejected: %d", w.Code)
-	}
-}
-
-func TestHubCreatesWorkspaceInEmptyOrNewFolder(t *testing.T) {
-	for _, name := range []string{"", "new-child"} {
-		h := newTestHub()
-		h.programDir = t.TempDir()
-		folder := filepath.Join(t.TempDir(), name)
-		quoted := `"` + folder + `"` // pasted paths often carry quotes
-		w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {quoted}}, h.origin)
-		if w.Code != 200 || h.root == "" || !strings.Contains(w.Body.String(), "Workspace created") {
-			t.Fatalf("%q: not created: %d %s", name, w.Code, w.Body.String())
-		}
-		for _, want := range []string{"context/courses.md", ".claude/settings.json", "cse.cmd", "AGENTS.md"} {
-			if _, err := os.Stat(filepath.Join(folder, filepath.FromSlash(want))); err != nil {
-				t.Fatalf("starter file missing: %s", want)
-			}
-		}
-		if _, err := os.Stat(filepath.Join(folder, "cse.exe")); err == nil {
-			t.Fatal("program copied into workspace")
+	h.root = makeWorkspace(t)
+	original := h.root
+	for _, route := range []string{"/workspace", "/browse", "/browse-cancel"} {
+		w := hubPost(h, route, url.Values{"request_secret": {"nonce"}, "path": {t.TempDir()}}, h.origin)
+		if w.Code != http.StatusNotFound || h.root != original {
+			t.Fatalf("%s changed installation or is still available: %d", route, w.Code)
 		}
 	}
-}
-
-func TestHubAsksBeforeUsingNonEmptyFolder(t *testing.T) {
-	h := newTestHub()
-	h.programDir = t.TempDir()
-	folder := t.TempDir()
-	keep := filepath.Join(folder, "mine.txt")
-	if err := os.WriteFile(keep, []byte("keep"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	form := url.Values{"request_secret": {"nonce"}, "path": {folder}}
-	if w := hubPost(h, "/workspace", form, h.origin); w.Code != 200 || h.root != "" || !strings.Contains(w.Body.String(), "Set up a workspace here?") {
-		t.Fatal("non-empty folder was not confirmed first")
-	}
-	if _, err := os.Stat(filepath.Join(folder, "context")); err == nil {
-		t.Fatal("scaffolded before confirmation")
-	}
-	form.Set("confirm", "1")
-	if w := hubPost(h, "/workspace", form, h.origin); w.Code != 200 || h.root == "" {
-		t.Fatal("confirmed setup failed")
-	}
-	if b, _ := os.ReadFile(keep); string(b) != "keep" {
-		t.Fatal("existing file changed")
-	}
-}
-
-func TestHubRejectsRelativeAndFilePaths(t *testing.T) {
-	h := newTestHub()
-	file := filepath.Join(t.TempDir(), "f.txt")
-	_ = os.WriteFile(file, []byte("x"), 0o644)
-	for _, p := range []string{"relative/dir", file, "  "} {
-		if w := hubPost(h, "/workspace", url.Values{"request_secret": {"nonce"}, "path": {p}}, h.origin); w.Code != 400 {
-			t.Fatalf("%q accepted: %d", p, w.Code)
-		}
-	}
-}
-
-func TestHubBrowseUsesChosenFolder(t *testing.T) {
-	h := newTestHub()
-	h.programDir = t.TempDir()
-	folder := t.TempDir()
-	release := make(chan struct{})
-	finished := make(chan struct{})
-	h.chooser = func(context.Context) (string, error) {
-		defer close(finished)
-		<-release
-		return folder, nil
-	}
-	w := hubPost(h, "/browse", url.Values{"request_secret": {"nonce"}}, h.origin)
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/settings" {
-		t.Fatalf("browse must redirect to settings, got %d", w.Code)
-	}
-	w = httptest.NewRecorder()
+	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/settings", nil))
-	if !strings.Contains(w.Body.String(), `http-equiv="refresh"`) {
-		t.Fatal("home did not show the waiting page while the chooser is open")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), original) || strings.Contains(w.Body.String(), `action="/workspace"`) || strings.Contains(w.Body.String(), `action="/browse"`) {
+		t.Fatal("settings must show a read-only installation")
 	}
-	close(release)
-	<-finished
-	for i := 0; i < 100; i++ {
-		h.mu.Lock()
-		ready := h.picked != nil
-		h.mu.Unlock()
-		if ready {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	w = httptest.NewRecorder()
+}
+
+func TestHubDevelopmentLaunchExplainsExplicitRoot(t *testing.T) {
+	h := newTestHub()
+	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/settings", nil))
-	if h.root == "" || !strings.Contains(w.Body.String(), "Workspace created") {
-		t.Fatalf("chosen folder not adopted: %s", w.Body.String())
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "--workspace") {
+		t.Fatal("missing explicit development launch guidance")
 	}
 }
 

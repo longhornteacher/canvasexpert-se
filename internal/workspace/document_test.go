@@ -30,6 +30,48 @@ func TestStrictHeaderRejectsDuplicatesAndUnknownFields(t *testing.T) {
 		}
 	}
 }
+
+func TestScoringUnknownFieldsExplainCanonicalLocations(t *testing.T) {
+	b, err := os.ReadFile("../../engine-docs/examples/synthetic-results-two.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical := string(b)
+	for _, bad := range []string{
+		strings.Replace(canonical, "kind: results", "kind: results\nmapping: repeated", 1),
+		strings.Replace(canonical, "attempt: {attempt: 1,", "attempt: {mapping: repeated, attempt: 1,", 1),
+		strings.Replace(canonical, "      components:", "      compnents:", 1),
+	} {
+		doc := domain.ResultsDocument{Packet: "original"}
+		_, err := ParseDocument([]byte(bad), &doc)
+		if err == nil {
+			t.Fatal("invalid scoring field accepted")
+		}
+		for _, detail := range []string{"not found in type", "interpretation.mapping", "grade.components", "engine_reference", "formats", "examples"} {
+			if !strings.Contains(err.Error(), detail) {
+				t.Fatalf("missing actionable detail %q: %v", detail, err)
+			}
+		}
+		if doc.Packet != "original" {
+			t.Fatal("invalid scoring file mutated saved judgments")
+		}
+	}
+}
+
+func TestScoringQuotedDecimalsAndExistingCoupledRubricRemainSupported(t *testing.T) {
+	b, err := os.ReadFile("../../engine-docs/examples/synthetic-results-two.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	quoted := strings.NewReplacer("points: 20", `points: "20"`, "points: 3}", `points: "3.125"}`, "assessment: 7", `assessment: "7.13"`).Replace(string(b))
+	var doc domain.ResultsDocument
+	if _, err := ParseDocument([]byte(quoted), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if !doc.Assignment.Rubric.UseForGrading || doc.Students[0].Grade.Assessment.Cmp(domain.MustDecimal("7.13")) != 0 {
+		t.Fatal("existing rubric coupling or quoted decimal assessment changed")
+	}
+}
 func TestBodyIsPreservedAsContent(t *testing.T) {
 	body := "---\r\nschema: words in the teacher's text\r\n<div data-extra=\"keep\">HTML</div>\r\n"
 	var c domain.GradingConfig

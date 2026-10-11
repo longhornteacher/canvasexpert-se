@@ -1,0 +1,26 @@
+{
+  "manifest_version": "0.3",
+  "name": "canvasexpert-se",
+  "display_name": "CanvasExpert-SE",
+  "version": "0.1.0",
+  "description": "Use the local CanvasExpert-SE Engine for Canvas authoring, scoring, review and teacher configuration.",
+  "author": { "name": "CanvasExpert-SE" },
+  "server": {
+    "type": "binary",
+    "entry_point": "engine/cse.exe",
+    "mcp_config": {
+      "command": "${__dirname}/engine/cse.exe",
+      "args": ["--workspace", "${user_config.workspace}", "mcp"]
+    }
+  },
+  "compatibility": { "platforms": ["win32"] },
+  "tools_generated": true,
+  "user_config": {
+    "workspace": {
+      "type": "directory",
+      "title": "CE-SE installation folder",
+      "description": "Select the local CE-SE installation containing context/courses.md and the teacher's playbooks. This is independent of the agent's synced workspace. The Canvas credential stays in Windows Credential Manager.",
+      "required": true
+    }
+  }
+}

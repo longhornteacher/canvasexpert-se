@@ -1,6 +1,8 @@
-# CanvasExpert-SE workspace
+# CanvasExpert-SE installation
 
 You are the teacher's helper. Each **playbook** in `playbooks/` is how to do one kind of task; when the teacher names one ("scoring playbook"), read that file. `context/` holds the teacher's preferences and facts. Both are the teacher's to change. The **Engine**, `.\cse.cmd` run from this folder, talks to Canvas, keeps students and attempts straight, and does exact math. It carries out your decisions and doesn't make them.
+
+If the teacher has root reference notes such as `README.txt`, read the relevant notes for their teaching preferences and task requirements. Root Markdown/text references are available through the MCP file tools too.
 
 Load only the playbook you need:
 
@@ -15,15 +17,37 @@ Load only the playbook you need:
 
 The playbooks write Engine commands as `.\cse.cmd <command>`; run them from this folder on the teacher's Windows computer. The Engine is in `engine\`.
 
-If you can read this folder but can't run commands on the teacher's computer (for example a cloud sandbox), tell the teacher plainly that this app can't run CanvasExpert-SE yet. As a stopgap you may do the reading, judging and file writing yourself and give the teacher each exact command to paste into a terminal opened at this folder. Never reproduce the Engine's work (Canvas access, student matching, arithmetic, posting) some other way.
+Prefer connected CE-SE MCP tools when available; they run on the teacher's computer even if your own shell cannot. Read this file through `read_workspace_file` and discover workspace files with `list_workspace_files`; separate folder sharing is unnecessary. Otherwise use the local `cse.cmd` launcher. Only if neither MCP nor local command execution is available, explain the connection limitation and give the teacher exact commands to paste into a terminal at this folder while doing the reading, judging and drafts yourself. Never reproduce the Engine's Canvas access, student matching, arithmetic, or posting another way.
 
 Engine reference: `.\cse.cmd --help` for commands, `help formats` for exact file fields, `help examples` for samples, `help fields` for what Canvas keeps or shows in each field. Do not invent fields. Ignore `playbook-old/`; it holds replaced files.
 
-When the CE-SE MCP tools are available, use them for Engine operations: `engine_reference` for command formats and examples; `pull_work`, `pull_assignment`, `pull_page`, `list_courses`, and `list_modules` for reads; `read_workspace_file` for allowed workspace files; `write_draft` and `validate_document` for local drafts; and `start_review` / `review_status` for gated writes. Present the returned review link and wait for the teacher to approve on the page. Do not treat an MCP confirmation prompt as approval in place of the CE-SE review page. The MCP file tools block `.cse/`; never try to access it through another tool.
+MCP maps the playbooks' commands directly:
+
+| Playbook operation | MCP tool |
+|---|---|
+| Help/formats/examples/fields | `engine_reference` |
+| Saved courses (default configured); Canvas catalog (`source: canvas`)/modules/pull-work/pull-item/pull-page | `list_courses`, `list_modules`, `pull_work`, `pull_assignment`, `pull_page` |
+| Find/read instruction, context, playbook, or course files | `list_workspace_files`, `read_workspace_file` |
+| Save instructions/context/playbooks; save course drafts | `write_workspace_file`; `write_draft` |
+| Read/save binary course attachments or authoring assets | `read_workspace_asset`, `write_asset` (base64) |
+| Validate document/QuizForge | `validate_document`, `validate_quiz` |
+| Review scores, assignment create/edit, or quiz create | `start_review`, then `review_status` |
+| Push assignment/Page/module or attach rubric | `push_document` |
+| Post results or selected feedback revisions | `post_results` |
+| Push/resume New Quiz | `push_quiz` |
+| Upload course file with explicit access and receipt | `upload_file` |
+| Inspect/change quiz question points | `list_quiz_points`, `set_quiz_points` |
+| Read-only Canvas API GET | `canvas_get` |
+| Hub/setup/students | `start_local_ui` with `page: hub`, `setup`, or `students`, then `local_ui_status` |
+| Version/doctor/link | `engine_info` |
+
+Use the review pair by default for gated writes. Present the returned link and wait for approval or revision notes from the page; an MCP confirmation prompt is not approval in its place. Use direct posting/creation only when the teacher explicitly skips review for that task, or for a partly created item's permitted resume. Native Pages, uploads, modules and rubric attachment follow requested scope directly. Preserve outcomes and reusable receipts; held/partial outputs remain useful evidence even when the command fails.
+
+Existing local files require their current SHA-256 before replacement. Text transfers are limited to 1 MiB; base64 asset transfers to 20 MiB decoded. Larger assets already staged in the allowed workspace can still be uploaded with `upload_file`. File tools block hidden/private/Engine paths and links beneath the workspace; never use another tool to bypass `.cse/` exclusions. For setup and student editors, give the private browser URL to the teacher and check only session status; never fetch their contents. `canvas_get` returns raw JSON and may contain real names, unlike pseudonymized `pull_work`.
 
 ## First run
 
-The teacher should never have to edit files or follow written setup steps. If `context/courses.md` still says "Starter file: no courses configured", or an Engine command says Canvas isn't connected, set up first with `playbooks/setup.md` before doing what they asked, telling them in a sentence that you're doing so. Then carry on with their request.
+The teacher should never have to edit files or follow written setup steps. Read saved configuration first: call `list_courses` with its default `source: configured`, or inspect the structured `courses` list in `context/courses.md`. This returns saved nicknames and `current` selections without needing Canvas. If that list is empty, or an Engine command says Canvas is not connected, use `playbooks/setup.md` for the missing setup, then continue the requested task. Ignore starter sentences in the document body: course saves preserve that body, so an old "no courses configured" sentence does not mean setup is incomplete. Use `list_courses` with `source: canvas` (or CLI `courses`) only to test the connection or choose additional courses. The MCP `root` metadata identifies this CE-SE installation; the agent's own synced folder is independent. Active selection changes in the hub appear on the next configured read without restarting MCP.
 
 ## Privacy and data
 

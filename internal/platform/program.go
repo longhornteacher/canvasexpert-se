@@ -8,7 +8,7 @@ import (
 )
 
 // LocalDir is the per-machine, unsynced folder for non-secret state such as the
-// program link and the hub's last workspace. LOCALAPPDATA never roams.
+// program link. LOCALAPPDATA never roams.
 func LocalDir() (string, error) {
 	base := os.Getenv("LOCALAPPDATA")
 	if base == "" {

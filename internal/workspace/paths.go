@@ -8,6 +8,34 @@ import (
 	"strings"
 )
 
+// ResolveRuntimeRoot binds a bundled Engine to its own CE-SE installation.
+// Development and extension binaries have no adjacent teacher configuration and
+// retain the explicit root (or CLI working-directory discovery).
+func ResolveRuntimeRoot(explicit, start, executable string) (string, error) {
+	programDir := filepath.Dir(executable)
+	installed := filepath.Dir(programDir)
+	info, err := os.Stat(filepath.Join(installed, "context", "courses.md"))
+	if strings.EqualFold(filepath.Base(programDir), "engine") && err == nil && !info.IsDir() {
+		if explicit != "" {
+			requested, err := filepath.Abs(explicit)
+			if err != nil {
+				return "", err
+			}
+			same := strings.EqualFold(filepath.Clean(requested), filepath.Clean(installed))
+			if !same {
+				a, aerr := os.Stat(requested)
+				b, berr := os.Stat(installed)
+				same = aerr == nil && berr == nil && os.SameFile(a, b)
+			}
+			if !same {
+				return "", fmt.Errorf("CE-SE installation mismatch: this bundled Engine uses %s; --workspace requested %s. Use the Engine in the intended installation", installed, requested)
+			}
+		}
+		return ResolveRoot(installed, "")
+	}
+	return ResolveRoot(explicit, start)
+}
+
 func ResolveRoot(explicit, start string) (string, error) {
 	if explicit != "" {
 		p, e := filepath.Abs(explicit)
