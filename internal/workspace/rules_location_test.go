@@ -32,7 +32,7 @@ func TestRulesLocationClassificationAndLocalDefault(t *testing.T) {
 			t.Errorf("%s should be shared", p)
 		}
 	}
-	for _, p := range []string{"README.md", "context/courses.md", "context/students.md", "courses/a.md", "engine/cse.exe", "playbooks/tool.exe", "context/helper.cmd", ".cse/rules-location.json", "drafts/a.md"} {
+	for _, p := range []string{"README.md", "install-log.jsonl", "context/courses.md", "context/students.md", "courses/a.md", "engine/cse.exe", "playbooks/tool.exe", "context/helper.cmd", ".cse/rules-location.json", "drafts/a.md"} {
 		if IsSharedRulePath(p) {
 			t.Errorf("%s should remain local", p)
 		}
@@ -44,6 +44,23 @@ func TestRulesLocationClassificationAndLocalDefault(t *testing.T) {
 	}
 	if got, err := ResolveTeacherPath(root, "context/courses.md"); err != nil || got != filepath.Join(root, "context", "courses.md") {
 		t.Fatalf("local-only path = %s, %v", got, err)
+	}
+	if _, err := ResolveTeacherPath(root, "install-log.jsonl"); err == nil {
+		t.Fatal("operational log exposed as teacher rules")
+	}
+}
+
+func TestInstallLogStaysLocalWhenBindingSync(t *testing.T) {
+	root := makeRulesInstall(t)
+	if err := os.WriteFile(filepath.Join(root, "install-log.jsonl"), []byte("operational"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	syncRoot := t.TempDir()
+	if _, err := SetRulesLocation(root, syncRoot, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(syncRoot, "install-log.jsonl")); !os.IsNotExist(err) {
+		t.Fatal("Install operational log copied to Sync")
 	}
 }
 

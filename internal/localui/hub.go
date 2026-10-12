@@ -20,6 +20,8 @@ import (
 
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/hubcoord"
+	"canvasexpertse/internal/installlog"
 	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
@@ -31,12 +33,13 @@ const preferredHubAddr = "127.0.0.1:47831"
 
 var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert: Special Edition</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>CanvasExpert: Special Edition</h1>
 <p class="lead">You tell your AI agent what you need, like &ldquo;scoring session&rdquo; or &ldquo;make a new assignment&rdquo;. It reads your <b>playbooks</b> (how to do each job) and your <b>context</b> (your voice, students, courses, calendar), then uses this program to work with Canvas safely. You stay in charge: nothing is posted unless you say so.</p>
+{{if .Root}}<div class="card"><h2>Active locations</h2><p>Install: <code>{{.Root}}</code></p><p>Teacher rules ({{.RulesMode}}): <code>{{.RulesRoot}}</code></p>{{if .RulesError}}<span class="pill off">{{if eq .RulesMode "sync"}}Sync unavailable{{else}}Rules location unavailable{{end}}</span><p class="error">{{.RulesError}}</p>{{end}}</div>{{end}}
 <ol class="steps"><li><b>Connect Canvas</b> with an access token.</li><li><b>Pick your courses</b> and add student notes.</li><li><b>Connect CE-SE to your agent</b> and ask for work.</li></ol>
 <p class="reassure">Student names and pulled work stay in this local CE-SE installation. Your token stays in Windows Credential Manager. The agent is told never to open the private student-name file, and your token is never written to a file.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <div class="cards">
 <div class="card"><h2>Your teaching assistant</h2><p>Connect this Install to Cowork or desktop Work, then check the local tools.</p><a class="go" href="/connect">Connect your agent &rarr;</a></div>
-<div class="card token {{if .CanvasUser}}t-green{{else if .Connected}}t-yellow{{else}}t-red{{end}}"><h2>Canvas token <button type="button" class="qmark" popovertarget="pat-help" aria-label="How do I get a Canvas access token?">?</button></h2>{{if .CanvasUser}}<span class="pill on">working</span><p>Signed in as <b>{{.CanvasUser}}</b>.</p>{{else if .Connected}}<span class="pill warn">saved, not tested</span><p>A token is saved on this computer. Test it to make sure Canvas still accepts it.</p>{{else}}<span class="pill off">not connected</span><p>The agent can't reach Canvas until you add a token.</p>{{end}}<a class="go" href="{{if .Connected}}/settings{{else}}/setup{{end}}">{{if .Connected}}Test or replace it &rarr;{{else}}Connect Canvas &rarr;{{end}}</a></div>
+<div class="card token {{if .ConnectionTested}}t-green{{else if .Connected}}t-yellow{{else}}t-red{{end}}"><h2>Canvas token <button type="button" class="qmark" popovertarget="pat-help" aria-label="How do I get a Canvas access token?">?</button></h2>{{if .ConnectionTested}}<span class="pill on">tested this session</span><p>Canvas accepted the saved token in this hub session.</p>{{else if .Connected}}<span class="pill warn">saved, not tested</span><p>A token is saved on this computer. Test it to make sure Canvas still accepts it.</p>{{else}}<span class="pill off">not connected</span><p>The agent can't reach Canvas until you add a token.</p>{{end}}<a class="go" href="{{if .Connected}}/settings{{else}}/setup{{end}}">{{if .Connected}}Test or replace it &rarr;{{else}}Connect Canvas &rarr;{{end}}</a></div>
 <div class="card"><h2>Courses</h2>{{if .Root}}<p><b>{{.ActiveCourses}}</b> active</p><a class="go" href="/courses">Pick active courses &rarr;</a>{{else}}<p>Launch CE-SE from its installation folder to get started.</p><a class="go" href="/settings">Open Settings &rarr;</a>{{end}}</div>
 <div class="card"><h2>Students</h2>{{if .Root}}<p><b>{{.Students}}</b> known, <b>{{.Monitored}}</b> monitored</p><a class="go" href="/students">Open students &rarr;</a>{{else}}<p>Launch CE-SE from its installation folder to get started.</p>{{end}}</div>
 <div class="card"><h2>Playbooks &amp; context</h2><p>Feedback voice, how each job is done, and your starter files.</p><a class="go" href="/settings">Open Settings &rarr;</a></div>
@@ -48,7 +51,7 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><htm
 
 var settingsTemplate = template.Must(template.New("settings").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE settings</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>Settings</h1><p>Manage your Canvas connection and CE-SE settings.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}<div class="cards">
-<div class="card"><h2>Canvas</h2>{{if .Connected}}<span class="pill on">connected</span><p><code>{{.CanvasOrigin}}</code></p>{{if .CanvasUser}}<p>Signed in as <b>{{.CanvasUser}}</b></p>{{end}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" class="small">Test connection</button></form>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a>{{if .Connected}}<details class="forget"><summary>Forget token on this computer</summary><form method="post" action="/canvas/forget"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="confirm" required> Yes, remove it. I can reconnect later.</label><button type="submit" class="small danger">Remove token</button></form></details>{{end}}</div>
+<div class="card"><h2>Canvas</h2>{{if .Connected}}{{if .ConnectionTested}}<span class="pill on">tested this session</span>{{else}}<span class="pill warn">saved, not tested</span>{{end}}<p><code>{{.CanvasOrigin}}</code></p>{{if .CanvasUser}}<p>Signed in as <b>{{.CanvasUser}}</b></p>{{end}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" class="small">Test connection</button></form>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a>{{if .Connected}}<details class="forget"><summary>Forget token on this computer</summary><form method="post" action="/canvas/forget"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="confirm" required> Yes, remove it. I can reconnect later.</label><button type="submit" class="small danger">Remove token</button></form></details>{{end}}</div>
 <div class="card"><h2>Engine</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>The machinery plus the starter playbooks. Nothing private.</p></div>
 <div class="card"><h2>CE-SE installation</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Engine, courses, student information and work stay here.</p>{{else}}<span class="pill off">none</span><p>For a development launch, use <code>cse --workspace &quot;PATH&quot; ui</code> with the CE-SE installation containing <code>context/courses.md</code>.</p>{{end}}</div>
 {{if .Root}}<div class="card"><h2>Teacher rules: Install / Sync</h2><p>Install: <code>{{.Root}}</code></p><p>Effective rules location{{if .RulesMode}} ({{.RulesMode}}){{end}}: <code>{{.RulesRoot}}</code></p>{{if .RulesError}}<span class="pill off">Sync unavailable</span><p class="error">{{.RulesError}}</p>{{end}}<p>By default, teacher rules live in Install. Sync is optional: CE-SE reads and edits the selected folder directly, and its provider (such as OneDrive or Google Drive) carries changes between computers. Courses, students, work and the Engine remain in Install.</p><p>Selecting an empty Sync folder initializes it from the current shareable teacher rules. An existing Sync folder becomes authoritative; local originals are preserved but inactive. Switching back to Install copies the shared rules there and archives differing local versions.</p><form method="post" action="/rules-location"><input type="hidden" name="request_secret" value="{{.Secret}}"><label for="sync_root">Sync folder path (leave blank to use Install)</label><input id="sync_root" name="sync_root" value="{{.SyncRoot}}" maxlength="4000" autocomplete="off"><button type="submit">Save rules location</button></form></div>{{end}}
@@ -64,6 +67,7 @@ type homeData struct {
 	Program, Version                            string
 	ActiveCourses                               int
 	Connected                                   bool
+	ConnectionTested                            bool
 	Preferences, Aliases                        bool
 	Students, Monitored                         int
 	CanvasUser, Voice, FeedbackGuidance         string
@@ -76,6 +80,7 @@ type homeData struct {
 // commands.
 type Hub struct {
 	origin, secret string
+	installClient  string
 	programDir     string
 	version        string
 	ctx            context.Context
@@ -91,7 +96,9 @@ type Hub struct {
 	savedOriginFn func() string
 	forgetFn      func() error
 	// canvasUser is the account name from the last successful connection test.
-	canvasUser string
+	canvasUser       string
+	setupValidated   bool
+	connectionTested bool
 	// seedNotice reports starter files added when the installation opened;
 	// Home shows it once.
 	seedNotice        string
@@ -118,6 +125,21 @@ func addMissingSeed(root string) string {
 		notice += " Could not add some starter files: " + err.Error()
 	}
 	return strings.TrimSpace(notice)
+}
+
+// seedAdoptionNotice points teachers with customized active rules to the
+// existing comparison and explicit adoption controls in Settings.
+func seedAdoptionNotice(root string) string {
+	loc, err := workspace.GetRulesLocation(root)
+	if err != nil || loc.Mode != "sync" {
+		return ""
+	}
+	for _, row := range playbookRows(root) {
+		if row.Replaceable && row.State == "differs" {
+			return "Some seed-managed instructions in Sync differ from this version. Review them in Settings → Your playbooks and context; choose any files to adopt. Nothing was replaced."
+		}
+	}
+	return ""
 }
 
 func (h *Hub) headers(w http.ResponseWriter) {
@@ -165,6 +187,7 @@ func (h *Hub) home(w http.ResponseWriter, status int, message, notice string) {
 
 func (h *Hub) pageData() homeData {
 	data := homeData{Secret: h.secret, Root: h.root, Program: h.programDir, Version: h.version}
+	data.ConnectionTested = h.connectionTested
 	if c, err := platform.LoadCredential(); err == nil {
 		data.Connected, data.CanvasOrigin, data.CanvasUser = true, c.Origin, h.canvasUser
 	}
@@ -260,9 +283,21 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(struct {
-			CredentialSaved bool   `json:"credential_saved"`
-			SetupOutcome    string `json:"setup_outcome"`
-		}{saved, outcome})
+			CredentialSaved     bool   `json:"credential_saved"`
+			SetupOutcome        string `json:"setup_outcome"`
+			ValidationSucceeded bool   `json:"validation_succeeded"`
+			ConnectionTested    bool   `json:"connection_tested"`
+		}{saved, outcome, h.setupValidated, h.connectionTested})
+	case "/_cse/hub-identity":
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			InstallRoot string `json:"install_root"`
+		}{hubcoord.CanonicalRoot(h.root)})
 	case "/connect":
 		h.connectionPage(w, r)
 	case "/connect/extension":
@@ -326,7 +361,8 @@ func RunHub(ctx context.Context, root, version string, output io.Writer) error {
 
 // HubOptions selects the first browser page without changing saved settings.
 type HubOptions struct {
-	SetupFirst bool
+	SetupFirst    bool
+	InstallClient string
 	// ReadyFile is a short-lived installer handshake containing no credentials.
 	ReadyFile string
 }
@@ -337,6 +373,26 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 	}
 	if output == nil {
 		output = io.Discard
+	}
+	var hubUnlock func()
+	hubLocked := false
+	defer func() {
+		if hubLocked && hubUnlock != nil {
+			hubUnlock()
+		}
+	}()
+	if root != "" && options.ReadyFile == "" {
+		root = hubcoord.CanonicalRoot(root)
+		unlock, lockErr := hubcoord.Acquire(root, 5*time.Second)
+		if lockErr != nil {
+			return lockErr
+		}
+		hubUnlock, hubLocked = unlock, true
+		if existing, ok := hubcoord.Find(root); ok {
+			unlock()
+			hubLocked = false
+			return reportExistingHub(existing, root, output, options)
+		}
 	}
 	listener, err := net.Listen("tcp4", preferredHubAddr)
 	if err != nil {
@@ -352,7 +408,7 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 	}
 	origin := "http://" + listener.Addr().String()
 	secret := hex.EncodeToString(nonce[:])
-	hub := &Hub{origin: origin, secret: secret, version: version, ctx: ctx, quit: make(chan struct{})}
+	hub := &Hub{origin: origin, secret: secret, version: version, ctx: ctx, quit: make(chan struct{}), installClient: options.InstallClient}
 	if exe, linkErr := platform.LinkProgram(); linkErr == nil {
 		hub.programDir = filepath.Dir(exe)
 	} else if exe, exeErr := os.Executable(); exeErr == nil {
@@ -360,27 +416,78 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 	}
 	hub.setup = &setupHandler{origin: origin, secret: secret, ctx: ctx, validate: validateCredential, save: platform.SaveCredential, persistent: true, hub: true, done: make(chan struct{})}
 	hub.setup.after = func(c platform.Credential) string {
-		hub.setupSaved = true
 		hub.canvasUser = ""
+		hub.connectionTested = true
 		if hub.root == "" {
 			return ""
 		}
 		changed, err := workspace.SyncInstance(hub.root, c.Origin)
+		logOutcome := "updated"
+		if err != nil {
+			logOutcome = "failed"
+		} else if !changed {
+			logOutcome = "unchanged"
+		}
+		rulesPath := ""
+		if location, locationErr := workspace.GetRulesLocation(hub.root); locationErr == nil {
+			rulesPath = location.RulesRoot
+		}
+		if logErr := installlog.Append(hub.root, version, installlog.Entry{Step: "origin_configuration", Client: hub.installClient, Outcome: logOutcome, ErrorCategory: map[bool]string{true: "configuration"}[err != nil], InstallPath: hub.root, RulesPath: rulesPath}); logErr != nil {
+			fmt.Fprintln(output, "Install log unavailable; setup continues.")
+		}
 		switch {
 		case err != nil:
-			return "Could not update context/courses.md."
+			return "The credential was saved, but context/courses.md could not be updated; fix that file before running remote commands."
 		case !changed:
 			return "Saved origin differs from configured courses; update context/courses.md before remote commands."
 		}
 		return "CE-SE settings now use this Canvas address."
 	}
+	hub.setup.onValidation = func(valid bool) {
+		hub.setupValidated = valid
+		hub.setupSaved = false
+		hub.connectionTested = false
+		hub.canvasUser = ""
+	}
+	hub.setup.onValidationResult = func(valid bool) {
+		outcome := "failed"
+		category := "validation"
+		if valid {
+			outcome, category = "succeeded", ""
+		}
+		if err := installlog.Append(hub.root, version, installlog.Entry{Step: "credential_validation", Client: hub.installClient, Outcome: outcome, ErrorCategory: category, InstallPath: hub.root}); err != nil {
+			fmt.Fprintln(output, "Install log unavailable; setup continues.")
+		}
+	}
+	hub.setup.onSaved = func() {
+		hub.setupSaved = true
+		if err := installlog.Append(hub.root, version, installlog.Entry{Step: "credential_save", Client: hub.installClient, Outcome: "succeeded", InstallPath: hub.root}); err != nil {
+			fmt.Fprintln(output, "Install log unavailable; setup continues.")
+		}
+	}
+	hub.setup.onSaveFailed = func() {
+		if err := installlog.Append(hub.root, version, installlog.Entry{Step: "credential_save", Client: hub.installClient, Outcome: "failed", ErrorCategory: "credential_store", InstallPath: hub.root}); err != nil {
+			fmt.Fprintln(output, "Install log unavailable; setup continues.")
+		}
+	}
 	hub.root = root
 	if root != "" {
-		hub.seedNotice = addMissingSeed(root)
+		hub.seedNotice = strings.TrimSpace(strings.Join([]string{addMissingSeed(root), seedAdoptionNotice(root)}, " "))
 	}
 	server := &http.Server{Handler: hub, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()
+	if root != "" {
+		if err = hubcoord.Write(root, origin); err != nil {
+			return err
+		}
+		defer hubcoord.Remove(root, origin)
+		// Publish the endpoint before releasing the lock so a concurrent caller
+		// can validate and reuse this listener instead of binding another port.
+		// The health probe may briefly precede Serve; the caller retries boundedly.
+		hubUnlock()
+		hubLocked = false
+	}
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -396,12 +503,27 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 			firstPage = "/settings"
 		}
 	}
+	browserOutcome := "launch_requested"
+	if err = platform.OpenBrowser(origin + firstPage); err != nil {
+		browserOutcome = "launch_failed"
+	}
+	if root != "" {
+		category := ""
+		if browserOutcome == "launch_failed" {
+			category = "browser"
+		}
+		if logErr := installlog.Append(root, version, installlog.Entry{Step: "browser", Outcome: browserOutcome, ErrorCategory: category, InstallPath: root}); logErr != nil {
+			fmt.Fprintln(output, "Install log unavailable; hub continues.")
+		}
+	}
 	if options.ReadyFile != "" {
 		ready, marshalErr := json.Marshal(struct {
 			URL            string `json:"url"`
 			InstallRoot    string `json:"install_root"`
 			SetupStatusURL string `json:"setup_status_url"`
-		}{origin + firstPage, root, origin + "/setup/status"})
+			Reused         bool   `json:"reused"`
+			BrowserOutcome string `json:"browser_outcome"`
+		}{origin + firstPage, root, origin + "/setup/status", false, browserOutcome})
 		if marshalErr != nil {
 			return marshalErr
 		}
@@ -415,8 +537,10 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 			return fmt.Errorf("could not report hub readiness: %w", err)
 		}
 	}
-	if err = platform.OpenBrowser(origin + firstPage); err != nil {
+	if browserOutcome == "launch_failed" {
 		_, _ = fmt.Fprintln(output, "The browser could not open automatically; open the local URL above.")
+	} else {
+		_, _ = fmt.Fprintln(output, "A browser launch was requested for the local hub; this does not confirm that a page appeared.")
 	}
 	select {
 	case <-hub.quit:

@@ -149,6 +149,8 @@ func (h *Hub) testCanvas(w http.ResponseWriter, r *http.Request) {
 	if !h.checkPost(w, r) {
 		return
 	}
+	h.connectionTested = false
+	h.canvasUser = ""
 	name, err := h.whoami(r)
 	if err != nil {
 		h.canvasUser = ""
@@ -164,6 +166,7 @@ func (h *Hub) testCanvas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.canvasUser = name
+	h.connectionTested = true
 	h.redirect(w, r, "/settings", "Canvas works. The token belongs to "+name+".", "")
 }
 
@@ -184,5 +187,8 @@ func (h *Hub) forgetCanvas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.canvasUser = ""
+	h.connectionTested = false
+	h.setupSaved = false
+	h.setupValidated = false
 	h.redirect(w, r, "/settings", "Token removed from this computer. Your CE-SE files are untouched.", "")
 }

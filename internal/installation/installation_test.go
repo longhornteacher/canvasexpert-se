@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -98,6 +99,31 @@ func TestWorkRegistrationPreservesAndRepeatsWithoutCLI(t *testing.T) {
 		t.Fatalf("repeat install: %+v %v", again, err)
 	}
 }
+
+func TestRegisterReportsSelectedInstallRoot(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "Extracted Install")
+	for path, contents := range map[string]string{
+		filepath.Join(root, "engine", "cse.exe"):     "engine",
+		filepath.Join(root, "AGENTS.md"):             "instructions",
+		filepath.Join(root, "context", "courses.md"): "courses",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex"))
+	result, err := Register(root, "work", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.InstallRoot != root {
+		t.Fatalf("helper returned Install root %q, want %q", result.InstallRoot, root)
+	}
+}
+
 func TestWorkReplacementAndMalformedPreservation(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "New Install")
 	old := filepath.Join(t.TempDir(), "Old Install")
@@ -134,5 +160,28 @@ func TestConfiguredCodexHome(t *testing.T) {
 	t.Setenv("CODEX_HOME", home)
 	if workConfig() != filepath.Join(home, "config.toml") {
 		t.Fatal("CODEX_HOME ignored")
+	}
+}
+
+func TestCoworkLaunchOutcomesAreNarrowAndHonest(t *testing.T) {
+	prepared := Result{Client: "cowork", ExtensionPath: `C:\Install with spaces\engine\prepared.mcpb`, NextAction: "Manual extension path."}
+	called := false
+	requested := CoworkLaunchOutcome(prepared, true, func(path string) error {
+		called = true
+		if path != prepared.ExtensionPath {
+			t.Fatalf("wrong extension %q", path)
+		}
+		return nil
+	})
+	if !called || requested.CoworkLaunchOutcome != "launch_requested" || strings.Contains(strings.ToLower(requested.NextAction), "installed") {
+		t.Fatalf("misleading launch result: %+v", requested)
+	}
+	failed := CoworkLaunchOutcome(prepared, true, func(string) error { return errors.New("synthetic handler failure containing PAT_SYNTHETIC") })
+	if failed.CoworkLaunchOutcome != "launch_failed" || !strings.Contains(failed.NextAction, "manually open") || strings.Contains(failed.NextAction, "PAT_SYNTHETIC") {
+		t.Fatalf("bad fallback: %+v", failed)
+	}
+	noUI := CoworkLaunchOutcome(prepared, false, func(string) error { t.Fatal("no-UI invoked handler"); return nil })
+	if noUI.CoworkLaunchOutcome != "prepared" {
+		t.Fatalf("no-UI outcome: %+v", noUI)
 	}
 }

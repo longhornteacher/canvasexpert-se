@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"canvasexpertse/internal/hubcoord"
 	"canvasexpertse/internal/platform"
 )
 
@@ -14,9 +15,11 @@ type installUIReady struct {
 	URL            string `json:"url"`
 	InstallRoot    string `json:"install_root"`
 	SetupStatusURL string `json:"setup_status_url"`
+	Reused         bool   `json:"reused"`
+	BrowserOutcome string `json:"browser_outcome,omitempty"`
 }
 
-func launchInstallUI(ctx context.Context, root string) (installUIReady, error) {
+func launchInstallUI(ctx context.Context, root, client string) (installUIReady, error) {
 	var ready installUIReady
 	f, err := os.CreateTemp("", "cse-ui-ready-*.json")
 	if err != nil {
@@ -30,7 +33,7 @@ func launchInstallUI(ctx context.Context, root string) (installUIReady, error) {
 	if err != nil {
 		return ready, err
 	}
-	if err = platform.LaunchHidden(exe, "--workspace", root, "ui", "--setup-first", "--ready-file", path); err != nil {
+	if err = platform.LaunchHidden(exe, "--workspace", root, "ui", "--setup-first", "--install-client", client, "--ready-file", path); err != nil {
 		return ready, err
 	}
 	timer := time.NewTimer(8 * time.Second)
@@ -48,7 +51,7 @@ func launchInstallUI(ctx context.Context, root string) (installUIReady, error) {
 			if err != nil {
 				continue
 			}
-			if json.Unmarshal(data, &ready) != nil || ready.URL == "" || ready.InstallRoot != root {
+			if json.Unmarshal(data, &ready) != nil || ready.URL == "" || hubcoord.CanonicalRoot(ready.InstallRoot) != hubcoord.CanonicalRoot(root) {
 				return ready, errors.New("private WebUI startup returned an unexpected Install")
 			}
 			return ready, nil

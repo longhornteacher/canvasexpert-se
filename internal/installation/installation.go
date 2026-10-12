@@ -21,13 +21,15 @@ import (
 )
 
 type Result struct {
-	Client          string `json:"client"`
-	State           string `json:"state"`
-	ConfigPath      string `json:"config_path,omitempty"`
-	BackupPath      string `json:"backup_path,omitempty"`
-	ExtensionPath   string `json:"extension_path,omitempty"`
-	NextAction      string `json:"next_action"`
-	ExistingInstall string `json:"existing_install,omitempty"`
+	Client              string `json:"client"`
+	InstallRoot         string `json:"install_root"`
+	State               string `json:"state"`
+	ConfigPath          string `json:"config_path,omitempty"`
+	BackupPath          string `json:"backup_path,omitempty"`
+	ExtensionPath       string `json:"extension_path,omitempty"`
+	NextAction          string `json:"next_action"`
+	ExistingInstall     string `json:"existing_install,omitempty"`
+	CoworkLaunchOutcome string `json:"cowork_launch_outcome,omitempty"`
 }
 type CheckResult struct {
 	State                 string `json:"state"`
@@ -87,12 +89,35 @@ func Register(root, client string, replace bool) (Result, error) {
 	}
 	switch client {
 	case "work":
-		return registerWork(root, exe, workConfig(), replace)
+		result, err := registerWork(root, exe, workConfig(), replace)
+		result.InstallRoot = root
+		return result, err
 	case "cowork":
-		return prepareCowork(root)
+		result, err := prepareCowork(root)
+		result.InstallRoot = root
+		return result, err
 	default:
 		return Result{}, errors.New("choose client work or cowork")
 	}
+}
+
+// CoworkLaunchOutcome records only the OS request outcome. It cannot establish
+// that Claude accepted the extension or connected to its destination.
+func CoworkLaunchOutcome(result Result, automatic bool, open func(string) error) Result {
+	if result.Client != "cowork" || result.ExtensionPath == "" {
+		return result
+	}
+	result.CoworkLaunchOutcome = "prepared"
+	if automatic {
+		if open == nil || open(result.ExtensionPath) != nil {
+			result.CoworkLaunchOutcome = "launch_failed"
+			result.NextAction += " Automatic opening failed; manually open the prepared extension at " + result.ExtensionPath + "."
+		} else {
+			result.CoworkLaunchOutcome = "launch_requested"
+		}
+	}
+	result.NextAction += " OS launch does not confirm trust or installation; accept Claude Desktop's prompt and restart if requested."
+	return result
 }
 
 func registerWork(root, exe, path string, replace bool) (Result, error) {

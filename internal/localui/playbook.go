@@ -1,138 +1,33 @@
 package localui
 
 import (
-	"bytes"
-	"fmt"
 	"html/template"
-	"io/fs"
 	"net/http"
-	"os"
-	"path"
-	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
-	embedded "canvasexpertse"
-	"canvasexpertse/internal/workspace"
+	updates "canvasexpertse/internal/playbooks"
 )
 
-// playbookRow is one playbook or context seed file as the workspace holds it.
 type playbookRow struct {
-	Path, State string
-	Replaceable bool
+	Path, State, SHA256 string
+	Replaceable         bool
 }
 
-// playbookSeedPaths lists the seed files the teacher can compare and refresh:
-// AGENTS.md, CLAUDE.md, playbooks/* and context/* (the context). README.md,
-// cse.cmd and .claude are glue.
-func playbookSeedPaths() []string {
-	var out []string
-	_ = fs.WalkDir(embedded.WorkspaceTemplate, "workspace-template", func(name string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		rel := strings.TrimPrefix(name, "workspace-template/")
-		if rel == "AGENTS.md" || rel == "CLAUDE.md" || strings.HasPrefix(rel, "playbooks/") || strings.HasPrefix(rel, "context/") {
-			out = append(out, rel)
-		}
-		return nil
-	})
-	sort.Strings(out)
+func playbookRows(root string) []playbookRow {
+	rows := updates.Status(root)
+	out := make([]playbookRow, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, playbookRow{Path: r.Path, State: r.State, SHA256: r.SHA256, Replaceable: r.Replaceable})
+	}
 	return out
 }
-
-func isSettingsPath(rel string) bool { return strings.HasPrefix(rel, "context/") }
-
-func seedBytes(rel string) ([]byte, error) {
-	return fs.ReadFile(embedded.WorkspaceTemplate, path.Join("workspace-template", rel))
-}
-
-// playbookRows compares each file with this version's starter copy.
-func playbookRows(root string) []playbookRow {
-	var rows []playbookRow
-	for _, rel := range playbookSeedPaths() {
-		row := playbookRow{Path: rel}
-		seed, err := seedBytes(rel)
-		active, pathErr := workspace.ResolveTeacherPath(root, rel)
-		var have []byte
-		var readErr error
-		if pathErr != nil {
-			readErr = pathErr
-		} else {
-			have, readErr = os.ReadFile(active)
-		}
-		switch {
-		case err != nil:
-			continue
-		case pathErr != nil:
-			row.State = "unavailable"
-		case os.IsNotExist(readErr):
-			row.State = "missing"
-		case readErr != nil:
-			row.State = "differs"
-		case bytes.Equal(have, seed):
-			row.State = "same"
-		default:
-			row.State, row.Replaceable = "differs", !isSettingsPath(rel)
-		}
-		rows = append(rows, row)
-	}
-	return rows
-}
-
-// replacePlaybookFile moves the teacher's copy to playbook-old/<date>/<path>
-// and writes this version's starter copy. Settings files are never replaced.
+func seedBytes(rel string) ([]byte, error) { return updates.SeedBytes(rel) }
 func replacePlaybookFile(root, rel string, now time.Time) error {
-	rel = path.Clean(strings.ReplaceAll(rel, "\\", "/"))
-	known := false
-	for _, p := range playbookSeedPaths() {
-		known = known || p == rel
-	}
-	if !known || isSettingsPath(rel) {
-		return fmt.Errorf("%s can't be replaced from the hub", rel)
-	}
-	seed, err := seedBytes(rel)
-	if err != nil {
-		return err
-	}
-	target, err := workspace.ResolveTeacherPath(root, rel)
-	if err != nil {
-		return err
-	}
-	if _, err = os.Lstat(target); err == nil {
-		loc, locErr := workspace.GetRulesLocation(root)
-		if locErr != nil {
-			return locErr
-		}
-		oldRel := path.Join("playbook-old", now.Format("2006-01-02"), rel)
-		dest, err := workspace.ConstrainPath(loc.RulesRoot, filepath.FromSlash(oldRel))
-		if err != nil {
-			return err
-		}
-		ext := filepath.Ext(dest)
-		base := strings.TrimSuffix(dest, ext)
-		for n := 2; ; n++ {
-			if _, statErr := os.Lstat(dest); os.IsNotExist(statErr) {
-				break
-			}
-			dest = fmt.Sprintf("%s-%d%s", base, n, ext)
-		}
-		if err = os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return err
-		}
-		if err = os.Rename(target, dest); err != nil {
-			return err
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if err = os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(target, seed, 0o644)
+	return updates.Replace(root, rel, "", now)
 }
-
+func ReplacePlaybook(root, rel, expectedSHA256 string, now time.Time) error {
+	return updates.Replace(root, rel, expectedSHA256, now)
+}
 func (h *Hub) replacePlaybook(w http.ResponseWriter, r *http.Request) {
 	if !h.checkPost(w, r) || h.needWorkspace(w) {
 		return

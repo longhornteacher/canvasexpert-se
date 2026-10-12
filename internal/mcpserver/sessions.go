@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -18,16 +19,18 @@ import (
 
 	"canvasexpertse/internal/workflow"
 
+	"canvasexpertse/internal/hubcoord"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type reviewTask struct {
-	id, url, kind  string
-	done           chan struct{}
-	mu             sync.Mutex
-	stdout, stderr strings.Builder
-	err            error
-	process        *os.Process
+	id, url, kind    string
+	done             chan struct{}
+	external, reused bool
+	mu               sync.Mutex
+	stdout, stderr   strings.Builder
+	err              error
+	process          *os.Process
 }
 
 type LocalUIInput struct {
@@ -67,7 +70,28 @@ func (s *Server) startLocalUI(ctx context.Context, in LocalUIInput) (TextOutput,
 	if !ok {
 		return TextOutput{}, errors.New("page must be hub, setup, or students")
 	}
+	if in.Page == "hub" {
+		if loc, found := hubcoord.Find(s.root); found {
+			return s.trackReusedHub(loc.URL)
+		}
+	}
 	return s.startSession(ctx, in.Page, []string{command})
+}
+
+func (s *Server) trackReusedHub(pageURL string) (TextOutput, error) {
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return TextOutput{}, err
+	}
+	task := &reviewTask{id: hex.EncodeToString(nonce[:]), kind: "hub", url: pageURL, done: make(chan struct{}), external: true}
+	s.mu.Lock()
+	if s.sessions == nil {
+		s.sessions = make(map[string]*reviewTask)
+	}
+	s.sessions[task.id] = task
+	s.mu.Unlock()
+	result := TextOutput{State: "pending", SessionID: task.id, URL: pageURL, Text: "Reusing the running private hub for this Install. It remains open independently of this agent session; ask the teacher to open " + pageURL + ". Never fetch the page contents through MCP."}
+	return result, nil
 }
 
 func (s *Server) startSession(ctx context.Context, kind string, args []string) (TextOutput, error) {
@@ -148,6 +172,12 @@ func (s *Server) startSession(ctx context.Context, kind string, args []string) (
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			line := scanner.Text()
+			if kind == "hub" && strings.Contains(line, "Reusing the running CanvasExpert-SE hub") {
+				task.mu.Lock()
+				task.reused = true
+				task.external = true
+				task.mu.Unlock()
+			}
 			raw := sessionURL(kind, line)
 			task.mu.Lock()
 			if kind == "review" && raw == "" {
@@ -235,11 +265,26 @@ func (t *reviewTask) status() (TextOutput, error) {
 	}
 	select {
 	case <-t.done:
+		if t.external && t.kind == "hub" {
+			result.State = "pending"
+			result.Text = "Reusing the running private hub for this Install. It remains open independently of this agent session. Ask the teacher to open " + t.url + ". Never fetch the page contents through MCP."
+			result.URL = t.url
+			return result, nil
+		}
 		result.State = "finished"
 		if t.err != nil {
 			result.State = "failed"
 		}
 		if t.kind != "review" {
+			if t.kind == "setup" && t.err == nil {
+				// The setup command exits successfully only after Canvas validation
+				// and credential save both complete. Do not inspect its output.
+				result.SetupStatusAvailable = true
+				result.CredentialSaved = boolPointer(true)
+				result.ValidationSucceeded = boolPointer(true)
+				result.ConnectionTested = boolPointer(true)
+				result.SetupOutcome = "saved_this_session"
+			}
 			if t.err != nil {
 				result.Text = "Private teacher page failed or stopped. " + identity + ". Open the hub to inspect or retry."
 				return result, nil
@@ -285,6 +330,9 @@ func (t *reviewTask) status() (TextOutput, error) {
 			message = "The review page is opening in the teacher's browser; fallback address " + t.url + ". " + identity + ". No Canvas changes occur unless the teacher approves on the page."
 		} else {
 			message += ". This page is private to the teacher; do not read its contents through MCP."
+			if t.kind == "setup" {
+				message += " Connection test and save status are not confirmed while setup is still open."
+			}
 		}
 		result.Text, result.URL = message, t.url
 		return result, nil
@@ -307,7 +355,81 @@ func (s *Server) localUIStatus(id string) (TextOutput, error) {
 	if task == nil {
 		return TextOutput{}, errors.New("unknown session_id")
 	}
-	return task.status()
+	if task.kind == "hub" && task.external {
+		if _, ok := hubcoord.Find(s.root); !ok {
+			task.mu.Lock()
+			select {
+			case <-task.done:
+			default:
+				close(task.done)
+			}
+			task.external = false
+			task.err = fmt.Errorf("hub stopped")
+			task.mu.Unlock()
+		}
+	}
+	result, err := task.status()
+	if err != nil {
+		return result, err
+	}
+	if task.kind == "hub" {
+		task.mu.Lock()
+		pageURL := task.url
+		task.mu.Unlock()
+		status, statusErr := fetchHubSetupStatus(pageURL)
+		if statusErr == nil {
+			result.SetupStatusAvailable = true
+			result.CredentialSaved = boolPointer(status.CredentialSaved)
+			result.ValidationSucceeded = boolPointer(status.ValidationSucceeded)
+			result.ConnectionTested = boolPointer(status.ConnectionTested)
+			result.SetupOutcome = status.SetupOutcome
+		} else if result.State != "failed" {
+			result.Text += ". Connection status is unavailable; this agent session cannot confirm whether the saved token was tested"
+		}
+	}
+	return result, nil
+}
+
+type hubSetupStatus struct {
+	CredentialSaved     bool   `json:"credential_saved"`
+	SetupOutcome        string `json:"setup_outcome"`
+	ValidationSucceeded bool   `json:"validation_succeeded"`
+	ConnectionTested    bool   `json:"connection_tested"`
+}
+
+// fetchHubSetupStatus reads only the hub's intentionally non-secret status
+// fields. The session URL is accepted only for a loopback HTTP origin.
+func fetchHubSetupStatus(pageURL string) (hubSetupStatus, error) {
+	var status hubSetupStatus
+	u, err := url.Parse(pageURL)
+	if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.Port() == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+		return status, errors.New("hub status route unavailable")
+	}
+	u.Path, u.RawPath = "/setup/status", ""
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return status, errors.New("hub status route unavailable")
+	}
+	client := &http.Client{Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(req)
+	if err != nil {
+		return status, errors.New("hub status route unavailable")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return status, errors.New("hub status route unavailable")
+	}
+	if err = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&status); err != nil {
+		return hubSetupStatus{}, errors.New("hub status route unavailable")
+	}
+	switch status.SetupOutcome {
+	case "not_saved", "saved_not_tested", "saved_this_session":
+	default:
+		return hubSetupStatus{}, errors.New("hub status route unavailable")
+	}
+	return status, nil
 }
 
 // Run invokes this synchronously before returning: the CLI uses os.Exit, so a
@@ -320,7 +442,7 @@ func (s *Server) stopSessions() {
 			select {
 			case <-task.done:
 			default:
-				if task.process != nil {
+				if task.process != nil && !task.external {
 					_ = task.process.Kill()
 				}
 			}

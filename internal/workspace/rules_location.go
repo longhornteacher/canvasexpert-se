@@ -111,6 +111,9 @@ func GetRulesLocation(root string) (RulesLocation, error) {
 // ResolveTeacherPath maps a logical workspace path to its active authority,
 // while retaining the ordinary path confinement checks at that authority.
 func ResolveTeacherPath(root, relative string) (string, error) {
+	if strings.EqualFold(strings.Trim(strings.ReplaceAll(relative, "\\", "/"), "/"), "install-log.jsonl") {
+		return "", fmt.Errorf("install-log.jsonl is operational Install state, not teacher rules")
+	}
 	install, err := filepath.Abs(root)
 	if err != nil {
 		return "", err
@@ -129,6 +132,23 @@ func ResolveTeacherPath(root, relative string) (string, error) {
 		return "", err
 	}
 	if err := rejectLinkedPrefixes(base, relative); err != nil {
+		return "", err
+	}
+	return p, nil
+}
+
+// ResolveRulesPath resolves a path inside the active teacher-rules authority,
+// including archive paths that are not eligible for ordinary rule reads.
+func ResolveRulesPath(root, relative string) (string, error) {
+	loc, err := GetRulesLocation(root)
+	if err != nil {
+		return "", err
+	}
+	p, err := ConstrainPath(loc.RulesRoot, relative)
+	if err != nil {
+		return "", err
+	}
+	if err := rejectLinkedPrefixes(loc.RulesRoot, relative); err != nil {
 		return "", err
 	}
 	return p, nil

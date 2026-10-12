@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/playbooks"
 	"canvasexpertse/internal/workspace"
 )
 
@@ -18,6 +20,65 @@ func TestHelpAndVersionNeedNoWorkspaceOrCanvas(t *testing.T) {
 		if code := run(context.Background(), args, &out, &err); code != 0 || !strings.Contains(out.String(), "CanvasExpert-SE") {
 			t.Fatalf("%v: %d %s", args, code, err.String())
 		}
+	}
+}
+
+func TestInstallUIEnabled(t *testing.T) {
+	if installUIEnabled(true, false) || installUIEnabled(false, true) || !installUIEnabled(false, false) {
+		t.Fatal("check-only or no-UI must never launch the private hub/browser")
+	}
+}
+
+func TestPlaybooksCLIStatusAndExplicitReplacement(t *testing.T) {
+	root := t.TempDir()
+	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), domain.CourseConfig{Schema: 1, Instance: "https://school.example", Courses: []domain.Course{}}, ""); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(root, "playbooks", "setup.md")
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("teacher version"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var out, progress bytes.Buffer
+	if code := run(context.Background(), []string{"--workspace", root, "playbooks", "status"}, &out, &progress); code != 0 {
+		t.Fatalf("status: %d %s", code, progress.String())
+	}
+	var status struct {
+		Files []playbooks.StatusRow `json:"files"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	var hash string
+	for _, row := range status.Files {
+		if row.Path == "playbooks/setup.md" {
+			if row.State != "differs" || !row.Replaceable {
+				t.Fatalf("unexpected status: %+v", row)
+			}
+			hash = row.SHA256
+		}
+	}
+	if hash == "" {
+		t.Fatal("status omitted current hash")
+	}
+	out.Reset()
+	progress.Reset()
+	if code := run(context.Background(), []string{"--workspace", root, "playbooks", "replace", "playbooks/setup.md", "--expected-sha256", "stale"}, &out, &progress); code == 0 {
+		t.Fatal("stale hash was accepted")
+	}
+	if b, _ := os.ReadFile(p); string(b) != "teacher version" {
+		t.Fatal("stale hash changed active file")
+	}
+	out.Reset()
+	progress.Reset()
+	if code := run(context.Background(), []string{"--workspace", root, "playbooks", "replace", "playbooks/setup.md", "--expected-sha256", hash}, &out, &progress); code != 0 {
+		t.Fatalf("replace: %d %s", code, progress.String())
+	}
+	seed, _ := playbooks.SeedBytes("playbooks/setup.md")
+	if b, _ := os.ReadFile(p); string(b) != string(seed) {
+		t.Fatal("CLI replacement did not install seed")
 	}
 }
 func TestInvalidResultsAreRejectedBeforeCredentials(t *testing.T) {

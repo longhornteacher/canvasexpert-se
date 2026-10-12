@@ -27,7 +27,7 @@ func studentsHub(t *testing.T) (*Hub, string) {
 	}
 	h.root = root
 	h.listCoursesFn = func(context.Context) ([]workflow.Course, string, error) {
-		return []workflow.Course{{ID: 11, Name: "Computer Science 8", Code: "CS8", State: "available"}, {ID: 22, Name: "Old Course", Code: "OLD", State: "available"}}, "https://school.example", nil
+		return []workflow.Course{{ID: 11, Name: "Computer Science 8", Code: "CS8", State: "available"}, {ID: 22, Name: "Old Course", Code: "OLD", State: "available"}, {ID: 33, Name: "Same Title", Code: "A", State: "unpublished"}, {ID: 44, Name: "Same Title", Code: "B", State: "available"}}, "https://school.example", nil
 	}
 	h.rosterFn = func(_ context.Context, id int64) ([]workflow.Enrollment, string, error) {
 		mk := func(uid int64, name, state string) workflow.Enrollment {
@@ -49,8 +49,22 @@ func hubGet(h *Hub, path string) *httptest.ResponseRecorder {
 
 func TestCoursePickerSavesOnlyActiveCourses(t *testing.T) {
 	h, root := studentsHub(t)
-	if w := hubGet(h, "/courses"); w.Code != 200 || !strings.Contains(w.Body.String(), "Computer Science 8") || !strings.Contains(w.Body.String(), `value="CS8"`) {
-		t.Fatalf("course list missing: %d", w.Code)
+	page := hubGet(h, "/courses")
+	if page.Code != 200 || !strings.Contains(page.Body.String(), "Computer Science 8") || !strings.Contains(page.Body.String(), `name="nick_11" value=""`) {
+		t.Fatalf("course list missing or new nickname not empty: %d", page.Code)
+	}
+	body := page.Body.String()
+	if strings.Contains(body, `name="nick_11" value="CS8"`) || strings.Contains(body, `name="active_11" checked`) {
+		t.Fatal("new course should start with an empty nickname and unchecked")
+	}
+	if !strings.Contains(body, `ID 11 · available`) || !strings.Contains(body, `ID 33 · unpublished`) || !strings.Contains(body, `<tr class="unpublished">`) {
+		t.Fatal("course ID/state or unpublished styling missing")
+	}
+	if strings.Index(body, `ID 44 · available`) > strings.Index(body, `ID 33 · unpublished`) {
+		t.Fatal("available course should be listed before unpublished course")
+	}
+	if strings.Count(body, "Same Title") != 2 {
+		t.Fatal("same-title courses with distinct IDs must both remain visible")
 	}
 	form := url.Values{"request_secret": {"nonce"}, "id": {"11", "22"}, "nick_11": {"CS8"}, "active_11": {"on"}, "nick_22": {"OLD"}}
 	if w := hubPost(h, "/courses", form, h.origin); w.Code != http.StatusSeeOther {
@@ -70,6 +84,25 @@ func TestCoursePickerSavesOnlyActiveCourses(t *testing.T) {
 	hubPost(h, "/courses", form, h.origin)
 	if w := hubGet(h, "/courses"); !strings.Contains(w.Body.String(), "Not saved") {
 		t.Fatal("duplicate nickname accepted")
+	}
+	// An explicitly selected unpublished course keeps its nickname and active flag on reload/save.
+	config, _, _ = h.readConfig()
+	config.Courses = append(config.Courses, domain.Course{ID: 33, Nickname: "Archive", Current: true})
+	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); err != nil {
+		t.Fatal(err)
+	}
+	page = hubGet(h, "/courses")
+	if !strings.Contains(page.Body.String(), `name="active_33" checked`) || !strings.Contains(page.Body.String(), `name="nick_33" value="Archive"`) {
+		t.Fatal("saved unpublished selection was not restored")
+	}
+	hubPost(h, "/courses", url.Values{"request_secret": {"nonce"}, "id": {"11", "22", "33", "44"}, "nick_11": {"CS8"}, "nick_22": {"Old"}, "nick_33": {"Archive"}, "active_33": {"on"}}, h.origin)
+	if config, _, _ = h.readConfig(); len(config.Courses) != 2 || !config.Courses[1].Current || config.Courses[1].Nickname != "Archive" {
+		t.Fatalf("saved choice changed after reload/save: %+v", config.Courses)
+	}
+	// Selecting a new course without supplying a nickname is rejected with a useful message.
+	hubPost(h, "/courses", url.Values{"request_secret": {"nonce"}, "id": {"11", "22", "33", "44"}, "nick_11": {"CS8"}, "nick_22": {"Old"}, "nick_33": {"Archive"}, "active_33": {"on"}, "active_44": {"on"}}, h.origin)
+	if w := hubGet(h, "/courses"); !strings.Contains(w.Body.String(), "Every active course needs a nickname.") {
+		t.Fatal("new active course without nickname should explain the correction")
 	}
 	_ = root
 }

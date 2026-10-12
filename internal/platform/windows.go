@@ -152,3 +152,19 @@ func OpenBrowser(rawURL string) error {
 	}
 	return nil
 }
+
+// OpenDefaultFile asks Windows to open a prepared file with its registered handler.
+func OpenDefaultFile(path string) error {
+	verb, _ := syscall.UTF16PtrFromString("open")
+	file, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return errors.New("invalid file path")
+	}
+	result, _, _ := shellExecute.Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(file)), 0, 0, 1)
+	runtime.KeepAlive(verb)
+	runtime.KeepAlive(file)
+	if result <= 32 {
+		return errors.New("could not open prepared file with its default handler")
+	}
+	return nil
+}

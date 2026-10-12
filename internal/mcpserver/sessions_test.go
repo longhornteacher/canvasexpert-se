@@ -2,7 +2,10 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +16,59 @@ import (
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/workspace"
 )
+
+func TestLocalUIStatusReportsOnlyAllowlistedHubConnectionState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `{"credential_saved":true,"setup_outcome":"saved_this_session","validation_succeeded":true,"connection_tested":true,"account":"PRIVATE-ACCOUNT","response":"PRIVATE-RESPONSE","token":"PRIVATE-PAT"}`)
+	}))
+	defer server.Close()
+	task := &reviewTask{id: "hub-session", kind: "hub", url: server.URL + "/", done: make(chan struct{})}
+	s := &Server{sessions: map[string]*reviewTask{task.id: task}}
+	status, err := s.localUIStatus(task.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !status.SetupStatusAvailable || status.CredentialSaved == nil || !*status.CredentialSaved || status.ValidationSucceeded == nil || !*status.ValidationSucceeded || status.ConnectionTested == nil || !*status.ConnectionTested || status.SetupOutcome != "saved_this_session" {
+		t.Fatalf("hub state missing from agent status: %+v", status)
+	}
+	b, err := json.Marshal(status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, private := range []string{"PRIVATE-ACCOUNT", "PRIVATE-RESPONSE", "PRIVATE-PAT"} {
+		if strings.Contains(string(b), private) {
+			t.Fatalf("private hub data escaped through MCP: %s", b)
+		}
+	}
+}
+
+func TestHubSetupStatusRejectsNonLoopbackURL(t *testing.T) {
+	if _, err := fetchHubSetupStatus("http://example.com:1234/"); err == nil {
+		t.Fatal("non-loopback status URL accepted")
+	}
+}
+
+func TestReusedHubSessionIsExternallyOwnedAndSurvivesTransportClose(t *testing.T) {
+	s := &Server{root: t.TempDir()}
+	out, err := s.trackReusedHub("http://127.0.0.1:45678/")
+	if err != nil || out.State != "pending" || out.URL == "" || !strings.Contains(out.Text, "independently") {
+		t.Fatalf("%+v %v", out, err)
+	}
+	task := s.sessions[out.SessionID]
+	if task == nil || !task.external || task.process != nil {
+		t.Fatal("reused hub was represented as a child-owned session")
+	}
+	s.stopSessions()
+	select {
+	case <-task.done:
+		t.Fatal("transport close ended externally owned hub session")
+	default:
+	}
+	status, err := task.status()
+	if err != nil || status.State != "pending" || status.URL != out.URL {
+		t.Fatalf("reused hub status lost its lifetime/URL: %+v %v", status, err)
+	}
+}
 
 // A synthetic child stands in for the CLI: no credential store or Canvas calls.
 func TestSessionChild(t *testing.T) {

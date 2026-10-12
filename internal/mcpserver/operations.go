@@ -8,9 +8,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	embedded "canvasexpertse"
+	"canvasexpertse/internal/doctor"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/playbooks"
 	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -51,8 +54,11 @@ type CanvasGetInput struct {
 }
 
 type EngineInfoInput struct {
-	Operation string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, rules-location, or set-rules-location"`
-	SyncRoot  string `json:"sync_root,omitempty" jsonschema:"Explicit teacher-rules directory for set-rules-location; empty selects local Install mode"`
+	Operation      string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, rules-location, set-rules-location, playbooks-status, or replace-playbook"`
+	SyncRoot       string `json:"sync_root,omitempty" jsonschema:"Explicit teacher-rules directory for set-rules-location; empty selects local Install mode"`
+	Path           string `json:"path,omitempty" jsonschema:"Seed-managed workspace-relative file for replace-playbook"`
+	ExpectedSHA256 string `json:"expected_sha256,omitempty" jsonschema:"Current hash from playbooks-status, or missing when explicitly adding an absent file"`
+	Offline        bool   `json:"offline,omitempty" jsonschema:"For doctor only: skip Canvas and local hub network checks; those results are not_verified"`
 }
 
 func (s *Server) registerOperationTools(server *mcp.Server) {
@@ -113,7 +119,7 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		return s.command(ctx, "api", in.Path)
 	})
-	addActionTool(server, "engine_info", "Read Engine build/version, run its temporary dummy credential self-test (doctor), record this executable for workspace launchers (link), or inspect/set teacher-rules authority (rules-location, set-rules-location). Never returns Canvas credentials.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
+	addActionTool(server, "engine_info", "Read Engine build/version; run doctor with bounded authenticated read-only Canvas and same-Install hub checks (or offline:true to skip network checks); inspect/set teacher-rules authority; or compare and explicitly replace one seed-managed playbook. Doctor reports categorized results and never returns Canvas identity, credentials, or raw responses, and does not inspect client settings. playbooks-status returns active-rule paths and hashes; replace-playbook requires path plus expected_sha256 (current hash or missing). Replacement archives the prior file and never replaces context preferences.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
 		op := in.Operation
 		if op == "" {
 			op = "version"
@@ -141,8 +147,40 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 			b, err := json.Marshal(location)
 			return TextOutput{Text: string(b)}, err
 		}
+		if op == "doctor" {
+			exe, err := os.Executable()
+			if err != nil {
+				return TextOutput{}, err
+			}
+			build := fmt.Sprintf("version=%s revision=%s built_at=%s kind=%s", Version, Revision, BuiltAt, BuildKind)
+			report := doctor.RunMode(s.root, exe, build, in.Offline)
+			data, err := report.JSON()
+			return TextOutput{Text: string(data)}, err
+		}
+		if op == "playbooks-status" {
+			location, locErr := workspace.GetRulesLocation(s.root)
+			status := struct {
+				Location          workspace.RulesLocation `json:"location"`
+				AvailabilityError string                  `json:"availability_error,omitempty"`
+				Files             []playbooks.StatusRow   `json:"files"`
+			}{Location: location, Files: playbooks.Status(s.root)}
+			if locErr != nil {
+				status.AvailabilityError = locErr.Error()
+			}
+			b, err := json.Marshal(status)
+			return TextOutput{Text: string(b)}, err
+		}
+		if op == "replace-playbook" {
+			if strings.TrimSpace(in.Path) == "" || strings.TrimSpace(in.ExpectedSHA256) == "" {
+				return TextOutput{}, errors.New("replace-playbook requires path and expected_sha256 from playbooks-status, or expected_sha256: missing for an absent file")
+			}
+			if err := playbooks.Replace(s.root, in.Path, in.ExpectedSHA256, time.Now()); err != nil {
+				return TextOutput{}, err
+			}
+			return TextOutput{Text: in.Path + " replaced with this Engine's seed; previous copy archived under playbook-old."}, nil
+		}
 		if op != "version" && op != "doctor" && op != "link" {
-			return TextOutput{}, errors.New("operation must be version, doctor, link, rules-location, or set-rules-location")
+			return TextOutput{}, errors.New("operation must be version, doctor, link, rules-location, set-rules-location, playbooks-status, or replace-playbook")
 		}
 		result, err := s.command(ctx, op)
 		if op == "version" {

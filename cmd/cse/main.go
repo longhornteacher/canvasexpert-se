@@ -13,14 +13,18 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"time"
 	_ "time/tzdata"
 
 	embedded "canvasexpertse"
+	"canvasexpertse/internal/doctor"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/installation"
+	"canvasexpertse/internal/installlog"
 	"canvasexpertse/internal/localui"
 	"canvasexpertse/internal/mcpserver"
 	"canvasexpertse/internal/platform"
+	"canvasexpertse/internal/playbooks"
 	"canvasexpertse/internal/workspace"
 )
 
@@ -38,6 +42,9 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   mcp                           Run the local MCP adapter over stdio
   link                          Record this program's location for workspace cse.cmd
   rules-location                Show teacher-rules authority; use --sync PATH or --local to set it
+  playbooks status              Compare active teacher rules with this Engine's seed
+  playbooks replace PATH --expected-sha256 HASH
+                                Explicitly archive and replace one seed-managed file (HASH may be 'missing')
   setup                         Connect Canvas privately on this machine
   students                      Edit student aliases and monitored status
   courses                       Discover authorized teacher courses
@@ -53,7 +60,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   quiz-points COURSE QUIZ [N=PTS ...] List a New Quiz's questions, or set question N to PTS points
   api PATH                      Read-only Canvas API GET when no command fits; prints the JSON
   validate FILE                 Validate a workspace document locally
-  doctor                        Test native dummy credential round trip
+  doctor [--json] [--offline]   Check this Install; authenticated Canvas and hub checks unless offline
   version [--json]              Print version and build information
   review FILE [COURSE]  Open a local page where the teacher reviews scores (results file), a new assignment (create document) or a quiz (QuizForge file plus COURSE), revises some, and posts or creates the approved ones; exits when finished and prints what was posted, revised and held
   help [formats|fields|examples] Print this help, the file-format reference, Canvas field limits, or the synthetic examples (no Canvas requests)
@@ -127,6 +134,46 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 	}
 	cmd := args[0]
 	args = args[1:]
+	if cmd == "playbooks" {
+		root, e := runtimeRoot(*rootOpt)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		if len(args) == 1 && args[0] == "status" {
+			location, locErr := workspace.GetRulesLocation(root)
+			status := struct {
+				Location          workspace.RulesLocation `json:"location"`
+				AvailabilityError string                  `json:"availability_error,omitempty"`
+				Files             []playbooks.StatusRow   `json:"files"`
+			}{Location: location, Files: playbooks.Status(root)}
+			if locErr != nil {
+				status.AvailabilityError = locErr.Error()
+			}
+			b, e := json.MarshalIndent(status, "", "  ")
+			if e != nil {
+				return fail(e, progress)
+			}
+			fmt.Fprintln(out, string(b))
+			return 0
+		}
+		if len(args) >= 2 && args[0] == "replace" {
+			var rel, expected string
+			if len(args) == 4 && args[2] == "--expected-sha256" {
+				rel, expected = args[1], args[3]
+			} else if len(args) == 4 && args[1] == "--expected-sha256" {
+				expected, rel = args[2], args[3]
+			}
+			if strings.TrimSpace(rel) == "" || strings.TrimSpace(expected) == "" {
+				return fail(inputError(fmt.Errorf("use playbooks replace PATH --expected-sha256 HASH")), progress)
+			}
+			if e := playbooks.Replace(root, rel, expected, time.Now()); e != nil {
+				return fail(e, progress)
+			}
+			fmt.Fprintf(out, "%s replaced with this Engine's seed; previous copy archived under playbook-old.\n", rel)
+			return 0
+		}
+		return fail(inputError(fmt.Errorf("use playbooks status or playbooks replace PATH --expected-sha256 HASH")), progress)
+	}
 	if cmd == "rules-location" {
 		root, e := runtimeRoot(*rootOpt)
 		if e != nil {
@@ -192,13 +239,38 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		return 0
 	}
 	if cmd == "doctor" {
-		if len(args) != 0 {
-			return fail(inputError(fmt.Errorf("doctor takes no arguments")), progress)
+		doctorFlags := flag.NewFlagSet("doctor", flag.ContinueOnError)
+		doctorFlags.SetOutput(progress)
+		jsonOutput := doctorFlags.Bool("json", false, "emit JSON checklist")
+		offline := doctorFlags.Bool("offline", false, "skip Canvas and local hub network checks")
+		if e := doctorFlags.Parse(args); e != nil {
+			return 2
 		}
-		if e := platform.CredentialSelfTest(); e != nil {
+		if doctorFlags.NArg() != 0 {
+			return fail(inputError(fmt.Errorf("use doctor [--json] [--offline]")), progress)
+		}
+		root, e := runtimeRoot(*rootOpt)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		exe, e := os.Executable()
+		if e != nil {
 			return fail(e, progress)
 		}
-		fmt.Fprintln(out, "Native dummy credential byte round trip passed; temporary credential removed.")
+		build := fmt.Sprintf("version=%s revision=%s built_at=%s kind=%s", version, revision, builtAt, buildKind)
+		report := doctor.RunMode(root, exe, build, *offline)
+		if *jsonOutput {
+			data, marshalErr := report.JSON()
+			if marshalErr != nil {
+				return fail(marshalErr, progress)
+			}
+			fmt.Fprintln(out, string(data))
+		} else {
+			fmt.Fprint(out, report.Human())
+		}
+		if report.Failed {
+			return 4
+		}
 		return 0
 	}
 	if cmd == "link" {
@@ -237,26 +309,56 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		// Launch independently of registration, including a client trust/restart requirement.
 		var installErrors []error
-		if !*noUI {
-			ready, err := launchInstallUI(ctx, root)
+		logEvent := func(step, outcome, category, selected string) {
+			if e := installlog.Append(root, version, installlog.Entry{Step: step, Client: selected, Outcome: outcome, ErrorCategory: category, InstallPath: root}); e != nil {
+				fmt.Fprintln(progress, "Install log unavailable; setup continues.")
+			}
+		}
+		if installUIEnabled(*checkOnly, *noUI) {
+			ready, err := launchInstallUI(ctx, root, *client)
 			if err != nil {
+				logEvent("hub", "failed", "startup", *client)
 				installErrors = append(installErrors, err)
 			} else {
+				outcome := "started"
+				if ready.Reused {
+					outcome = "reused"
+				}
+				logEvent("hub", outcome, "", *client)
+				if ready.BrowserOutcome == "launch_failed" || ready.BrowserOutcome == "launch_requested" {
+					logEvent("browser", ready.BrowserOutcome, map[bool]string{true: "browser"}[ready.BrowserOutcome == "launch_failed"], *client)
+				}
 				data, _ := json.Marshal(ready)
 				fmt.Fprintln(out, string(data))
-				fmt.Fprintln(progress, "Private WebUI launched; enter Canvas credentials only there.")
+				if ready.Reused {
+					fmt.Fprintln(progress, "Reused the running private WebUI for this Install; it remains open independently of this install call.")
+				} else {
+					fmt.Fprintln(progress, "Private WebUI launched; enter Canvas credentials only there.")
+				}
 			}
 		}
 		if !*checkOnly {
 			result, err := installation.Register(root, *client, *replace)
 			if err != nil {
+				logEvent("registration", "failed", "registration", *client)
 				installErrors = append(installErrors, err)
 			} else {
+				logEvent("registration", "succeeded", "", *client)
+				if *client == "cowork" {
+					result = installation.CoworkLaunchOutcome(result, !*noUI, platform.OpenDefaultFile)
+					launch := result.CoworkLaunchOutcome
+					logEvent("cowork_extension", launch, "", *client)
+				}
 				data, _ := json.Marshal(result)
 				fmt.Fprintln(out, string(data))
 			}
 		}
 		check, err := installation.Check(ctx, root)
+		outcome, category := "succeeded", ""
+		if err != nil {
+			outcome, category = "failed", "local_check"
+		}
+		logEvent("local_mcp_check", outcome, category, *client)
 		data, _ := json.Marshal(check)
 		fmt.Fprintln(out, string(data))
 		if err != nil {
@@ -268,6 +370,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		uiFlags := flag.NewFlagSet("ui", flag.ContinueOnError)
 		uiFlags.SetOutput(progress)
 		setupFirst := uiFlags.Bool("setup-first", false, "open private Canvas setup first when no saved connection exists")
+		installClient := uiFlags.String("install-client", "", "selected client for private install setup events")
 		readyFile := uiFlags.String("ready-file", "", "advanced: write non-secret local startup result")
 		if err := uiFlags.Parse(args); err != nil {
 			return 2
@@ -279,7 +382,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		if rootErr != nil && *rootOpt != "" {
 			return fail(inputError(rootErr), progress)
 		}
-		return fail(localui.RunHubWithOptions(ctx, uiRoot, version, progress, localui.HubOptions{SetupFirst: *setupFirst, ReadyFile: *readyFile}), progress)
+		return fail(localui.RunHubWithOptions(ctx, uiRoot, version, progress, localui.HubOptions{SetupFirst: *setupFirst, ReadyFile: *readyFile, InstallClient: *installClient}), progress)
 	}
 	if cmd == "setup" {
 		if len(args) != 0 {
@@ -287,11 +390,9 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		origin := ""
 		setupRoot, rootErr := runtimeRoot(*rootOpt)
-		var config domain.CourseConfig
-		configBody := ""
 		if rootErr == nil {
-			var err error
-			configBody, err = workspace.ReadDocument(filepath.Join(setupRoot, "context", "courses.md"), &config)
+			var config domain.CourseConfig
+			_, err := workspace.ReadDocument(filepath.Join(setupRoot, "context", "courses.md"), &config)
 			if err != nil {
 				return fail(inputError(err), progress)
 			}
@@ -310,12 +411,11 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 				return fail(err, progress)
 			}
 			credential.Token = ""
-			if len(config.Courses) == 0 || config.Instance == credential.Origin {
-				config.Instance = credential.Origin
-				if err = workspace.WriteDocument(filepath.Join(setupRoot, "context", "courses.md"), config, configBody); err != nil {
-					return fail(err, progress)
-				}
-			} else {
+			changed, err := workspace.SyncInstance(setupRoot, credential.Origin)
+			if err != nil {
+				return fail(fmt.Errorf("Canvas credential was saved, but context/courses.md could not be updated; fix that file before remote commands: %w", err), progress)
+			}
+			if !changed {
 				fmt.Fprintln(progress, "Saved Canvas origin differs from configured courses; update context/courses.md before remote commands.")
 			}
 		}
@@ -352,6 +452,8 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 	}
 	return runRemote(ctx, root, cmd, args, out, progress)
 }
+
+func installUIEnabled(checkOnly, noUI bool) bool { return !checkOnly && !noUI }
 func fail(e error, w io.Writer) int {
 	if e == nil {
 		return 0

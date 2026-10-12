@@ -37,14 +37,19 @@ type Server struct {
 }
 
 type TextOutput struct {
-	Text          string           `json:"text" jsonschema:"Result text"`
-	State         string           `json:"state,omitempty" jsonschema:"Local session state: pending, finished, or failed"`
-	ReviewID      string           `json:"review_id,omitempty"`
-	SessionID     string           `json:"session_id,omitempty"`
-	URL           string           `json:"url,omitempty" jsonschema:"Local page URL; returned only while the session is pending"`
-	Outcome       string           `json:"outcome,omitempty" jsonschema:"Review write outcome: completed, partial, or held"`
-	ResultPath    string           `json:"result_path,omitempty"`
-	RevisionNotes []ReviewRevision `json:"revision_notes,omitempty"`
+	Text                 string           `json:"text" jsonschema:"Result text"`
+	State                string           `json:"state,omitempty" jsonschema:"Local session state: pending, finished, or failed"`
+	ReviewID             string           `json:"review_id,omitempty"`
+	SessionID            string           `json:"session_id,omitempty"`
+	URL                  string           `json:"url,omitempty" jsonschema:"Local page URL; returned only while the session is pending"`
+	Outcome              string           `json:"outcome,omitempty" jsonschema:"Review write outcome: completed, partial, or held"`
+	ResultPath           string           `json:"result_path,omitempty"`
+	RevisionNotes        []ReviewRevision `json:"revision_notes,omitempty"`
+	SetupStatusAvailable bool             `json:"setup_status_available,omitempty"`
+	CredentialSaved      *bool            `json:"credential_saved,omitempty"`
+	ValidationSucceeded  *bool            `json:"validation_succeeded,omitempty"`
+	ConnectionTested     *bool            `json:"connection_tested,omitempty"`
+	SetupOutcome         string           `json:"setup_outcome,omitempty"`
 }
 
 type ReviewRevision struct {

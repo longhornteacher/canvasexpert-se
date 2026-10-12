@@ -6,4 +6,4 @@ Implemented in Source 2026-10-12; fresh-user pilot pending: [Teacher-first insta
 
 Implemented in Source 2026-10-12: [Optional Sync as the authority for teacher rules](active/SHARED-TEACHER-RULES-SYNC.md). Engine routing/settings and agent documentation preserve the one-folder default and make selected teacher rules authoritative across PCs. Local temporary fixtures verify file routing; real provider/client adoption remains unobserved, and no live Install has been migrated.
 
-Open 2026-10-12: [Fresh-install pilot findings](active/FRESH-INSTALL-PILOT-FINDINGS-20261012.md). A simulated brand-new-teacher install found six places where the agent or teacher did work the product should do (address not recorded, stale Sync rules not upgraded, course picker defaults, duplicate hubs, setup status, extension hand-off).
+Implemented in Source 2026-10-12; destination validation pending: [Improve 1.0b1: findings and execution slices](active/FRESH-INSTALL-PILOT-FINDINGS-20261012.md). All ten slices passed local checks and a pinned package run. Cowork trust/restart, Work restart, destination tool use, browser visibility and provider delivery remain unobserved.

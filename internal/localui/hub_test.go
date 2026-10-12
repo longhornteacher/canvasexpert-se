@@ -85,6 +85,13 @@ func TestUnavailableSyncShowsPathAndKeepsSettingsCorrectionForm(t *testing.T) {
 	if !strings.Contains(page, "Sync unavailable") || !strings.Contains(page, syncRoot) || !strings.Contains(page, `name="sync_root" value="`+syncRoot+`"`) {
 		t.Fatal("unavailable Sync path or correction control is missing")
 	}
+	home := hubGet(h, "/").Body.String()
+	if !strings.Contains(home, "Active locations") || !strings.Contains(home, "Teacher rules (sync)") || !strings.Contains(home, syncRoot) || !strings.Contains(home, "Sync unavailable") || !strings.Contains(home, "configured Sync rules directory") {
+		t.Fatal("home summary must show the unavailable configured Sync root and error")
+	}
+	if strings.Contains(home, "Teacher rules (sync)") && strings.Contains(home, "Teacher rules (local)") {
+		t.Fatal("home summary must not imply fallback to local rules")
+	}
 	if _, _, err := readGrading(h.root); err == nil || !strings.Contains(err.Error(), "unavailable") {
 		t.Fatalf("grading read fell back to stale Install copy: %v", err)
 	}
@@ -93,6 +100,18 @@ func TestUnavailableSyncShowsPathAndKeepsSettingsCorrectionForm(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(h.root, ".cse", "rules-location.json")); err != nil {
 		t.Fatal("unauthorized form altered or removed the binding")
+	}
+}
+
+func TestHomeShowsResolvedLocalLocations(t *testing.T) {
+	h := newTestHub()
+	h.root = makeWorkspace(t)
+	page := hubGet(h, "/").Body.String()
+	if !strings.Contains(page, "Active locations") || !strings.Contains(page, "Install: <code>"+h.root+"</code>") || !strings.Contains(page, "Teacher rules (local): <code>"+h.root+"</code>") {
+		t.Fatal("home summary missing resolved local Install and rules roots")
+	}
+	if strings.Contains(page, `action="/rules-location"`) {
+		t.Fatal("home summary must not duplicate editable Settings controls")
 	}
 }
 
@@ -217,6 +236,59 @@ func TestPlaybookReplaceUsesActiveSyncAndArchivesThere(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(h.root, "playbooks", "score.md")); string(b) != "custom Install version" {
 		t.Fatal("inactive local copy changed")
+	}
+}
+
+func TestBindingCustomizedSyncOffersComparisonWithoutReplacing(t *testing.T) {
+	h := newTestHub()
+	h.root = makeWorkspace(t)
+	syncRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(syncRoot, "AGENTS.md"), []byte("teacher's existing instructions"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	addMissingSeed(syncRoot)
+	custom := filepath.Join(syncRoot, "playbooks", "setup.md")
+	if err := os.WriteFile(custom, []byte("teacher setup preferences"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"request_secret": {"nonce"}, "sync_root": {syncRoot}}
+	if w := hubPost(h, "/rules-location", form, h.origin); w.Code != 303 {
+		t.Fatalf("bind existing Sync: %d", w.Code)
+	}
+	if !strings.Contains(h.flash, "seed-managed instructions in Sync differ") || !strings.Contains(h.flash, "Settings → Your playbooks and context") {
+		t.Fatalf("missing adoption notice: %q", h.flash)
+	}
+	if got := readString(t, custom); got != "teacher setup preferences" {
+		t.Fatalf("binding replaced customized Sync file: %q", got)
+	}
+	if got := readString(t, filepath.Join(syncRoot, "AGENTS.md")); got != "teacher's existing instructions" {
+		t.Fatalf("binding replaced existing AGENTS: %q", got)
+	}
+	page := hubGet(h, "/settings").Body.String()
+	if !strings.Contains(page, "Get the new version") || !strings.Contains(page, "differs from this version's starter copy") {
+		t.Fatal("existing comparison and explicit adoption UI not shown")
+	}
+}
+
+func TestBindingEmptySyncInitializesWithoutAdoptionNotice(t *testing.T) {
+	h := newTestHub()
+	h.root = makeWorkspace(t)
+	syncRoot := t.TempDir()
+	form := url.Values{"request_secret": {"nonce"}, "sync_root": {syncRoot}}
+	if w := hubPost(h, "/rules-location", form, h.origin); w.Code != 303 {
+		t.Fatalf("bind empty Sync: %d", w.Code)
+	}
+	if strings.Contains(h.flash, "seed-managed instructions") {
+		t.Fatalf("empty Sync should initialize cleanly: %q", h.flash)
+	}
+	if rows := playbookRows(h.root); len(rows) == 0 {
+		t.Fatal("comparison rows missing after empty Sync initialization")
+	} else {
+		for _, row := range rows {
+			if row.Replaceable && row.State != "same" {
+				t.Fatalf("empty Sync seed %s = %s, want same", row.Path, row.State)
+			}
+		}
 	}
 }
 

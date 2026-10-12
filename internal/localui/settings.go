@@ -43,7 +43,11 @@ func (h *Hub) saveRulesLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if loc.Mode == "sync" {
-		h.redirect(w, r, "/settings", "Teacher rules now use Sync at "+loc.RulesRoot+". Courses, students and work remain in Install.", "")
+		notice := "Teacher rules now use Sync at " + loc.RulesRoot + ". Courses, students and work remain in Install."
+		if adoption := seedAdoptionNotice(h.root); adoption != "" {
+			notice += " " + adoption
+		}
+		h.redirect(w, r, "/settings", notice, "")
 		return
 	}
 	h.redirect(w, r, "/settings", "Teacher rules now use Install.", "")

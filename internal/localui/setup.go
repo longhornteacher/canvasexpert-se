@@ -43,6 +43,11 @@ type setupHandler struct {
 	hub        bool
 	// after runs once a credential is saved and returns a note for the page.
 	after func(platform.Credential) string
+	// These callbacks update non-secret state in the owning hub session.
+	onValidation       func(bool)
+	onValidationResult func(bool)
+	onSaved            func()
+	onSaveFailed       func()
 }
 
 func validateCredential(ctx context.Context, credential platform.Credential) error {
@@ -112,6 +117,9 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Setup is already complete", 410)
 		return
 	}
+	if h.persistent && h.hub && h.onValidation != nil {
+		h.onValidation(false)
+	}
 	credential := platform.Credential{Origin: r.PostForm.Get("origin"), Token: r.PostForm.Get("token")}
 	client, err := canvas.New(credential.Origin, credential.Token)
 	if err != nil {
@@ -122,6 +130,12 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(h.ctx, 45*time.Second)
 	defer cancel()
 	if err = h.validate(ctx, credential); err != nil {
+		if h.persistent && h.hub && h.onValidation != nil {
+			h.onValidation(false)
+		}
+		if h.onValidationResult != nil {
+			h.onValidationResult(false)
+		}
 		message := "Canvas could not be reached to validate this token. Check your network or Canvas availability and try again. Your saved credential has not changed."
 		var ce *canvas.Error
 		if errors.As(err, &ce) {
@@ -134,9 +148,21 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.page(w, 400, message)
 		return
 	}
+	if h.persistent && h.hub && h.onValidation != nil {
+		h.onValidation(true)
+	}
+	if h.onValidationResult != nil {
+		h.onValidationResult(true)
+	}
 	if err = h.save(credential); err != nil {
+		if h.persistent && h.hub && h.onSaveFailed != nil {
+			h.onSaveFailed()
+		}
 		h.page(w, 500, "Windows could not save the credential. Try again or check local credential access.")
 		return
+	}
+	if h.persistent && h.hub && h.onSaved != nil {
+		h.onSaved()
 	}
 	if h.persistent {
 		notice := "Connected to " + credential.Origin + ". Token saved on this machine."

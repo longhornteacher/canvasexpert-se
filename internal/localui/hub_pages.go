@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"path/filepath"
+	"sort"
 
 	"strconv"
 	"strings"
@@ -22,10 +23,10 @@ import (
 const starterInstance = "canvas.example.edu"
 
 type courseRow struct {
-	ID               int64
-	Name, Code, Nick string
-	State            string
-	Active, InCanvas bool
+	ID                  int64
+	Name, Code, Nick    string
+	State               string
+	Active, Unpublished bool
 }
 
 type coursesData struct {
@@ -33,10 +34,10 @@ type coursesData struct {
 	Rows                    []courseRow
 }
 
-var coursesTemplate = template.Must(template.New("courses").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE courses</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>Pick your active courses</h1><p>Tick the courses you are teaching right now. Active courses appear as tabs on the Students page and are scanned for work. The nickname is what you and the agent call the course.</p>
+var coursesTemplate = template.Must(template.New("courses").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE courses</title><style>` + funkyCSS + `</style><style>.courses tr.unpublished{opacity:.58}.courses tr.unpublished td:first-of-type{opacity:1}.course-state{font-size:.85em;color:#667085}</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>Pick your active courses</h1><p>Tick the courses you are teaching right now. Active courses appear as tabs on the Students page and are scanned for work. Enter your own short nickname for each course you activate.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <form method="post" action="/courses"><input type="hidden" name="request_secret" value="{{.Secret}}"><table class="courses"><thead><tr><th>Active</th><th>Course</th><th>Canvas code</th><th>Nickname</th></tr></thead><tbody>
-{{range .Rows}}<tr><td><input type="hidden" name="id" value="{{.ID}}"><input type="checkbox" name="active_{{.ID}}" {{if .Active}}checked{{end}} aria-label="Active"></td><td>{{.Name}}{{if not .InCanvas}} <span class="pill off">not in Canvas list</span>{{end}}</td><td><code>{{.Code}}</code></td><td><input type="text" name="nick_{{.ID}}" value="{{.Nick}}" maxlength="40" autocomplete="off"></td></tr>
+{{range .Rows}}<tr{{if .Unpublished}} class="unpublished"{{end}}><td><input type="hidden" name="id" value="{{.ID}}"><input type="checkbox" name="active_{{.ID}}" {{if .Active}}checked{{end}} aria-label="Active"></td><td>{{.Name}} <span class="course-state">ID {{.ID}} · {{if .State}}{{.State}}{{else}}not in Canvas list{{end}}</span>{{if .Unpublished}} <span class="pill off">unpublished</span>{{end}}</td><td><code>{{.Code}}</code></td><td><input type="text" name="nick_{{.ID}}" value="{{.Nick}}" maxlength="40" autocomplete="off"></td></tr>
 {{else}}<tr><td colspan="4">No courses found. Connect Canvas first, then reload this page.</td></tr>{{end}}</tbody></table>
 {{if .Rows}}<button type="submit">Save active courses</button>{{end}}</form></main></html>`))
 
@@ -97,23 +98,6 @@ func (h *Hub) redirect(w http.ResponseWriter, r *http.Request, to, notice, probl
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }
 
-func suggestNickname(code, name string) string {
-	nick := strings.TrimSpace(code)
-	if nick == "" {
-		nick = strings.TrimSpace(name)
-	}
-	nick = strings.Map(func(r rune) rune {
-		if r < 32 || strings.ContainsRune(`/\<>:"|?*`, r) {
-			return '-'
-		}
-		return r
-	}, nick)
-	if len([]rune(nick)) > 40 {
-		nick = string([]rune(nick)[:40])
-	}
-	return strings.Trim(strings.TrimSpace(nick), ". ")
-}
-
 func (h *Hub) needWorkspace(w http.ResponseWriter) bool {
 	if h.root == "" {
 		h.home(w, 400, "Launch with the CE-SE installation first; for development use cse --workspace PATH ui.", "")
@@ -150,12 +134,16 @@ func (h *Hub) coursesPage(w http.ResponseWriter, r *http.Request) {
 	seen := map[int64]bool{}
 	for _, c := range list {
 		seen[c.ID] = true
-		row := courseRow{ID: c.ID, Name: c.Name, Code: c.Code, State: c.State, InCanvas: true, Nick: suggestNickname(c.Code, c.Name)}
+		row := courseRow{ID: c.ID, Name: c.Name, Code: c.Code, State: c.State, Unpublished: c.State == "unpublished", Nick: ""}
 		if known, ok := configured[c.ID]; ok {
 			row.Nick, row.Active = known.Nickname, known.Current
 		}
 		rows = append(rows, row)
 	}
+	// Keep Canvas' ordering within each state group while putting usable courses first.
+	sort.SliceStable(rows, func(i, j int) bool {
+		return !rows[i].Unpublished && rows[j].Unpublished
+	})
 	for _, c := range config.Courses {
 		if !seen[c.ID] {
 			rows = append(rows, courseRow{ID: c.ID, Name: c.Nickname, Nick: c.Nickname, Active: c.Current})
