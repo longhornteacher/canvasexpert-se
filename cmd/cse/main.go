@@ -33,6 +33,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   ui                            Open the local hub: Canvas setup, students, more
   mcp                           Run the local MCP adapter over stdio
   link                          Record this program's location for workspace cse.cmd
+  rules-location                Show teacher-rules authority; use --sync PATH or --local to set it
   setup                         Connect Canvas privately on this machine
   students                      Edit student aliases and monitored status
   courses                       Discover authorized teacher courses
@@ -122,6 +123,36 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 	}
 	cmd := args[0]
 	args = args[1:]
+	if cmd == "rules-location" {
+		root, e := runtimeRoot(*rootOpt)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		locationFlags := flag.NewFlagSet("rules-location", flag.ContinueOnError)
+		locationFlags.SetOutput(progress)
+		syncRoot := locationFlags.String("sync", "", "explicit shared teacher-rules directory")
+		local := locationFlags.Bool("local", false, "use this Install as the teacher-rules authority")
+		if e := locationFlags.Parse(args); e != nil {
+			return 2
+		}
+		if locationFlags.NArg() != 0 || (*local && *syncRoot != "") {
+			return fail(inputError(fmt.Errorf("use rules-location [--sync PATH | --local]")), progress)
+		}
+		if *local || *syncRoot != "" {
+			location, e := workspace.SetRulesLocation(root, *syncRoot, embedded.WorkspaceTemplate, "workspace-template")
+			if e != nil {
+				return fail(e, progress)
+			}
+			fmt.Fprintf(out, "mode: %s\ninstall_root: %s\nrules_root: %s\n", location.Mode, location.InstallRoot, location.RulesRoot)
+			return 0
+		}
+		location, e := workspace.GetRulesLocation(root)
+		fmt.Fprintf(out, "mode: %s\ninstall_root: %s\nrules_root: %s\n", location.Mode, location.InstallRoot, location.RulesRoot)
+		if e != nil {
+			fmt.Fprintf(progress, "Teacher rules location unavailable: %v\n", e)
+		}
+		return 0
+	}
 	if cmd == "mcp" {
 		if len(args) != 0 {
 			return fail(inputError(fmt.Errorf("mcp takes no arguments")), progress)

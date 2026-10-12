@@ -36,10 +36,10 @@ type AssetWriteInput struct {
 }
 
 func (s *Server) registerWorkspaceTools(server *mcp.Server) {
-	addReadTool(server, "list_workspace_files", "Discover allowed workspace files and directories. Hidden, private and Engine paths are excluded; results are workspace-relative.", func(_ context.Context, _ *mcp.CallToolRequest, in ListFilesInput) (TextOutput, error) {
+	addReadTool(server, "list_workspace_files", "Discover allowed workspace files and directories. Hidden, private and Engine paths are excluded; results use logical workspace-relative paths and include Install/rules authority metadata.", func(_ context.Context, _ *mcp.CallToolRequest, in ListFilesInput) (TextOutput, error) {
 		return s.listWorkspaceFiles(in)
 	})
-	addActionTool(server, "write_workspace_file", "Save teacher instructions, context or playbooks with SHA-256 conflict protection. Never writes to Canvas.", true, func(_ context.Context, _ *mcp.CallToolRequest, in WorkspaceWriteInput) (TextOutput, error) {
+	addActionTool(server, "write_workspace_file", "Save teacher instructions, context or playbooks through the active authority with SHA-256 conflict protection. Returns authority metadata. Never writes to Canvas.", true, func(_ context.Context, _ *mcp.CallToolRequest, in WorkspaceWriteInput) (TextOutput, error) {
 		p, err := s.readablePath(in.Path)
 		if err != nil {
 			return TextOutput{}, err
@@ -93,8 +93,26 @@ func firstComponent(relative string) string {
 }
 func (s *Server) relativePath(path string) string {
 	root, _ := filepath.Abs(s.root)
+	if loc, err := workspace.GetRulesLocation(s.root); err == nil {
+		rulesRoot, _ := filepath.Abs(loc.RulesRoot)
+		if rel, relErr := filepath.Rel(rulesRoot, path); relErr == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel) {
+			return filepath.ToSlash(rel)
+		}
+	}
 	rel, _ := filepath.Rel(root, path)
 	return filepath.ToSlash(rel)
+}
+
+func (s *Server) rulesMetadata(relative string) (workspace.RulesLocation, string, error) {
+	location, err := workspace.GetRulesLocation(s.root)
+	if err != nil {
+		return location, "", err
+	}
+	authority := location.InstallRoot
+	if workspace.IsSharedRulePath(filepath.ToSlash(strings.ReplaceAll(relative, "\\", "/"))) {
+		authority = location.RulesRoot
+	}
+	return location, authority, nil
 }
 
 func (s *Server) safePath(relative string) (string, error) {
@@ -108,6 +126,9 @@ func (s *Server) safePath(relative string) (string, error) {
 		}
 	}
 	path, err := workspace.ConstrainPath(s.root, relative)
+	if workspace.IsSharedRulePath(filepath.ToSlash(strings.ReplaceAll(relative, "\\", "/"))) {
+		path, err = workspace.ResolveTeacherPath(s.root, relative)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -115,9 +136,27 @@ func (s *Server) safePath(relative string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if workspace.IsSharedRulePath(filepath.ToSlash(strings.ReplaceAll(relative, "\\", "/"))) {
+		if location, locationErr := workspace.GetRulesLocation(s.root); locationErr == nil {
+			root, err = filepath.Abs(location.RulesRoot)
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+	if err := checkNoLinkedPaths(root, path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func checkNoLinkedPaths(root, path string) error {
 	rel, err := filepath.Rel(root, path)
 	if err != nil {
-		return "", err
+		return err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return errors.New("path escapes its selected authority")
 	}
 	prefix := root
 	for _, part := range strings.Split(rel, string(filepath.Separator)) {
@@ -127,21 +166,21 @@ func (s *Server) safePath(relative string) (string, error) {
 			break
 		}
 		if err != nil {
-			return "", err
+			return err
 		}
 		if info.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
 			// Windows junctions are ModeIrregular. Other reparse points such as
 			// OneDrive placeholders are allowed when Readlink reports no link.
 			_, linkErr := os.Readlink(prefix)
 			if linkErr == nil || info.Mode()&os.ModeSymlink != 0 {
-				return "", errors.New("linked workspace paths are not accessible")
+				return errors.New("linked workspace paths are not accessible")
 			}
 			if !os.IsNotExist(linkErr) {
-				return "", linkErr
+				return linkErr
 			}
 		}
 	}
-	return path, nil
+	return nil
 }
 func (s *Server) readablePath(relative string) (string, error) {
 	p, err := s.safePath(relative)
@@ -191,8 +230,12 @@ func (s *Server) writeWorkspaceBytes(path string, b []byte, expected string) (Te
 	// both overwrite the same version of unsent work.
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, err := s.safePath(s.relativePath(path)); err != nil {
+	routed, err := s.safePath(s.relativePath(path))
+	if err != nil {
 		return TextOutput{}, err
+	}
+	if filepath.Clean(routed) != filepath.Clean(path) {
+		return TextOutput{}, errors.New("teacher-rules location changed during this write; reread the file and retry")
 	}
 	if existing, err := os.ReadFile(path); err == nil {
 		if expected == "" {
@@ -228,7 +271,12 @@ func (s *Server) writeWorkspaceBytes(path string, b []byte, expected string) (Te
 		return TextOutput{}, err
 	}
 	h := sha256.Sum256(b)
-	return TextOutput{Text: fmt.Sprintf("File saved: %s\nsha256: %x", s.relativePath(path), h)}, nil
+	relative := s.relativePath(path)
+	location, authority, locationErr := s.rulesMetadata(relative)
+	if locationErr != nil {
+		return TextOutput{}, fmt.Errorf("teacher rules location unavailable after save: %w", locationErr)
+	}
+	return TextOutput{Text: fmt.Sprintf("File saved: %s\nmode: %s\ninstall_root: %s\nrules_root: %s\nauthority_root: %s\nsha256: %x", relative, location.Mode, location.InstallRoot, location.RulesRoot, authority, h)}, nil
 }
 func readLimited(path string, limit int) ([]byte, error) {
 	f, err := os.Open(path)
@@ -256,23 +304,89 @@ func readLimited(path string, limit int) ([]byte, error) {
 	return b, nil
 }
 func (s *Server) listWorkspaceFiles(in ListFilesInput) (TextOutput, error) {
-	var roots []string
+	type candidate struct{ logical, physical string }
+	var candidates []candidate
+	location, locationErr := workspace.GetRulesLocation(s.root)
+	syncMode := locationErr == nil && location.Mode == "sync"
+	listingError := ""
+	requestedRoot := strings.Trim(strings.ReplaceAll(in.Path, "\\", "/"), "/")
+	isPlaybooksRoot := strings.EqualFold(requestedRoot, "playbooks")
+	if in.Path != "" && locationErr != nil && (isPlaybooksRoot || workspace.IsSharedRulePath(requestedRoot)) {
+		return TextOutput{}, fmt.Errorf("teacher rules location unavailable: %w", locationErr)
+	}
+	addRulesDirectory := func(name string) error {
+		p := filepath.Join(location.RulesRoot, name)
+		if err := checkNoLinkedPaths(location.RulesRoot, p); err != nil {
+			if in.Path != "" {
+				return err
+			}
+			listingError = err.Error()
+			return nil
+		}
+		candidates = append(candidates, candidate{name, p})
+		return nil
+	}
 	if in.Path == "" {
 		rootEntries, err := os.ReadDir(s.root)
 		if err != nil {
 			return TextOutput{}, err
 		}
 		for _, entry := range rootEntries {
-			if entry.IsDir() {
+			if entry.IsDir() || syncMode && workspace.IsSharedRulePath(entry.Name()) {
 				continue
 			}
 			if _, err := s.readablePath(entry.Name()); err == nil {
-				roots = append(roots, entry.Name())
+				candidates = append(candidates, candidate{entry.Name(), filepath.Join(s.root, entry.Name())})
 			}
 		}
-		roots = append(roots, "context", "playbooks", "courses")
+		if syncMode {
+			if entries, readErr := os.ReadDir(location.RulesRoot); readErr == nil {
+				for _, entry := range entries {
+					if entry.IsDir() || !workspace.IsSharedRulePath(entry.Name()) {
+						continue
+					}
+					if _, pathErr := s.readablePath(entry.Name()); pathErr == nil {
+						candidates = append(candidates, candidate{entry.Name(), filepath.Join(location.RulesRoot, entry.Name())})
+					}
+				}
+			} else {
+				listingError = fmt.Sprintf("read Sync rules directory %s: %v", location.RulesRoot, readErr)
+			}
+		}
+		for _, name := range []string{"context", "playbooks", "courses"} {
+			p, pathErr := s.safePath(name)
+			if pathErr == nil {
+				candidates = append(candidates, candidate{name, p})
+			}
+			if syncMode && (name == "context" || name == "playbooks") {
+				if err := addRulesDirectory(name); err != nil {
+					return TextOutput{}, err
+				}
+			}
+		}
 	} else {
-		roots = []string{in.Path}
+		if !(syncMode && isPlaybooksRoot) {
+			p, err := s.readablePath(in.Path)
+			if err != nil {
+				return TextOutput{}, err
+			}
+			candidates = append(candidates, candidate{requestedRoot, p})
+		} else {
+			// Preserve the original caller path through confinement before using
+			// the normalized logical directory name for Sync routing.
+			if _, err := s.safePath(in.Path); err != nil {
+				return TextOutput{}, err
+			}
+			if _, err := workspace.ConstrainPath(location.RulesRoot, in.Path); err != nil {
+				return TextOutput{}, err
+			}
+		}
+		if syncMode && (strings.EqualFold(requestedRoot, "context") || isPlaybooksRoot) {
+			name := strings.ToLower(requestedRoot)
+			if err := addRulesDirectory(name); err != nil {
+				return TextOutput{}, err
+			}
+		}
 	}
 	type entry struct {
 		Path      string `json:"path"`
@@ -280,23 +394,44 @@ func (s *Server) listWorkspaceFiles(in ListFilesInput) (TextOutput, error) {
 		Bytes     int64  `json:"bytes,omitempty"`
 	}
 	entries := []entry{}
+	seen := map[string]bool{}
 	truncated := false
-	for _, relative := range roots {
-		p, err := s.readablePath(relative)
-		if err != nil {
-			return TextOutput{}, err
-		}
-		if _, err = os.Stat(p); os.IsNotExist(err) && in.Path == "" {
+	for _, candidate := range candidates {
+		relative, p := candidate.logical, candidate.physical
+		if _, statErr := os.Stat(p); os.IsNotExist(statErr) && in.Path == "" {
 			continue
-		} else if err != nil {
-			return TextOutput{}, err
+		} else if statErr != nil {
+			return TextOutput{}, statErr
 		}
-		err = filepath.WalkDir(p, func(path string, d fs.DirEntry, walkErr error) error {
+		walkErr := filepath.WalkDir(p, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
-			rel := s.relativePath(path)
-			if _, err := s.readablePath(rel); err != nil {
+			suffix, relErr := filepath.Rel(p, path)
+			if relErr != nil {
+				return relErr
+			}
+			rel := relative
+			if suffix != "." {
+				rel = filepath.ToSlash(filepath.Join(relative, suffix))
+			}
+			effective, pathErr := s.readablePath(rel)
+			if pathErr != nil || filepath.Clean(effective) != filepath.Clean(path) {
+				// Mixed roots such as context/ have local operational files and
+				// shared references. Permit traversing each candidate root while
+				// filtering every child against its actual authority below.
+				if d.IsDir() && suffix == "." {
+					info, infoErr := d.Info()
+					if infoErr != nil {
+						return infoErr
+					}
+					key := strings.ToLower(filepath.ToSlash(rel))
+					if !seen[key] {
+						entries = append(entries, entry{rel, true, info.Size()})
+						seen[key] = true
+					}
+					return nil
+				}
 				if d.IsDir() {
 					return filepath.SkipDir
 				}
@@ -310,22 +445,36 @@ func (s *Server) listWorkspaceFiles(in ListFilesInput) (TextOutput, error) {
 			if err != nil {
 				return err
 			}
-			entries = append(entries, entry{rel, d.IsDir(), info.Size()})
+			key := strings.ToLower(filepath.ToSlash(rel))
+			if !seen[key] {
+				entries = append(entries, entry{rel, d.IsDir(), info.Size()})
+				seen[key] = true
+			}
 			if d.IsDir() && path != p && !in.Recursive {
 				return filepath.SkipDir
 			}
 			return nil
 		})
-		if err != nil {
-			return TextOutput{}, err
+		if walkErr != nil {
+			return TextOutput{}, walkErr
 		}
 		if truncated {
 			break
 		}
 	}
-	out, err := json.Marshal(struct {
-		Entries   []entry `json:"entries"`
-		Truncated bool    `json:"truncated"`
-	}{entries, truncated})
+	metadata := struct {
+		Entries           []entry `json:"entries"`
+		Truncated         bool    `json:"truncated"`
+		InstallRoot       string  `json:"install_root"`
+		RulesRoot         string  `json:"rules_root"`
+		Mode              string  `json:"mode"`
+		AvailabilityError string  `json:"availability_error,omitempty"`
+	}{Entries: entries, Truncated: truncated, InstallRoot: location.InstallRoot, RulesRoot: location.RulesRoot, Mode: location.Mode}
+	if locationErr != nil {
+		metadata.AvailabilityError = locationErr.Error()
+	} else if listingError != "" {
+		metadata.AvailabilityError = listingError
+	}
+	out, err := json.Marshal(metadata)
 	return TextOutput{Text: string(out)}, err
 }

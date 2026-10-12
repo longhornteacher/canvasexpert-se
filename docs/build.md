@@ -1,8 +1,10 @@
 # Build and package CanvasExpert-SE
 
+Folder names: **Source** is this development checkout, including code, starter templates and generated `dist/` artifacts. **Install** is the extracted local CE-SE folder containing the Engine and operational/student state. Optional **Sync** is a dedicated locally accessible OneDrive/Google Drive directory for authoritative teacher rules. Each Install accesses those files directly; the provider synchronizes them. With no binding, teacher files stay in Install. Develop in Source and do teacher work in Install, regardless of the agent app. Teachers need only Install. The internal `workspace` term in commands and file contracts refers to Install during teacher work.
+
 The source build targets a portable Windows 11 executable. Building requires the exact Go version declared in `go.mod` (currently Go 1.27.1) and PowerShell. The scripts do not install a toolchain, modify `PATH`, or change persistent environment settings. `build.ps1` sets Windows/amd64 and `CGO_ENABLED=0` only for its child Go processes, checks the supplied Go executable's exact version, then runs `go test ./...`, `go vet ./...`, and builds `dist/cse.exe`.
 
-From the repository root:
+From the Source root:
 
 ```powershell
 .\scripts\build.ps1
@@ -12,7 +14,7 @@ From the repository root:
 
 The executable embeds version `0.1b`, the current short Git revision with `+dirty` when the working tree has changes, and a UTC build timestamp. `-trimpath` removes local source paths from the binary. The scripts do not format source files automatically.
 
-To create the distributable starter workspace:
+To create the distributable starter Install:
 
 ```powershell
 .\scripts\package.ps1
@@ -28,6 +30,8 @@ Colleagues unzip `CanvasExpert-SE.zip` on a local drive and connect the agent th
 The packaged executable is intended to run without a Go or other language runtime installed on the teacher's computer. A successful source build or ZIP inspection verifies the local build and package, not every possible Canvas response or district configuration. Use current API responses and the task guides; see [0.1b-evidence.md](0.1b-evidence.md) for historical observations, not operation prerequisites. The bundled Engine resolves its installation automatically, for example `.\engine\cse.exe --help` from the package root. Explicit `--workspace PATH` remains an advanced option for development/test binaries and Engine-only extensions; it must match the installation when using a bundled Engine.
 
 ## Local MCP adapter
+
+Settings → Teacher rules, CLI `rules-location` and MCP `engine_info` configure the same per-Install binding. CLI status is `cse rules-location`; explicit changes use `--sync "ABSOLUTE PATH"` or `--local`. Keep MCP registration and commands pointed at Install. Shared categories are teacher AGENTS.md/CLAUDE.md, playbooks, root .md/.txt guides except product README.md, and context references except courses.md/students.md. Engine, launchers, integration glue, private state and course work remain local. Updates add missing seed files at their active location and preserve existing teacher files. Selecting empty Sync preserves current customized rules; an existing shared directory wins, with inactive local originals preserved. Explicit return to local preserves readable shared files and archives differing local versions. Packages ship no Sync binding or teacher data. Source packaging is not an update to a live Install. Provider delivery and human-client adoption remain pending observation.
 
 The packaged `engine\cse.exe` also supports `mcp`, a stdio server with 26 typed tools for all currently supported Engine commands, scoped workspace text/assets, review flow, and teacher-only local pages. It preserves the playbooks' review default and direct-write/resume exceptions without an extra approval token. It does not expose arbitrary commands, arbitrary HTTP writes, or private `.cse` files. Read-only API JSON can contain real names.
 

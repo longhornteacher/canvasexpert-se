@@ -20,6 +20,7 @@ func Scaffold(root string, template fs.FS, base string) ([]string, error) {
 		return nil, fmt.Errorf("create %s: %w", root, err)
 	}
 	var created []string
+	var firstErr error
 	err = fs.WalkDir(sub, ".", func(name string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -27,12 +28,16 @@ func Scaffold(root string, template fs.FS, base string) ([]string, error) {
 		if name == "." {
 			return nil
 		}
-		target, err := ConstrainPath(root, filepath.FromSlash(name))
-		if err != nil {
-			return err
-		}
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
+			return nil
+		}
+		logical := filepath.ToSlash(name)
+		target, err := ResolveTeacherPath(root, logical)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			return nil
 		}
 		if _, err := os.Lstat(target); err == nil {
 			return nil
@@ -52,5 +57,8 @@ func Scaffold(root string, template fs.FS, base string) ([]string, error) {
 		created = append(created, path.Clean(name))
 		return nil
 	})
-	return created, err
+	if err != nil {
+		return created, err
+	}
+	return created, firstErr
 }

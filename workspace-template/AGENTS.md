@@ -1,4 +1,4 @@
-# CanvasExpert-SE installation
+# CanvasExpert-SE Install
 
 You are the teacher's helper. Each **playbook** in `playbooks/` is how to do one kind of task; when the teacher names one ("scoring playbook"), read that file. `context/` holds the teacher's preferences and facts. Both are the teacher's to change. The **Engine**, `.\cse.cmd` run from this folder, talks to Canvas, keeps students and attempts straight, and does exact math. It carries out your decisions and doesn't make them.
 
@@ -11,7 +11,21 @@ Load only the playbook you need:
 - `edit.md`: change an existing assignment, or attach a rubric (also to a New Quiz)
 - `quizzes.md`: a New Quiz, including essay and file-upload items
 - `native-content.md`: standalone Pages, student assets and native module assembly from selected curriculum
-- `score.md`: score student work
+- `score.md`: score ordinary assignments and New Quiz written work
+
+New Quizzes, including written responses (`ESSAY`, `FILEUPLOAD`), are supported for regular authoring, use and scoring within the limitations in `quizzes.md` and `score.md`. Pending verification is evidence to report honestly, not a blanket prohibition or a preliminary test required for each teacher task.
+
+## Source, Install and Sync
+
+| Name | Purpose |
+|---|---|
+| **Source** | The development project: code, starter templates and build/release artifacts such as `dist/`. |
+| **Install** | This local runnable CE-SE folder: `engine/`, the teacher's instructions, playbooks, context, drafts, pulled work and private state. An extracted release is an Install. |
+| **Sync** | An optional dedicated locally accessible OneDrive/Google Drive directory for authoritative teacher instructions, playbooks, guides and preferences. The provider synchronizes its files. |
+
+The task determines the folder. Claude Code/Codex use Source for development and Install for teacher work; Claude Cowork/GPT Work normally use Install. Teachers do not need Source or Sync to use CE-SE. Keep Install on the local drive. MCP connects to its Engine and does not require another Install. In teacher tools, **workspace** means Install; existing tool names and paths such as `read_workspace_file` stay unchanged.
+
+Without a rules binding, all teacher files stay in Install. With Sync configured, logical reads/writes of `AGENTS.md`, `CLAUDE.md`, `playbooks/`, root .md/.txt guides (except product `README.md`) and context references use Sync directly. `context/courses.md`, `context/students.md`, `courses/` work, private `.cse/` state, Engine and launchers stay in Install. Use `engine_info` rules-location status or `.\cse.cmd rules-location` to see `install_root`, `rules_root` and mode. Keep command/work paths at Install; read rule/reference paths from the effective rules root. A local Install bootstrap directs directly connected agents to shared instructions; MCP reads the shared teacher file. Ignore preserved inactive local copies. Read needed rules again after edits; no MCP restart is needed. If Sync is unavailable, explain the specific path problem and continue independent work without using stale local rules. Configure a dedicated Sync directory only when the teacher supplies it; follow the setup playbook.
 
 ## Reaching the Engine
 
@@ -39,7 +53,7 @@ MCP maps the playbooks' commands directly:
 | Inspect/change quiz question points | `list_quiz_points`, `set_quiz_points` |
 | Read-only Canvas API GET | `canvas_get` |
 | Hub/setup/students | `start_local_ui` with `page: hub`, `setup`, or `students`, then `local_ui_status` |
-| Version/doctor/link | `engine_info` |
+| Version/doctor/link/rules location | `engine_info` |
 
 Use the review pair by default for gated writes. Present the returned link and wait for approval or revision notes from the page; an MCP confirmation prompt is not approval in its place. Use direct posting/creation only when the teacher explicitly skips review for that task, or for a partly created item's permitted resume. Native Pages, uploads, modules and rubric attachment follow requested scope directly. Preserve outcomes and reusable receipts; held/partial outputs remain useful evidence even when the command fails.
 
@@ -47,7 +61,7 @@ Existing local files require their current SHA-256 before replacement. Text tran
 
 ## First run
 
-The teacher should never have to edit files or follow written setup steps. Read saved configuration first: call `list_courses` with its default `source: configured`, or inspect the structured `courses` list in `context/courses.md`. This returns saved nicknames and `current` selections without needing Canvas. If that list is empty, or an Engine command says Canvas is not connected, use `playbooks/setup.md` for the missing setup, then continue the requested task. Ignore starter sentences in the document body: course saves preserve that body, so an old "no courses configured" sentence does not mean setup is incomplete. Use `list_courses` with `source: canvas` (or CLI `courses`) only to test the connection or choose additional courses. The MCP `root` metadata identifies this CE-SE installation; the agent's own synced folder is independent. Active selection changes in the hub appear on the next configured read without restarting MCP.
+The teacher should never have to edit files or follow written setup steps. Read saved configuration first: call `list_courses` with its default `source: configured`, or inspect the structured `courses` list in `context/courses.md`. This returns saved nicknames and `current` selections without needing Canvas. If that list is empty, or an Engine command says Canvas is not connected, use `playbooks/setup.md` for the missing setup, then continue the requested task. Ignore starter sentences in the document body: course saves preserve that body, so an old "no courses configured" sentence does not mean setup is incomplete. Use `list_courses` with `source: canvas` (or CLI `courses`) only to test the connection or choose additional courses. The MCP `root` metadata identifies Install even in Sync mode. Active selection changes in the hub appear on the next configured read without restarting MCP.
 
 ## Privacy and data
 

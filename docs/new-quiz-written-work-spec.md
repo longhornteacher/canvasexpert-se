@@ -2,6 +2,8 @@
 
 Status (2026-10-11): **parts 1–3 are implemented with local tests; the Engine/MCP paths have not been validated live.** Earlier Canvas Live hand-runs on CS8 quiz 3698192 covered one student's typed response, one byte-exact DOCX download, and one comment post. Those runs are evidence for the APIs, not proof that the new Engine implementation works against Canvas. See the dated results at the end of [the probe handoff](../handoffs/active/NEW-QUIZ-SCORING-PROBE.md).
 
+Teacher direction (2026-10-12): **New Quizzes, including written-response items, are open for regular authoring, use and scoring within these supported limits.** Use the scoped pull and comment-only review/post workflow in Install. The teacher enters item points in SpeedGrader; CE-SE writes no New Quiz item grade, quiz grade, rubric assessment or late timing. Pending live/human checks describe the evidence level and are not a prerequisite for ordinary teacher use. Source holds implementation and seed instructions; optional Sync remains independent of Install.
+
 Design stance (teacher decision): keep the Engine lean. A mechanistic step that worked in development testing is treated as working until Canvas or the teacher says otherwise. No read-backs, confirmation reports or retry frameworks after a write.
 
 ### Engine implementation status
@@ -88,4 +90,4 @@ The agent writes the whole-assignment comment with all per-criterion scores **be
 
 ## Evidence discipline
 
-Part 1's report read is Canvas Live API evidence for one student. Everything else in this spec is untested design. Do not show either as verified on the Capabilities page until a human-validated live run exists.
+Separate the recorded Canvas Live hand-runs from the implemented Engine paths and their local tests. The report, file-download and comment APIs each have limited hand-run evidence; the Engine implementations have local tests and still await live validation. Do not claim those Engine paths are live-verified, and do not describe implemented supported teacher workflows as unavailable merely because that validation remains pending.

@@ -2,6 +2,8 @@
 
 Practical notes for working in this checkout. Authority stays with the root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`.
 
+This checkout is **Source**. **Install** is the local runnable CE-SE folder and the teacher's actual files. **Sync** is optional teacher/agent cloud storage, independent of Install; CE-SE does not automatically synchronize them. Development agents use Source for product work and Install for teacher tasks. MCP workspace paths refer to Install.
+
 ## Checkout and shell
 
 - The working copy uses **CRLF** in many files, so `gofmt -l` lists nearly everything. Format only files you change, and preserve line endings (use the Edit tool or CRLF-aware scripts).

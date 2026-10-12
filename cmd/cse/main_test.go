@@ -41,6 +41,41 @@ func TestHelpFormatsAndExamplesNeedNoWorkspace(t *testing.T) {
 	}
 }
 
+func TestRulesLocationCommandConfiguresAndReportsAuthority(t *testing.T) {
+	root, syncRoot := t.TempDir(), t.TempDir()
+	config := domain.CourseConfig{Schema: 1, Instance: "https://school.example", Courses: []domain.Course{}}
+	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); err != nil {
+		t.Fatal(err)
+	}
+	var out, progress bytes.Buffer
+	if code := run(context.Background(), []string{"--workspace", root, "rules-location", "--sync", syncRoot}, &out, &progress); code != 0 {
+		t.Fatalf("set Sync: %d %s", code, progress.String())
+	}
+	for _, want := range []string{"mode: sync", "install_root: " + root, "rules_root: " + syncRoot} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("status omitted %q: %s", want, out.String())
+		}
+	}
+	out.Reset()
+	if code := run(context.Background(), []string{"--workspace", root, "rules-location"}, &out, &progress); code != 0 || !strings.Contains(out.String(), "mode: sync") {
+		t.Fatalf("read status: %d %s %s", code, out.String(), progress.String())
+	}
+	if err := os.Rename(syncRoot, syncRoot+".offline"); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	progress.Reset()
+	if code := run(context.Background(), []string{"--workspace", root, "rules-location"}, &out, &progress); code != 0 || !strings.Contains(out.String(), "mode: sync") || !strings.Contains(progress.String(), "unavailable") {
+		t.Fatalf("missing Sync status: %d %s %s", code, out.String(), progress.String())
+	}
+	if err := os.Rename(syncRoot+".offline", syncRoot); err != nil {
+		t.Fatal(err)
+	}
+	if code := run(context.Background(), []string{"--workspace", root, "rules-location", "--local"}, &out, &progress); code != 0 {
+		t.Fatalf("set local: %d %s", code, progress.String())
+	}
+}
+
 func TestValidateResultsPreviewsComputedAssessmentTimingAndHold(t *testing.T) {
 	root := t.TempDir()
 	config := domain.CourseConfig{Schema: 1, Instance: "https://school.example", Courses: []domain.Course{{Nickname: "TEST", ID: 1}}}

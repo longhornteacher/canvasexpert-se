@@ -2,6 +2,8 @@
 
 The judgment calls are yours; the Engine pulls work, does the arithmetic and posts. What the teacher's words mean, the review page and how to report are in `AGENTS.md`.
 
+Read this playbook and grading/calendar references through their logical MCP paths or from the effective teacher-rules root (Install by default, configured Sync otherwise). Student notes, course configuration, packets, drafts and commands stay in Install. If a shared reference is unavailable, explain that file's problem without reading an inactive local copy; continue independent work that has its needed evidence.
+
 ## Pull
 
 ```powershell
@@ -10,32 +12,37 @@ The judgment calls are yours; the Engine pulls work, does the arithmetic and pos
 
 Read the packet and student files it writes. A fresh pull never overwrites unsent scoring work. Before judging anything, read `context/grading.md` (the teacher's `voice` and `feedback_guidance`; they override style defaults here, never the rubric or posting rules) and `context/students.md`. Student notes also arrive with each student's pulled work. Apply established accommodations without asking the teacher to repeat them.
 
-New Quizzes can't be pulled for scoring yet; the teacher grades their written items in SpeedGrader.
+New Quiz written items (`ESSAY`, `FILEUPLOAD`) are open for regular scoring. Pull the quiz explicitly by its assignment ID: `.\cse.cmd pull-work COURSE QUIZ_ID` (MCP: `pull_work` with that assignment ID). If the teacher gives a quiz name, resolve its assignment ID through `pull_assignment` (CLI `pull-item`) rather than asking them to find the ID. Broad class pulls skip New Quizzes. Their results are **comment-only**; follow the New Quiz section below instead of ordinary assignment grade/lateness instructions.
 
 ## Fix the scoring basis
 
 - **Canvas rubric attached**: use it. Never invent a criterion or rating ID, and never pick a rating whose points don't match the score you give. If a rubric was just attached, pull again so the packet has Canvas's real IDs.
-- **No Canvas rubric**: score anyway. Infer sensible criteria from the directions, the work and the grade level, and record them once in the results file as `scoring_basis` (`title`, and `criteria` each with `id`, `description`, `points`; one overall criterion is fine). It drives the arithmetic and the score lines in feedback; Canvas receives only the grade and comment. If a real rubric would help (a reusable assignment), offer one in a preview.
+- **No Canvas rubric**: score anyway. Infer sensible criteria from the directions, the work and the grade level, and record them once in the results file as `scoring_basis` (`title`, and `criteria` each with `id`, `description`, `points`; one overall criterion is fine). It drives the arithmetic and the score lines in feedback, without creating a Canvas rubric. Ordinary assignments receive the grade and comment; New Quizzes receive only the comment. If a real rubric would help (a reusable assignment), offer one in a preview.
 
-Before scoring anyone, identify the required response units from the directions, rubric and submission mode. A choice among prompts is one unit. Infer defensible relative weights from what each unit demands; equal weights are allowed but not automatic. Use `repeated` mapping when the rubric applies to each response, `direct` when criteria already match separate prompts. Record a short private rationale and apply the same interpretation to every student unless a documented accommodation applies. `help formats` has the exact fields and arithmetic; `help examples` shows shape only. Start a results file by copying `synthetic-results-two.md` from `help examples` (MCP: `engine_reference` topic `examples`) rather than probing the validator; the shared `interpretation:` block (mapping, rationale, components) is required and each student's `grade` lists per-component criterion points.
+Before scoring anyone, identify the required response units from the directions, rubric and submission mode. A choice among prompts is one unit. Infer defensible relative weights from what each unit demands; equal weights are allowed but not automatic. Use `repeated` mapping when the rubric applies to each response, `direct` when criteria already match separate prompts. Record a short private rationale and apply the same interpretation to every student unless a documented accommodation applies. `help formats` has the exact fields and arithmetic; `help examples` shows shape only. The shared `interpretation:` block (mapping, rationale, components) is required. For ordinary assignment grading, start from `synthetic-results-two.md` in `help examples` (MCP: `engine_reference` topic `examples`); each student's `grade` lists criterion points. For New Quizzes, use the `comment_only` contract below and in `help formats`; do not copy a grade operation.
 
 ## Assess honestly
 
-### New Quiz written items
-
-`pull-work COURSE QUIZ_ID` supports a New Quiz when the teacher explicitly names its assignment ID. It reads Student Analysis essay responses and attempts to download uploaded files into that packet's `students/<student_ref>/files/attempt-N/` folder; file records include a status and reason when a download is unavailable. Open downloaded files with your normal document tools. A missing or unreadable file is `evidence: unknown`, so hold that student's feedback and continue with other students.
-
-For New Quiz written work, use the attached independent rubric or a `scoring_basis`, then create a `comment-only` result per student. Include the exact pulled `attempt` and `submitted_at`, criterion components, and student-facing `feedback`; do not include a grade operation or late timing. The Engine validates criterion arithmetic, shows the exact whole-assignment comment in review, and posts only that comment after approval. The comment lists criterion scores without an aggregate quiz assessment. The teacher enters per-item points in SpeedGrader. Never write a New Quiz question score or rubric assessment through this workflow.
-
-The New Quiz report and file transport are implemented with local tests; Canvas Live evidence currently comes from a separate one-student, one-file hand-run. Treat any failure to match the report student and attempt as a skipped student, and rely on the pulled file status rather than assuming the upload was retrieved.
-
 - Score a missing required response as missing; don't average only the answered parts. Report missing submissions; don't enter zeros.
-- Unreadable work gets `evidence: unknown`: that student is held, everyone else posts.
+- Unreadable work gets `evidence: unknown`: hold that student, explain the specific missing evidence, and continue independent students within the teacher's posting scope.
 - Compare with the strongest earlier attempt as one whole submission. Never mix parts of attempts or treat a teacher-adjusted grade as proof of stronger work.
-- Post the honest score for the current work, even below an existing grade. Canvas applies late penalties; you don't.
 - Reassess when the academic requirements or the submission changed. A title, publication, scheduling or HTML-formatting change alone doesn't need it. The Engine holds a post only when points, rubric, grading type or anonymous/moderated/group mode changed. A new attempt shows up on its own; editing posted feedback doesn't requeue an attempt, but the teacher can ask for a reassessment.
 
-## Lateness
+## New Quiz written items
+
+This path supports individual quizzes graded as points or percent. Anonymous, moderated and group grading are outside its current scope.
+
+The scoped pull reads typed Student Analysis essay responses and attempts to download uploaded files into the packet's `students/<student_ref>/files/attempt-N/` folder. File records include status and a reason when retrieval is unavailable; limits are 50 MB per file and 500 MB per pull. Open downloaded files with your normal document tools. An unavailable or unreadable file is `evidence: unknown`, not a missing response to score as zero. Explain the affected student, file and reason, hold that student's feedback, and continue independent students. The teacher can open the affected file in SpeedGrader.
+
+Use the attached Canvas rubric or a `scoring_basis`, with private authored `rubric_hint`s as guidance when available. Start from `synthetic-results-new-quiz-comment.md` in `help examples` (MCP: `engine_reference` topic `examples`), replacing synthetic identity and evidence with the actual pull. Create `operation: comment-only` per student with a `comment_only` body containing the exact pulled `attempt` reference (`attempt`, `submitted_at`), scored `components`, and student-facing `feedback`. The Engine validates criterion arithmetic and reviews the exact whole-assignment comment. Review is the default; post directly only when the teacher explicitly skips review for this task. The comment lists truthful criterion scores without an aggregate quiz assessment. This workflow writes no grade, rubric assessment, per-item score or late timing. The teacher enters per-item points in SpeedGrader.
+
+The report/file transport and comment-only workflow have local tests; separate one-student Canvas Live hand-runs support the APIs and one file download. Engine/MCP end-to-end live verification remains pending. Report that evidence honestly without making a preliminary validation run a prerequisite for regular teacher use. Treat a failure to match the report student and attempt as a skipped student, and rely on the pulled file status rather than assuming retrieval.
+
+## Ordinary assignment grades
+
+For ordinary assignments, post the honest computed score for the current work, even below an existing grade. Never inflate criterion scores or suppress the assessment to preserve a teacher-adjusted grade. Canvas applies late point penalties; you don't. These grade and lateness instructions do not apply to New Quiz comment-only results.
+
+### Lateness
 
 You judge lateness; the Engine writes it; Canvas computes the penalty.
 
@@ -48,11 +55,11 @@ If the due date, first genuine work, calendar coverage or accommodation details 
 
 ## Feedback
 
-The Engine starts each comment with the computed score and compact criterion lines; you write the rest as plain text in the teacher's voice. Give specific, respectful glows and grows grounded in the work, including meaningful changes from the strongest earlier attempt. Full rubric definitions stay in Canvas.
+For ordinary grades, the Engine starts the comment with the computed score and compact criterion lines. For New Quiz comment-only results, it starts with criterion lines and omits any aggregate quiz assessment. You write the rest as plain text in the teacher's voice: specific, respectful glows and grows grounded in the work, including meaningful changes from the strongest earlier attempt. Full rubric definitions stay in Canvas.
 
 ## Save, review, post
 
-Save the results in the assignment's scoring area. Run `.\cse.cmd validate <results-file>` to check the arithmetic and preview computed scores (`assessment` may be omitted; the Engine fills it in). Then `.\cse.cmd review <results-file>` as in `AGENTS.md`, or `.\cse.cmd post <results-file>` only when the teacher skipped review.
+Save the results in the assignment's scoring area. Run `.\cse.cmd validate <results-file>` to check criterion arithmetic (ordinary grade `assessment` may be omitted; the Engine fills it in). Then `.\cse.cmd review <results-file>` as in `AGENTS.md`, or `.\cse.cmd post <results-file>` only when the teacher skipped review.
 
 The page approves everyone by default and calls out held students. After Revise, fix exactly the noted students and nothing else; the others keep their approval. If the command is interrupted or the teacher says "check revisions", read `<results-file>.review.json` (items with `"status": "revise"`). Never `post` students who were revised or held. Explain each held student specifically.
 

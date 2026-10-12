@@ -1,5 +1,7 @@
 # GPT Work test protocol
 
+Historical exploratory protocol, retained from before the current MCP route. Use [mcp-adapter.md](mcp-adapter.md) and Install's AGENTS.md for current teacher setup and [MCP-VERIFY-AND-WEBUI-ACCURACY.md](../handoffs/active/MCP-VERIFY-AND-WEBUI-ACCURACY.md) for remaining scoped verification. These older experiments are not teacher-use prerequisites or authorization to read private pages/data. In the current vocabulary, the dev repo is **Source**, the teacher workspace is **Install**, and optional cloud storage is **Sync**, independent of Install.
+
 Goal: find out which route can connect GPT Work to the Engine (running commands directly, the browser, or the teacher pasting commands), and how much friction each one adds. Record results in the **Result** lines as you go. Exact error text and screenshots are worth more than summaries.
 
 Stop at any step that would expose real student data, and note why.

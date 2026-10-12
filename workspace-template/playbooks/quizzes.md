@@ -2,6 +2,10 @@
 
 Use this for any Canvas New Quiz: auto-scored items, written items (`ESSAY`, `FILEUPLOAD`), or a mix such as multiple choice plus constructed responses. What the teacher's words mean and the review page are in `AGENTS.md`.
 
+Read teacher rules and design references from the effective teacher-rules location (Install by default, configured Sync otherwise), using logical MCP paths where available. Run commands and save course drafts, assets and outcomes in Install. Sync holds rules; its provider carries their edits between PCs.
+
+New Quizzes are supported for regular authoring and use, including written-response scoring with `score.md`. Work within the limits below; pending live or student-view verification is not a prohibition or a preliminary test required for each task.
+
 For curriculum conversion, student file assets and placing an existing quiz into a native module, read `native-content.md`. Use the returned New Quiz assignment ID for a module Assignment entry.
 
 ## Write the quiz in QuizForge format
@@ -14,7 +18,7 @@ Read `engine_reference` formats and examples (CLI `help formats` / `help example
 - Quiz settings (time limit, attempts, due date, publication, module) go in `metadata.canvas`.
 - For one attempt, omit `allowed_attempts` and multiple-attempt settings. For two or more set `allow_multiple_attempts: true` and the desired `allowed_attempts`; omit the limit or use `"unlimited"` for unlimited attempts.
 - TF uses a boolean `answer`. Feedback goes in root `rationales`, keyed by `item_id`; MC/MA entries contain `choices` with matching choice `id` and `rationale`, while TF and other auto-scored entries contain `rationale`. Never put `rationale` inside an item or its choices.
-- Written items: `ESSAY` takes optional `word_limit_min`/`word_limit_max`; `FILEUPLOAD` takes optional `accepted_formats`. Write a `rubric_hint` for each ECR/SCR: it is never sent to students, and it becomes the quiz rubric and the scoring basis later.
+- Written items: `ESSAY` takes optional `word_limit_min`/`word_limit_max`; `FILEUPLOAD` takes optional `accepted_formats`. Write a `rubric_hint` for each ECR/SCR as private guidance for later rubric authoring and scoring. It is not sent to Canvas and does not automatically create a rubric; put anything students must see in `prompt`.
 
 ## Review and create
 
@@ -30,7 +34,7 @@ The Engine records the quiz ID in `<quiz-file>.cse.json`. If it reports `partial
 
 ## Written items: rubric and grading
 
-When the quiz has ECR/SCR items, offer to attach a rubric after it is created: follow "Attach a rubric" in `edit.md`, building the criteria from the `rubric_hint`s. The teacher enters the points for written items in SpeedGrader; CE-SE can't pull New Quiz responses for scoring yet. Say both when you create the quiz.
+When the quiz has ECR/SCR items, offer to attach an independent rubric after it is created: follow "Attach a rubric" in `edit.md`, building the criteria from the `rubric_hint`s. For scoring, use `score.md`: explicitly pull the New Quiz by its assignment ID, assess typed answers and retrieved files against the attached rubric or a local `scoring_basis`, and prepare a comment with truthful criterion scores for review. A missing rubric does not block scoring. CE-SE posts only the whole-assignment comment, with no aggregate quiz assessment, grade, rubric-assessment or late writes. The teacher enters per-item points in SpeedGrader. Explain this handoff when you create the quiz.
 
 ## What to tell the teacher
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +14,8 @@ import (
 	"sync"
 	"testing"
 
+	embedded "canvasexpertse"
+	"canvasexpertse/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -135,6 +138,200 @@ func TestWorkspaceRootReferences(t *testing.T) {
 			t.Errorf("listed %s: %s", name, out.Text)
 		}
 	}
+}
+
+func TestSharedRulesRouteAcrossInstallRoots(t *testing.T) {
+	installA, installB, syncRoot := t.TempDir(), t.TempDir(), t.TempDir()
+	for _, root := range []string{installA, installB} {
+		if err := os.MkdirAll(filepath.Join(root, "context"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(root, "courses"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "context", "courses.md"), []byte("local course config"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(installA, "context", "grading.md"), []byte("custom grading voice"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.SetRulesLocation(installA, syncRoot, embedded.WorkspaceTemplate, "workspace-template"); err != nil {
+		t.Fatal(err)
+	}
+	// PC B sees the existing authority as-is and keeps its different local copy inactive.
+	if err := os.WriteFile(filepath.Join(installB, "context", "grading.md"), []byte("different local copy"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.SetRulesLocation(installB, syncRoot, embedded.WorkspaceTemplate, "workspace-template"); err != nil {
+		t.Fatal(err)
+	}
+	a, b := &Server{root: installA}, &Server{root: installB}
+	pa, err := a.readablePath("context/grading.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(pa)
+	if err != nil || string(content) != "custom grading voice" {
+		t.Fatalf("initial shared content %q, %v", content, err)
+	}
+	oldHash := fmt.Sprintf("%x", sha256.Sum256(content))
+	if _, err := a.writeWorkspaceBytes(pa, []byte("updated through PC A"), oldHash); err != nil {
+		t.Fatal(err)
+	}
+	pb, err := b.readablePath("context/grading.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err = os.ReadFile(pb)
+	if err != nil || string(content) != "updated through PC A" {
+		t.Fatalf("PC B stale read %q, %v", content, err)
+	}
+	if _, err := b.writeWorkspaceBytes(pb, []byte("stale overwrite"), oldHash); err == nil {
+		t.Fatal("stale hash was accepted")
+	}
+	localCourses, err := b.readablePath("context/courses.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err = os.ReadFile(localCourses)
+	if err != nil || string(content) != "local course config" {
+		t.Fatalf("course config left Install: %q, %v", content, err)
+	}
+	if _, err := b.readablePath(".cse/rules-location.json"); err == nil {
+		t.Fatal("private binding became readable")
+	}
+	listed, err := b.listWorkspaceFiles(ListFilesInput{Path: "context", Recursive: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(listed.Text, "context/grading.md"); count != 1 {
+		t.Fatalf("shared path listed %d times: %s", count, listed.Text)
+	}
+}
+
+func TestMCPSharedRulesRefreshesAcrossConnectedClients(t *testing.T) {
+	ctx := context.Background()
+	installA, installB, syncRoot := t.TempDir(), t.TempDir(), t.TempDir()
+	for _, root := range []string{installA, installB} {
+		if err := os.MkdirAll(filepath.Join(root, "context"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(root, "courses"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "context", "courses.md"), []byte("local"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(installA, "context", "grading.md"), []byte("initial shared voice"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.SetRulesLocation(installA, syncRoot, embedded.WorkspaceTemplate, "workspace-template"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.SetRulesLocation(installB, syncRoot, embedded.WorkspaceTemplate, "workspace-template"); err != nil {
+		t.Fatal(err)
+	}
+	connect := func(root string) (*mcp.ClientSession, func()) {
+		t.Helper()
+		server, closeServer := NewServer(ctx, root)
+		client := mcp.NewClient(&mcp.Implementation{Name: "client", Version: "test"}, nil)
+		st, ct := mcp.NewInMemoryTransports()
+		ss, err := server.Connect(ctx, st, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cs, err := client.Connect(ctx, ct, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cs, func() { _ = cs.Close(); _ = ss.Close(); closeServer() }
+	}
+	a, closeA := connect(installA)
+	defer closeA()
+	b, closeB := connect(installB)
+	defer closeB()
+	if _, err := a.ListTools(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.ListTools(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	call := func(client *mcp.ClientSession, name string, args map[string]any, wantError bool) string {
+		t.Helper()
+		result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.IsError != wantError {
+			t.Fatalf("%s isError=%v: %v", name, result.IsError, result.Content)
+		}
+		if wantError {
+			return ""
+		}
+		text := result.Content[0].(*mcp.TextContent).Text
+		var structured map[string]any
+		if json.Unmarshal([]byte(text), &structured) == nil {
+			if value, ok := structured["text"].(string); ok {
+				return value
+			}
+		}
+		return text
+	}
+	readA := call(a, "read_workspace_file", map[string]any{"path": "context/grading.md"}, false)
+	if !strings.Contains(readA, "authority_root: "+syncRoot) || !strings.Contains(readA, "initial shared voice") {
+		t.Fatalf("unexpected authoritative read: %s", readA)
+	}
+	oldHash := fmt.Sprintf("%x", sha256.Sum256([]byte("initial shared voice")))
+	call(a, "write_workspace_file", map[string]any{"path": "context/grading.md", "content": "changed from connected client A", "expected_sha256": oldHash}, false)
+	readB := call(b, "read_workspace_file", map[string]any{"path": "context/grading.md"}, false)
+	if !strings.Contains(readB, "changed from connected client A") {
+		t.Fatalf("client B did not observe current rules: %s", readB)
+	}
+	call(b, "write_workspace_file", map[string]any{"path": "context/grading.md", "content": "stale", "expected_sha256": oldHash}, true)
+	listing := call(b, "list_workspace_files", map[string]any{"path": "context", "recursive": true}, false)
+	var listed struct {
+		Entries []struct {
+			Path string `json:"path"`
+		} `json:"entries"`
+		InstallRoot string `json:"install_root"`
+		RulesRoot   string `json:"rules_root"`
+		Mode        string `json:"mode"`
+	}
+	if err := json.Unmarshal([]byte(listing), &listed); err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, entry := range listed.Entries {
+		if entry.Path == "context/grading.md" {
+			count++
+		}
+	}
+	if count != 1 || listed.InstallRoot != installB || listed.RulesRoot != syncRoot || listed.Mode != "sync" {
+		t.Fatalf("listing authority/contents incorrect: %s", listing)
+	}
+	playbooks := call(b, "list_workspace_files", map[string]any{"path": "playbooks/", "recursive": true}, false)
+	if !strings.Contains(playbooks, "playbooks/setup.md") {
+		t.Fatalf("explicit shared playbook listing failed without a local playbooks folder: %s", playbooks)
+	}
+	call(b, "list_workspace_files", map[string]any{"path": "/playbooks"}, true)
+	contextSlash := call(b, "list_workspace_files", map[string]any{"path": "context\\", "recursive": true}, false)
+	if !strings.Contains(contextSlash, "context/grading.md") {
+		t.Fatalf("context directory with trailing separator omitted shared rules: %s", contextSlash)
+	}
+	if err := os.Rename(syncRoot, syncRoot+".offline"); err != nil {
+		t.Fatal(err)
+	}
+	call(b, "list_workspace_files", map[string]any{"path": "playbooks/"}, true)
+	fullListing := call(b, "list_workspace_files", map[string]any{}, false)
+	if !strings.Contains(fullListing, "availability_error") || strings.Contains(fullListing, "playbooks/setup.md") {
+		t.Fatalf("missing Sync listing fell back to inactive local rules: %s", fullListing)
+	}
+	if err := os.Rename(syncRoot+".offline", syncRoot); err != nil {
+		t.Fatal(err)
+	}
+	call(b, "read_workspace_file", map[string]any{"path": ".cse/rules-location.json"}, true)
 }
 func TestWorkspaceLinkPrivacy(t *testing.T) {
 	root := t.TempDir()

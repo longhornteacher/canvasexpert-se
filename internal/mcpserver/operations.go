@@ -2,14 +2,17 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
+	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/workflow"
+	"canvasexpertse/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -48,7 +51,8 @@ type CanvasGetInput struct {
 }
 
 type EngineInfoInput struct {
-	Operation string `json:"operation,omitempty" jsonschema:"version (default), doctor (temporary dummy credential self-test), or link (record this executable for cse.cmd)"`
+	Operation string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, rules-location, or set-rules-location"`
+	SyncRoot  string `json:"sync_root,omitempty" jsonschema:"Explicit teacher-rules directory for set-rules-location; empty selects local Install mode"`
 }
 
 func (s *Server) registerOperationTools(server *mcp.Server) {
@@ -109,13 +113,36 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		return s.command(ctx, "api", in.Path)
 	})
-	addActionTool(server, "engine_info", "Read Engine build/version, run its temporary dummy credential self-test (doctor), or record this executable for workspace launchers (link). Never returns Canvas credentials.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
+	addActionTool(server, "engine_info", "Read Engine build/version, run its temporary dummy credential self-test (doctor), record this executable for workspace launchers (link), or inspect/set teacher-rules authority (rules-location, set-rules-location). Never returns Canvas credentials.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
 		op := in.Operation
 		if op == "" {
 			op = "version"
 		}
+		if op == "rules-location" {
+			location, err := workspace.GetRulesLocation(s.root)
+			status := struct {
+				workspace.RulesLocation
+				AvailabilityError string `json:"availability_error,omitempty"`
+			}{RulesLocation: location}
+			if err != nil {
+				status.AvailabilityError = err.Error()
+			}
+			b, marshalErr := json.Marshal(status)
+			if marshalErr != nil {
+				return TextOutput{}, marshalErr
+			}
+			return TextOutput{Text: string(b)}, nil
+		}
+		if op == "set-rules-location" {
+			location, err := workspace.SetRulesLocation(s.root, in.SyncRoot, embedded.WorkspaceTemplate, "workspace-template")
+			if err != nil {
+				return TextOutput{}, err
+			}
+			b, err := json.Marshal(location)
+			return TextOutput{Text: string(b)}, err
+		}
 		if op != "version" && op != "doctor" && op != "link" {
-			return TextOutput{}, errors.New("operation must be version, doctor, or link")
+			return TextOutput{}, errors.New("operation must be version, doctor, link, rules-location, or set-rules-location")
 		}
 		return s.command(ctx, op)
 	})

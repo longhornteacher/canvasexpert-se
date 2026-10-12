@@ -2,6 +2,8 @@
 
 Written 2026-10-11 by Claude for Codex. Belongs mostly to the **Engine** (verification, small fixes) with **playbook/instruction** follow-through. Read repository `AGENTS.md`, `ARCHITECTURE.md`, `SCORING-RULES.md` first. Two jobs:
 
+Current direction (2026-10-12): **Source** is the development checkout; **Install** holds the runnable Engine and actual teacher files; optional **Sync** is independent cloud storage with no automatic CE-SE synchronization. New Quizzes and written-response scoring are open for regular use within the implemented limits. Parts 1–3 of the written-work path are implemented locally; remaining live/client checks establish evidence, not a blanket prerequisite for teacher use. Dated state and results below describe their original observations; current contracts are in ARCHITECTURE.md, SCORING-RULES.md and Install's playbooks.
+
 1. Make sure everything built in the last two days works when driven **only through the CE-SE MCP tools**, the way a Cowork or Work session would use it (no shell, no Go, no one-off programs).
 2. Make the WebUI (Capabilities page, Home/Settings text, playbook status) reflect the real capabilities, limitations and evidence levels.
 
@@ -79,8 +81,8 @@ Specific corrections needed (verify, then fix):
 
 1. Anything still describing the removed behaviors as present: post-write read-back or "uncertain" outcomes for comment/grade/rubric; "agent shows the review page in the browser pane"; review showing feedback only.
 2. Review page: now shows the submission with the feedback; opens automatically (until step 3/4 above are seen working, label **local tests only / pending MCP validation**).
-3. New Quiz written work row: reading typed answers is **Canvas Live API read, one student, one hand-run**; file download chain **hand-run once, Canvas Live, one student/one file, not built into the Engine**; comment on a New Quiz submission **posted once by hand, not Engine-supported**; scoring New Quiz written work **not available through MCP/Engine**. Link `docs/new-quiz-written-work-spec.md`.
-4. MCP row: 26 typed tools; Cowork initialization and read-only calls verified; full task workflows pending human validation until checklist items 3 to 11 pass. Add the three New Quiz gaps above as explicit limitations so no agent or teacher assumes otherwise.
+3. New Quiz written work row: the Engine now implements scoped typed-response/file pulls and comment-only scoring/review/post, with local tests. Record the separate one-student Canvas Live hand-runs for typed response, one file download and one comment. Place implemented written-work scoring among supported workflows awaiting meaningful validation; the future capability is automatic item-score writing. Link `docs/new-quiz-written-work-spec.md`. The teacher enters per-item points in SpeedGrader; no aggregate quiz assessment, grade, rubric-assessment or late write is part of comment-only output.
+4. MCP row: 26 typed tools; Cowork initialization and read-only calls verified; full task workflows still await live/human evidence. Name the specific remaining checks without treating them as a prohibition on supported New Quiz use. Preserve the evidence distinction in item 3.
 5. Quiz authoring and rubric rows: record the new refusals (`use_for_grading: true` on new rubrics, contradictory attempts settings) and the unchanged live evidence for creation.
 6. Scoring row: SCR 4/5/6 were posted through the review page on 2026-10-11 (Canvas Live, CS8, real students); SCR 4 confirmed present in Canvas; SCR 5/6 not re-read. This is real-use evidence, distinct from the earlier Test Student runs.
 7. Update the review date on the page and in `docs/engine-capabilities.md` together.

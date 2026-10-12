@@ -107,7 +107,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		fmt.Fprintf(os.Stderr, "Could not add some CE-SE starter files: %v\n", err)
 	}
 	s := &Server{root: root, ctx: ctx, reviews: map[string]*reviewTask{}}
-	server := mcp.NewServer(&mcp.Implementation{Name: "canvasexpert-se", Version: "0.1b"}, &mcp.ServerOptions{Instructions: "Before any teacher task, read AGENTS.md using read_workspace_file, then read the relevant playbook. Read list_courses with its default configured source for saved nicknames and current selections; request source canvas only for connection testing or additional course discovery. Treat the structured courses list as setup status and ignore obsolete starter text in a preserved document body. Use engine_reference for Engine commands and file contracts. Keep .cse files and private teacher-only browser pages out of model context. Preserve honest computed grades, unsent work, and the teacher's requested scope. Review is the default for scores, assignment creation/edits, and quiz creation; direct writes follow an explicit teacher request to skip review."})
+	server := mcp.NewServer(&mcp.Implementation{Name: "canvasexpert-se", Version: "0.1b"}, &mcp.ServerOptions{Instructions: "Before any teacher task, read AGENTS.md using read_workspace_file, then read the relevant playbook. Commands, courses, student-specific context and work remain in Install. Teacher instructions, playbooks, guides and preferences use Install by default or the explicitly configured Sync authority; Sync is a provider-synchronized local directory, and reads always use its current contents. Check engine_info operation rules-location if the active authority is unclear. Read list_courses with its default configured source for saved nicknames and current selections; request source canvas only for connection testing or additional course discovery. Treat the structured courses list as setup status and ignore obsolete starter text in a preserved document body. Use engine_reference for Engine commands and file contracts. Keep .cse files and private teacher-only browser pages out of model context. Preserve honest computed grades, unsent work, and the teacher's requested scope. Review is the default for scores, assignment creation/edits, and quiz creation; direct writes follow an explicit teacher request to skip review."})
 	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
 		return s.listCourses(ctx, in)
 	})
@@ -142,7 +142,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addActionTool(server, "pull_page", "Pull an exact Canvas Page and its edit baseline through the CE-SE Engine.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
 		return s.command(ctx, "pull-page", in.Course, in.Query)
 	})
-	addReadTool(server, "read_workspace_file", "Read a root .md/.txt teacher reference, workspace instruction, playbook, context file, or course work file. Hidden folders, .cse, and Engine files are blocked.", func(_ context.Context, _ *mcp.CallToolRequest, in ReadFileInput) (TextOutput, error) {
+	addReadTool(server, "read_workspace_file", "Read a root .md/.txt teacher reference, workspace instruction, playbook, context file, or course work file through its active authority. Returns authority metadata and the file hash. Hidden folders, .cse, and Engine files are blocked.", func(_ context.Context, _ *mcp.CallToolRequest, in ReadFileInput) (TextOutput, error) {
 		path, err := s.readablePath(in.Path)
 		if err != nil {
 			return TextOutput{}, err
@@ -155,7 +155,11 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 			return TextOutput{}, fmt.Errorf("file exceeds the %d-byte read limit", maxWorkspaceFile)
 		}
 		h := sha256.Sum256(b)
-		return TextOutput{Text: fmt.Sprintf("path: %s\nsha256: %x\n\n%s", filepath.ToSlash(in.Path), h, string(b))}, nil
+		location, authority, locationErr := s.rulesMetadata(in.Path)
+		if locationErr != nil {
+			return TextOutput{}, fmt.Errorf("teacher rules location unavailable: %w", locationErr)
+		}
+		return TextOutput{Text: fmt.Sprintf("path: %s\nmode: %s\ninstall_root: %s\nrules_root: %s\nauthority_root: %s\nsha256: %x\n\n%s", filepath.ToSlash(in.Path), location.Mode, location.InstallRoot, location.RulesRoot, authority, h, string(b))}, nil
 	})
 	addActionTool(server, "write_draft", "Create or update a draft under courses/. Existing files require their current SHA-256 to prevent overwriting newer unsent work. This tool never writes to Canvas.", true, func(_ context.Context, _ *mcp.CallToolRequest, in WriteFileInput) (TextOutput, error) {
 		return s.writeDraft(in)
@@ -235,10 +239,13 @@ type ListCoursesInput struct {
 }
 
 type configuredCourses struct {
-	Source   string          `json:"source"`
-	Root     string          `json:"root"`
-	Instance string          `json:"instance"`
-	Courses  []domain.Course `json:"courses"`
+	Source      string          `json:"source"`
+	Root        string          `json:"root"`
+	InstallRoot string          `json:"install_root"`
+	RulesRoot   string          `json:"rules_root"`
+	Mode        string          `json:"mode"`
+	Instance    string          `json:"instance"`
+	Courses     []domain.Course `json:"courses"`
 }
 
 func (s *Server) listCourses(ctx context.Context, in ListCoursesInput) (TextOutput, error) {
@@ -257,7 +264,8 @@ func (s *Server) listCourses(ctx context.Context, in ListCoursesInput) (TextOutp
 		if config.Courses == nil {
 			config.Courses = []domain.Course{}
 		}
-		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, Instance: config.Instance, Courses: config.Courses})
+		location, _ := workspace.GetRulesLocation(s.root)
+		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, InstallRoot: location.InstallRoot, RulesRoot: location.RulesRoot, Mode: location.Mode, Instance: config.Instance, Courses: config.Courses})
 		return TextOutput{Text: string(b)}, err
 	default:
 		return TextOutput{}, errors.New("source must be configured or canvas")

@@ -48,13 +48,14 @@ var settingsTemplate = template.Must(template.New("settings").Parse(`<!doctype h
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}<div class="cards">
 <div class="card"><h2>Canvas</h2>{{if .Connected}}<span class="pill on">connected</span><p><code>{{.CanvasOrigin}}</code></p>{{if .CanvasUser}}<p>Signed in as <b>{{.CanvasUser}}</b></p>{{end}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" class="small">Test connection</button></form>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a>{{if .Connected}}<details class="forget"><summary>Forget token on this computer</summary><form method="post" action="/canvas/forget"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="confirm" required> Yes, remove it. I can reconnect later.</label><button type="submit" class="small danger">Remove token</button></form></details>{{end}}</div>
 <div class="card"><h2>Engine</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>The machinery plus the starter playbooks. Nothing private.</p></div>
-<div class="card"><h2>CE-SE installation</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Your playbooks, context and student information.</p>{{else}}<span class="pill off">none</span><p>For a development launch, use <code>cse --workspace &quot;PATH&quot; ui</code> with the CE-SE installation containing <code>context/courses.md</code>.</p>{{end}}</div>
+<div class="card"><h2>CE-SE installation</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Engine, courses, student information and work stay here.</p>{{else}}<span class="pill off">none</span><p>For a development launch, use <code>cse --workspace &quot;PATH&quot; ui</code> with the CE-SE installation containing <code>context/courses.md</code>.</p>{{end}}</div>
+{{if .Root}}<div class="card"><h2>Teacher rules: Install / Sync</h2><p>Install: <code>{{.Root}}</code></p><p>Effective rules location{{if .RulesMode}} ({{.RulesMode}}){{end}}: <code>{{.RulesRoot}}</code></p>{{if .RulesError}}<span class="pill off">Sync unavailable</span><p class="error">{{.RulesError}}</p>{{end}}<p>By default, teacher rules live in Install. Sync is optional: CE-SE reads and edits the selected folder directly, and its provider (such as OneDrive or Google Drive) carries changes between computers. Courses, students, work and the Engine remain in Install.</p><p>Selecting an empty Sync folder initializes it from the current shareable teacher rules. An existing Sync folder becomes authoritative; local originals are preserved but inactive. Switching back to Install copies the shared rules there and archives differing local versions.</p><form method="post" action="/rules-location"><input type="hidden" name="request_secret" value="{{.Secret}}"><label for="sync_root">Sync folder path (leave blank to use Install)</label><input id="sync_root" name="sync_root" value="{{.SyncRoot}}" maxlength="4000" autocomplete="off"><button type="submit">Save rules location</button></form></div>{{end}}
 </div>
 {{if .Preferences}}<div class="card"><h2>Student aliases</h2><form method="post" action="/settings"><input type="hidden" name="request_secret" value="{{.Secret}}"><label><input type="checkbox" name="aliases" {{if .Aliases}}checked{{end}}> Use aliases in student work files</label><button type="submit">Save settings</button></form></div>{{end}}
 {{if .Root}}<div class="card voice"><h2>Feedback voice</h2><p><span class="pill">Part of your context</span></p><p>The agent reads this every time it writes feedback or scores work. Plain sentences are fine.</p><form method="post" action="/grading"><input type="hidden" name="request_secret" value="{{.Secret}}">
 <label for="voice">How feedback should sound</label><textarea id="voice" name="voice" rows="4" maxlength="8000" placeholder="Warm and encouraging, short sentences a 7th grader can read. Start with one glow, then one grow. Use their first name.">{{.Voice}}</textarea>
 <label for="feedback_guidance">Grading habits and rubric preferences</label><textarea id="feedback_guidance" name="feedback_guidance" rows="6" maxlength="8000" placeholder="Don't take off points for spelling in CS8. Accept late work without comment. Quote one line from their work when praising it.">{{.FeedbackGuidance}}</textarea>
-<button type="submit">Save feedback voice</button></form></div>{{end}}{{if .Playbook}}<div class="card voice"><h2>Your playbooks and context</h2><p>The files the agent follows, compared with this program version's starter copy. Existing teacher copies of <code>AGENTS.md</code> and playbooks are not updated automatically. Use <b>Get the new version</b> to adopt changes, including the latest <code>AGENTS.md</code> instructions for opening the review page and stopping after an accepted post without re-checking Canvas.</p><ul class="playbook">{{range .Playbook}}<li><code>{{.Path}}</code> {{if eq .State "same"}}<span class="pill same">same as this version</span>{{else if eq .State "missing"}}<span class="pill off">missing</span>{{else}}<span class="pill differs">yours / differs</span> <small>differs from this version's starter copy</small>{{end}}{{if .Replaceable}}<details class="forget"><summary>Get the new version</summary><form method="post" action="/playbook/replace"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="file" value="{{.Path}}"><label class="check"><input type="checkbox" name="confirm" required> Replace my copy. Keep my old one in playbook-old.</label><button type="submit" class="small danger">Replace file</button></form></details>{{end}}</li>{{end}}</ul></div>{{end}}</main></html>`))
+<button type="submit">Save feedback voice</button></form></div>{{end}}{{if .Playbook}}<div class="card voice"><h2>Your playbooks and context</h2><p>The files the agent follows, compared with this program version's starter copy. Existing teacher copies of <code>AGENTS.md</code> and playbooks are not updated automatically. Use <b>Get the new version</b> to adopt changes, including the latest <code>AGENTS.md</code> instructions for opening the review page and stopping after an accepted post without re-checking Canvas.</p><ul class="playbook">{{range .Playbook}}<li><code>{{.Path}}</code> {{if eq .State "same"}}<span class="pill same">same as this version</span>{{else if eq .State "missing"}}<span class="pill off">missing</span>{{else if eq .State "unavailable"}}<span class="pill off">unavailable</span>{{else}}<span class="pill differs">yours / differs</span> <small>differs from this version's starter copy</small>{{end}}{{if .Replaceable}}<details class="forget"><summary>Get the new version</summary><form method="post" action="/playbook/replace"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="file" value="{{.Path}}"><label class="check"><input type="checkbox" name="confirm" required> Replace my copy. Keep my old one in playbook-old.</label><button type="submit" class="small danger">Replace file</button></form></details>{{end}}</li>{{end}}</ul></div>{{end}}</main></html>`))
 
 type homeData struct {
 	Secret, Message, Notice, CanvasOrigin, Root string
@@ -64,6 +65,7 @@ type homeData struct {
 	Preferences, Aliases                        bool
 	Students, Monitored                         int
 	CanvasUser, Voice, FeedbackGuidance         string
+	RulesMode, RulesRoot, SyncRoot, RulesError  string
 	Playbook                                    []playbookRow
 }
 
@@ -162,6 +164,14 @@ func (h *Hub) pageData() homeData {
 		data.Connected, data.CanvasOrigin, data.CanvasUser = true, c.Origin, h.canvasUser
 	}
 	if h.root != "" {
+		loc, rulesErr := workspace.GetRulesLocation(h.root)
+		data.RulesMode, data.RulesRoot, data.SyncRoot = loc.Mode, loc.RulesRoot, ""
+		if loc.Mode == "sync" {
+			data.SyncRoot = loc.RulesRoot
+		}
+		if rulesErr != nil {
+			data.RulesError = rulesErr.Error()
+		}
 		if config, _, err := h.readConfig(); err == nil {
 			data.Preferences, data.Aliases = true, config.Aliases
 			for _, c := range config.Courses {
@@ -231,6 +241,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.coursesPage(w, r)
 	case "/grading":
 		h.saveGrading(w, r)
+	case "/rules-location":
+		h.saveRulesLocation(w, r)
 	case "/how":
 		h.howPage(w, r)
 	case "/capabilities":

@@ -1,7 +1,7 @@
 // Synthetic checks against the compiled Engine. No Canvas writes. The optional
 // --review check uses the machine's saved connection only to start local review.
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, readFile, copyFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, copyFile, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -58,7 +58,13 @@ try {
   const names = discovered.result.tools.map(t => t.name);
   assert.equal(names.length, 26);
   const configured = JSON.parse(await call('list_courses'));
-  assert.deepEqual(configured, { source: 'configured', root, instance: origin, courses: [] });
+  assert.equal(configured.source, 'configured');
+  assert.equal(configured.root, root);
+  assert.equal(configured.install_root, root);
+  assert.equal(configured.rules_root, root);
+  assert.equal(configured.mode, 'local');
+  assert.equal(configured.instance, origin);
+  assert.deepEqual(configured.courses, []);
   await call('list_courses', { source: 'unknown' }, true);
   assert.equal(await readFile(path.join(root, 'context/grading.md'), 'utf8'), 'Teacher-edited grading fixture.');
   assert.match(await call('read_workspace_file', { path: 'playbooks/setup.md' }), /source: canvas/);
@@ -69,6 +75,18 @@ try {
   assert.equal(updatedCourses.root, root);
   assert.deepEqual(updatedCourses.courses, [{ nickname: 'CS8', id: 11, current: true, timezone: 'America/Chicago' }, { nickname: 'OLD', id: 22, current: false }]);
   await call('engine_info');
+  const syncRoot = await mkdtemp(path.join(tmpdir(), 'cse-rules-sync-'));
+  const binding = JSON.parse(await call('engine_info', { operation: 'set-rules-location', sync_root: syncRoot }));
+  assert.equal(binding.mode, 'sync');
+  assert.equal(binding.install_root, root);
+  assert.equal(binding.rules_root, syncRoot);
+  const gradingRead = await call('read_workspace_file', { path: 'context/grading.md' });
+  const gradingHash = /sha256: ([a-f0-9]{64})/.exec(gradingRead)[1];
+  await call('write_workspace_file', { path: 'context/grading.md', content: 'Updated through shared authority.', expected_sha256: gradingHash });
+  assert.match(await readFile(path.join(syncRoot, 'context/grading.md'), 'utf8'), /Updated through shared authority/);
+  assert.match(await call('read_workspace_file', { path: 'context/grading.md' }), /Updated through shared authority/);
+  const locationStatus = JSON.parse(await call('engine_info', { operation: 'rules-location' }));
+  assert.equal(locationStatus.rules_root, syncRoot);
   assert.match(await call('engine_reference', { topic: 'formats' }), /rationales/);
   assert.match(await call('engine_reference', { topic: 'examples' }), /synthetic-quizforge-mixed/);
   await call('list_workspace_files');
@@ -120,6 +138,11 @@ try {
     const state = await call('read_workspace_file', { path: 'courses/assignment.md.review.json' });
     assert.match(state, /Synthetic revision/);
   }
+  await rename(syncRoot, `${syncRoot}-offline`);
+  const unavailable = JSON.parse(await call('engine_info', { operation: 'rules-location' }));
+  assert.equal(unavailable.mode, 'sync');
+  assert.match(unavailable.availability_error, /unavailable/);
+  await call('read_workspace_file', { path: 'context/grading.md' }, true);
   console.log(`PASS: 26 tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, references, discovery, path exclusions, guarded context, binary asset and QuizForge/document validation${review ? ', real local review and revision status' : ''}. No Canvas writes.`);
   console.log(`Synthetic fixture: ${root}`);
 } finally {

@@ -41,6 +41,32 @@ func TestFeedbackVoiceSavesAndShows(t *testing.T) {
 	}
 }
 
+func TestFeedbackVoiceUsesConfiguredSyncAndKeepsCoursesLocal(t *testing.T) {
+	h, root := studentsHub(t)
+	syncRoot := t.TempDir()
+	form := url.Values{"request_secret": {"nonce"}, "sync_root": {syncRoot}}
+	if w := hubPost(h, "/rules-location", form, h.origin); w.Code != 303 {
+		t.Fatalf("enable Sync: %d", w.Code)
+	}
+	if page := hubGet(h, "/settings").Body.String(); !strings.Contains(page, syncRoot) || !strings.Contains(page, "provider") {
+		t.Fatal("Settings did not show effective rules location")
+	}
+	form = url.Values{"request_secret": {"nonce"}, "voice": {"Shared voice."}, "feedback_guidance": {"Shared guidance."}}
+	if w := hubPost(h, "/grading", form, h.origin); w.Code != 303 {
+		t.Fatalf("save shared grading: %d", w.Code)
+	}
+	var got domain.GradingConfig
+	if _, err := workspace.ReadDocument(filepath.Join(syncRoot, "context", "grading.md"), &got); err != nil || got.Voice != "Shared voice." {
+		t.Fatalf("Sync grading was not saved: %+v %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "context", "courses.md")); err != nil {
+		t.Fatal("courses marker moved out of Install")
+	}
+	if _, err := os.Stat(filepath.Join(syncRoot, "context", "courses.md")); !os.IsNotExist(err) {
+		t.Fatal("course configuration was copied into Sync")
+	}
+}
+
 func TestStudentNotesSaveWithoutTouchingHandWrittenNotes(t *testing.T) {
 	h, root := studentsHub(t)
 	config := domain.CourseConfig{Schema: 1, Instance: "https://school.example", Courses: []domain.Course{{ID: 11, Nickname: "CS8", Current: true}}}

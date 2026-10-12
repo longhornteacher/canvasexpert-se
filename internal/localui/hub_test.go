@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"canvasexpertse/internal/workspace"
 )
 
 func newTestHub() *Hub {
@@ -54,7 +56,7 @@ func TestHubRejectsForeignHostAndServesNavigation(t *testing.T) {
 
 func TestHubFormsNeedOriginAndSecret(t *testing.T) {
 	h := newTestHub()
-	for _, path := range []string{"/settings", "/quit"} {
+	for _, path := range []string{"/settings", "/quit", "/rules-location"} {
 		if w := hubPost(h, path, url.Values{"request_secret": {"nonce"}, "path": {"x"}}, "http://attacker.example"); w.Code != 403 {
 			t.Fatalf("%s cross-origin allowed", path)
 		}
@@ -66,6 +68,31 @@ func TestHubFormsNeedOriginAndSecret(t *testing.T) {
 	case <-h.quit:
 		t.Fatal("unauthenticated quit")
 	default:
+	}
+}
+
+func TestUnavailableSyncShowsPathAndKeepsSettingsCorrectionForm(t *testing.T) {
+	h := newTestHub()
+	h.root = makeWorkspace(t)
+	syncRoot := t.TempDir()
+	if _, err := workspace.SetRulesLocation(h.root, syncRoot, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(syncRoot, syncRoot+"-offline"); err != nil {
+		t.Fatal(err)
+	}
+	page := hubGet(h, "/settings").Body.String()
+	if !strings.Contains(page, "Sync unavailable") || !strings.Contains(page, syncRoot) || !strings.Contains(page, `name="sync_root" value="`+syncRoot+`"`) {
+		t.Fatal("unavailable Sync path or correction control is missing")
+	}
+	if _, _, err := readGrading(h.root); err == nil || !strings.Contains(err.Error(), "unavailable") {
+		t.Fatalf("grading read fell back to stale Install copy: %v", err)
+	}
+	if w := hubPost(h, "/rules-location", url.Values{"request_secret": {"wrong"}, "sync_root": {""}}, h.origin); w.Code != 403 {
+		t.Fatal("rules location accepted wrong secret")
+	}
+	if _, err := os.Stat(filepath.Join(h.root, ".cse", "rules-location.json")); err != nil {
+		t.Fatal("unauthorized form altered or removed the binding")
 	}
 }
 
@@ -159,6 +186,37 @@ func TestPlaybookReplaceKeepsOldCopyAndRefusesSettings(t *testing.T) {
 	hubPost(h, "/playbook/replace", form, h.origin)
 	if readString(t, grading) != "mine" || !strings.Contains(h.flashErr, "can't be replaced") {
 		t.Fatal("settings file was replaced or not refused")
+	}
+}
+
+func TestPlaybookReplaceUsesActiveSyncAndArchivesThere(t *testing.T) {
+	h := newTestHub()
+	h.root = makeWorkspace(t)
+	addMissingSeed(h.root)
+	syncRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(h.root, "playbooks", "score.md"), []byte("custom Install version"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if w := hubPost(h, "/rules-location", url.Values{"request_secret": {"nonce"}, "sync_root": {syncRoot}}, h.origin); w.Code != 303 {
+		t.Fatalf("enable Sync: %d", w.Code)
+	}
+	active := filepath.Join(syncRoot, "playbooks", "score.md")
+	if err := os.WriteFile(active, []byte("custom shared version"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"request_secret": {"nonce"}, "file": {"playbooks/score.md"}, "confirm": {"on"}}
+	if w := hubPost(h, "/playbook/replace", form, h.origin); w.Code != 303 {
+		t.Fatalf("replace shared playbook: %d", w.Code)
+	}
+	old, _ := filepath.Glob(filepath.Join(syncRoot, "playbook-old", "*", "playbooks", "score.md"))
+	if len(old) != 1 {
+		t.Fatalf("shared old copy not kept: %v", old)
+	}
+	if b, _ := os.ReadFile(old[0]); string(b) != "custom shared version" {
+		t.Fatal("wrong authority was archived")
+	}
+	if b, _ := os.ReadFile(filepath.Join(h.root, "playbooks", "score.md")); string(b) != "custom Install version" {
+		t.Fatal("inactive local copy changed")
 	}
 }
 

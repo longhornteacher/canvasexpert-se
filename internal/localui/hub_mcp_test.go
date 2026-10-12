@@ -75,4 +75,30 @@ func TestCourseSaveVisibleToConnectedMCPWithoutRestart(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(root, "context", "courses.md")); err != nil || !strings.Contains(string(b), body) {
 		t.Fatal("course save lost teacher notes")
 	}
+
+	// This MCP client remains connected as the hub enables Sync and saves the
+	// grading voice. Its next logical read must use the active shared authority.
+	syncRoot := t.TempDir()
+	if w := hubPost(h, "/rules-location", url.Values{"request_secret": {"nonce"}, "sync_root": {syncRoot}}, h.origin); w.Code != http.StatusSeeOther {
+		t.Fatalf("select Sync rules: %d", w.Code)
+	}
+	voiceForm := url.Values{"request_secret": {"nonce"}, "voice": {"Shared hub voice."}, "feedback_guidance": {"Shared grading preference."}}
+	if w := hubPost(h, "/grading", voiceForm, h.origin); w.Code != http.StatusSeeOther {
+		t.Fatalf("save shared grading voice: %d", w.Code)
+	}
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "read_workspace_file", Arguments: map[string]any{"path": "context/grading.md"}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP read of shared grading: %v %+v", err, result)
+	}
+	var grading mcpserver.TextOutput
+	b, _ := json.Marshal(result.StructuredContent)
+	if err := json.Unmarshal(b, &grading); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(grading.Text, "mode: sync") || !strings.Contains(grading.Text, "authority_root: "+syncRoot) || !strings.Contains(grading.Text, "Shared hub voice.") || !strings.Contains(grading.Text, "Shared grading preference.") {
+		t.Fatalf("connected MCP did not read the hub's active Sync file: %s", grading.Text)
+	}
+	if saved := read(); len(saved) != 2 || saved[0].Current || !saved[1].Current {
+		t.Fatalf("Sync changed local course configuration: %+v", saved)
+	}
 }
