@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	github.com/pelletier/go-toml/v2 v2.2.4
 	gopkg.in/yaml.v3 v3.0.1
 )
 

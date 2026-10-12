@@ -2,6 +2,10 @@
 
 Use this playbook to turn selected archived teaching material into Canvas Pages, activity Assignments, New Quizzes, Files and Modules. Read `context/courses.md`, the archive's provenance and conversion notes, and `cse help formats` first. The archive and its capture tools stay outside the Engine.
 
+## Teaching preferences
+
+Before authoring curriculum content, read `context/teaching-profile.md`, `context/grading.md` and relevant teacher-selected references through the active rules location. Use this teacher's grade/subject, instructional priorities, standards and feedback guidance. Preserve their preferences and ask only for missing details needed for this task; developer class names and differentiation tags are never defaults for a colleague.
+
 ## Choose content and destination
 
 Select material with the teacher and establish the exact destination course nickname and publication scope. Archive source course IDs are not write destinations. Preserve source discrepancies and adaptations in the conversion workspace; do not silently change an assessment key. Keep teacher guides, keys and solutions in the private archive unless the teacher explicitly requests a suitable destination and access scope.

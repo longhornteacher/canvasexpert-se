@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/platform"
 )
 
@@ -18,6 +19,21 @@ func formRequest(origin, secret, token string) *http.Request {
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("Origin", origin)
 	return r
+}
+
+func TestSetupDistinguishesRejectedTokenFromConnectionFailure(t *testing.T) {
+	for _, test := range []struct{ kind, want string }{
+		{"authentication", "Canvas rejected this token"},
+		{"network", "does not show that your PAT needs replacing"},
+	} {
+		saved := false
+		h := &setupHandler{origin: "http://127.0.0.1:1234", secret: "secret", ctx: context.Background(), validate: func(context.Context, platform.Credential) error { return &canvas.Error{Kind: test.kind} }, save: func(platform.Credential) error { saved = true; return nil }}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, formRequest(h.origin, h.secret, "PRIVATE-PAT"))
+		if saved || strings.Contains(w.Body.String(), "PRIVATE-PAT") || !strings.Contains(w.Body.String(), test.want) || !strings.Contains(w.Body.String(), "saved credential has not changed") {
+			t.Fatalf("unsafe or misleading %s result: %s", test.kind, w.Body.String())
+		}
+	}
 }
 func TestSetupRejectsCrossOriginAndWrongSecret(t *testing.T) {
 	called := false

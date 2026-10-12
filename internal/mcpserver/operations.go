@@ -144,7 +144,11 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		if op != "version" && op != "doctor" && op != "link" {
 			return TextOutput{}, errors.New("operation must be version, doctor, link, rules-location, or set-rules-location")
 		}
-		return s.command(ctx, op)
+		result, err := s.command(ctx, op)
+		if op == "version" {
+			result.Text = "loaded_adapter: " + AdapterVersion() + "\nchild_engine:\n" + result.Text
+		}
+		return result, err
 	})
 }
 

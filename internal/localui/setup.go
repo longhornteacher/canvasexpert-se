@@ -122,10 +122,14 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(h.ctx, 45*time.Second)
 	defer cancel()
 	if err = h.validate(ctx, credential); err != nil {
-		message := "Canvas could not validate these credentials. Check the address, token, and connection."
+		message := "Canvas could not be reached to validate this token. Check your network or Canvas availability and try again. Your saved credential has not changed."
 		var ce *canvas.Error
 		if errors.As(err, &ce) {
-			message = ce.Error()
+			if ce.Kind == "authentication" {
+				message = "Canvas rejected this token. Check the Canvas address and token. Your saved credential has not changed."
+			} else {
+				message = ce.Error() + ". Your saved credential has not changed; this does not show that your PAT needs replacing."
+			}
 		}
 		h.page(w, 400, message)
 		return

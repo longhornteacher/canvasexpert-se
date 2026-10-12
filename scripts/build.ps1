@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string]$GoExecutable = 'go'
+    [string]$GoExecutable = 'go',
+    [Parameter()][switch]$Release
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,6 +12,10 @@ $goModPath = Join-Path $repoRoot 'go.mod'
 $commandRoot = Join-Path $repoRoot 'cmd/cse'
 $outputDirectory = Join-Path $repoRoot 'dist'
 $outputPath = Join-Path $outputDirectory 'cse.exe'
+$productVersion = [IO.File]::ReadAllText((Join-Path $repoRoot 'VERSION')).Trim()
+if ($productVersion -notmatch '^\d+\.\d+\.\d+(?:-beta\.[1-9]\d*)?$') { throw 'VERSION must be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-beta.N.' }
+$buildKind = 'development'
+if ($Release) { $buildKind = 'release' }
 
 if (-not (Test-Path -LiteralPath $goModPath -PathType Leaf)) {
     throw "Missing module file: $goModPath"
@@ -79,14 +84,22 @@ try {
         throw 'Unable to determine whether the working tree is dirty.'
     }
     if (@($statusLines).Count -gt 0) {
+        if ($Release) { throw 'Release builds require a clean checkout. Commit reviewed changes and use its immutable version tag before building a release.' }
         $revision += '+dirty'
+    }
+    if ($Release) {
+        $tagCommit = & git -C $repoRoot rev-parse "refs/tags/v$productVersion^{commit}"
+        if ($LASTEXITCODE -ne 0) { throw "Release requires the existing tag v$productVersion. This script never creates tags." }
+        $headCommit = & git -C $repoRoot rev-parse HEAD
+        if ($LASTEXITCODE -ne 0 -or (@($tagCommit) -join '').Trim() -cne (@($headCommit) -join '').Trim()) { throw "Release tag v$productVersion must point at HEAD." }
     }
     $builtAt = [DateTimeOffset]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
 
     Invoke-Go -GoArgs @('test', './...')
     Invoke-Go -GoArgs @('vet', './...')
-    Invoke-Go -GoArgs @('build', '-trimpath', '-ldflags', "-s -w -X main.version=0.1b -X main.revision=$revision -X main.builtAt=$builtAt", '-o', $outputPath, './cmd/cse')
+    Invoke-Go -GoArgs @('build', '-trimpath', '-ldflags', "-s -w -X main.revision=$revision -X main.builtAt=$builtAt -X main.buildKind=$buildKind -X canvasexpertse/internal/mcpserver.Revision=$revision -X canvasexpertse/internal/mcpserver.BuiltAt=$builtAt -X canvasexpertse/internal/mcpserver.BuildKind=$buildKind", '-o', $outputPath, './cmd/cse')
 
+    Invoke-Go -GoArgs @('build', '-trimpath', '-ldflags', '-s -w', '-o', (Join-Path $outputDirectory 'cse-mcp-launcher.exe'), './cmd/cse-mcp-launcher')
     if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
         throw "Go reported success but did not create $outputPath"
     }

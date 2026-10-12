@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string]$GoExecutable = 'go'
+    [string]$GoExecutable = 'go',
+    [Parameter()][switch]$Release
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,10 +21,21 @@ if (-not (Test-Path -LiteralPath $templateRoot -PathType Container)) {
 }
 
 # Always rebuild so the archive contains the executable produced from this source tree.
-& (Join-Path $PSScriptRoot 'build.ps1') -GoExecutable $GoExecutable
+& (Join-Path $PSScriptRoot 'build.ps1') -GoExecutable $GoExecutable -Release:$Release
 if (-not (Test-Path -LiteralPath $binaryPath -PathType Leaf)) {
     throw "Missing built executable: $binaryPath"
 }
+$productVersion = [IO.File]::ReadAllText((Join-Path $repoRoot 'VERSION')).Trim()
+$identity = & $binaryPath version --json | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or $identity.version -cne $productVersion) { throw 'Built Engine does not match VERSION.' }
+$artifactIdentity = $productVersion
+if ($identity.build_kind -ne 'release') {
+    $safeRevision = $identity.revision.Replace('+', '.')
+    $safeTime = ([DateTimeOffset]$identity.built_at).ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'", [Globalization.CultureInfo]::InvariantCulture)
+    $artifactIdentity += "-dev.$safeRevision.$safeTime"
+}
+$versionedPackagePath = Join-Path $distRoot "CanvasExpert-SE-$artifactIdentity-windows-amd64.zip"
+if ($Release -and (Test-Path -LiteralPath $versionedPackagePath)) { throw "Refusing to overwrite immutable release artifact $versionedPackagePath" }
 
 # Windows PowerShell 5.1 (.NET Framework) writes backslash entry names with
 # ZipFile.CreateFromDirectory, which is not a conforming ZIP. Write entries with
@@ -50,11 +62,11 @@ function Test-TemplatePathAllowed {
     param([Parameter(Mandatory)][string]$RelativePath)
 
     $normalizedPath = $RelativePath.Replace('\', '/')
-    return $normalizedPath -match '^(AGENTS|CLAUDE|README)\.md$' -or
+    return $normalizedPath -match '^(AGENTS|CLAUDE|README|TEACHING-ASSISTANT)\.md$' -or
         $normalizedPath -eq 'cse.cmd' -or
         $normalizedPath -match '^\.claude/settings\.json$' -or
         $normalizedPath -match '^playbooks/[A-Za-z0-9._-]+\.md$' -or
-        $normalizedPath -match '^context/(courses|grading|students|school-calendar|engine-notes)\.md$'
+        $normalizedPath -match '^context/(courses|grading|teaching-profile|students|school-calendar|engine-notes)\.md$'
 }
 
 $studentNotesPath = Join-Path $templateRoot 'context/students.md'
@@ -73,6 +85,12 @@ if (-not (Test-Path -LiteralPath $gradingSettingsPath -PathType Leaf)) {
 $gradingSettings = [IO.File]::ReadAllText($gradingSettingsPath)
 if ($gradingSettings -notmatch '(?i)starter file: no teacher-specific preferences are configured') {
     throw 'Refusing to package context/grading.md: it is not marked as the empty starter file.'
+}
+
+$teachingProfilePath = Join-Path $templateRoot 'context/teaching-profile.md'
+if (-not (Test-Path -LiteralPath $teachingProfilePath -PathType Leaf) -or
+    [IO.File]::ReadAllText($teachingProfilePath) -notmatch '(?i)starter file: no teacher-specific preferences are configured') {
+    throw 'Refusing to package context/teaching-profile.md: it must be the empty starter file.'
 }
 
 $courseSettingsPath = Join-Path $templateRoot 'context/courses.md'
@@ -144,7 +162,16 @@ try {
     }
     New-Item -ItemType Directory -Path (Join-Path $stageRoot 'engine') | Out-Null
     Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $stageRoot 'engine/cse.exe')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'VERSION') -Destination (Join-Path $stageRoot 'VERSION')
+    $expectedEntries.Add('VERSION')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $stageRoot 'LICENSE')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD_PARTY_NOTICES.md') -Destination (Join-Path $stageRoot 'engine/THIRD_PARTY_NOTICES.md')
+    $expectedEntries.Add('LICENSE')
+    $expectedEntries.Add('engine/THIRD_PARTY_NOTICES.md')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/package-webui.cmd') -Destination (Join-Path $stageRoot 'webui.cmd')
+    & (Join-Path $PSScriptRoot 'package-mcp.ps1') -BinaryPath $binaryPath
+    Copy-Item -LiteralPath (Join-Path $distRoot 'CanvasExpert-SE-Cowork.mcpb') -Destination (Join-Path $stageRoot 'engine/CanvasExpert-SE-Cowork.mcpb')
+    $expectedEntries.Add('engine/CanvasExpert-SE-Cowork.mcpb')
     $expectedEntries.Add('engine/cse.exe')
     $expectedEntries.Add('webui.cmd')
 
@@ -201,11 +228,19 @@ try {
         Remove-Item -LiteralPath $packagePath -Force
     }
     Move-Item -LiteralPath $zipTempFullPath -Destination $packagePath
+    Copy-Item -LiteralPath $packagePath -Destination $versionedPackagePath
+
+    $versionedMCPPath = Join-Path $distRoot "CanvasExpert-SE-Cowork-$artifactIdentity-windows-amd64.mcpb"
+    $sumLines = @($versionedPackagePath, $versionedMCPPath) | ForEach-Object {
+        (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($_)
+    }
+    $sumPath = Join-Path $distRoot "SHA256SUMS-$artifactIdentity.txt"
+    [IO.File]::WriteAllText($sumPath, ($sumLines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
+    Copy-Item -LiteralPath $sumPath -Destination (Join-Path $distRoot 'SHA256SUMS.txt') -Force
 
     $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "Packaged $packagePath"
     Write-Host "SHA256 $hash"
-    & (Join-Path $PSScriptRoot 'package-mcp.ps1') -BinaryPath $binaryPath
 }
 finally {
     if (Test-Path -LiteralPath $zipTempFullPath -PathType Leaf) {

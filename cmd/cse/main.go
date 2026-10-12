@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,21 +17,24 @@ import (
 
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/installation"
 	"canvasexpertse/internal/localui"
 	"canvasexpertse/internal/mcpserver"
 	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workspace"
 )
 
-var version = "0.1b"
+var version = embedded.ReleaseVersion()
 var revision = "development"
 var builtAt = "unrecorded"
+var buildKind = "development"
 
-const help = `CanvasExpert-SE 0.1b — the Engine: Canvas content authoring and scoring
+var help = `CanvasExpert-SE ` + version + ` — the Engine: Canvas content authoring and scoring
 
 Usage: cse [--workspace PATH] COMMAND [ARGS]
 
   ui                            Open the local hub: Canvas setup, students, more
+  install --client work|cowork   Connect this Install and check local MCP; opens private setup
   mcp                           Run the local MCP adapter over stdio
   link                          Record this program's location for workspace cse.cmd
   rules-location                Show teacher-rules authority; use --sync PATH or --local to set it
@@ -50,7 +54,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   api PATH                      Read-only Canvas API GET when no command fits; prints the JSON
   validate FILE                 Validate a workspace document locally
   doctor                        Test native dummy credential round trip
-  version                       Print version and build information
+  version [--json]              Print version and build information
   review FILE [COURSE]  Open a local page where the teacher reviews scores (results file), a new assignment (create document) or a quiz (QuizForge file plus COURSE), revises some, and posts or creates the approved ones; exits when finished and prints what was posted, revised and held
   help [formats|fields|examples] Print this help, the file-format reference, Canvas field limits, or the synthetic examples (no Canvas requests)
 
@@ -161,13 +165,25 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
+		mcpserver.Version, mcpserver.Revision, mcpserver.BuiltAt = version, revision, builtAt
+		mcpserver.BuildKind = buildKind
 		return fail(mcpserver.Run(ctx, root), progress)
 	}
 	if cmd == "version" {
-		if len(args) != 0 {
-			return fail(inputError(fmt.Errorf("version takes no arguments")), progress)
+		if len(args) == 1 && args[0] == "--json" {
+			data, _ := json.Marshal(struct {
+				Version   string `json:"version"`
+				Revision  string `json:"revision"`
+				BuiltAt   string `json:"built_at"`
+				BuildKind string `json:"build_kind"`
+			}{version, revision, builtAt, buildKind})
+			fmt.Fprintln(out, string(data))
+			return 0
 		}
-		fmt.Fprintf(out, "CanvasExpert-SE %s (SE = %s)\nrevision %s\nbuilt %s\n%s %s/%s\n", version, localui.SEExpansion(), revision, builtAt, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		if len(args) != 0 {
+			return fail(inputError(fmt.Errorf("use version [--json]")), progress)
+		}
+		fmt.Fprintf(out, "CanvasExpert-SE %s (SE = %s)\nrevision %s\nbuilt %s\nbuild_kind %s\n%s %s/%s\n", version, localui.SEExpansion(), revision, builtAt, buildKind, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 		if info, ok := debug.ReadBuildInfo(); ok {
 			for _, dep := range info.Deps {
 				fmt.Fprintf(out, "dependency %s %s\n", dep.Path, dep.Version)
@@ -196,15 +212,74 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		fmt.Fprintf(out, "Linked this machine to %s\n", exe)
 		return 0
 	}
+	if cmd == "install" {
+		root, err := runtimeRoot(*rootOpt)
+		if err != nil {
+			return fail(inputError(err), progress)
+		}
+		installFlags := flag.NewFlagSet("install", flag.ContinueOnError)
+		installFlags.SetOutput(progress)
+		client := installFlags.String("client", "", "selected local destination: work or cowork")
+		replace := installFlags.Bool("replace-existing", false, "explicitly replace a CE-SE connection targeting another Install")
+		checkOnly := installFlags.Bool("check-only", false, "check bundled local MCP without changing client settings")
+		noUI := installFlags.Bool("no-ui", false, "do not launch private setup (advanced/testing)")
+		inspect := installFlags.Bool("inspect", false, "inspect client configuration-directory hints without changes")
+		if err := installFlags.Parse(args); err != nil {
+			return 2
+		}
+		if *inspect && installFlags.NArg() == 0 {
+			data, _ := json.Marshal(installation.Inspect(root))
+			fmt.Fprintln(out, string(data))
+			return 0
+		}
+		if installFlags.NArg() != 0 || (!*checkOnly && *client != "work" && *client != "cowork") {
+			return fail(inputError(fmt.Errorf("use install --client work|cowork; choose the teacher's local destination")), progress)
+		}
+		// Launch independently of registration, including a client trust/restart requirement.
+		var installErrors []error
+		if !*noUI {
+			ready, err := launchInstallUI(ctx, root)
+			if err != nil {
+				installErrors = append(installErrors, err)
+			} else {
+				data, _ := json.Marshal(ready)
+				fmt.Fprintln(out, string(data))
+				fmt.Fprintln(progress, "Private WebUI launched; enter Canvas credentials only there.")
+			}
+		}
+		if !*checkOnly {
+			result, err := installation.Register(root, *client, *replace)
+			if err != nil {
+				installErrors = append(installErrors, err)
+			} else {
+				data, _ := json.Marshal(result)
+				fmt.Fprintln(out, string(data))
+			}
+		}
+		check, err := installation.Check(ctx, root)
+		data, _ := json.Marshal(check)
+		fmt.Fprintln(out, string(data))
+		if err != nil {
+			installErrors = append(installErrors, err)
+		}
+		return fail(errors.Join(installErrors...), progress)
+	}
 	if cmd == "ui" {
-		if len(args) != 0 {
-			return fail(inputError(fmt.Errorf("ui takes no arguments")), progress)
+		uiFlags := flag.NewFlagSet("ui", flag.ContinueOnError)
+		uiFlags.SetOutput(progress)
+		setupFirst := uiFlags.Bool("setup-first", false, "open private Canvas setup first when no saved connection exists")
+		readyFile := uiFlags.String("ready-file", "", "advanced: write non-secret local startup result")
+		if err := uiFlags.Parse(args); err != nil {
+			return 2
+		}
+		if uiFlags.NArg() != 0 {
+			return fail(inputError(fmt.Errorf("use ui [--setup-first]")), progress)
 		}
 		uiRoot, rootErr := runtimeRoot(*rootOpt)
 		if rootErr != nil && *rootOpt != "" {
 			return fail(inputError(rootErr), progress)
 		}
-		return fail(localui.RunHub(ctx, uiRoot, version, progress), progress)
+		return fail(localui.RunHubWithOptions(ctx, uiRoot, version, progress, localui.HubOptions{SetupFirst: *setupFirst, ReadyFile: *readyFile}), progress)
 	}
 	if cmd == "setup" {
 		if len(args) != 0 {

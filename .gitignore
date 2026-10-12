@@ -7,6 +7,8 @@ build/
 *.exe
 *.test
 coverage.out
+/output/
+/tmp/
 
 # Never commit populated private mapping or credentials.
 .cse/

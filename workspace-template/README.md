@@ -1,6 +1,20 @@
 # CanvasExpert-SE
 
+**1.0 beta · `1.0.0-beta.1` · Windows 11**
+
 This folder is your local CanvasExpert-SE **Install**. An AI agent (Claude or ChatGPT, for example) does the work here: scoring student work and creating or editing Canvas assignments and quizzes. Review is the default for scoring, new assignments, new quizzes and assignment edits; you can explicitly skip it for a task.
+
+## Start here
+
+1. Unzip CanvasExpert-SE into a folder on your computer's local drive.
+2. Open that folder in Code/Codex and say **"Install this for Cowork"** or **"Install this for Work."** The agent handles connection settings and checks, then opens the Canvas form.
+3. Enter your Canvas address and access token in the private WebUI. Complete any trust prompt or restart your chosen app requires, then use the short message in `TEACHING-ASSISTANT.md` to start teaching there.
+
+You do not need terminal commands, client settings edits, Source or a separate Codex CLI. Your token is saved in Windows Credential Manager, never in a file or chat. The agent distinguishes a local check from a successful connection in your destination app. Cowork's extension installation may require an app trust action; hosted Work and organization restrictions depend on your available client.
+
+Double-click `webui.cmd` as a fallback or any time to open the hub for courses, students, feedback voice and capabilities. Tell the assistant about your teaching preferences when useful, or ask it to carry over existing instructions you choose; this is optional and grows as you work.
+
+To share teacher rules across PCs, choose a dedicated Sync directory in Settings → Teacher rules, or tell the agent its path. An empty directory starts with your current customized rules. An existing shared directory becomes authoritative and your differing local originals are preserved. Configure the corresponding provider directory separately on each PC. Course choices, student notes, private identities and student work stay local. Returning to Install preserves readable shared rules locally and archives differing local versions; Sync stays intact. If Sync is unavailable, CE-SE explains the problem instead of silently using old local rules.
 
 ## Three clear names
 
@@ -10,19 +24,11 @@ This folder is your local CanvasExpert-SE **Install**. An AI agent (Claude or Ch
 
 Claude Code/Codex use Source to develop CE-SE and Install for teacher work. Claude Cowork/GPT Work normally use Install. MCP connects agents to Install's Engine; it does not require an extra Install. Agent tools call Install the "workspace".
 
-## Start here
-
-1. Connect CE-SE to your agent through MCP, or open Install as the project in a local agent app.
-2. Tell the agent what you'd like to do, for example "set me up" or "start a scoring session". The first time, it connects to Canvas with you. You'll paste a Canvas access token into a small local form; it's saved in Windows Credential Manager, never in a file.
-
-That's it. You don't need to edit anything here yourself; ask the agent instead. Double-click `webui.cmd` any time to open the hub, where you can see your courses, students, feedback voice and what CanvasExpert-SE can do.
-
-To share teacher rules across PCs, choose a dedicated Sync directory in Settings → Teacher rules, or tell the agent its path. An empty directory starts with your current customized rules. An existing shared directory becomes authoritative and your differing local originals are preserved. Configure the corresponding provider directory separately on each PC. Course choices, student notes, private identities and student work stay local. Returning to Install preserves readable shared rules locally and archives differing local versions; Sync stays intact. If Sync is unavailable, CE-SE explains the problem instead of silently using old local rules.
-
 ## What's in this folder
 
 - `AGENTS.md`, `CLAUDE.md` and `playbooks/`: how the agent does each job. They're yours to change.
-- `context/`: your preferences and facts (courses, feedback voice, student notes, school calendar).
+- `context/`: your teaching profile, preferences and facts (courses, feedback voice, student notes, school calendar).
+- `TEACHING-ASSISTANT.md`: a short starter for your destination assistant; current teacher files remain authoritative.
 - `engine/`: the program that talks to Canvas. `cse.cmd` runs it for the agent.
 - `courses/`: your pulled work and drafts, created as you go.
 - `.cse/`: private student information. The agent is told not to read it.

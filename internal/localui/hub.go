@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -34,6 +35,7 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><htm
 <p class="reassure">Student names and pulled work stay in this local CE-SE installation. Your token stays in Windows Credential Manager. The agent is told never to open the private student-name file, and your token is never written to a file.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <div class="cards">
+<div class="card"><h2>Your teaching assistant</h2><p>Connect this Install to Cowork or desktop Work, then check the local tools.</p><a class="go" href="/connect">Connect your agent &rarr;</a></div>
 <div class="card token {{if .CanvasUser}}t-green{{else if .Connected}}t-yellow{{else}}t-red{{end}}"><h2>Canvas token <button type="button" class="qmark" popovertarget="pat-help" aria-label="How do I get a Canvas access token?">?</button></h2>{{if .CanvasUser}}<span class="pill on">working</span><p>Signed in as <b>{{.CanvasUser}}</b>.</p>{{else if .Connected}}<span class="pill warn">saved, not tested</span><p>A token is saved on this computer. Test it to make sure Canvas still accepts it.</p>{{else}}<span class="pill off">not connected</span><p>The agent can't reach Canvas until you add a token.</p>{{end}}<a class="go" href="{{if .Connected}}/settings{{else}}/setup{{end}}">{{if .Connected}}Test or replace it &rarr;{{else}}Connect Canvas &rarr;{{end}}</a></div>
 <div class="card"><h2>Courses</h2>{{if .Root}}<p><b>{{.ActiveCourses}}</b> active</p><a class="go" href="/courses">Pick active courses &rarr;</a>{{else}}<p>Launch CE-SE from its installation folder to get started.</p><a class="go" href="/settings">Open Settings &rarr;</a>{{end}}</div>
 <div class="card"><h2>Students</h2>{{if .Root}}<p><b>{{.Students}}</b> known, <b>{{.Monitored}}</b> monitored</p><a class="go" href="/students">Open students &rarr;</a>{{else}}<p>Launch CE-SE from its installation folder to get started.</p>{{end}}</div>
@@ -92,12 +94,15 @@ type Hub struct {
 	canvasUser string
 	// seedNotice reports starter files added when the installation opened;
 	// Home shows it once.
-	seedNotice string
-	mu         sync.Mutex
-	root       string
-	setup      *setupHandler
-	quit       chan struct{}
-	quitOnce   sync.Once
+	seedNotice        string
+	mu                sync.Mutex
+	root              string
+	setup             *setupHandler
+	quit              chan struct{}
+	quitOnce          sync.Once
+	connection        connectionData
+	setupSaved        bool
+	credentialSavedFn func() bool
 }
 
 // addMissingSeed copies any seed file the workspace lacks (never
@@ -233,6 +238,40 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/setup":
 		h.setup.initialOrigin = h.knownOrigin()
 		h.setup.ServeHTTP(w, r)
+	case "/setup/status":
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+		saved := false
+		if h.credentialSavedFn != nil {
+			saved = h.credentialSavedFn()
+		} else {
+			_, credentialErr := platform.LoadCredential()
+			saved = credentialErr == nil
+		}
+		outcome := "not_saved"
+		if saved {
+			outcome = "saved_not_tested"
+		}
+		if saved && h.setupSaved {
+			outcome = "saved_this_session"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			CredentialSaved bool   `json:"credential_saved"`
+			SetupOutcome    string `json:"setup_outcome"`
+		}{saved, outcome})
+	case "/connect":
+		h.connectionPage(w, r)
+	case "/connect/extension":
+		if r.Method != http.MethodGet || h.connection.Result.ExtensionPath == "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Disposition", `attachment; filename="CanvasExpert-SE.mcpb"`)
+		http.ServeFile(w, r, h.connection.Result.ExtensionPath)
 	case "/students":
 		h.studentsPage(w, r)
 	case "/students/refresh":
@@ -282,6 +321,17 @@ func (h *Hub) knownOrigin() string {
 // RunHub serves every local page until ctx ends or the user quits. root may be
 // empty for a development launch; no remembered folder is restored.
 func RunHub(ctx context.Context, root, version string, output io.Writer) error {
+	return RunHubWithOptions(ctx, root, version, output, HubOptions{})
+}
+
+// HubOptions selects the first browser page without changing saved settings.
+type HubOptions struct {
+	SetupFirst bool
+	// ReadyFile is a short-lived installer handshake containing no credentials.
+	ReadyFile string
+}
+
+func RunHubWithOptions(ctx context.Context, root, version string, output io.Writer, options HubOptions) error {
 	if err := platform.CredentialSelfTest(); err != nil {
 		return err
 	}
@@ -310,6 +360,7 @@ func RunHub(ctx context.Context, root, version string, output io.Writer) error {
 	}
 	hub.setup = &setupHandler{origin: origin, secret: secret, ctx: ctx, validate: validateCredential, save: platform.SaveCredential, persistent: true, hub: true, done: make(chan struct{})}
 	hub.setup.after = func(c platform.Credential) string {
+		hub.setupSaved = true
 		hub.canvasUser = ""
 		if hub.root == "" {
 			return ""
@@ -337,7 +388,34 @@ func RunHub(ctx context.Context, root, version string, output io.Writer) error {
 		_ = server.Close()
 	}()
 	_, _ = fmt.Fprintf(output, "CanvasExpert-SE hub is running: %s/ (Ctrl+C or the Quit button stops it)\n", origin)
-	if err = platform.OpenBrowser(origin + "/"); err != nil {
+	firstPage := "/"
+	if options.SetupFirst {
+		if _, credentialErr := platform.LoadCredential(); credentialErr != nil {
+			firstPage = "/setup"
+		} else {
+			firstPage = "/settings"
+		}
+	}
+	if options.ReadyFile != "" {
+		ready, marshalErr := json.Marshal(struct {
+			URL            string `json:"url"`
+			InstallRoot    string `json:"install_root"`
+			SetupStatusURL string `json:"setup_status_url"`
+		}{origin + firstPage, root, origin + "/setup/status"})
+		if marshalErr != nil {
+			return marshalErr
+		}
+		// Rename prevents the installing process from reading a partial marker.
+		tempReady := options.ReadyFile + ".tmp"
+		if err = os.WriteFile(tempReady, ready, 0o600); err != nil {
+			return fmt.Errorf("could not report hub readiness: %w", err)
+		}
+		if err = os.Rename(tempReady, options.ReadyFile); err != nil {
+			_ = os.Remove(tempReady)
+			return fmt.Errorf("could not report hub readiness: %w", err)
+		}
+	}
+	if err = platform.OpenBrowser(origin + firstPage); err != nil {
 		_, _ = fmt.Fprintln(output, "The browser could not open automatically; open the local URL above.")
 	}
 	select {

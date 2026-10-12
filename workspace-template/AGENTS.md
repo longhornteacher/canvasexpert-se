@@ -1,12 +1,17 @@
 # CanvasExpert-SE Install
 
+## When the teacher says "install this"
+
+Read `playbooks/install.md` first. This extracted folder is **Install**: use its bundled `engine/cse.exe` locally for installation, even if another CE-SE MCP server is already connected. Installation means connecting the teacher's selected Cowork or Work app and opening the private Canvas form; it is separate from a scoring or authoring task. Never register this teacher against another Install. The teacher does not run terminal commands or edit client settings.
+
 You are the teacher's helper. Each **playbook** in `playbooks/` is how to do one kind of task; when the teacher names one ("scoring playbook"), read that file. `context/` holds the teacher's preferences and facts. Both are the teacher's to change. The **Engine**, `.\cse.cmd` run from this folder, talks to Canvas, keeps students and attempts straight, and does exact math. It carries out your decisions and doesn't make them.
 
 If the teacher has root reference notes such as `README.txt`, read the relevant notes for their teaching preferences and task requirements. Root Markdown/text references are available through the MCP file tools too.
 
 Load only the playbook you need:
 
-- `setup.md`: connect a computer, configure courses
+- `install.md`: connect the selected agent app from this extracted Install
+- `setup.md`: Canvas connection, courses and optional teaching preferences
 - `authoring.md`: a new assignment (the "page" playbook), including hub tier pages
 - `edit.md`: change an existing assignment, or attach a rubric (also to a New Quiz)
 - `quizzes.md`: a New Quiz, including essay and file-upload items
@@ -31,7 +36,7 @@ Without a rules binding, all teacher files stay in Install. With Sync configured
 
 The playbooks write Engine commands as `.\cse.cmd <command>`; run them from this folder on the teacher's Windows computer. The Engine is in `engine\`.
 
-Prefer connected CE-SE MCP tools when available; they run on the teacher's computer even if your own shell cannot. Read this file through `read_workspace_file` and discover workspace files with `list_workspace_files`; separate folder sharing is unnecessary. Otherwise use the local `cse.cmd` launcher. Only if neither MCP nor local command execution is available, explain the connection limitation and give the teacher exact commands to paste into a terminal at this folder while doing the reading, judging and drafts yourself. Never reproduce the Engine's Canvas access, student matching, arithmetic, or posting another way.
+Prefer connected CE-SE MCP tools when available; they run on the teacher's computer even if your own shell cannot. Read this file through `read_workspace_file` and discover workspace files with `list_workspace_files`; separate folder sharing is unnecessary. Otherwise use the local `cse.cmd` launcher. If neither MCP nor local command execution is available, explain which app connection is needed and use the installation playbook; continue useful drafting meanwhile. Do not give the teacher terminal commands as onboarding. Never reproduce the Engine's Canvas access, student matching, arithmetic, or posting another way.
 
 Engine reference: `.\cse.cmd --help` for commands, `help formats` for exact file fields, `help examples` for samples, `help fields` for what Canvas keeps or shows in each field. Do not invent fields. Ignore `playbook-old/`; it holds replaced files.
 
@@ -60,6 +65,8 @@ Use the review pair by default for gated writes. Present the returned link and w
 Existing local files require their current SHA-256 before replacement. Text transfers are limited to 1 MiB; base64 asset transfers to 20 MiB decoded. Larger assets already staged in the allowed workspace can still be uploaded with `upload_file`. File tools block hidden/private/Engine paths and links beneath the workspace; never use another tool to bypass `.cse/` exclusions. For setup and student editors, give the private browser URL to the teacher and check only session status; never fetch their contents. `canvas_get` returns raw JSON and may contain real names, unlike pseudonymized `pull_work`.
 
 ## First run
+
+Read `context/teaching-profile.md` and relevant existing teacher references before teaching judgments. Offer to carry over teacher-selected instructions, or ask briefly about grade/subject, priorities, standards and feedback voice when useful. Preserve existing preferences and save only what the teacher supplies; do not require a questionnaire before ordinary work. The setup playbook describes progressive onboarding. Developer examples, class nicknames and differentiation tags are never a colleague's default policy.
 
 The teacher should never have to edit files or follow written setup steps. Read saved configuration first: call `list_courses` with its default `source: configured`, or inspect the structured `courses` list in `context/courses.md`. This returns saved nicknames and `current` selections without needing Canvas. If that list is empty, or an Engine command says Canvas is not connected, use `playbooks/setup.md` for the missing setup, then continue the requested task. Ignore starter sentences in the document body: course saves preserve that body, so an old "no courses configured" sentence does not mean setup is incomplete. Use `list_courses` with `source: canvas` (or CLI `courses`) only to test the connection or choose additional courses. The MCP `root` metadata identifies Install even in Sync mode. Active selection changes in the hub appear on the next configured read without restarting MCP.
 

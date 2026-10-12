@@ -2,6 +2,8 @@
 
 Use this for any Canvas New Quiz: auto-scored items, written items (`ESSAY`, `FILEUPLOAD`), or a mix such as multiple choice plus constructed responses. What the teacher's words mean and the review page are in `AGENTS.md`.
 
+Before design, read `context/teaching-profile.md`, `context/grading.md` and relevant teacher references. Apply this teacher's grade/subject, instructional priorities, standards and feedback guidance; ask only for missing details that matter to this quiz. Never adopt developer examples as this teacher's policy.
+
 Read teacher rules and design references from the effective teacher-rules location (Install by default, configured Sync otherwise), using logical MCP paths where available. Run commands and save course drafts, assets and outcomes in Install. Sync holds rules; its provider carries their edits between PCs.
 
 New Quizzes are supported for regular authoring and use, including written-response scoring with `score.md`. Work within the limits below; pending live or student-view verification is not a prohibition or a preliminary test required for each task.
@@ -42,4 +44,4 @@ Report the quiz URL, the point total, publication outcome and returned sidecar p
 
 ## Differentiated hub for a quiz
 
-Use the hub for tier supports around one whole-class quiz: add `"differentiation": "hub"` and `tiers` (`label`, exact Canvas `tag`, `supports` HTML; in ELA7 the tags are Silver, Red, Blue for Support, Core, Accelerate). Put shared instructions and hints in the quiz `instructions`, with one `{{tier:LABEL}}` link per tier. Tier content scaffolds the same standard; it doesn't lower it. If a tag doesn't exist, the page is created restricted to nobody and the Engine prints a teacher action naming the page and tag; relay it. Pages publish only with the quiz. A page title that already exists stops the push before anything is created. Students in other tiers see every link but get Canvas's access-denied page for the others.
+Use the hub for tier supports around one whole-class quiz: add `"differentiation": "hub"` and `tiers` (`label`, this teacher's exact Canvas `tag`, `supports` HTML). Ask for actual tags when missing from this teacher's context; do not assume another teacher's tags. Put shared instructions and hints in the quiz `instructions`, with one `{{tier:LABEL}}` link per tier. Tier content scaffolds the same standard; it doesn't lower it. If a tag doesn't exist, the page is created restricted to nobody and the Engine prints a teacher action naming the page and tag; relay it. Pages publish only with the quiz. A page title that already exists stops the push before anything is created. Students in other tiers see every link but get Canvas's access-denied page for the others.
