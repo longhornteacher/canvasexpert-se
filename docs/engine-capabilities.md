@@ -12,7 +12,7 @@ Dated narrative history (build hashes, per-run notes, probe reports) is in Git h
 
 ## Current build
 
-One current build: `scripts/package.ps1` publishes `dist/CanvasExpert-SE.zip` (see [build.md](build.md)). Version `1.0.0-beta.1`, revision `a550d597c92d+dirty`, built `2026-10-13T14:39:24Z`, development. ZIP SHA-256 `a980b538169c8fd7523f1a2e582be23b0399d07850be0a8b75b7ec5e10ff8fec`. Full tests/vet and the compiled 26-tool MCP check passed; the ZIP's Engine is byte-equal to `dist/cse.exe`. A temporary Install with spaces in its path passed Work registration (isolated `CODEX_HOME`), repeat, the local MCP check and offline doctor. The installer's browser/WebUI launch was **not** run from the package. This establishes a local build, not client or Canvas behavior.
+One current build: `scripts/package.ps1` publishes `dist/CanvasExpert-SE.zip` (see [build.md](build.md)). Version `1.0.0-beta.1`, revision `6884d5199567+dirty`, built `2026-10-13T14:49:44Z`, development. ZIP SHA-256 `1cd2501b2783e23d7f1d113151e5bfb1b5e2eac47726d08ec582ddcdc449831b`. Full tests/vet and the compiled 26-tool MCP check passed; the ZIP's Engine is byte-equal to `dist/cse.exe`. A temporary Install with spaces in its path passed Work registration (isolated `CODEX_HOME`), repeat, the local MCP check and offline doctor. The installer's browser/WebUI launch was **not** run from the package. This establishes a local build, not client or Canvas behavior.
 
 ## Capabilities and evidence
 
