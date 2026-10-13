@@ -11,6 +11,8 @@ type connectionData struct {
 	Secret, Root, Message, Notice, Client, ExistingInstall string
 	ResultLabel, CheckLabel                                string
 	Result                                                 installation.Result
+	Results                                                []installation.Result
+	Found                                                  installation.Availability
 	Check                                                  installation.CheckResult
 }
 
@@ -25,12 +27,18 @@ func init() {
 
 // connectionExtension serves the prepared Cowork extension, if any.
 func (h *Hub) connectionExtension(w http.ResponseWriter, r *http.Request) {
-	if h.connection.Result.ExtensionPath == "" {
+	path := h.connection.Result.ExtensionPath
+	for _, r := range h.connection.Results {
+		if path == "" {
+			path = r.ExtensionPath
+		}
+	}
+	if path == "" {
 		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Disposition", `attachment; filename="CanvasExpert-SE.mcpb"`)
-	http.ServeFile(w, r, h.connection.Result.ExtensionPath)
+	http.ServeFile(w, r, path)
 }
 
 func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
@@ -42,9 +50,25 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 		switch r.PostForm.Get("action") {
 		case "register":
 			h.connection.Result = installation.Result{}
+			h.connection.Results = nil
 			h.connection.ExistingInstall = ""
 			h.connection.Client = r.PostForm.Get("client")
-			result, err := installation.Register(h.root, h.connection.Client, r.PostForm.Get("replace") == "on")
+			replace := r.PostForm.Get("replace") == "on"
+			if h.connection.Client == "" || h.connection.Client == "auto" {
+				results, err := installation.RegisterAuto(h.root, replace)
+				h.connection.Results = results
+				switch {
+				case err != nil:
+					h.connection.Message = err.Error()
+					h.connection.Notice = ""
+				case len(results) == 0:
+					h.connection.Message = "No supported app was found on this PC."
+				default:
+					h.connection.Notice = "Connection action completed. Follow each app's next action below."
+				}
+				break
+			}
+			result, err := installation.Register(h.root, h.connection.Client, replace)
 			if err != nil {
 				h.connection.Message = err.Error()
 				var replacement *installation.ReplacementRequired
@@ -69,6 +93,7 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.connection.Secret, h.connection.Root = h.secret, h.root
+	h.connection.Found = installation.Inspect(h.root)
 	h.connection.ResultLabel = connectionResultLabel(h.connection.Result)
 	h.connection.CheckLabel = connectionCheckLabel(h.connection.Check)
 	h.render(w, http.StatusOK, tmpl("connect"), h.connection)
@@ -77,9 +102,9 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 func connectionResultLabel(result installation.Result) string {
 	switch result.State {
 	case "settings-saved":
-		return "Work registration saved"
+		return labelApp(result.Client) + " registration saved"
 	case "settings-already-saved":
-		return "Work already points to this Install"
+		return labelApp(result.Client) + " already points to this Install"
 	case "extension-ready":
 		switch result.CoworkLaunchOutcome {
 		case "launch_requested":
@@ -104,4 +129,27 @@ func connectionCheckLabel(result installation.CheckResult) string {
 		return "Local check did not pass"
 	}
 	return ""
+}
+
+func appName(client string) string {
+	switch client {
+	case "work":
+		return "ChatGPT"
+	case "cowork":
+		return "Claude"
+	case "antigravity":
+		return "Antigravity"
+	}
+	return client
+}
+
+// ResultLabelFor lets the template label each result of a multi-app pass.
+func (c connectionData) ResultLabelFor(r installation.Result) string { return connectionResultLabel(r) }
+func (c connectionData) AppName(client string) string                { return appName(client) }
+
+func labelApp(client string) string {
+	if client == "" || client == "work" {
+		return "Work"
+	}
+	return appName(client)
 }

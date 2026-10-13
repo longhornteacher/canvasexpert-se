@@ -1,6 +1,6 @@
 # Set up CE-SE
 
-Use `install.md` first when the teacher says "install this" or needs Claude or ChatGPT connected (it asks "Are you using Claude, ChatGPT, or both?" unless already answered). This playbook handles Canvas, courses and progressive teaching context after Engine access exists. Do this the first time, and on each new computer (the Canvas credential stays on each machine). The teacher only talks to you and enters their Canvas token in the local form; you do everything else, including editing `context/` files.
+Use `install.md` first when the teacher says "install this" or needs Claude or ChatGPT connected (it connects every supported app it finds: Claude, ChatGPT and Antigravity). This playbook handles Canvas, courses and progressive teaching context after Engine access exists. Do this the first time, and on each new computer (the Canvas credential stays on each machine). The teacher only talks to you and enters their Canvas token in the local form; you do everything else, including editing `context/` files.
 
 Work in **Install**, the local runnable CE-SE folder. **Source** is for developing the product. Optional **Sync** is a dedicated locally accessible cloud directory holding authoritative teacher rules; the provider synchronizes it. The default needs only Install. MCP's "workspace" remains Install, and logical rule paths use the same active files as the hub.
 

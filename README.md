@@ -15,7 +15,7 @@ This is an independent open-source project. The teacher-first installation mecha
 Published builds belong on [GitHub Releases](https://github.com/longhornteacher/canvasexpert-se/releases). Look for the versioned Windows ZIP rather than GitHub's source-code ZIP; if no beta asset is available yet, use the [build guide](docs/build.md).
 
 1. Unzip the CanvasExpert-SE ZIP into a folder on your computer's local drive.
-2. Open that folder in Code/Codex and say **“Install this.”** The installing assistant asks whether you are using Claude, ChatGPT, or both, sets that up, checks the Engine and opens the local Canvas form.
+2. Open that folder in Code/Codex and say **“Install this.”** The installing assistant connects every supported app it finds (Claude, ChatGPT, Antigravity), checks the Engine and opens the local Canvas form.
 3. Enter your Canvas address and access token in the private form. Approve the install prompt in your app (restart it only if it asks and you are not mid-review), then use the included `TEACHING-ASSISTANT.md` starter to begin teaching there.
 
 Teachers do not need Source, Go, Node, a separate Codex CLI, terminal commands or client configuration edits. If the form does not open, the assistant shows its local address, or double-click the included `webui.cmd`. You need the Claude or ChatGPT app on this PC; a website alone cannot reach your Install, and app or organization controls can require additional actions. Saving connection settings or passing a local MCP check does not prove the destination app can use the tools.

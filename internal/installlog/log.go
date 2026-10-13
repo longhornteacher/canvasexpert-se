@@ -26,7 +26,7 @@ type Entry struct {
 func Append(root, build string, e Entry) error {
 	e.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 	e.Build = build
-	if !oneOf(e.Step, "hub", "browser", "registration", "cowork_extension", "local_mcp_check", "credential_validation", "credential_save", "origin_configuration") || !oneOf(e.Outcome, "started", "reused", "launch_requested", "file_revealed", "launch_failed", "prepared", "succeeded", "failed", "updated", "unchanged") || !oneOf(e.Client, "", "work", "cowork") || !oneOf(e.ErrorCategory, "", "startup", "registration", "local_check", "validation", "credential_store", "configuration", "browser", "file_io") {
+	if !oneOf(e.Step, "hub", "browser", "registration", "cowork_extension", "local_mcp_check", "credential_validation", "credential_save", "origin_configuration") || !oneOf(e.Outcome, "started", "reused", "launch_requested", "file_revealed", "launch_failed", "prepared", "succeeded", "failed", "updated", "unchanged") || !oneOf(e.Client, "", "work", "cowork", "antigravity", "auto") || !oneOf(e.ErrorCategory, "", "startup", "registration", "local_check", "validation", "credential_store", "configuration", "browser", "file_io") {
 		return errors.New("install log entry contains an unsupported field value")
 	}
 	b, err := json.Marshal(e)

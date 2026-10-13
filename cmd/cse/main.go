@@ -38,7 +38,7 @@ var help = `CanvasExpert-SE ` + version + ` — the Engine: Canvas content autho
 Usage: cse [--workspace PATH] COMMAND [ARGS]
 
   ui                            Open the local hub: Canvas setup, students, more
-  install --client work|cowork   Connect this Install and check local MCP; opens private setup
+  install [--client auto|work|cowork|antigravity]   Connect every detected app (or one) and check local MCP; opens private setup
   mcp                           Run the local MCP adapter over stdio
   link                          Record this program's location for workspace cse.cmd
   rules-location                Show teacher-rules authority; use --sync PATH or --local to set it
@@ -294,7 +294,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		installFlags := flag.NewFlagSet("install", flag.ContinueOnError)
 		installFlags.SetOutput(progress)
-		client := installFlags.String("client", "", "selected local destination: work or cowork")
+		client := installFlags.String("client", "", "local destination: auto (default, every detected app), all, work, cowork or antigravity")
 		replace := installFlags.Bool("replace-existing", false, "explicitly replace a CE-SE connection targeting another Install")
 		checkOnly := installFlags.Bool("check-only", false, "check bundled local MCP without changing client settings")
 		noUI := installFlags.Bool("no-ui", false, "do not launch private setup (advanced/testing)")
@@ -307,8 +307,11 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			fmt.Fprintln(out, string(data))
 			return 0
 		}
-		if installFlags.NArg() != 0 || (!*checkOnly && *client != "work" && *client != "cowork") {
-			return fail(inputError(fmt.Errorf("use install --client work|cowork; choose the teacher's local destination")), progress)
+		if *client == "" || *client == "all" {
+			*client = "auto"
+		}
+		if installFlags.NArg() != 0 || (*client != "auto" && *client != "work" && *client != "cowork" && *client != "antigravity") {
+			return fail(inputError(fmt.Errorf("use install [--client auto|work|cowork|antigravity]")), progress)
 		}
 		// Launch independently of registration, including a client trust/restart requirement.
 		var installErrors []error
@@ -323,16 +326,28 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			}
 		}
 		if !*checkOnly {
-			result, err := installation.Register(root, *client, *replace)
+			var results []installation.Result
+			var err error
+			if *client == "auto" {
+				results, err = installation.RegisterAuto(root, *replace)
+				if len(results) == 0 && err == nil {
+					err = errors.New("no supported app was found on this computer (Claude, ChatGPT/Codex or Antigravity); install one, or name it with --client")
+				}
+			} else {
+				var result installation.Result
+				if result, err = installation.Register(root, *client, *replace); err == nil {
+					results = []installation.Result{result}
+				}
+			}
 			if err != nil {
 				logEvent("registration", "failed", "registration", *client)
 				installErrors = append(installErrors, err)
-			} else {
-				logEvent("registration", "succeeded", "", *client)
-				if *client == "cowork" {
+			}
+			for _, result := range results {
+				logEvent("registration", "succeeded", "", result.Client)
+				if result.Client == "cowork" {
 					result = installation.CoworkLaunchOutcome(result, !*noUI, installation.DefaultLauncher)
-					launch := result.CoworkLaunchOutcome
-					logEvent("cowork_extension", launch, "", *client)
+					logEvent("cowork_extension", result.CoworkLaunchOutcome, "", result.Client)
 				}
 				data, _ := json.Marshal(result)
 				fmt.Fprintln(out, string(data))

@@ -30,7 +30,7 @@ func seedPaths() []string {
 			return err
 		}
 		rel := strings.TrimPrefix(name, "workspace-template/")
-		if rel == "AGENTS.md" || rel == "CLAUDE.md" || strings.HasPrefix(rel, "playbooks/") || strings.HasPrefix(rel, "context/") {
+		if rel == "AGENTS.md" || rel == "CLAUDE.md" || rel == "TEACHER.md" || strings.HasPrefix(rel, "playbooks/") || strings.HasPrefix(rel, "context/") {
 			out = append(out, rel)
 		}
 		return nil

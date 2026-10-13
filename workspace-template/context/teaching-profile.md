@@ -1,6 +1,6 @@
 # Teaching profile
 
-Starter file: no teacher-specific preferences are configured.
+Starter file: no teacher-specific preferences are configured. The defaults below come from `TEACHER.md`; replace any of them with this teacher's own preferences as they state them.
 
 This is a plain reference for the agent, not an Engine policy file. Leave unknown details unspecified and build it gradually during ordinary work.
 
@@ -10,7 +10,9 @@ Grade levels and subjects:
 
 ## Instructional priorities
 
-What students should learn; preferred scaffolds, challenge and lesson structure:
+What students should learn; preferred scaffolds, challenge and lesson structure. Defaults until the teacher says otherwise: 100-point assignments and quizzes; rigor for proficient-to-advanced students at grade level; a Learning Target line and three-step directions; support tiers **Emerging** (frames, organizers, word banks), **On-level** (guiding questions, outline, checklist) and **Extension** (DOK 3-4 challenge), all held to the same standard.
+
+Visual style for pages (ask on the first page build; clean and academic, or warm and engaging):
 
 ## Standards and curriculum
 

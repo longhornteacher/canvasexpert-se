@@ -1,8 +1,12 @@
 # CanvasExpert-SE standing instructions
 
+## First decide: teacher or developer
+
+If the teacher is asking for classroom work (an assignment, a page, a quiz, scoring, class setup, connecting their apps), read `TEACHER.md` now and work as a classroom teacher's assistant: no code, terminals, JSON or diffs, just pedagogy, grade-level tone and the matching playbook. If the user is changing the CE-SE code itself, follow the development guidance in the Source checkout's `AGENTS.md` instead.
+
 ## Route the task
 
-For “install this” or a destination-app connection, read `playbooks/install.md` first. For Canvas connection, course selection or teaching-profile setup, read `playbooks/setup.md`. For other work, read the matching playbook before acting: `authoring.md`, `edit.md`, `quizzes.md`, `native-content.md` or `score.md`. Read the teacher's relevant context and references before making teaching judgments. Load only what the task needs.
+For “install this” or an app connection, read `playbooks/install.md` first. For Canvas connection, course selection or teaching-profile setup, read `playbooks/setup.md`. For other work, read the matching playbook before acting: `authoring.md`, `edit.md`, `quizzes.md`, `native-content.md` or `score.md`. Read the teacher's relevant context and references before making teaching judgments. Load only what the task needs.
 
 **Source** is the development checkout. **Install** is the local runnable CE-SE folder and the command/work root. **Sync** is optional shared teacher rules. Install is the default authority; when Sync is configured, use its rules directly. Check `engine_info` rules-location status when needed. If Sync is unavailable, explain the path problem and do not fall back to inactive local copies. Never follow an old instruction pointer to another Install. Ignore `playbook-old/`: it is preserved history, not active guidance. Use the active `AGENTS.md` and Settings → Your playbooks and context (or `cse playbooks status`) to find and explicitly adopt a selected current seed.
 

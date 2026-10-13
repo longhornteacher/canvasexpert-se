@@ -1,32 +1,30 @@
 # Install this for the teacher
 
-Use this when the teacher unzips CanvasExpert-SE, opens the folder in Code/Codex and says "install this", or asks to connect Claude or ChatGPT. Routine Canvas/course work after setup is in `setup.md`. The extracted folder is **Install**; no Source checkout, developer runtime, separate Codex CLI or teacher terminal command is needed.
+Use this when the teacher unzips CanvasExpert-SE, opens the folder in a coding agent (Claude Code, Codex, Antigravity) and says "install this", or asks to connect Claude, ChatGPT or Antigravity. Routine Canvas/course work after setup is in `setup.md`. The extracted folder is **Install**; no Source checkout, developer runtime, separate Codex CLI or teacher terminal command is needed.
 
 ## How to talk to the teacher
 
-The teacher is a classroom teacher, not a developer. Be brisk and friendly, in the first person, one step at a time, and wait for them before moving on. Say what is coming before each step and say plainly when it is done. Never say MCP, extension, trust prompt, PAT, origin, Install, Engine, Credential Manager, registration or adapter. The one term they must meet is Canvas's own button label, **New Access Token**: explain it the first time. Do not give time estimates. Never ask for the token in chat; it goes only in the private form. Do not read out the technical checklist further down; say only what the teacher needs to do next. Ask for preferences, the school calendar and similar details later, when a task needs them, not during first setup.
+The teacher is a classroom teacher, not a developer. Be brisk and friendly, in the first person, one step at a time, and wait for them before moving on. Say what is coming before each step and say plainly when it is done. Never say MCP, extension, trust prompt, PAT, origin, Install, Engine, registration or adapter. The one term they must meet is Canvas's own button label, **New Access Token**: explain it the first time. Do not give time estimates. Never ask for the token in chat; it goes only in the private form. Do not read out the technical checklist further down; say only what the teacher needs to do next. Ask for preferences, the school calendar and similar details later, when a task needs them, not during first setup.
 
 The lines below are the script. Adapt the wording to the situation; keep the plain language.
 
 ### 1. Opening
 
-If the teacher has not said which app they use:
+Do not ask which app they use: they are already talking to one, and the Engine finds the rest.
 
-> "Happy to set this up. It takes three short things from you: tell me which app you use, approve one pop-up in that app, and paste a Canvas code into a private form. I'll do the rest. Are you using Claude, ChatGPT, or both?"
+> "Happy to set this up. I'll look at what's on your computer and connect it, then you'll approve one pop-up if the app shows one and paste a Canvas code into a private form. I'll do the rest."
 
-If they already said (including "for Cowork" or "for Work"), do not ask again: "Great, I'll set it up for Claude" (or ChatGPT, or both).
+Skip this opening if they have already told you what they want. If they only use a website version of an app, say so honestly: CanvasExpert connects to apps installed on this computer, not websites. Never install an app or subscription for them.
 
-If they only use the website:
+### 2. Connecting the apps
 
-> "Thanks, that matters. CanvasExpert works with the Claude or ChatGPT app installed on this computer, not their websites. If you can install the app, I'll wait while you do. If not, we can't connect it from here."
+> "Connecting now."
 
-Never install an app or subscription for them.
+Run the helper (see "Run the helper"); with no `--client` it connects every supported app it finds. Report what happened in the teacher's terms:
 
-### 2. Connecting the app
+> "I found {Claude, ChatGPT, Antigravity} on your computer and connected {it / them}! CanvasExpert can also work in {the ones not found}, so if you ever install one, just come back here and I'll connect it too."
 
-> "I'm connecting {Claude / ChatGPT} now."
-
-Then run the helper (see "Run the helper" below) and tell the teacher what to do based on the result.
+Then give what each app still needs:
 
 **Claude, app opened with the file:**
 
@@ -36,15 +34,17 @@ Then run the helper (see "Run the helper" below) and tell the teacher what to do
 
 > "I've put a file called CanvasExpert-SE-Cowork in a folder window. In Claude, open Settings, find Extensions, and add that file. Tell me when it's in."
 
-**ChatGPT:**
+**ChatGPT or Antigravity:**
 
-> "ChatGPT is set up. When we're done here, close it and open it again so it notices. I'll tell you when."
+> "{App} is set up. When we're done here, close it and open it again so it notices. I'll tell you when."
 
-If the teacher chose both, do both and report each separately. Never connect an app they did not choose. Do not ask anyone to close an app during an active CE-SE review.
+Do not ask anyone to close an app during an active CE-SE review. If nothing supported was found, say so and ask which app they plan to use.
 
 ### 3. The Canvas form
 
-> "Now I need CanvasExpert to be able to see your courses. Canvas lets you make a private key for that. It's called an **access token**: a key that lets this program read your courses. You can delete it in Canvas any time, and it never leaves this computer.
+> "Now I need CanvasExpert to be able to see your courses. Canvas lets you make a private key for that. It's called an **access token**: a key that lets this program read your courses. You can delete it in Canvas any time. It's stored only in Windows Credential Manager on this computer and never leaves it.
+>
+> **My safety promise:** CanvasExpert drafts in private. It will never publish an assignment, change a grade or send feedback to students without first showing you a private review page for your approval.
 >
 > A form is opening in your browser."
 
@@ -53,8 +53,8 @@ If the page did not open, give the address the helper returned (never invent one
 > "In the form you'll type your **Canvas address**. That's the web address you see when you're signed into Canvas, like `yourschool.instructure.com`. Then paste your key. Here's how to make one:
 > 1. Sign in to Canvas.
 > 2. Click **Account**, then **Settings**.
-> 3. Scroll to **Approved Integrations** and click **+ New Access Token**.
-> 4. For the purpose, type CanvasExpert. If your school limits how long a token can last (many do, often 90 days), choose the longest allowed.
+> 3. Scroll to **Approved Integrations** and click **+ New Access Token**. (Once you tell me your Canvas address I can give you a direct link: `https://<your-address>/profile/settings#access_tokens`.)
+> 4. For the purpose, type CanvasExpert. For the expiration, choose the end of the school year, or the longest your school allows, so you don't have to redo this mid-semester.
 > 5. Click Generate and **copy the long code Canvas shows you.** It only shows it once.
 > 6. Paste it into the form and click **Connect**.
 >
@@ -72,35 +72,50 @@ If the teacher says their school limits token life, add: "Canvas will stop accep
 
 ### 5. Choosing courses
 
-> "Which of these are you teaching right now?" (list the courses Canvas returns, likely current ones first, using the course ID and state to tell similar names apart) "For each one, what short name do you want me to use? For example 'Period 3 English' or 'ELA 7'."
+Canvas course names are long and clumsy (like `2026-FALL-ENG-07-003-PREAP-SMITH-S1`). Read the courses Canvas returns, keep the ones that look current (use course ID and state to tell similar names apart), and propose short names yourself:
 
-Never invent nicknames. Then: "Saved. You can change these any time." Write the choices as `setup.md` describes.
+> "I found {n} active classes. Here are the short names I came up with:
+> 1. **ELA 7 - Period 2** (`2026-FALL-ENG-07-002...`)
+> 2. **Pre-AP ELA 7 - Period 3** (`2026-FALL-ENG-07-003...`)
+>
+> Do these look good, or would you like to tweak any? And are there ones above I left out that you're teaching?"
+
+Save what they confirm as `setup.md` describes: "Saved. You can change these any time."
 
 ### 6. Finishing up
 
-> "CanvasExpert is ready on this computer. One last step so {Claude / ChatGPT} can use it: {approve the pop-up / close it and open it again}. Then start a new chat there and paste this:"
+> "CanvasExpert is ready on this computer. One last step so {the app(s)} can use it: {approve the pop-up / close it and open it again}. Then start a new chat there and paste this:"
 
 Give the starter message from `TEACHING-ASSISTANT.md`. After they say they have done it:
 
 > "Great. Ask it to show you your courses. If it lists {their course nicknames}, you're all set. If not, tell me what it says."
 
-If you set up both apps, check each one separately; each counts as connected only after its assistant lists the right courses.
+Each connected app counts only after its assistant lists the right courses. If something is still pending, name only the one real next action ("Claude is waiting for you to approve its prompt; Antigravity needs to be closed and reopened").
 
-If anything is still pending, name only the one real next action: "Claude is set up and waiting for you to approve its prompt; ChatGPT needs to be closed and reopened after your review finishes."
+Then give three doors instead of a questionnaire:
+
+> "All set! To get our feet wet, what would help you most today?
+> - **Make a page look great:** tell me a lesson topic.
+> - **Build a quick quiz:** tell me the topic and how many questions.
+> - **Clear a grading stack:** name an assignment with ungraded work and we'll go through it together.
+>
+> Pick whichever sounds easiest, or just tell me what's on your desk."
+
+Do not ask about visual style, grading scale or teaching philosophy now. Ask on the first page build or first scoring session, and save the answers to `context/teaching-profile.md` and `context/grading.md`.
 
 ## What you do behind the scenes
 
 Do not narrate this to the teacher.
 
-### Select the destination and the correct Install
+### Select the correct Install
 
-Internally Claude on this PC uses `--client cowork` and ChatGPT's local desktop app uses `--client work`. Decide from the app inventory and context you can actually see; `.\cse.cmd install --inspect` gives read-only configuration-directory hints, which do not prove an app is installed, running or in a supported mode. Do not read whole client configuration files or private settings. If the evidence is not enough, ask one concrete follow-up: "Do you use the app installed on this PC, or only the website?"
+By default `.\cse.cmd install` connects every supported app whose configuration folder exists: Claude (`cowork`), ChatGPT/Codex (`work`) and Antigravity (`antigravity`). `.\cse.cmd install --inspect` shows the read-only hints it uses; they do not prove an app is installed, running or in a supported mode. Do not read whole client configuration files or private settings. All connected apps point at this same Install, so they share one Canvas credential and course list.
 
-Resolve this extracted folder and its bundled `engine/cse.exe`, not an existing CE-SE MCP connection, PATH executable or another teacher folder. Run installation locally from here. An already-connected server may belong to a different Install: it must not receive this teacher's setup or preferences.
+Resolve this extracted folder and its bundled `engine/cse.exe`, not an existing CE-SE MCP connection, PATH executable or another teacher folder. An already-connected server may belong to a different Install: it must not receive this teacher's setup or preferences.
 
 ### Run the helper
 
-Run `.\cse.cmd install --client work` (ChatGPT) and/or `.\cse.cmd install --client cowork` (Claude) yourself. This saves narrowly scoped connection settings, or prepares the Claude extension and tries to open it, checks the local Engine/MCP without Canvas writes, and starts the private WebUI independently of any destination restart. A repeat install reuses the same Install's running WebUI. It needs no `codex` command. Do not add `--no-ui` for ordinary first installation. `--check-only` is a local diagnostic, not registration or proof of destination access.
+Run `.\cse.cmd install` yourself (add `--client work`, `--client cowork` or `--client antigravity` only to connect one app, for example when the teacher later installs another). This saves narrowly scoped connection settings, or prepares the Claude extension and tries to open it, checks the local Engine/MCP without Canvas writes, and starts the private WebUI independently of any destination restart. A repeat install reuses the same Install's running WebUI. It needs no `codex` command. Do not add `--no-ui` for ordinary first installation. `--check-only` is a local diagnostic, not registration or proof of destination access.
 
 Inspect the returned outcomes rather than assuming the whole operation succeeded. The helper's `install_root` identifies the extracted folder this operation selected. If an existing CE-SE registration targets another Install, explain the exact old and new folders to the teacher in plain words before using `--replace-existing`; that flag replaces the connection entry, not the old folder's files. Keep other servers/settings and all unsent work. Malformed client configuration stays intact: explain the helper's reported repair action without exposing unrelated configuration or secrets. An unavailable app does not prevent preparing the other selected route.
 

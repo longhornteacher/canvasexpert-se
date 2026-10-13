@@ -4,6 +4,10 @@ What the teacher's words mean and the review page are in `AGENTS.md`.
 
 Before designing content, read `context/teaching-profile.md`, relevant teacher reference notes and `context/grading.md` through logical MCP paths or the effective teacher-rules root. Use saved grade/subject, priorities, standards and feedback guidance; ask only for missing details needed for this task. Preserve teacher choices and never use developer class names or differentiation tags as colleague defaults.
 
+## Standards
+
+Apply `TEACHER.md`: 100 points by default, grade-level rigor, a one-line Learning Target and three-step directions at the top, and a grade-representative exemplar for writing assignments. Once the content is shaped, offer tiered Hub support (below) once.
+
 ## Write the draft
 
 Ask only for missing details that matter: course, title, directions, points, due and availability dates, submission type, module, publication, rubric. `.\cse.cmd courses` lists course nicknames and `.\cse.cmd modules <course>` lists module targets.

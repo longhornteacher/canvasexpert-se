@@ -63,7 +63,7 @@ function Test-TemplatePathAllowed {
     param([Parameter(Mandatory)][string]$RelativePath)
 
     $normalizedPath = $RelativePath.Replace('\', '/')
-    return $normalizedPath -match '^(AGENTS|CLAUDE|README|TEACHING-ASSISTANT)\.md$' -or
+    return $normalizedPath -match '^(AGENTS|CLAUDE|README|TEACHER|TEACHING-ASSISTANT)\.md$' -or
         $normalizedPath -eq 'cse.cmd' -or
         $normalizedPath -match '^\.claude/settings\.json$' -or
         $normalizedPath -match '^playbooks/[A-Za-z0-9._-]+\.md$' -or

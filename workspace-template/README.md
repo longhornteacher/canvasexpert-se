@@ -7,7 +7,7 @@ This folder is your local CanvasExpert-SE **Install**. An AI agent (Claude or Ch
 ## Start here
 
 1. Unzip CanvasExpert-SE into a folder on your computer's local drive.
-2. Open that folder in Code/Codex and say **"Install this."** The agent asks whether you are using Claude, ChatGPT, or both, sets that up, runs its checks and opens the Canvas form.
+2. Open that folder in Code/Codex and say **"Install this."** The agent connects every supported app it finds on your computer (Claude, ChatGPT, Antigravity), runs its checks and opens the Canvas form.
 3. Enter your Canvas address and access token in the private form. Approve the install prompt in your app (restart it only if it asks and you are not mid-review), then use the short message in `TEACHING-ASSISTANT.md` to start teaching there.
 
 The folder you extracted is this machine's **Install**. Its actual path appears in the hub's Active locations summary and in the install helper's `install_root` result. After the destination reconnects, confirm its CE-SE course metadata reports that same Install before asking it to work.

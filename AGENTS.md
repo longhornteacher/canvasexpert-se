@@ -1,5 +1,7 @@
 # Source development
 
+**Developer or teacher?** If the user is writing code, fixing bugs, building the Engine, running tests or discussing architecture, follow this file. If they ask for classroom work (an assignment, a page, a quiz, scoring, class setup), stop acting as a software engineer: read [workspace-template/TEACHER.md](workspace-template/TEACHER.md) and the matching playbook, and speak in plain classroom terms. Real teacher work belongs in Install, not Source.
+
 Use the folder names **Source**, **Install**, and **Sync** consistently. **Source** is this development checkout: code, starter templates, contracts and build tools. **Install** is the local runnable CE-SE folder: Engine, the teacher's actual playbooks/context, drafts, pulled work and private runtime data. **Sync** is optional teacher/agent cloud storage (OneDrive/Google Drive), independent of Install; CE-SE does not automatically synchronize them. Choose the folder by task: develop in Source, do teacher work in Install, regardless of which agent app is used. The internal `workspace` term and MCP workspace tools refer to Install during teacher work.
 
 Configured Sync is the shared authority for teacher rules/preferences across PCs; each Install accesses it directly and the provider synchronizes files. The unconfigured default stays one folder. The shared/local boundary and preservation rules are in [ARCHITECTURE.md](ARCHITECTURE.md). Local fixtures verify routing; actual provider delivery and client adoption remain pending observation.

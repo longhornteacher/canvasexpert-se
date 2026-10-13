@@ -4,4 +4,4 @@ A handoff is bounded execution work for an agent session. It should say whether 
 
 Current development authority lives in the root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`; build instructions and dated observations live under `docs/`.
 
-There are no active handoffs. `retired/` keeps only four records that carry unique dated evidence (the fresh-install notes and triage, the New Quiz scoring probe results and the MCP verification record); everything else is in Git history.
+`active/` is empty. `retired/` keeps the records that carry unique dated evidence (the fresh-install notes and triage, the New Quiz scoring probe results, the MCP verification record) and the retired Antigravity/streamlined-install spec; everything else is in Git history.

@@ -44,10 +44,12 @@ type CheckResult struct {
 	ChildEngineVersion    string `json:"child_engine_version,omitempty"`
 }
 type Availability struct {
-	WorkConfigFound      bool   `json:"work_config_found"`
-	CoworkConfigFound    bool   `json:"cowork_config_found"`
-	WorkConfigPath       string `json:"work_config_path"`
-	AvailabilityEvidence string `json:"availability_evidence"`
+	WorkConfigFound        bool   `json:"work_config_found"`
+	CoworkConfigFound      bool   `json:"cowork_config_found"`
+	AntigravityConfigFound bool   `json:"antigravity_config_found"`
+	WorkConfigPath         string `json:"work_config_path"`
+	AntigravityConfigPath  string `json:"antigravity_config_path"`
+	AvailabilityEvidence   string `json:"availability_evidence"`
 }
 type ReplacementRequired struct{ ExistingInstall, InstallRoot string }
 
@@ -63,11 +65,19 @@ func workConfig() string {
 	}
 	return filepath.Join(base, "config.toml")
 }
+
+// antigravityConfig is Google Antigravity's user-level MCP configuration file.
+func antigravityConfig() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".gemini", "config", "mcp_config.json")
+}
 func Inspect(root string) Availability {
 	config := workConfig()
 	_, err := os.Stat(filepath.Dir(config))
 	_, claudeErr := os.Stat(filepath.Join(os.Getenv("APPDATA"), "Claude"))
-	return Availability{WorkConfigFound: err == nil, CoworkConfigFound: claudeErr == nil, WorkConfigPath: config, AvailabilityEvidence: "configuration-directory-only; app availability unconfirmed"}
+	anti := antigravityConfig()
+	_, antiErr := os.Stat(filepath.Dir(filepath.Dir(anti)))
+	return Availability{WorkConfigFound: err == nil, CoworkConfigFound: claudeErr == nil, AntigravityConfigFound: antiErr == nil, WorkConfigPath: config, AntigravityConfigPath: anti, AvailabilityEvidence: "configuration-directory-only; app availability unconfirmed"}
 }
 func validate(root string) (string, string, error) {
 	root, err := filepath.Abs(root)
@@ -98,9 +108,37 @@ func Register(root, client string, replace bool) (Result, error) {
 		result, err := prepareCowork(root)
 		result.InstallRoot = root
 		return result, err
+	case "antigravity":
+		result, err := registerAntigravity(root, exe, antigravityConfig(), replace)
+		result.InstallRoot = root
+		return result, err
 	default:
-		return Result{}, errors.New("choose client work or cowork")
+		return Result{}, errors.New("choose client work, cowork or antigravity")
 	}
+}
+
+// RegisterAuto connects every supported client whose configuration directory
+// is present. One client failing does not stop the others; each outcome is
+// returned and the failures are joined.
+func RegisterAuto(root string, replace bool) ([]Result, error) {
+	found := Inspect(root)
+	var results []Result
+	var errs []error
+	for _, c := range []struct {
+		name  string
+		found bool
+	}{{"cowork", found.CoworkConfigFound}, {"work", found.WorkConfigFound}, {"antigravity", found.AntigravityConfigFound}} {
+		if !c.found {
+			continue
+		}
+		result, err := Register(root, c.name, replace)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", c.name, err))
+			continue
+		}
+		results = append(results, result)
+	}
+	return results, errors.Join(errs...)
 }
 
 // Launcher is how the prepared extension is handed to Claude Desktop. Fields
@@ -199,6 +237,72 @@ func registerWork(root, exe, path string, replace bool) (Result, error) {
 		return result, err
 	}
 	if data != nil {
+		backup := path + ".cse-backup-" + time.Now().UTC().Format("20060102T150405.000000000")
+		if err := os.WriteFile(backup, data, 0600); err != nil {
+			return result, fmt.Errorf("could not preserve client configuration backup: %w", err)
+		}
+		result.BackupPath = backup
+	}
+	if err := writeFile(path, updated); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+// registerAntigravity merges the CE-SE server into Antigravity's JSON MCP
+// configuration, preserving every other server and setting.
+func registerAntigravity(root, exe, path string, replace bool) (Result, error) {
+	result := Result{Client: "antigravity", State: "settings-saved", ConfigPath: path, NextAction: "Restart Antigravity if it is open, then ask its agent to read CE-SE AGENTS.md and configured courses. A local check does not verify that app's connection."}
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return result, fmt.Errorf("cannot read client configuration: %w", err)
+	}
+	config := map[string]any{}
+	if len(strings.TrimSpace(string(data))) > 0 {
+		if err := json.Unmarshal(data, &config); err != nil {
+			return result, errors.New("client configuration is malformed; left it unchanged. Repair it in the client settings, then retry installation")
+		}
+	}
+	servers, ok := config["mcpServers"].(map[string]any)
+	if config["mcpServers"] != nil && !ok {
+		return result, errors.New("client mcpServers configuration is not an object; left it unchanged")
+	}
+	if servers == nil {
+		servers = map[string]any{}
+		config["mcpServers"] = servers
+	}
+	wanted := map[string]any{"command": exe, "args": []any{"--workspace", root, "mcp"}}
+	if old, exists := servers["canvasexpert-se"]; exists {
+		oldMap, ok := old.(map[string]any)
+		if !ok {
+			return result, errors.New("existing CE-SE entry is not an object; left client configuration unchanged")
+		}
+		oldRoot := registeredRoot(oldMap)
+		if !samePath(oldRoot, root) && !replace {
+			return result, &ReplacementRequired{ExistingInstall: oldRoot, InstallRoot: root}
+		}
+		if samePath(oldRoot, root) {
+			if reflect.DeepEqual(oldMap["command"], wanted["command"]) && reflect.DeepEqual(oldMap["args"], wanted["args"]) {
+				result.State = "settings-already-saved"
+				return result, nil
+			}
+			for k, v := range oldMap {
+				if k != "command" && k != "args" && k != "url" {
+					wanted[k] = v
+				}
+			}
+		}
+		result.ExistingInstall = oldRoot
+	}
+	servers["canvasexpert-se"] = wanted
+	updated, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return result, fmt.Errorf("cannot encode client configuration: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return result, err
+	}
+	if len(data) > 0 {
 		backup := path + ".cse-backup-" + time.Now().UTC().Format("20060102T150405.000000000")
 		if err := os.WriteFile(backup, data, 0600); err != nil {
 			return result, fmt.Errorf("could not preserve client configuration backup: %w", err)

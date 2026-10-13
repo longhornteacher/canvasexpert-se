@@ -10,6 +10,10 @@ New Quizzes are supported for regular authoring and use, including written-respo
 
 For curriculum conversion, student file assets and placing an existing quiz into a native module, read `native-content.md`. Use the returned New Quiz assignment ID for a module Assignment entry.
 
+## Standards
+
+Apply `TEACHER.md`: items sum to 100 points unless the teacher chooses otherwise, depth at DOK 2-3, distractors that are real misconceptions, and about two sentences of "why this is correct" per item. After shaping the quiz, offer tiered Hub support (see the Hub section below) once.
+
 ## Write the quiz in QuizForge format
 
 Read `engine_reference` formats and examples (CLI `help formats` / `help examples`), including the embedded `synthetic-quizforge-mixed.md`, before authoring. Write the quiz as a QuizForge v3.0-json file (`<QUIZFORGE_JSON>` or bare JSON). If the teacher has optional QuizForge design modules (`QuizForge_Base.md` and ELA/stimulus references), use them for educational design; the embedded reference defines what this Engine accepts. You write questions, distractors, rationales and points; the Engine handles IDs, scoring structures and Canvas calls. Save the file in the course's `drafts/` folder.
@@ -19,7 +23,7 @@ Read `engine_reference` formats and examples (CLI `help formats` / `help example
 - Keep HTML to what `help fields` records as kept; the Engine sends it unfiltered. Show code as `<pre><code>...</code></pre>` (colored as Python; add `class="language-html"` or similar to leave it uncolored). Put TEKS codes in `metadata.teks`.
 - Quiz settings (time limit, attempts, due date, publication, module) go in `metadata.canvas`.
 - For one attempt, omit `allowed_attempts` and multiple-attempt settings. For two or more set `allow_multiple_attempts: true` and the desired `allowed_attempts`; omit the limit or use `"unlimited"` for unlimited attempts.
-- TF uses a boolean `answer`. Feedback goes in root `rationales`, keyed by `item_id`; MC/MA entries contain `choices` with matching choice `id` and `rationale`, while TF and other auto-scored entries contain `rationale`. Never put `rationale` inside an item or its choices.
+- TF uses a boolean `answer`. Feedback goes in root `rationales`, keyed by `item_id`; MC/MA entries contain `choices` with matching choice `id` and `rationale`, while TF and other auto-scored entries contain `rationale`. Never put `rationale` inside an item or its choices. Write the explanation in green as `TEACHER.md` shows (`<p style="color: #2e7d32;"><strong>Why this is correct:</strong> ...</p>`).
 - Written items: `ESSAY` takes optional `word_limit_min`/`word_limit_max`; `FILEUPLOAD` takes optional `accepted_formats`. Write a `rubric_hint` for each ECR/SCR as private guidance for later rubric authoring and scoring. It is not sent to Canvas and does not automatically create a rubric; put anything students must see in `prompt`.
 
 ## Review and create

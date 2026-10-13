@@ -216,3 +216,101 @@ func TestCompactEngineVersionKeepsBuildIdentityOnly(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestAntigravityRegistrationPreservesReplacesAndRepeats(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "Install with spaces")
+	exe := filepath.Join(root, "engine", "cse.exe")
+	path := filepath.Join(t.TempDir(), ".gemini", "config", "mcp_config.json")
+	os.MkdirAll(filepath.Dir(path), 0700)
+	original := []byte(`{"theme":"dark","mcpServers":{"other":{"command":"other.exe","env":{"PRIVATE_VALUE":"keep-me"}}}}`)
+	os.WriteFile(path, original, 0600)
+	result, err := registerAntigravity(root, exe, path, false)
+	if err != nil || result.State != "settings-saved" {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if backup, err := os.ReadFile(result.BackupPath); err != nil || string(backup) != string(original) {
+		t.Fatal("original configuration not backed up")
+	}
+	var cfg map[string]any
+	data, _ := os.ReadFile(path)
+	if err := json.Unmarshal(data, &cfg); err != nil || cfg["theme"] != "dark" {
+		t.Fatalf("unrelated setting lost: %v", err)
+	}
+	servers := cfg["mcpServers"].(map[string]any)
+	if servers["other"].(map[string]any)["env"].(map[string]any)["PRIVATE_VALUE"] != "keep-me" {
+		t.Fatal("unrelated server changed")
+	}
+	if args := servers["canvasexpert-se"].(map[string]any)["args"].([]any); args[1] != root || args[2] != "mcp" {
+		t.Fatalf("wrong args: %v", args)
+	}
+	again, err := registerAntigravity(root, exe, path, false)
+	if err != nil || again.State != "settings-already-saved" || again.BackupPath != "" {
+		t.Fatalf("repeat install: %+v %v", again, err)
+	}
+	other := filepath.Join(t.TempDir(), "Other Install")
+	before, _ := os.ReadFile(path)
+	_, err = registerAntigravity(other, filepath.Join(other, "engine", "cse.exe"), path, false)
+	var required *ReplacementRequired
+	if !errors.As(err, &required) || !samePath(required.ExistingInstall, root) {
+		t.Fatalf("different Install not explained: %v", err)
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(before) {
+		t.Fatal("changed before explicit replacement")
+	}
+	if _, err = registerAntigravity(other, filepath.Join(other, "engine", "cse.exe"), path, true); err != nil {
+		t.Fatal(err)
+	}
+	bad := []byte(`{"mcpServers": {`)
+	os.WriteFile(path, bad, 0600)
+	if _, err = registerAntigravity(root, exe, path, true); err == nil {
+		t.Fatal("malformed config accepted")
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(bad) {
+		t.Fatal("malformed config overwritten")
+	}
+}
+
+func TestAntigravityRegistrationCreatesMissingConfig(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(t.TempDir(), "new", "mcp_config.json")
+	result, err := registerAntigravity(root, filepath.Join(root, "engine", "cse.exe"), path, false)
+	if err != nil || result.BackupPath != "" {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal("config not created")
+	}
+}
+
+func TestRegisterAutoConnectsOnlyDetectedClients(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "Extracted Install")
+	for path, contents := range map[string]string{
+		filepath.Join(root, "engine", "cse.exe"):     "engine",
+		filepath.Join(root, "AGENTS.md"):             "instructions",
+		filepath.Join(root, "context", "courses.md"): "courses",
+	} {
+		os.MkdirAll(filepath.Dir(path), 0700)
+		os.WriteFile(path, []byte(contents), 0600)
+	}
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", filepath.Join(home, "AppData"))
+	t.Setenv("CODEX_HOME", filepath.Join(home, "no-codex"))
+	if results, err := RegisterAuto(root, false); err != nil || len(results) != 0 {
+		t.Fatalf("nothing installed: %+v %v", results, err)
+	}
+	os.MkdirAll(filepath.Join(home, ".gemini"), 0700)
+	os.MkdirAll(filepath.Join(home, "no-codex"), 0700)
+	results, err := RegisterAuto(root, false)
+	if err != nil || len(results) != 2 {
+		t.Fatalf("%+v %v", results, err)
+	}
+	got := map[string]bool{}
+	for _, r := range results {
+		got[r.Client] = r.InstallRoot == root
+	}
+	if !got["work"] || !got["antigravity"] || got["cowork"] {
+		t.Fatalf("wrong clients: %v", got)
+	}
+}
