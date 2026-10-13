@@ -31,15 +31,17 @@ type courseRow struct {
 
 type coursesData struct {
 	Secret, Message, Notice string
+	DraftKey                string
+	ClearDraft              bool
 	Rows                    []courseRow
 }
 
-var coursesTemplate = template.Must(template.New("courses").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE courses</title><style>` + funkyCSS + `</style><style>.courses tr.unpublished{opacity:.58}.courses tr.unpublished td:first-of-type{opacity:1}.course-state{font-size:.85em;color:#667085}</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>Pick your active courses</h1><p>Tick the courses you are teaching right now. Active courses appear as tabs on the Students page and are scanned for work. Enter your own short nickname for each course you activate.</p>
+var coursesTemplate = template.Must(template.New("courses").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE courses</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNavCourses + `<h1>Select active courses</h1><p>Choose current courses and set a short nickname for each.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
-<form method="post" action="/courses"><input type="hidden" name="request_secret" value="{{.Secret}}"><table class="courses"><thead><tr><th>Active</th><th>Course</th><th>Canvas code</th><th>Nickname</th></tr></thead><tbody>
-{{range .Rows}}<tr{{if .Unpublished}} class="unpublished"{{end}}><td><input type="hidden" name="id" value="{{.ID}}"><input type="checkbox" name="active_{{.ID}}" {{if .Active}}checked{{end}} aria-label="Active"></td><td>{{.Name}} <span class="course-state">ID {{.ID}} · {{if .State}}{{.State}}{{else}}not in Canvas list{{end}}</span>{{if .Unpublished}} <span class="pill off">unpublished</span>{{end}}</td><td><code>{{.Code}}</code></td><td><input type="text" name="nick_{{.ID}}" value="{{.Nick}}" maxlength="40" autocomplete="off"></td></tr>
-{{else}}<tr><td colspan="4">No courses found. Connect Canvas first, then reload this page.</td></tr>{{end}}</tbody></table>
-{{if .Rows}}<button type="submit">Save active courses</button>{{end}}</form></main></html>`))
+<form method="post" action="/courses" data-draft-key="{{.DraftKey}}" data-clear-draft="{{.ClearDraft}}"><input type="hidden" name="request_secret" value="{{.Secret}}"><div class="table-scroll"><table class="courses"><thead><tr><th>Active</th><th>Course</th><th>Canvas code</th><th>Nickname</th></tr></thead><tbody>
+{{range .Rows}}<tr{{if .Unpublished}} class="unpublished"{{end}}><td><input type="hidden" name="id" value="{{.ID}}"><input type="checkbox" name="active_{{.ID}}" {{if .Active}}checked{{end}} aria-label="Active course {{.Name}} ({{.ID}})"></td><td>{{.Name}} <span class="course-state">ID {{.ID}} · {{if .State}}{{.State}}{{else}}not in Canvas list{{end}}</span>{{if .Unpublished}} <span class="pill off">unpublished</span>{{end}}</td><td><code>{{.Code}}</code></td><td><input type="text" name="nick_{{.ID}}" value="{{.Nick}}" maxlength="40" autocomplete="off" aria-label="Nickname for {{.Name}} ({{.ID}})"></td></tr>
+{{else}}<tr><td colspan="4">No courses found. Connect Canvas first, then reload this page.</td></tr>{{end}}</tbody></table></div>
+{{if .Rows}}<button type="submit">Save active courses</button>{{end}}</form><script src="/_cse/drafts.js" defer></script></main></html>`))
 
 func (h *Hub) reqCtx() (context.Context, context.CancelFunc) {
 	base := h.ctx
@@ -149,7 +151,7 @@ func (h *Hub) coursesPage(w http.ResponseWriter, r *http.Request) {
 			rows = append(rows, courseRow{ID: c.ID, Name: c.Nickname, Nick: c.Nickname, Active: c.Current})
 		}
 	}
-	h.render(w, 200, coursesTemplate, coursesData{Secret: h.secret, Message: message, Notice: notice, Rows: rows})
+	h.render(w, 200, coursesTemplate, coursesData{Secret: h.secret, Message: message, Notice: notice, DraftKey: "courses:" + h.secret, ClearDraft: r.URL.Query().Get("saved") == "1", Rows: rows})
 }
 
 func (h *Hub) render(w http.ResponseWriter, status int, t *template.Template, data any) {
@@ -223,7 +225,7 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.loaded = nil
-	h.redirect(w, r, "/courses", fmt.Sprintf("Saved. %d active courses.", active), "")
+	h.redirect(w, r, "/courses?saved=1", fmt.Sprintf("Saved. %d active courses.", active), "")
 }
 
 func randomAlias(available []string) string { return available[rand.IntN(len(available))] }

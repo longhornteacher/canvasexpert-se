@@ -12,6 +12,21 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
+// classroomDraftScript keeps unsaved edits in the current browser tab only.
+// A per-hub key prevents another local hub session from restoring private notes.
+const classroomDraftScript = `(()=>{
+const form=document.querySelector("form[data-draft-key]");
+if(!form)return;
+const key=form.dataset.draftKey;
+const fields=()=>Array.from(form.elements).filter(e=>e.name&&/^(active_|nick_|alias_|monitored_|extra_time_|note_)/.test(e.name));
+let values={};
+try{values=JSON.parse(sessionStorage.getItem(key)||"{}")}catch{}
+if(form.dataset.clearDraft==="true"){for(const e of fields())delete values[e.name];try{if(Object.keys(values).length)sessionStorage.setItem(key,JSON.stringify(values));else sessionStorage.removeItem(key)}catch{};const u=new URL(location.href);u.searchParams.delete("saved");history.replaceState(null,"",u.pathname+u.search+u.hash)}
+for(const e of fields())if(Object.prototype.hasOwnProperty.call(values,e.name)){if(e.type==="checkbox")e.checked=values[e.name]===true;else e.value=values[e.name]}
+const save=event=>{const e=event.target;if(!e.name||! /^(active_|nick_|alias_|monitored_|extra_time_|note_)/.test(e.name))return;values[e.name]=e.type==="checkbox"?e.checked:e.value;try{sessionStorage.setItem(key,JSON.stringify(values))}catch{}};
+form.addEventListener("input",save);form.addEventListener("change",save);
+})();`
+
 func (h *Hub) fetchTags(ctx context.Context, courseID int64) (map[int64][]string, string, error) {
 	if h.tagsFn != nil {
 		return h.tagsFn(ctx, courseID)

@@ -31,48 +31,41 @@ import (
 // back to any free loopback port when it is taken.
 const preferredHubAddr = "127.0.0.1:47831"
 
-var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert: Special Edition</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>CanvasExpert: Special Edition</h1>
-<p class="lead">You tell your AI agent what you need, like &ldquo;scoring session&rdquo; or &ldquo;make a new assignment&rdquo;. It reads your <b>playbooks</b> (how to do each job) and your <b>context</b> (your voice, students, courses, calendar), then uses this program to work with Canvas safely. You stay in charge: nothing is posted unless you say so.</p>
-{{if .Root}}<div class="card"><h2>Active locations</h2><p>Install: <code>{{.Root}}</code></p><p>Teacher rules ({{.RulesMode}}): <code>{{.RulesRoot}}</code></p>{{if .RulesError}}<span class="pill off">{{if eq .RulesMode "sync"}}Sync unavailable{{else}}Rules location unavailable{{end}}</span><p class="error">{{.RulesError}}</p>{{end}}</div>{{end}}
-<ol class="steps"><li><b>Connect Canvas</b> with an access token.</li><li><b>Pick your courses</b> and add student notes.</li><li><b>Connect CE-SE to your agent</b> and ask for work.</li></ol>
-<p class="reassure">Student names and pulled work stay in this local CE-SE installation. Your token stays in Windows Credential Manager. The agent is told never to open the private student-name file, and your token is never written to a file.</p>
+var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert: Special Edition</title><style>` + funkyCSS + `</style><main class="wide">` + hubNavHome + `
+<section class="home-status-grid" aria-label="Connection status">
+<section class="card home-status" id="home-canvas" data-canvas-health data-state="{{.CanvasHealth}}"><h2><span class="status-mark" data-health-mark aria-hidden="true"></span>Canvas</h2><p class="health-state" data-health-state aria-live="polite">{{.CanvasHealth}}</p><p class="health-note" data-health-note>{{.CanvasHealthNote}}</p>
+<div class="inline">{{if .Connected}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" data-canvas-test class="small" {{if eq .CanvasHealth "Checking…"}}disabled{{end}}>Test</button></form><a class="go" href="/settings?section=connections">Connection</a><a class="go" href="/setup">Replace token</a>{{else}}<a class="go" href="/setup">Connect Canvas</a><a class="go" href="/settings?section=connections">Connection</a>{{end}}</div>
+<details><summary>Get an Access token</summary><ol><li>Sign in to Canvas and open Account → Settings.</li><li>Under Approved Integrations, choose New Access Token.</li><li>Copy the token when Canvas shows it. Enter it under Settings → Connections.</li></ol><p>The token is kept in Windows Credential Manager on this computer.</p></details></section>
+		<section class="card home-status" id="home-sync"><h2><span class="status-mark" aria-hidden="true"></span>Sync</h2><p class="health-state">{{.SyncHealth}}</p><p class="health-note">{{.SyncHealthNote}}</p>{{if eq .RulesMode "sync"}}<p><code>{{.RulesRoot}}</code></p>{{end}}<div class="inline"><a class="go" href="/settings?section=connections#rules">Browse</a><form method="post" action="/rules/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="sync_root" value="{{.SyncRoot}}"><button class="small secondary" type="submit">Test saved folder</button></form><a class="go" href="/settings?section=connections">Manage teacher rules</a></div></section>
+</section>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
-<div class="cards">
-<div class="card"><h2>Your teaching assistant</h2><p>Connect this Install to Cowork or desktop Work, then check the local tools.</p><a class="go" href="/connect">Connect your agent &rarr;</a></div>
-<div class="card token {{if .ConnectionTested}}t-green{{else if .Connected}}t-yellow{{else}}t-red{{end}}"><h2>Canvas token <button type="button" class="qmark" popovertarget="pat-help" aria-label="How do I get a Canvas access token?">?</button></h2>{{if .ConnectionTested}}<span class="pill on">tested this session</span><p>Canvas accepted the saved token in this hub session.</p>{{else if .Connected}}<span class="pill warn">saved, not tested</span><p>A token is saved on this computer. Test it to make sure Canvas still accepts it.</p>{{else}}<span class="pill off">not connected</span><p>The agent can't reach Canvas until you add a token.</p>{{end}}<a class="go" href="{{if .Connected}}/settings{{else}}/setup{{end}}">{{if .Connected}}Test or replace it &rarr;{{else}}Connect Canvas &rarr;{{end}}</a></div>
-<div class="card"><h2>Courses</h2>{{if .Root}}<p><b>{{.ActiveCourses}}</b> active</p><a class="go" href="/courses">Pick active courses &rarr;</a>{{else}}<p>Launch CE-SE from its installation folder to get started.</p><a class="go" href="/settings">Open Settings &rarr;</a>{{end}}</div>
-<div class="card"><h2>Students</h2>{{if .Root}}<p><b>{{.Students}}</b> known, <b>{{.Monitored}}</b> monitored</p><a class="go" href="/students">Open students &rarr;</a>{{else}}<p>Launch CE-SE from its installation folder to get started.</p>{{end}}</div>
-<div class="card"><h2>Playbooks &amp; context</h2><p>Feedback voice, how each job is done, and your starter files.</p><a class="go" href="/settings">Open Settings &rarr;</a></div>
-<div class="card"><h2>New here?</h2><p>One folder: the Engine, your playbooks and your private student information.</p><a class="go" href="/how">See how it works &rarr;</a></div>
-<div class="card"><h2>Capabilities</h2><p>Green, yellow, and red lights for what CE-SE can do with Canvas Live.</p><a class="go" href="/capabilities">See the capability map &rarr;</a></div>
-</div>
-<div popover id="pat-help"><h2>Get a Canvas access token</h2><ol><li>Sign in to Canvas in your browser.</li><li>Click your profile picture (or <b>Account</b>), then <b>Settings</b>.</li><li>Scroll to <b>Approved Integrations</b> and click <b>+ New Access Token</b>.</li><li>Purpose: <code>CanvasExpert SE</code>. Leave the expiry blank, or pick a date you'll remember.</li><li>Click <b>Generate Token</b> and copy it right away. Canvas shows it only once.</li><li>Back here, choose <b>Connect Canvas</b> and paste it. It is kept in Windows Credential Manager, not in a file.</li></ol><p>If your district hides this option, ask your Canvas admin for a teacher access token.</p><button type="button" class="small" popovertarget="pat-help" popovertargetaction="hide">Close</button></div>
-<form method="post" action="/quit"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit">Quit the hub</button></form></main></html>`))
-
-var settingsTemplate = template.Must(template.New("settings").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE settings</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>Settings</h1><p>Manage your Canvas connection and CE-SE settings.</p>
-{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}<div class="cards">
-<div class="card"><h2>Canvas</h2>{{if .Connected}}{{if .ConnectionTested}}<span class="pill on">tested this session</span>{{else}}<span class="pill warn">saved, not tested</span>{{end}}<p><code>{{.CanvasOrigin}}</code></p>{{if .CanvasUser}}<p>Signed in as <b>{{.CanvasUser}}</b></p>{{end}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" class="small">Test connection</button></form>{{else}}<span class="pill off">not connected</span><p>No saved token on this machine.</p>{{end}}<a class="go" href="/setup">{{if .Connected}}Replace token &rarr;{{else}}Connect &rarr;{{end}}</a>{{if .Connected}}<details class="forget"><summary>Forget token on this computer</summary><form method="post" action="/canvas/forget"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="confirm" required> Yes, remove it. I can reconnect later.</label><button type="submit" class="small danger">Remove token</button></form></details>{{end}}</div>
-<div class="card"><h2>Engine</h2><span class="pill on">{{.Version}}</span><p><code>{{.Program}}</code></p><p>The machinery plus the starter playbooks. Nothing private.</p></div>
-<div class="card"><h2>CE-SE installation</h2>{{if .Root}}<span class="pill on">found</span><p><code>{{.Root}}</code></p><p>Engine, courses, student information and work stay here.</p>{{else}}<span class="pill off">none</span><p>For a development launch, use <code>cse --workspace &quot;PATH&quot; ui</code> with the CE-SE installation containing <code>context/courses.md</code>.</p>{{end}}</div>
-{{if .Root}}<div class="card"><h2>Teacher rules: Install / Sync</h2><p>Install: <code>{{.Root}}</code></p><p>Effective rules location{{if .RulesMode}} ({{.RulesMode}}){{end}}: <code>{{.RulesRoot}}</code></p>{{if .RulesError}}<span class="pill off">Sync unavailable</span><p class="error">{{.RulesError}}</p>{{end}}<p>By default, teacher rules live in Install. Sync is optional: CE-SE reads and edits the selected folder directly, and its provider (such as OneDrive or Google Drive) carries changes between computers. Courses, students, work and the Engine remain in Install.</p><p>Selecting an empty Sync folder initializes it from the current shareable teacher rules. An existing Sync folder becomes authoritative; local originals are preserved but inactive. Switching back to Install copies the shared rules there and archives differing local versions.</p><form method="post" action="/rules-location"><input type="hidden" name="request_secret" value="{{.Secret}}"><label for="sync_root">Sync folder path (leave blank to use Install)</label><input id="sync_root" name="sync_root" value="{{.SyncRoot}}" maxlength="4000" autocomplete="off"><button type="submit">Save rules location</button></form></div>{{end}}
-</div>
-{{if .Preferences}}<div class="card"><h2>Student aliases</h2><form method="post" action="/settings"><input type="hidden" name="request_secret" value="{{.Secret}}"><label><input type="checkbox" name="aliases" {{if .Aliases}}checked{{end}}> Use aliases in student work files</label><button type="submit">Save settings</button></form></div>{{end}}
-{{if .Root}}<div class="card voice"><h2>Feedback voice</h2><p><span class="pill">Part of your context</span></p><p>The agent reads this every time it writes feedback or scores work. Plain sentences are fine.</p><form method="post" action="/grading"><input type="hidden" name="request_secret" value="{{.Secret}}">
-<label for="voice">How feedback should sound</label><textarea id="voice" name="voice" rows="4" maxlength="8000" placeholder="Warm and encouraging, short sentences a 7th grader can read. Start with one glow, then one grow. Use their first name.">{{.Voice}}</textarea>
-<label for="feedback_guidance">Grading habits and rubric preferences</label><textarea id="feedback_guidance" name="feedback_guidance" rows="6" maxlength="8000" placeholder="Don't take off points for spelling in CS8. Accept late work without comment. Quote one line from their work when praising it.">{{.FeedbackGuidance}}</textarea>
-<button type="submit">Save feedback voice</button></form></div>{{end}}{{if .Playbook}}<div class="card voice"><h2>Your playbooks and context</h2><p>The files the agent follows, compared with this program version's starter copy. Existing teacher copies of <code>AGENTS.md</code> and playbooks are not updated automatically. Use <b>Get the new version</b> to adopt changes, including the latest <code>AGENTS.md</code> instructions for opening the review page and stopping after an accepted post without re-checking Canvas.</p><ul class="playbook">{{range .Playbook}}<li><code>{{.Path}}</code> {{if eq .State "same"}}<span class="pill same">same as this version</span>{{else if eq .State "missing"}}<span class="pill off">missing</span>{{else if eq .State "unavailable"}}<span class="pill off">unavailable</span>{{else}}<span class="pill differs">yours / differs</span> <small>differs from this version's starter copy</small>{{end}}{{if .Replaceable}}<details class="forget"><summary>Get the new version</summary><form method="post" action="/playbook/replace"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="file" value="{{.Path}}"><label class="check"><input type="checkbox" name="confirm" required> Replace my copy. Keep my old one in playbook-old.</label><button type="submit" class="small danger">Replace file</button></form></details>{{end}}</li>{{end}}</ul></div>{{end}}</main></html>`))
+<section class="home-courses"><div class="section-head"><h2>Active courses <span class="count">{{.ActiveCourses}}</span></h2><a href="/courses">Manage</a></div>
+{{if .CourseRows}}<ul class="home-course-list">{{range .CourseRows}}<li><a href="/students?course={{.ID}}">{{.Nickname}}</a><span>Canvas course {{.ID}}</span></li>{{end}}</ul>{{else}}<p class="health-note">No active courses selected. Choose courses to show them here.</p><a class="go" href="/courses">Choose courses</a>{{end}}</section>
+<p class="home-agent"><span>Agent setup</span><a href="/connect">Connect this Install to your teaching app</a></p>
+<script src="/_cse/canvas-health.js" defer></script></main></html>`))
 
 type homeData struct {
 	Secret, Message, Notice, CanvasOrigin, Root string
 	Program, Version                            string
+	CanvasHealth, CanvasHealthNote              string
+	SyncHealth, SyncHealthNote                  string
 	ActiveCourses                               int
+	CourseRows                                  []homeCourse
 	Connected                                   bool
 	ConnectionTested                            bool
 	Preferences, Aliases                        bool
 	Students, Monitored                         int
 	CanvasUser, Voice, FeedbackGuidance         string
+	SettingsSection                             string
+	SettingsNav                                 template.HTML
+	SettingsDraftClear                          string
 	RulesMode, RulesRoot, SyncRoot, RulesError  string
 	Playbook                                    []playbookRow
+}
+
+type homeCourse struct {
+	ID       int64
+	Nickname string
 }
 
 // Hub is one long-lived loopback server holding every local page. Pages share
@@ -89,16 +82,21 @@ type Hub struct {
 	// loaded tracks the courses refreshed from Canvas during this hub session.
 	loaded map[int64]bool
 	// Test seams; nil means use the saved Canvas credential.
-	listCoursesFn func(context.Context) ([]workflow.Course, string, error)
-	rosterFn      func(context.Context, int64) ([]workflow.Enrollment, string, error)
-	tagsFn        func(context.Context, int64) (map[int64][]string, string, error)
-	whoamiFn      func(context.Context) (string, error)
-	savedOriginFn func() string
-	forgetFn      func() error
+	listCoursesFn    func(context.Context) ([]workflow.Course, string, error)
+	rosterFn         func(context.Context, int64) ([]workflow.Enrollment, string, error)
+	tagsFn           func(context.Context, int64) (map[int64][]string, string, error)
+	whoamiFn         func(context.Context) (string, error)
+	loadCredentialFn func() (platform.Credential, error)
+	savedOriginFn    func() string
+	forgetFn         func() error
+	pickFolderFn     func(context.Context) (string, error)
 	// canvasUser is the account name from the last successful connection test.
-	canvasUser       string
-	setupValidated   bool
-	connectionTested bool
+	canvasUser                                              string
+	setupValidated                                          bool
+	connectionTested                                        bool
+	canvasHealth, canvasHealthNote, canvasHealthFingerprint string
+	canvasHealthGeneration                                  uint64
+	canvasHealthTimeout                                     time.Duration
 	// seedNotice reports starter files added when the installation opened;
 	// Home shows it once.
 	seedNotice        string
@@ -136,17 +134,23 @@ func seedAdoptionNotice(root string) string {
 	}
 	for _, row := range playbookRows(root) {
 		if row.Replaceable && row.State == "differs" {
-			return "Some seed-managed instructions in Sync differ from this version. Review them in Settings → Your playbooks and context; choose any files to adopt. Nothing was replaced."
+			return "Some seed-managed instructions in Sync differ from this version. Review them in Settings → Files and choose any files to adopt. Nothing was replaced."
 		}
 	}
 	return ""
 }
 
-func (h *Hub) headers(w http.ResponseWriter) {
+func (h *Hub) headers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	csp := "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+	if r.URL.Path == "/" || r.URL.Path == "/settings" {
+		csp += "; script-src 'self'; connect-src 'self'"
+	} else if r.URL.Path == "/courses" || r.URL.Path == "/students" {
+		csp += "; script-src 'self'"
+	}
+	w.Header().Set("Content-Security-Policy", csp)
 }
 
 // checkPost enforces method, origin and secret for hub-owned forms.
@@ -186,9 +190,13 @@ func (h *Hub) home(w http.ResponseWriter, status int, message, notice string) {
 }
 
 func (h *Hub) pageData() homeData {
-	data := homeData{Secret: h.secret, Root: h.root, Program: h.programDir, Version: h.version}
+	data := homeData{Secret: h.secret, Root: h.root, Program: h.programDir, Version: h.version, SyncHealth: "Local only", SyncHealthNote: "Teacher rules are stored in this Install."}
 	data.ConnectionTested = h.connectionTested
-	if c, err := platform.LoadCredential(); err == nil {
+	data.CanvasHealth, data.CanvasHealthNote = h.canvasHealth, h.canvasHealthNote
+	if data.CanvasHealth == "" {
+		data.CanvasHealth, data.CanvasHealthNote = canvasHealthNotConnected, canvasHealthNote(canvasHealthNotConnected)
+	}
+	if c, err := h.loadSavedCredential(); err == nil {
 		data.Connected, data.CanvasOrigin, data.CanvasUser = true, c.Origin, h.canvasUser
 	}
 	if h.root != "" {
@@ -196,6 +204,14 @@ func (h *Hub) pageData() homeData {
 		data.RulesMode, data.RulesRoot, data.SyncRoot = loc.Mode, loc.RulesRoot, ""
 		if loc.Mode == "sync" {
 			data.SyncRoot = loc.RulesRoot
+			if rulesErr != nil {
+				data.SyncHealth, data.SyncHealthNote = "Unavailable", "The saved Sync folder is unavailable; CE-SE will not fall back to Install. Use Test or choose an available folder."
+			} else {
+				data.SyncHealth = "Available"
+				data.SyncHealthNote = "Saved Sync folder exists here. Use Test to check readability. Cloud-provider delivery is not checked."
+			}
+		} else {
+			data.SyncHealth, data.SyncHealthNote = "Local only", "Teacher rules are stored in this Install."
 		}
 		if rulesErr != nil {
 			data.RulesError = rulesErr.Error()
@@ -205,6 +221,11 @@ func (h *Hub) pageData() homeData {
 			for _, c := range config.Courses {
 				if c.Current {
 					data.ActiveCourses++
+					nickname := strings.TrimSpace(c.Nickname)
+					if nickname == "" {
+						nickname = fmt.Sprintf("Course %d", c.ID)
+					}
+					data.CourseRows = append(data.CourseRows, homeCourse{ID: c.ID, Nickname: nickname})
 				}
 			}
 		}
@@ -225,15 +246,78 @@ func (h *Hub) pageData() homeData {
 }
 
 func (h *Hub) settings(w http.ResponseWriter, status int, message, notice string) {
+	h.settingsSection(w, status, message, notice, "connections")
+}
+
+func (h *Hub) settingsSection(w http.ResponseWriter, status int, message, notice, section string) {
 	data := h.pageData()
+	data.SettingsSection = validSettingsSection(section)
+	data.SettingsNav = template.HTML(hubNavFor("Settings", settingsNavLabel(data.SettingsSection)))
+	data.SettingsDraftClear = ""
 	data.Message, data.Notice = message, notice
 	h.render(w, status, settingsTemplate, data)
 }
 
+func (h *Hub) settingsRequest(w http.ResponseWriter, r *http.Request, status int, message, notice string) {
+	data := h.pageData()
+	query := r.URL.Query()
+	data.SettingsSection = validSettingsSection(query.Get("section"))
+	data.SettingsNav = template.HTML(hubNavFor("Settings", settingsNavLabel(data.SettingsSection)))
+	data.SettingsDraftClear = query.Get("clear")
+	if query.Has("sync_root") {
+		data.SyncRoot = query.Get("sync_root")
+	}
+	if query.Get("browse_cancel") == "1" {
+		notice = "Folder selection canceled. The typed path remains here; the saved location is unchanged."
+	}
+	if query.Get("browse_error") == "1" {
+		message = "The folder chooser could not open. Paste the folder path instead."
+	}
+	data.Message, data.Notice = message, notice
+	h.render(w, status, settingsTemplate, data)
+}
+
+func validSettingsSection(section string) string {
+	switch section {
+	case "preferences", "files", "system":
+		return section
+	default:
+		return "connections"
+	}
+}
+
+func settingsNavLabel(section string) string {
+	switch section {
+	case "preferences":
+		return "Preferences"
+	case "files":
+		return "Files"
+	case "system":
+		return "System"
+	default:
+		return "Connections"
+	}
+}
+
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.headers(w)
+	h.headers(w, r)
 	if "http://"+r.Host != h.origin {
 		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+	if r.Method == http.MethodGet && (r.URL.Path == "/" || r.URL.Path == "/settings") {
+		h.ensureCanvasHealth()
+	}
+	if r.URL.Path == "/canvas/test" {
+		h.testCanvas(w, r)
+		return
+	}
+	if r.URL.Path == "/rules/browse" {
+		h.browseRules(w, r)
+		return
+	}
+	if r.URL.Path == "/rules/test" {
+		h.testRulesLocation(w, r)
 		return
 	}
 	h.mu.Lock()
@@ -257,7 +341,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		message, notice := h.takeFlash()
-		h.settings(w, 200, message, notice)
+		h.settingsRequest(w, r, 200, message, notice)
 	case "/setup":
 		h.setup.initialOrigin = h.knownOrigin()
 		h.setup.ServeHTTP(w, r)
@@ -298,6 +382,42 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(struct {
 			InstallRoot string `json:"install_root"`
 		}{hubcoord.CanonicalRoot(h.root)})
+	case "/_cse/canvas-health":
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(struct {
+			State   string `json:"state"`
+			Note    string `json:"note"`
+			Account string `json:"account"`
+		}{h.canvasHealth, h.canvasHealthNote, h.canvasUser})
+	case "/_cse/canvas-health.js":
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		_, _ = io.WriteString(w, canvasHealthScript)
+	case "/_cse/drafts.js":
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		_, _ = io.WriteString(w, classroomDraftScript)
+	case "/_cse/settings-drafts.js":
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		_, _ = io.WriteString(w, settingsDraftScript)
 	case "/connect":
 		h.connectionPage(w, r)
 	case "/connect/extension":
@@ -323,8 +443,6 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.capabilitiesPage(w, r)
 	case "/playbook/replace":
 		h.replacePlaybook(w, r)
-	case "/canvas/test":
-		h.testCanvas(w, r)
 	case "/canvas/forget":
 		h.forgetCanvas(w, r)
 	case "/quit":
@@ -418,6 +536,7 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 	hub.setup.after = func(c platform.Credential) string {
 		hub.canvasUser = ""
 		hub.connectionTested = true
+		hub.markCanvasValidated(c)
 		if hub.root == "" {
 			return ""
 		}
@@ -448,6 +567,7 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 		hub.setupSaved = false
 		hub.connectionTested = false
 		hub.canvasUser = ""
+		hub.invalidateCanvasHealth()
 	}
 	hub.setup.onValidationResult = func(valid bool) {
 		outcome := "failed"

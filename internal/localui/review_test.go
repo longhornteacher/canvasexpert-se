@@ -16,7 +16,7 @@ import (
 
 func reviewModelFixture() workflow.ReviewModel {
 	return workflow.ReviewModel{Kind: "Assignment scores", Title: "Essay", Cards: []workflow.ReviewCard{
-		{Ref: "s-a", Attempt: 1, Total: "9 / 10", Comment: "Assessment: 9 / 10\n\nNice <b>work</b>", TeacherNote: "private-note", Late: "late 1d 3h", LateBasis: "skipped Mon 10/12 holiday", Digest: "d1"},
+		{Ref: "s-a", Attempt: 1, Total: "9 / 10", Submission: "student response", Comment: "Assessment: 9 / 10\n\nNice <b>work</b>", TeacherNote: "private-note", Late: "late 1d 3h", LateBasis: "skipped Mon 10/12 holiday", Digest: "d1"},
 		{Ref: "s-b", Attempt: 1, Total: "5 / 10", Comment: "Needs more", Digest: "d2"},
 		{Ref: "s-c", Attempt: 1, Hold: "unreadable evidence", Digest: "d3"},
 	}}
@@ -53,6 +53,14 @@ func TestReviewPageShowsPlainTextAndMarksPrivateNotes(t *testing.T) {
 	body := w.Body.String()
 	if w.Code != 200 || !strings.Contains(body, "Nice &lt;b&gt;work&lt;/b&gt;") || !strings.Contains(body, "Teacher only (not posted)") || !strings.Contains(body, "skipped Mon 10/12 holiday") || !strings.Contains(body, "Held, will not post: unreadable evidence") {
 		t.Fatal(body)
+	}
+	if strings.Index(body, `<pre class="work">student response</pre>`) < 0 || strings.Index(body, `<pre class="work">student response</pre>`) > strings.Index(body, `Feedback to be posted`) {
+		t.Fatal("student evidence should appear before proposed feedback")
+	}
+	for _, want := range []string{"Only approved items can be posted", "prefers-color-scheme:dark", "color:var(--accent-ink)", "summary:focus-visible", "Held"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("review page missing styling or scope detail %q", want)
+		}
 	}
 }
 
@@ -168,7 +176,7 @@ func TestReviewReportsActualPostOutcomeAndSavedPath(t *testing.T) {
 			}
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, reviewForm(h, reviewModelFixture().ReviewDigest(), "post", nil))
-			if w.Code != 200 || h.outcome.Status != status || h.outcome.Path != "archive/assignment.md" {
+			if w.Code != 200 || h.outcome.Status != status || h.outcome.Path != "archive/assignment.md" || !strings.Contains(w.Body.String(), "Review outcome: "+status) || !strings.Contains(w.Body.String(), "actual outcome") {
 				t.Fatalf("status %d: %+v", w.Code, h.outcome)
 			}
 		})

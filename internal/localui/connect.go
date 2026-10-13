@@ -10,18 +10,19 @@ import (
 
 type connectionData struct {
 	Secret, Root, Message, Notice, Client, ExistingInstall string
+	ResultLabel, CheckLabel                                string
 	Result                                                 installation.Result
 	Check                                                  installation.CheckResult
 }
 
-var connectionTemplate = template.Must(template.New("connect").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect your teaching assistant</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNav + `<h1>Connect your teaching assistant</h1><p>This connects the Engine in this Install: <code>{{.Root}}</code>. Choose the app where you want to teach.</p>
+var connectionTemplate = template.Must(template.New("connect").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect your teaching assistant</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>` + hubNavAgent + `<h1>Connect your teaching assistant</h1><p>This connects the Engine in this Install: <code>{{.Root}}</code>. Choose the app where you want to teach.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
-{{if .Root}}<form method="post" action="/connect"><input type="hidden" name="request_secret" value="{{.Secret}}"><label for="client">Teaching app</label><select id="client" name="client"><option value="work" {{if eq .Client "work"}}selected{{end}}>Work (local desktop)</option><option value="cowork" {{if eq .Client "cowork"}}selected{{end}}>Cowork (Claude desktop)</option></select>
+{{if .Root}}<section class="card"><h2>Register an app</h2><form method="post" action="/connect"><input type="hidden" name="request_secret" value="{{.Secret}}"><label for="client">Teaching app</label><select id="client" name="client"><option value="work" {{if eq .Client "work"}}selected{{end}}>Work (local desktop)</option><option value="cowork" {{if eq .Client "cowork"}}selected{{end}}>Cowork (Claude desktop)</option></select>
 {{if .ExistingInstall}}<p>The CE-SE connection currently points to <code>{{.ExistingInstall}}</code>. Replacing it will point this app to <code>{{.Root}}</code>; both Installs keep their files.</p><label class="check"><input type="checkbox" name="replace" required> Replace this app's CE-SE connection</label>{{end}}
-<button name="action" value="register" type="submit">Connect selected app</button></form>{{else}}<p>Open the hub from the extracted Install using webui.cmd to connect an agent.</p>{{end}}
-{{if .Result.State}}<div class="card"><h2>Connection outcome</h2><p>{{.Result.State}}</p>{{if .Result.NextAction}}<p>{{.Result.NextAction}}</p>{{end}}{{if .Result.ExtensionPath}}<p>Install the bundled extension using your app's local extension installer: <code>{{.Result.ExtensionPath}}</code>. <a class="go" href="/connect/extension">Download the ready-to-install extension &rarr;</a></p>{{end}}<p>Saved settings or an extension file do not establish that the destination app has used CE-SE tools.</p></div>{{end}}
-<div class="card"><h2>Local tool check</h2><p>This starts this Install's Engine, discovers tools and reads instructions and configured courses. It makes no Canvas writes.</p>{{if .Root}}<form method="post" action="/connect"><input type="hidden" name="request_secret" value="{{.Secret}}"><button name="action" value="check" type="submit">Check local tools</button></form>{{end}}{{if .Check.State}}<p>{{.Check.State}}; {{.Check.ToolCount}} tools. Loaded adapter: <code>{{.Check.AdapterVersion}}</code>.</p><p>Instructions read: {{.Check.InstructionsRead}}. Configured courses read: {{.Check.ConfiguredCoursesRead}}.</p>{{end}}<p>A local check cannot verify the destination app. Reconnect or restart the app if it asks, after finishing any open review.</p></div>
-<div class="card"><h2>Finish in your teaching app</h2><p>Once CE-SE tools appear, send this:</p><blockquote>Be my teaching assistant using CanvasExpert-SE. Read the current AGENTS.md through CE-SE, confirm the Install you are connected to and read my saved courses. Read my teaching profile, grading preferences and the playbook for each task. Keep those teacher files authoritative instead of copying the playbooks into project instructions. Help me carry over teaching instructions I choose, or learn my preferences gradually as we work. Tell me when the CE-SE tools are ready, then help with my first task. Drafting does not authorize Canvas writes; follow my requested scope and the ordinary review workflow.</blockquote><p>Your teaching preferences stay in Install or your configured Sync folder. You can add them progressively while working.</p><a class="go" href="/settings">Canvas connection and preferences &rarr;</a></div></main></html>`))
+<button name="action" value="register" type="submit">Register or prepare selected app</button></form></section>{{else}}<p>Open the hub from the extracted Install using webui.cmd to connect an agent.</p>{{end}}
+{{if .Result.State}}<section class="card"><h2>Registration result</h2><p><b>{{.ResultLabel}}</b></p>{{if .Result.NextAction}}<p>{{.Result.NextAction}}</p>{{end}}{{if .Result.ConfigPath}}<p>Work configuration: <code>{{.Result.ConfigPath}}</code>{{if .Result.BackupPath}}. Previous configuration backup: <code>{{.Result.BackupPath}}</code>{{end}}</p>{{end}}{{if .Result.ExtensionPath}}<p>Prepared Cowork extension: <code>{{.Result.ExtensionPath}}</code></p><p><a class="go" href="/connect/extension">Download the extension</a></p>{{end}}<p>This confirms local registration or preparation only. Finish setup and check for CE-SE tools in the selected app.</p></section>{{end}}
+<section class="card"><h2>Local tool check</h2><p>Starts this Install's Engine, discovers tools, and reads instructions and configured courses. It makes no Canvas writes and does not check the destination app.</p>{{if .Root}}<form method="post" action="/connect"><input type="hidden" name="request_secret" value="{{.Secret}}"><button name="action" value="check" type="submit">Check this Install</button></form>{{end}}{{if .Check.State}}<p><b>{{.CheckLabel}}</b>: {{.Check.ToolCount}} tools; adapter <code>{{.Check.AdapterVersion}}</code>.</p><p>Instructions read: {{.Check.InstructionsRead}}. Configured courses read: {{.Check.ConfiguredCoursesRead}}.</p>{{end}}</section>
+<details class="card"><summary><b>Finish in your teaching app</b></summary><p>After finishing the app's setup prompt, send this in the app:</p><blockquote>Be my teaching assistant using CanvasExpert-SE. Read the current AGENTS.md through CE-SE, confirm the Install you are connected to and read my saved courses. Read my teaching profile, grading preferences and the playbook for each task. Keep those teacher files authoritative instead of copying the playbooks into project instructions. Help me carry over teaching instructions I choose, or learn my preferences gradually as we work. Tell me when the CE-SE tools are ready, then help me with my first task. Drafting does not authorize Canvas writes; follow my requested scope and the ordinary review workflow.</blockquote><p>Your teaching preferences stay in Install or your configured Sync folder. You can add them progressively while working.</p><a class="go" href="/settings?section=connections">Canvas, teacher rules and Sync</a></details></main></html>`))
 
 func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
@@ -64,5 +65,37 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.connection.Secret, h.connection.Root = h.secret, h.root
+	h.connection.ResultLabel = connectionResultLabel(h.connection.Result)
+	h.connection.CheckLabel = connectionCheckLabel(h.connection.Check)
 	h.render(w, http.StatusOK, connectionTemplate, h.connection)
+}
+
+func connectionResultLabel(result installation.Result) string {
+	switch result.State {
+	case "settings-saved":
+		return "Work registration saved"
+	case "settings-already-saved":
+		return "Work already points to this Install"
+	case "extension-ready":
+		switch result.CoworkLaunchOutcome {
+		case "launch_requested":
+			return "Cowork extension prepared; opening was requested"
+		case "launch_failed":
+			return "Cowork extension prepared; automatic opening did not work"
+		default:
+			return "Cowork extension prepared"
+		}
+	default:
+		return "Local setup action completed"
+	}
+}
+
+func connectionCheckLabel(result installation.CheckResult) string {
+	if result.State == "local-check-passed" {
+		return "Local checks passed"
+	}
+	if result.State == "local-check-failed" {
+		return "Local check did not pass"
+	}
+	return ""
 }

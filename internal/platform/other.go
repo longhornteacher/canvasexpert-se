@@ -2,7 +2,14 @@
 
 package platform
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
+
+func PickFolder(context.Context) (string, error) {
+	return "", errors.New("the folder chooser is available on Windows; paste the folder path instead")
+}
 
 func LoadCredential() (Credential, error) {
 	return Credential{}, errors.New("SE credentials require Windows; run cse setup on the Windows machine")

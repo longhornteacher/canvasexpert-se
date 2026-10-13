@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"canvasexpertse/internal/installation"
+
 	"canvasexpertse/internal/platform"
 )
 
@@ -119,7 +121,30 @@ func TestFailedCanvasTestClearsTestedStatus(t *testing.T) {
 func TestConnectionPageExplainsDestinationVerificationAndMissingInstall(t *testing.T) {
 	h := newTestHub()
 	w := hubGet(h, "/connect")
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "A local check cannot verify the destination app") || !strings.Contains(w.Body.String(), "webui.cmd") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "does not check the destination app") || !strings.Contains(w.Body.String(), "webui.cmd") || !strings.Contains(w.Body.String(), `aria-current="page">Agent</a>`) {
 		t.Fatal("missing honest destination or Install guidance")
+	}
+}
+
+func TestConnectionOutcomeLabelsDescribeLocalEvidence(t *testing.T) {
+	cases := []struct {
+		result installation.Result
+		want   string
+	}{
+		{installation.Result{State: "settings-saved"}, "Work registration saved"},
+		{installation.Result{State: "settings-already-saved"}, "Work already points to this Install"},
+		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "launch_requested"}, "Cowork extension prepared; opening was requested"},
+		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "launch_failed"}, "Cowork extension prepared; automatic opening did not work"},
+	}
+	for _, tc := range cases {
+		if got := connectionResultLabel(tc.result); got != tc.want {
+			t.Errorf("connectionResultLabel(%+v) = %q, want %q", tc.result, got, tc.want)
+		}
+	}
+	if got := connectionCheckLabel(installation.CheckResult{State: "local-check-passed"}); got != "Local checks passed" {
+		t.Fatalf("successful local check label = %q", got)
+	}
+	if got := connectionCheckLabel(installation.CheckResult{State: "local-check-failed"}); got != "Local check did not pass" {
+		t.Fatalf("failed local check label = %q", got)
 	}
 }

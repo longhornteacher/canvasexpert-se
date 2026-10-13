@@ -13,7 +13,7 @@ import (
 func TestCapabilitiesPageWithoutWorkspace(t *testing.T) {
 	h := newTestHub()
 	w := hubGet(h, "/capabilities")
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "not real-time Canvas health") {
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "do not show real-time Canvas health") {
 		t.Fatalf("capabilities page unavailable without workspace: %d", w.Code)
 	}
 	w = httptest.NewRecorder()
@@ -48,6 +48,9 @@ func TestCapabilitiesStructureAndReviewDate(t *testing.T) {
 	h := newTestHub()
 	w := hubGet(h, "/capabilities")
 	body := w.Body.String()
+	if strings.Contains(body, `<div class="cap-legend"`) || strings.Contains(body, `<aside class="card cap-next">`) {
+		t.Fatal("capabilities page should keep the evidence list quiet and focused")
+	}
 	for status, count := range counts {
 		if got := strings.Count(body, `class="cap-item `+string(status)+`"`); got != count {
 			t.Errorf("rendered %d %s status lights; want %d", got, status, count)

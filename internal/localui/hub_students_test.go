@@ -63,8 +63,11 @@ func TestCoursePickerSavesOnlyActiveCourses(t *testing.T) {
 	if strings.Index(body, `ID 44 · available`) > strings.Index(body, `ID 33 · unpublished`) {
 		t.Fatal("available course should be listed before unpublished course")
 	}
-	if strings.Count(body, "Same Title") != 2 {
+	if strings.Count(body, `Same Title <span class="course-state"`) != 2 {
 		t.Fatal("same-title courses with distinct IDs must both remain visible")
+	}
+	if !strings.Contains(body, `aria-label="Nickname for Same Title (33)"`) || !strings.Contains(body, `aria-label="Active course Same Title (44)"`) {
+		t.Fatal("course controls need labels that distinguish same-title courses")
 	}
 	form := url.Values{"request_secret": {"nonce"}, "id": {"11", "22"}, "nick_11": {"CS8"}, "active_11": {"on"}, "nick_22": {"OLD"}}
 	if w := hubPost(h, "/courses", form, h.origin); w.Code != http.StatusSeeOther {
@@ -207,6 +210,38 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 	}
 }
 
+func TestClassroomKeepsUnsavedEditsInCurrentTab(t *testing.T) {
+	h, root := studentsHub(t)
+	config := domain.CourseConfig{Schema: 1, Instance: "https://school.example", Courses: []domain.Course{{ID: 11, Nickname: "CS8", Current: true}}}
+	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); err != nil {
+		t.Fatal(err)
+	}
+	students := hubGet(h, "/students")
+	page := students.Body.String()
+	if csp := students.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "script-src 'unsafe-inline'") {
+		t.Fatalf("student draft script is not confined by the page CSP: %s", csp)
+	}
+	for _, want := range []string{`data-draft-key="students:nonce"`, `name="alias_`, `name="note_`, `<details class="student-notes">`, `Refresh from Canvas`, `students`} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("student page missing %q", want)
+		}
+	}
+	if !strings.Contains(page, `table class="students"`) || strings.Contains(page, `class="student-card"`) || strings.Contains(page, `localStorage`) {
+		t.Fatal("student roster should stay compact and avoid durable browser storage")
+	}
+	coursesResponse := hubGet(h, "/courses")
+	courses := coursesResponse.Body.String()
+	if csp := coursesResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "connect-src") {
+		t.Fatalf("course draft CSP grants unnecessary access: %s", csp)
+	}
+	if !strings.Contains(courses, `data-draft-key="courses:nonce"`) || !strings.Contains(courses, `name="active_11"`) || !strings.Contains(courses, `name="nick_11"`) {
+		t.Fatal("course page does not expose draft-restorable controls")
+	}
+	if got := hubGet(h, "/_cse/drafts.js"); got.Code != 200 || !strings.Contains(got.Body.String(), "sessionStorage") || strings.Contains(got.Body.String(), "localStorage") {
+		t.Fatal("tab-scoped classroom draft script missing or uses durable storage")
+	}
+}
+
 func TestStudentsNoActiveCoursesAndTagFailure(t *testing.T) {
 	h, root := studentsHub(t)
 	if w := hubGet(h, "/students"); w.Code != 200 || !strings.Contains(w.Body.String(), "No active courses selected") {
@@ -242,8 +277,9 @@ func TestSettingsShowInstallationAndSavePreferences(t *testing.T) {
 	if strings.Contains(home, `name="path"`) || strings.Contains(home, "SE = ") || strings.Contains(home, "Command central") || !strings.Contains(home, "CanvasExpert: Special Edition") {
 		t.Fatal("home still contains old branding or workspace controls")
 	}
-	page := hubGet(h, "/settings").Body.String()
-	if strings.Contains(page, `name="path"`) || !strings.Contains(page, `name="aliases" checked`) || !strings.Contains(page, `href="/setup"`) {
+	page := hubGet(h, "/settings?section=preferences").Body.String()
+	connections := hubGet(h, "/settings?section=connections").Body.String()
+	if strings.Contains(page, `name="path"`) || !strings.Contains(page, `name="aliases" checked`) || !strings.Contains(connections, `href="/setup"`) {
 		t.Fatal("settings missing basic controls")
 	}
 	if w := hubPost(h, "/settings", url.Values{"request_secret": {"nonce"}}, h.origin); w.Code != 303 {

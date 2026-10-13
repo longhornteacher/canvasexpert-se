@@ -19,20 +19,19 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
-var studentsTemplate = template.Must(template.New("students").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE students</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>{{if .Hub}}` + hubNav + `{{end}}<h1>Students</h1><p>Manage aliases, monitoring, extra time, and private notes for your students. Differentiation tags come from Canvas.</p>
+var studentsTemplate = template.Must(template.New("students").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert-SE students</title><style>` + funkyCSS + `</style><main class="wide"><div class="badge">CanvasExpert: SE</div>{{if .Hub}}` + hubNavStudents + `{{end}}<h1>Students</h1><p>Manage aliases, monitoring, extra time, and private notes for your students. Differentiation tags come from Canvas.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 {{if .Hub}}{{if .Tabs}}<nav class="course-tabs" aria-label="Active courses">{{range .Tabs}}<a href="/students?course={{.ID}}" {{if .Selected}}aria-current="page"{{end}}>{{.Name}}</a>{{end}}</nav>
 <div class="row"><form method="post" action="/students/refresh"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="course" value="{{.CourseID}}"><button type="submit">Refresh from Canvas</button></form><span class="pill on">{{len .Rows}} students</span></div>
 <h2 class="grp">{{.CourseName}}</h2>{{if .UpdatedAt}}<p>Last pulled: {{.UpdatedAt}}</p>{{end}}
 {{else}}<p class="card">No active courses selected. <a href="/courses">Pick active courses</a> to load their students.</p>{{end}}{{end}}
 {{if .TagMessage}}<p class="error">{{.TagMessage}}</p>{{end}}
-{{if or .CourseID (not .Hub)}}<form action="/students" method="post"><input type="hidden" name="request_secret" value="{{.Secret}}">{{if .Hub}}<input type="hidden" name="course" value="{{.CourseID}}">{{end}}
-<div class="table-scroll"><table class="students"><thead><tr><th>Name</th><th>Alias</th><th>Differentiation tag</th><th>Monitored</th><th>Extra time</th>{{if .NotesOn}}<th>Notes for the agent</th>{{end}}</tr></thead><tbody>
+{{if or .CourseID (not .Hub)}}<form action="/students" method="post"{{if .Hub}} data-draft-key="{{.DraftKey}}" data-clear-draft="{{.ClearDraft}}"{{end}}><input type="hidden" name="request_secret" value="{{.Secret}}">{{if .Hub}}<input type="hidden" name="course" value="{{.CourseID}}">{{end}}
+<div class="table-scroll"><table class="students"><thead><tr><th>Student</th><th>Alias</th><th>Canvas tag</th><th>Monitored</th><th>Extra time</th>{{if .NotesOn}}<th>Private notes</th>{{end}}</tr></thead><tbody>
 {{range .Rows}}<tr><td class="student-name">{{.Name}}<br><span class="ref" title="Stable student reference">{{.Ref}}</span></td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required aria-label="Alias for {{.Name}}"></td>
-<td>{{if $.TagMessage}}<span class="pill">Unavailable</span>{{else}}{{range .Tags}}<span class="pill diff-tag {{.Class}}">{{.Name}}</span>{{else}}<span class="pill">No tag</span>{{end}}{{end}}</td>
-<td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}} aria-label="Monitored for {{.Name}}"></td><td><input type="checkbox" name="extra_time_{{.Ref}}" {{if .ExtraTime}}checked{{end}} aria-label="Extra time for {{.Name}}"></td>{{if $.NotesOn}}<td><textarea name="note_{{.Ref}}" rows="2" maxlength="8000" placeholder="Accommodations, context, what helps" aria-label="Notes for {{.Name}}">{{.Note}}</textarea></td>{{end}}</tr>
-{{else}}<tr><td colspan="{{if .NotesOn}}6{{else}}5{{end}}">No students loaded{{if .Hub}} for this course. Refresh from Canvas to load its roster{{else}}. Pull student work to populate this table{{end}}.</td></tr>{{end}}</tbody></table></div>
-<p>Extra time is saved for later use. Tags are managed in Canvas.{{if .NotesOn}} Notes follow the student into every course and are given to the agent with their work. They are never shown to students.{{end}}</p>{{if .Rows}}<button type="submit">{{if .Hub}}Save students{{else}}Save &amp; close{{end}}</button>{{end}}</form>{{end}}</main></html>`))
+<td>{{if $.TagMessage}}<span class="pill">Unavailable</span>{{else}}{{range .Tags}}<span class="pill diff-tag {{.Class}}">{{.Name}}</span>{{else}}<span class="pill">No tag</span>{{end}}{{end}}</td><td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}} aria-label="Monitored for {{.Name}}"></td><td><input type="checkbox" name="extra_time_{{.Ref}}" {{if .ExtraTime}}checked{{end}} aria-label="Extra time for {{.Name}}"></td>{{if $.NotesOn}}<td><details class="student-notes"><summary>Private notes for the agent</summary><textarea name="note_{{.Ref}}" rows="3" maxlength="8000" placeholder="Add private context for the agent" aria-label="Notes for {{.Name}}">{{.Note}}</textarea></details></td>{{end}}</tr>
+{{else}}<tr><td colspan="{{if .NotesOn}}6{{else}}5{{end}}">No students loaded{{if .Hub}} for this course. Refresh from Canvas to load their roster{{else}}. Pull student work to populate this table{{end}}.</td></tr>{{end}}</tbody></table></div>
+<p>Extra time is saved for later use; it does not change Canvas deadlines. Tags are managed in Canvas.{{if .NotesOn}} Private notes follow each student across courses and are given to the agent with their work. They are never shown to students.{{end}}</p>{{if .Rows}}<button type="submit">{{if .Hub}}Save students{{else}}Save &amp; close{{end}}</button>{{end}}</form>{{end}}{{if .Hub}}<script src="/_cse/drafts.js" defer></script>{{end}}</main></html>`))
 
 type courseTab struct {
 	ID       int64
@@ -52,6 +51,8 @@ type studentRow struct {
 
 type studentsData struct {
 	Secret, Message, Notice           string
+	DraftKey                          string
+	ClearDraft                        bool
 	Rows                              []studentRow
 	Hub, NotesOn                      bool
 	Tabs                              []courseTab
@@ -83,6 +84,9 @@ func (h *studentHandler) pageNotice(w http.ResponseWriter, status int, message, 
 	w.WriteHeader(status)
 	data := h.data
 	data.Secret, data.Message, data.Notice, data.Hub = h.secret, message, notice, h.hub
+	if h.hub {
+		data.DraftKey = "students:" + h.secret
+	}
 	data.Rows = nil
 	var notes map[string]string
 	if h.notesRoot != "" {
@@ -115,7 +119,11 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	csp := "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+	if h.hub {
+		csp += "; script-src 'self'"
+	}
+	w.Header().Set("Content-Security-Policy", csp)
 	if "http://"+r.Host != h.origin || r.URL.Path != "/students" {
 		http.NotFound(w, r)
 		return
@@ -186,12 +194,13 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if h.persistent {
+		h.data.ClearDraft = true
 		h.pageNotice(w, 200, "", "Saved.")
 		return
 	}
 	h.complete = true
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Students saved</title><style>"+funkyCSS+"</style><main class=\"done\"><h1>Saved!</h1><p>Student settings locked in. You can close this page.</p></main></html>")
+	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Students saved</title><style>"+funkyCSS+"</style><main class=\"done\"><h1>Saved</h1><p>Student settings saved. You can close this page.</p></main></html>")
 	close(h.done)
 }
 func Students(ctx context.Context, root string, output io.Writer) error {

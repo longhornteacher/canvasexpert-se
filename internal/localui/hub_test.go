@@ -1,6 +1,7 @@
 package localui
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -9,11 +10,15 @@ import (
 	"strings"
 	"testing"
 
+	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workspace"
 )
 
 func newTestHub() *Hub {
 	h := &Hub{origin: "http://127.0.0.1:4444", secret: "nonce", quit: make(chan struct{})}
+	h.loadCredentialFn = func() (platform.Credential, error) {
+		return platform.Credential{}, errors.New("no SE credential is saved on this machine")
+	}
 	h.setup = &setupHandler{origin: h.origin, secret: h.secret, persistent: true, hub: true, done: make(chan struct{})}
 	return h
 }
@@ -49,7 +54,7 @@ func TestHubRejectsForeignHostAndServesNavigation(t *testing.T) {
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/", nil))
 	body := w.Body.String()
-	if w.Code != 200 || !strings.Contains(body, `href="/students"`) || !strings.Contains(body, "CanvasExpert: Special Edition") || strings.Contains(body, "SE = ") || strings.Contains(body, "/pokemonify") {
+	if w.Code != 200 || !strings.Contains(body, `href="/courses"`) || !strings.Contains(body, `href="/settings"`) || !strings.Contains(body, `href="/how"`) || !strings.Contains(body, `href="/" aria-current="page">Home</a>`) || strings.Contains(body, "SE = ") || strings.Contains(body, "/pokemonify") {
 		t.Fatal("home page incomplete")
 	}
 }
@@ -81,16 +86,21 @@ func TestUnavailableSyncShowsPathAndKeepsSettingsCorrectionForm(t *testing.T) {
 	if err := os.Rename(syncRoot, syncRoot+"-offline"); err != nil {
 		t.Fatal(err)
 	}
-	page := hubGet(h, "/settings").Body.String()
-	if !strings.Contains(page, "Sync unavailable") || !strings.Contains(page, syncRoot) || !strings.Contains(page, `name="sync_root" value="`+syncRoot+`"`) {
+	page := hubGet(h, "/settings?section=connections").Body.String()
+	if !strings.Contains(page, "Unavailable") || !strings.Contains(page, syncRoot) || !strings.Contains(page, `name="sync_root" value="`+syncRoot+`"`) {
 		t.Fatal("unavailable Sync path or correction control is missing")
 	}
 	home := hubGet(h, "/").Body.String()
-	if !strings.Contains(home, "Active locations") || !strings.Contains(home, "Teacher rules (sync)") || !strings.Contains(home, syncRoot) || !strings.Contains(home, "Sync unavailable") || !strings.Contains(home, "configured Sync rules directory") {
-		t.Fatal("home summary must show the unavailable configured Sync root and error")
+	if !strings.Contains(home, "Unavailable") || !strings.Contains(home, syncRoot) || !strings.Contains(home, "will not fall back") {
+		t.Fatal("home summary must show unavailable Sync and its configured path")
 	}
-	if strings.Contains(home, "Teacher rules (sync)") && strings.Contains(home, "Teacher rules (local)") {
+	if strings.Contains(home, "Local only") {
 		t.Fatal("home summary must not imply fallback to local rules")
+	}
+	test := hubPost(h, "/rules/test", url.Values{"request_secret": {h.secret}, "sync_root": {t.TempDir()}}, h.origin)
+	result := hubGet(h, test.Header().Get("Location")).Body.String()
+	if !strings.Contains(result, "Saved teacher-rules folder test: Unavailable") || !strings.Contains(result, syncRoot) || !strings.Contains(result, "will not fall back") {
+		t.Fatal("testing an unavailable Sync folder must preserve its saved authority and explain the failure")
 	}
 	if _, _, err := readGrading(h.root); err == nil || !strings.Contains(err.Error(), "unavailable") {
 		t.Fatalf("grading read fell back to stale Install copy: %v", err)
@@ -107,8 +117,8 @@ func TestHomeShowsResolvedLocalLocations(t *testing.T) {
 	h := newTestHub()
 	h.root = makeWorkspace(t)
 	page := hubGet(h, "/").Body.String()
-	if !strings.Contains(page, "Active locations") || !strings.Contains(page, "Install: <code>"+h.root+"</code>") || !strings.Contains(page, "Teacher rules (local): <code>"+h.root+"</code>") {
-		t.Fatal("home summary missing resolved local Install and rules roots")
+	if !strings.Contains(page, "Local only") || !strings.Contains(page, "Teacher rules are stored in this Install.") {
+		t.Fatal("home summary missing local rules status")
 	}
 	if strings.Contains(page, `action="/rules-location"`) {
 		t.Fatal("home summary must not duplicate editable Settings controls")
@@ -138,7 +148,7 @@ func TestHubCannotChangeInstallation(t *testing.T) {
 		}
 	}
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/settings", nil))
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/settings?section=system", nil))
 	if w.Code != 200 || !strings.Contains(w.Body.String(), original) || strings.Contains(w.Body.String(), `action="/workspace"`) || strings.Contains(w.Body.String(), `action="/browse"`) {
 		t.Fatal("settings must show a read-only installation")
 	}
@@ -147,7 +157,7 @@ func TestHubCannotChangeInstallation(t *testing.T) {
 func TestHubDevelopmentLaunchExplainsExplicitRoot(t *testing.T) {
 	h := newTestHub()
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/settings", nil))
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/settings?section=system", nil))
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "--workspace") {
 		t.Fatal("missing explicit development launch guidance")
 	}
@@ -255,7 +265,7 @@ func TestBindingCustomizedSyncOffersComparisonWithoutReplacing(t *testing.T) {
 	if w := hubPost(h, "/rules-location", form, h.origin); w.Code != 303 {
 		t.Fatalf("bind existing Sync: %d", w.Code)
 	}
-	if !strings.Contains(h.flash, "seed-managed instructions in Sync differ") || !strings.Contains(h.flash, "Settings → Your playbooks and context") {
+	if !strings.Contains(h.flash, "seed-managed instructions in Sync differ") || !strings.Contains(h.flash, "Settings → Files") {
 		t.Fatalf("missing adoption notice: %q", h.flash)
 	}
 	if got := readString(t, custom); got != "teacher setup preferences" {
@@ -264,7 +274,7 @@ func TestBindingCustomizedSyncOffersComparisonWithoutReplacing(t *testing.T) {
 	if got := readString(t, filepath.Join(syncRoot, "AGENTS.md")); got != "teacher's existing instructions" {
 		t.Fatalf("binding replaced existing AGENTS: %q", got)
 	}
-	page := hubGet(h, "/settings").Body.String()
+	page := hubGet(h, "/settings?section=files").Body.String()
 	if !strings.Contains(page, "Get the new version") || !strings.Contains(page, "differs from this version's starter copy") {
 		t.Fatal("existing comparison and explicit adoption UI not shown")
 	}
@@ -307,5 +317,33 @@ func TestHowPageShowsPaths(t *testing.T) {
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/how", nil))
 	if body := w.Body.String(); w.Code != 200 || !strings.Contains(body, `C:\Prog`) || !strings.Contains(body, `C:\Work`) {
 		t.Fatal("how page missing paths")
+	}
+}
+
+func TestGuideUsesSixNativeExpandableTopicsAndExplainsStorageScopes(t *testing.T) {
+	h := newTestHub()
+	w := hubGet(h, "/how")
+	body := w.Body.String()
+	if w.Code != http.StatusOK || strings.Count(body, `class="card guide-topic"`) != 6 {
+		t.Fatalf("guide should render six native expandable topics, status=%d", w.Code)
+	}
+	if strings.Contains(body, `popovertarget=`) || !strings.Contains(body, `<details class="card guide-topic"`) {
+		t.Fatal("guide topics should use native details disclosures")
+	}
+	for _, want := range []string{"Source", "Install", "Sync", "provider carries", "Student information and work stay in Install"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("guide missing storage distinction %q", want)
+		}
+	}
+}
+
+func TestHomeRoutesCanvasAndSyncActionsToExistingSettingsAndChecks(t *testing.T) {
+	h := newTestHub()
+	h.root = makeWorkspace(t)
+	body := hubGet(h, "/").Body.String()
+	for _, want := range []string{`href="/settings?section=connections">Connection</a>`, `href="/settings?section=connections#rules">Browse</a>`, `action="/rules/test"`, `name="request_secret" value="nonce"`, `name="sync_root"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Home missing action %q", want)
+		}
 	}
 }
