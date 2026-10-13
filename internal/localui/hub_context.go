@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -28,7 +29,7 @@ const (
 	canvasHealthRejected      = "Token rejected"
 	canvasHealthUnavailable   = "Unavailable"
 	canvasHealthNotConnected  = "Not connected"
-	defaultCanvasHealthWindow = 8 * time.Second
+	defaultCanvasHealthWindow = 8 * time.Second // the page polls for 15s; keep this well inside it
 )
 
 const canvasHealthScript = `(()=>{
@@ -39,13 +40,13 @@ const note=panel.querySelector("[data-health-note]");
 const mark=panel.querySelector("[data-health-mark]");
 const buttons=document.querySelectorAll("[data-canvas-test]");
 const setButton=(checking)=>buttons.forEach(b=>{b.disabled=checking;b.textContent=checking?"Checking…":"Test"});
-let attempts=0,finished=false;
+const deadline=Date.now()+15000;let finished=false;
 const finishUnavailable=()=>{if(finished)return;finished=true;panel.dataset.state="Unavailable";state.textContent="Unavailable";note.textContent="The local page could not read the check result. Reload to retry.";mark.className="status-mark bad";setButton(false)};
 setButton(true);
 const poll=()=>fetch("/_cse/canvas-health",{cache:"no-store",headers:{Accept:"application/json"}})
  .then(r=>{if(!r.ok)throw new Error("status");return r.json()})
- .then(s=>{panel.dataset.state=s.state;state.textContent=s.state;note.textContent=s.note;mark.className="status-mark "+(s.state==="Connected"?"good":s.state==="Token rejected"||s.state==="Unavailable"?"bad":s.state==="Checking…"?"waiting":"");const account=panel.querySelector("[data-health-account]"),accountRow=panel.querySelector("[data-health-account-row]");if(account&&accountRow){account.textContent=s.account||"";accountRow.hidden=!s.account}if(s.state==="Checking…"){if(attempts++<40)setTimeout(poll,200);else finishUnavailable()}else{finished=true;setButton(false)}})
- .catch(()=>{if(attempts++<40)setTimeout(poll,200);else finishUnavailable()});
+ .then(s=>{panel.dataset.state=s.state;state.textContent=s.state;note.textContent=s.note;mark.className="status-mark "+(s.state==="Connected"?"good":s.state==="Token rejected"||s.state==="Unavailable"?"bad":s.state==="Checking…"?"waiting":"");const account=panel.querySelector("[data-health-account]"),accountRow=panel.querySelector("[data-health-account-row]");if(account&&accountRow){account.textContent=s.account||"";accountRow.hidden=!s.account}if(s.state==="Checking…"){if(Date.now()<deadline)setTimeout(poll,250);else finishUnavailable()}else{finished=true;setButton(false)}})
+ .catch(()=>{if(Date.now()<deadline)setTimeout(poll,250);else finishUnavailable()});
 setTimeout(poll,150);
 })();`
 
@@ -98,7 +99,7 @@ func (h *Hub) startCanvasHealthCheck(force, manual bool) {
 	h.mu.Lock()
 	if err != nil {
 		state, note := canvasHealthUnavailable, "Could not read the saved Access token from Windows Credential Manager. Check credential access on this computer."
-		if strings.Contains(strings.ToLower(err.Error()), "no se credential is saved") {
+		if errors.Is(err, platform.ErrNoCredential) {
 			state, note = canvasHealthNotConnected, canvasHealthNote(canvasHealthNotConnected)
 		}
 		if h.canvasHealth != state || h.canvasHealthFingerprint != "" {
@@ -172,8 +173,22 @@ func (h *Hub) startCanvasHealthCheck(force, manual bool) {
 			h.canvasHealth, h.canvasHealthNote = canvasHealthRejected, canvasHealthNote(canvasHealthRejected)
 			return
 		}
-		h.canvasHealth, h.canvasHealthNote = canvasHealthUnavailable, canvasHealthNote(canvasHealthUnavailable)
+		h.canvasHealth, h.canvasHealthNote = canvasHealthUnavailable, canvasFailureNote(checkErr)
 	}()
+}
+
+// canvasFailureNote distinguishes a Canvas response from no response; neither
+// proves the saved token is bad. canvas.Error text never contains the token.
+func canvasFailureNote(err error) string {
+	var ce *canvas.Error
+	switch {
+	case errors.As(err, &ce) && ce.Status > 0:
+		return fmt.Sprintf("Canvas answered but the check did not pass (%s; HTTP %d). Canvas did not reject the saved token; check the Canvas address or try again.", ce.Error(), ce.Status)
+	case errors.Is(err, context.DeadlineExceeded):
+		return "Canvas did not answer in time. The saved token may still be valid; try again."
+	default:
+		return "Canvas could not be reached (" + err.Error() + "). The saved token may still be valid; try again."
+	}
 }
 
 func credentialFingerprint(c platform.Credential) string {

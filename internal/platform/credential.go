@@ -11,6 +11,9 @@ import (
 
 const credentialTarget = "CanvasExpert-SE/Canvas/v1"
 
+// ErrNoCredential reports that this machine has no saved Canvas credential.
+var ErrNoCredential = errors.New("no SE credential is saved on this machine")
+
 type Credential struct{ Origin, Token string }
 
 // A length-prefixed blob preserves token bytes, including non-UTF-8 test data.

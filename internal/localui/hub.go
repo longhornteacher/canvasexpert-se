@@ -200,18 +200,11 @@ func (h *Hub) pageData() homeData {
 		data.Connected, data.CanvasOrigin, data.CanvasUser = true, c.Origin, h.canvasUser
 	}
 	if h.root != "" {
-		loc, rulesErr := workspace.GetRulesLocation(h.root)
+		loc, health, healthNote, rulesErr := inspectRulesLocation(h.root)
 		data.RulesMode, data.RulesRoot, data.SyncRoot = loc.Mode, loc.RulesRoot, ""
+		data.SyncHealth, data.SyncHealthNote = health, healthNote
 		if loc.Mode == "sync" {
 			data.SyncRoot = loc.RulesRoot
-			if rulesErr != nil {
-				data.SyncHealth, data.SyncHealthNote = "Unavailable", "The saved Sync folder is unavailable; CE-SE will not fall back to Install. Use Test or choose an available folder."
-			} else {
-				data.SyncHealth = "Available"
-				data.SyncHealthNote = "Saved Sync folder exists here. Use Test to check readability. Cloud-provider delivery is not checked."
-			}
-		} else {
-			data.SyncHealth, data.SyncHealthNote = "Local only", "Teacher rules are stored in this Install."
 		}
 		if rulesErr != nil {
 			data.RulesError = rulesErr.Error()

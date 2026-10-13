@@ -79,7 +79,7 @@ func loadAt(target string) (Credential, error) {
 	runtime.KeepAlive(name)
 	if ok == 0 {
 		if callErr == syscall.Errno(1168) {
-			return Credential{}, errors.New("no SE credential is saved on this machine; run cse setup")
+			return Credential{}, fmt.Errorf("%w; run cse setup", ErrNoCredential)
 		}
 		return Credential{}, windowsError("read", callErr)
 	}

@@ -3,13 +3,14 @@ package localui
 import "html/template"
 
 const settingsDraftScript = `(()=>{
-const page=document.querySelector("[data-settings-drafts]");if(!page)return;
+` + draftNoticeScript + `const page=document.querySelector("[data-settings-drafts]");if(!page)return;
 const key="settings:"+page.dataset.draftKey;
 const fields=()=>Array.from(page.querySelectorAll("input[name],textarea[name]")).filter(e=>/^(aliases|sync_root|voice|feedback_guidance)$/.test(e.name));
 let values={};try{values=JSON.parse(sessionStorage.getItem(key)||"{}")}catch{}
 if(page.dataset.clearDraft){const clear=page.dataset.clearDraft;if(clear==="prefs")delete values.aliases;else if(clear==="grading"){delete values.voice;delete values.feedback_guidance}else if(clear==="sync")delete values.sync_root;try{if(Object.keys(values).length)sessionStorage.setItem(key,JSON.stringify(values));else sessionStorage.removeItem(key)}catch{};const u=new URL(location.href);u.searchParams.delete("clear");history.replaceState(null,"",u.pathname+u.search+u.hash)}
-const u=new URL(location.href);if(u.searchParams.has("sync_root")){values.sync_root=u.searchParams.get("sync_root");try{sessionStorage.setItem(key,JSON.stringify(values))}catch{};u.searchParams.delete("sync_root");history.replaceState(null,"",u.pathname+u.search+u.hash)}
-for(const e of fields())if(Object.prototype.hasOwnProperty.call(values,e.name)){if(e.type==="checkbox")e.checked=values[e.name]===true;else e.value=values[e.name]}
+const u=new URL(location.href),fromURL=u.searchParams.has("sync_root");if(fromURL){values.sync_root=u.searchParams.get("sync_root");try{sessionStorage.setItem(key,JSON.stringify(values))}catch{};u.searchParams.delete("sync_root");history.replaceState(null,"",u.pathname+u.search+u.hash)}
+let restored=false;for(const e of fields())if(Object.prototype.hasOwnProperty.call(values,e.name)){const changed=e.type==="checkbox"?e.checked!==(values[e.name]===true):e.value!==values[e.name];if(changed&&!(fromURL&&e.name==="sync_root"))restored=true;if(e.type==="checkbox")e.checked=values[e.name]===true;else e.value=values[e.name]}
+if(restored)showDraftNotice((page.querySelector("h1")||{}).nextSibling||page.firstChild,key,values,fields().map(e=>e.name));
 const save=event=>{const e=event.target;if(!e.name||! /^(aliases|sync_root|voice|feedback_guidance)$/.test(e.name))return;values[e.name]=e.type==="checkbox"?e.checked:e.value;try{sessionStorage.setItem(key,JSON.stringify(values))}catch{}};
 page.addEventListener("input",save);page.addEventListener("change",save);
 })();`

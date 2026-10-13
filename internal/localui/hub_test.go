@@ -1,7 +1,6 @@
 package localui
 
 import (
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,7 +16,7 @@ import (
 func newTestHub() *Hub {
 	h := &Hub{origin: "http://127.0.0.1:4444", secret: "nonce", quit: make(chan struct{})}
 	h.loadCredentialFn = func() (platform.Credential, error) {
-		return platform.Credential{}, errors.New("no SE credential is saved on this machine")
+		return platform.Credential{}, platform.ErrNoCredential
 	}
 	h.setup = &setupHandler{origin: h.origin, secret: h.secret, persistent: true, hub: true, done: make(chan struct{})}
 	return h

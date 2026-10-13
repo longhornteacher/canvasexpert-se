@@ -182,7 +182,7 @@ func TestCanvasHealthNetworkFailureAndMissingCredential(t *testing.T) {
 		t.Fatalf("network error should remain one check without replacing valid token: calls=%d note=%q", calls, h.canvasHealthNote)
 	}
 	h.loadCredentialFn = func() (platform.Credential, error) {
-		return platform.Credential{}, errors.New("no SE credential is saved on this machine")
+		return platform.Credential{}, platform.ErrNoCredential
 	}
 	h.ensureCanvasHealth()
 	if h.canvasHealth != canvasHealthNotConnected || calls != 1 {
@@ -344,7 +344,7 @@ func TestCanvasHealthStaleCredentialResultsAreIgnored(t *testing.T) {
 	}
 	// Removing the credential invalidates the in-flight third snapshot.
 	h.loadCredentialFn = func() (platform.Credential, error) {
-		return platform.Credential{}, errors.New("no SE credential is saved on this machine")
+		return platform.Credential{}, platform.ErrNoCredential
 	}
 	h.ensureCanvasHealth()
 	if h.canvasHealth != canvasHealthNotConnected {
@@ -354,5 +354,18 @@ func TestCanvasHealthStaleCredentialResultsAreIgnored(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	if h.canvasHealth != canvasHealthNotConnected || h.canvasUser != "" {
 		t.Fatalf("stale result restored removed credential: %q %q", h.canvasHealth, h.canvasUser)
+	}
+}
+
+func TestCanvasFailureNoteSeparatesResponseFromNoResponse(t *testing.T) {
+	answered := canvasFailureNote(&canvas.Error{Kind: "forbidden", Status: 403})
+	if !strings.Contains(answered, "HTTP 403") || !strings.Contains(answered, "did not reject") || strings.Contains(answered, "could not be reached") {
+		t.Fatalf("answered note = %q", answered)
+	}
+	if note := canvasFailureNote(context.DeadlineExceeded); !strings.Contains(note, "did not answer in time") {
+		t.Fatalf("timeout note = %q", note)
+	}
+	if note := canvasFailureNote(&canvas.Error{Kind: "transport"}); !strings.Contains(note, "could not be reached (Canvas connection failed)") {
+		t.Fatalf("transport note = %q", note)
 	}
 }

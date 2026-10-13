@@ -72,7 +72,7 @@ func runMode(root, exe, build string, offline bool, loadCredential func() (platf
 	} else {
 		credential, credErr := loadCredential()
 		switch {
-		case credErr != nil && strings.Contains(strings.ToLower(credErr.Error()), "no se credential"):
+		case errors.Is(credErr, platform.ErrNoCredential):
 			r.add("canvas_connection", "not_configured", "No Canvas credential is saved on this machine; no live request was made.", "Use cse setup when ready to connect.")
 		case credErr != nil:
 			r.add("canvas_connection", "not_verified", "The saved Canvas credential could not be read; no live request was made.", "Check local credential storage access, then retry.")
@@ -148,7 +148,7 @@ func runMode(root, exe, build string, offline bool, loadCredential func() (platf
 	} else {
 		credential, credErr := loadCredential()
 		switch {
-		case credErr != nil && strings.Contains(strings.ToLower(credErr.Error()), "no se credential"):
+		case errors.Is(credErr, platform.ErrNoCredential):
 			r.add("saved_origin", "not_configured", "No Canvas credential is saved on this machine; origin consistency is not applicable.", "Use cse setup when ready to connect.")
 		case credErr != nil && strings.Contains(credErr.Error(), "requires Windows"):
 			r.add("saved_origin", "not_verified", "Saved credential origin cannot be checked on this platform.", "Run this check on the Windows Install machine.")

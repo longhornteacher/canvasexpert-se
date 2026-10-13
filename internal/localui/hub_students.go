@@ -12,17 +12,24 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
+// draftNoticeScript defines showDraftNotice for the draft scripts: a restored
+// draft overrides saved values, so the teacher sees it and can discard the
+// edits on this page. Drafts for other courses or sections are kept.
+const draftNoticeScript = `const showDraftNotice=(before,key,values,names)=>{const p=document.createElement("p");p.className="draft-restored";p.setAttribute("role","status");p.textContent="Unsaved edits from this tab are shown. Saving replaces the saved values. ";const b=document.createElement("button");b.type="button";b.className="small secondary";b.textContent="Discard unsaved edits";b.addEventListener("click",()=>{for(const n of names)delete values[n];try{if(Object.keys(values).length)sessionStorage.setItem(key,JSON.stringify(values));else sessionStorage.removeItem(key)}catch{};location.reload()});p.append(b);before.parentNode.insertBefore(p,before)};
+`
+
 // classroomDraftScript keeps unsaved edits in the current browser tab only.
 // A per-hub key prevents another local hub session from restoring private notes.
 const classroomDraftScript = `(()=>{
-const form=document.querySelector("form[data-draft-key]");
+` + draftNoticeScript + `const form=document.querySelector("form[data-draft-key]");
 if(!form)return;
 const key=form.dataset.draftKey;
 const fields=()=>Array.from(form.elements).filter(e=>e.name&&/^(active_|nick_|alias_|monitored_|extra_time_|note_)/.test(e.name));
 let values={};
 try{values=JSON.parse(sessionStorage.getItem(key)||"{}")}catch{}
 if(form.dataset.clearDraft==="true"){for(const e of fields())delete values[e.name];try{if(Object.keys(values).length)sessionStorage.setItem(key,JSON.stringify(values));else sessionStorage.removeItem(key)}catch{};const u=new URL(location.href);u.searchParams.delete("saved");history.replaceState(null,"",u.pathname+u.search+u.hash)}
-for(const e of fields())if(Object.prototype.hasOwnProperty.call(values,e.name)){if(e.type==="checkbox")e.checked=values[e.name]===true;else e.value=values[e.name]}
+let restored=false;for(const e of fields())if(Object.prototype.hasOwnProperty.call(values,e.name)){if(e.type==="checkbox"){restored||=e.checked!==(values[e.name]===true);e.checked=values[e.name]===true}else{restored||=e.value!==values[e.name];e.value=values[e.name]}}
+if(restored)showDraftNotice(form,key,values,fields().map(e=>e.name));
 const save=event=>{const e=event.target;if(!e.name||! /^(active_|nick_|alias_|monitored_|extra_time_|note_)/.test(e.name))return;values[e.name]=e.type==="checkbox"?e.checked:e.value;try{sessionStorage.setItem(key,JSON.stringify(values))}catch{}};
 form.addEventListener("input",save);form.addEventListener("change",save);
 })();`
