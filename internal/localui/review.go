@@ -73,6 +73,7 @@ type reviewHandler struct {
 	done                 chan struct{}
 }
 
+var reviewTemplate = pageTemplate("review")
 
 func (h *reviewHandler) view(message string, form map[string]string) (reviewView, error) {
 	model, err := h.build()

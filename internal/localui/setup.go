@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +18,6 @@ import (
 	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/platform"
 )
-
 
 type setupHandler struct {
 	origin, secret string
@@ -38,6 +38,43 @@ type setupHandler struct {
 	onValidationResult func(bool)
 	onSaved            func()
 	onSaveFailed       func()
+}
+
+func init() {
+	register(
+		page{Path: "/setup", Methods: []string{http.MethodGet, http.MethodPost}, Template: "setup", Handle: (*Hub).setupPage},
+		page{Path: "/setup/status", Handle: (*Hub).setupStatus},
+	)
+}
+
+func (h *Hub) setupPage(w http.ResponseWriter, r *http.Request) {
+	h.setup.initialOrigin = h.knownOrigin()
+	h.setup.ServeHTTP(w, r)
+}
+
+// setupStatus reports non-secret setup progress for the installer to poll.
+func (h *Hub) setupStatus(w http.ResponseWriter, r *http.Request) {
+	saved := false
+	if h.credentialSavedFn != nil {
+		saved = h.credentialSavedFn()
+	} else {
+		_, credentialErr := platform.LoadCredential()
+		saved = credentialErr == nil
+	}
+	outcome := "not_saved"
+	if saved {
+		outcome = "saved_not_tested"
+	}
+	if saved && h.setupSaved {
+		outcome = "saved_this_session"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		CredentialSaved     bool   `json:"credential_saved"`
+		SetupOutcome        string `json:"setup_outcome"`
+		ValidationSucceeded bool   `json:"validation_succeeded"`
+		ConnectionTested    bool   `json:"connection_tested"`
+	}{saved, outcome, h.setupValidated, h.connectionTested})
 }
 
 func validateCredential(ctx context.Context, credential platform.Credential) error {
@@ -64,7 +101,7 @@ func (h *setupHandler) page(w http.ResponseWriter, status int, message string) {
 func (h *setupHandler) pageNotice(w http.ResponseWriter, status int, message, notice string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_ = setupTemplate.Execute(w, struct {
+	_ = tmpl("setup").Execute(w, struct {
 		Secret, Message, Notice, Origin string
 		Hub                             bool
 	}{h.secret, message, notice, h.initialOrigin, h.hub})

@@ -27,6 +27,15 @@ func replacePlaybookFile(root, rel string, now time.Time) error {
 func ReplacePlaybook(root, rel, expectedSHA256 string, now time.Time) error {
 	return updates.Replace(root, rel, expectedSHA256, now)
 }
+func init() {
+	register(
+		page{Path: "/how", Template: "how",
+			Nav:    []navSlot{{Primary: "Guide", Order: 40}, {Primary: "Guide", Label: "How it works", Order: 41}},
+			Handle: (*Hub).howPage},
+		page{Path: "/playbook/replace", Methods: []string{http.MethodPost}, Handle: (*Hub).replacePlaybook},
+	)
+}
+
 func (h *Hub) replacePlaybook(w http.ResponseWriter, r *http.Request) {
 	if !h.checkPost(w, r) || h.needWorkspace(w) {
 		return
@@ -44,11 +53,5 @@ func (h *Hub) replacePlaybook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Hub) howPage(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
-		http.Error(w, "Method not allowed", 405)
-		return
-	}
-	h.render(w, 200, howTemplate, h.pageData())
+	h.render(w, 200, tmpl("how"), h.pageData())
 }
-

@@ -92,15 +92,15 @@ var capabilityGroups = []capabilityGroup{
 	},
 }
 
+func init() {
+	register(page{Path: "/capabilities", Template: "capabilities",
+		Nav:    []navSlot{{Primary: "Guide", Label: "Capabilities", Order: 42}},
+		Handle: (*Hub).capabilitiesPage})
+}
+
 func (h *Hub) capabilitiesPage(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	h.render(w, http.StatusOK, capabilitiesTemplate, struct {
+	h.render(w, http.StatusOK, tmpl("capabilities"), struct {
 		Reviewed string
 		Groups   []capabilityGroup
 	}{capabilitiesReviewed, capabilityGroups})
 }
-

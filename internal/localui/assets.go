@@ -38,22 +38,11 @@ var pageFuncs = template.FuncMap{
 	"inc": func(i int) int { return i + 1 },
 }
 
-// pageTemplate parses templates/<name>.html once at init.
+// pageTemplate parses templates/<name>.html once at init. Hub pages name their
+// template in register; review.go parses its own.
 func pageTemplate(name string) *template.Template {
 	return template.Must(template.New(name).Funcs(pageFuncs).Parse(assetText("templates/" + name + ".html")))
 }
-
-var (
-	homeTemplate         = pageTemplate("home")
-	coursesTemplate      = pageTemplate("courses")
-	studentsTemplate     = pageTemplate("students")
-	settingsTemplate     = pageTemplate("settings")
-	setupTemplate        = pageTemplate("setup")
-	connectionTemplate   = pageTemplate("connect")
-	capabilitiesTemplate = pageTemplate("capabilities")
-	howTemplate          = pageTemplate("how")
-	reviewTemplate       = pageTemplate("review")
-)
 
 // serveScript serves the embedded scripts under /_cse/. Only files in assets/
 // ending in .js are reachable.

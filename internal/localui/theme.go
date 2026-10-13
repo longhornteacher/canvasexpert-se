@@ -5,35 +5,28 @@ import "fmt"
 // SEExpansion keeps the CLI's edition label consistent with the WebUI.
 func SEExpansion() string { return "Special Edition" }
 
-// hubNavFor returns the shared primary and secondary navigation for a hub page.
-// Its arguments are internal route labels, never request data.
+// hubNavFor returns the shared primary and secondary navigation for a hub page,
+// built from the registered pages' nav slots. Its arguments are internal route
+// labels, never request data.
 func hubNavFor(primary, secondary string) string {
-	primaryLink := func(label, href, key string) string {
-		if primary == key {
+	link := func(label, href string, current bool) string {
+		if current {
 			return fmt.Sprintf(`<a href="%s" aria-current="page">%s</a>`, href, label)
 		}
 		return fmt.Sprintf(`<a href="%s">%s</a>`, href, label)
 	}
-	var secondaryNav string
-	items := map[string][][2]string{
-		"Classroom": {{"Courses", "/courses"}, {"Students", "/students"}},
-		"Settings":  {{"Connections", "/settings?section=connections"}, {"Preferences", "/settings?section=preferences"}, {"Files", "/settings?section=files"}, {"Agent", "/connect"}, {"System", "/settings?section=system"}},
-		"Guide":     {{"How it works", "/how"}, {"Capabilities", "/capabilities"}},
-	}
-	if children := items[primary]; len(children) > 0 {
-		secondaryNav = `<nav class="hub-subnav" aria-label="` + primary + `">`
-		for _, item := range children {
-			if item[0] == secondary {
-				secondaryNav += fmt.Sprintf(`<a href="%s" aria-current="page">%s</a>`, item[1], item[0])
-			} else {
-				secondaryNav += fmt.Sprintf(`<a href="%s">%s</a>`, item[1], item[0])
-			}
+	var tabs, secondaryNav string
+	for _, e := range navEntries() {
+		switch {
+		case e.label == "":
+			tabs += link(e.primary, e.href, primary == e.primary)
+		case e.primary == primary:
+			secondaryNav += link(e.label, e.href, secondary == e.label)
 		}
-		secondaryNav += `</nav>`
+	}
+	if secondaryNav != "" {
+		secondaryNav = `<nav class="hub-subnav" aria-label="` + primary + `">` + secondaryNav + `</nav>`
 	}
 	return `<header class="hub-header"><a class="hub-brand" href="/">CanvasExpert <span>SE</span></a><nav class="hub-nav" aria-label="Main navigation">` +
-		primaryLink("Home", "/", "Home") + primaryLink("Classroom", "/courses", "Classroom") +
-		primaryLink("Settings", "/settings", "Settings") + primaryLink("Guide", "/how", "Guide") +
-		`</nav></header>` + secondaryNav
+		tabs + `</nav></header>` + secondaryNav
 }
-

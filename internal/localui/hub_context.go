@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -31,6 +32,25 @@ const (
 	canvasHealthNotConnected  = "Not connected"
 	defaultCanvasHealthWindow = 8 * time.Second // the page polls for 15s; keep this well inside it
 )
+
+func init() {
+	register(
+		page{Path: "/_cse/canvas-health", Handle: (*Hub).canvasHealthJSON},
+		page{Path: "/canvas/test", Methods: []string{http.MethodPost}, Unlocked: true, Handle: (*Hub).testCanvas},
+		page{Path: "/canvas/forget", Methods: []string{http.MethodPost}, Handle: (*Hub).forgetCanvas},
+		page{Path: "/grading", Methods: []string{http.MethodPost}, Handle: (*Hub).saveGrading},
+	)
+}
+
+// canvasHealthJSON is polled by canvas-health.js while a check is running.
+func (h *Hub) canvasHealthJSON(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(struct {
+		State   string `json:"state"`
+		Note    string `json:"note"`
+		Account string `json:"account"`
+	}{h.canvasHealth, h.canvasHealthNote, h.canvasUser})
+}
 
 func (h *Hub) loadSavedCredential() (platform.Credential, error) {
 	if h.loadCredentialFn != nil {

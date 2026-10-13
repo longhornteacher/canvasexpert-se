@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"net"
 	"net/http"
@@ -30,35 +29,6 @@ import (
 // preferredHubAddr is tried first so a bookmark keeps working; the hub falls
 // back to any free loopback port when it is taken.
 const preferredHubAddr = "127.0.0.1:47831"
-
-type homeData struct {
-	Secret, Message, Notice, CanvasOrigin, Root string
-	Program, Version                            string
-	CanvasHealth, CanvasHealthNote              string
-	SyncHealth, SyncHealthNote                  string
-	ActiveCourses                               int
-	CourseRows                                  []homeCourse
-	Connected                                   bool
-	ConnectionTested                            bool
-	Preferences, Aliases                        bool
-	Students, Monitored                         int
-	CanvasUser, Voice, FeedbackGuidance         string
-	RulesMode, RulesRoot, SyncRoot, RulesError  string
-}
-
-// settingsData is homeData plus what only the Settings page needs.
-type settingsData struct {
-	homeData
-	SettingsSection    string
-	SettingsNav        template.HTML
-	SettingsDraftClear string
-	Playbook           []playbookRow
-}
-
-type homeCourse struct {
-	ID       int64
-	Nickname string
-}
 
 // Hub is one long-lived loopback server holding every local page. Pages share
 // a single per-run request secret and the same origin checks as the one-shot
@@ -140,10 +110,13 @@ func (h *Hub) headers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	csp := "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
-	if r.URL.Path == "/" || r.URL.Path == "/settings" {
-		csp += "; script-src 'self'; connect-src 'self'"
-	} else if r.URL.Path == "/courses" || r.URL.Path == "/students" {
-		csp += "; script-src 'self'"
+	if p := pages[r.URL.Path]; p != nil {
+		if len(p.Scripts) > 0 {
+			csp += "; script-src 'self'"
+		}
+		if p.Connect {
+			csp += "; connect-src 'self'"
+		}
 	}
 	w.Header().Set("Content-Security-Policy", csp)
 }
@@ -175,252 +148,45 @@ func (h *Hub) checkPost(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func (h *Hub) home(w http.ResponseWriter, status int, message, notice string) {
-	if notice == "" {
-		notice, h.seedNotice = h.seedNotice, ""
-	}
-	data := h.pageData()
-	data.Message, data.Notice = message, notice
-	h.render(w, status, homeTemplate, data)
-}
-
-func (h *Hub) pageData() homeData {
-	data := homeData{Secret: h.secret, Root: h.root, Program: h.programDir, Version: h.version, SyncHealth: "Local only", SyncHealthNote: "Your teaching rules are kept on this PC."}
-	data.ConnectionTested = h.connectionTested
-	data.CanvasHealth, data.CanvasHealthNote = h.canvasHealth, h.canvasHealthNote
-	if data.CanvasHealth == "" {
-		data.CanvasHealth, data.CanvasHealthNote = canvasHealthNotConnected, canvasHealthNote(canvasHealthNotConnected)
-	}
-	if c, err := h.loadSavedCredential(); err == nil {
-		data.Connected, data.CanvasOrigin, data.CanvasUser = true, c.Origin, h.canvasUser
-	}
-	if h.root != "" {
-		loc, health, healthNote, rulesErr := inspectRulesLocation(h.root)
-		data.RulesMode, data.RulesRoot, data.SyncRoot = loc.Mode, loc.RulesRoot, ""
-		data.SyncHealth, data.SyncHealthNote = health, healthNote
-		if loc.Mode == "sync" {
-			data.SyncRoot = loc.RulesRoot
-		}
-		if rulesErr != nil {
-			data.RulesError = rulesErr.Error()
-		}
-		if config, _, err := h.readConfig(); err == nil {
-			data.Preferences, data.Aliases = true, config.Aliases
-			for _, c := range config.Courses {
-				if c.Current {
-					data.ActiveCourses++
-					nickname := strings.TrimSpace(c.Nickname)
-					if nickname == "" {
-						nickname = fmt.Sprintf("Course %d", c.ID)
-					}
-					data.CourseRows = append(data.CourseRows, homeCourse{ID: c.ID, Nickname: nickname})
-				}
-			}
-		}
-		if g, _, err := readGrading(h.root); err == nil {
-			data.Voice, data.FeedbackGuidance = g.Voice, g.FeedbackGuidance
-		}
-		if s, err := workspace.OpenStudents(h.root); err == nil {
-			data.Students = len(s.Rows)
-			for _, row := range s.Rows {
-				if row.Monitored {
-					data.Monitored++
-				}
-			}
-		}
-	}
-	return data
-}
-
-func (h *Hub) settings(w http.ResponseWriter, status int, message, notice string) {
-	h.settingsSection(w, status, message, notice, "connections")
-}
-
-// settingsPage gathers the Settings page data for one section.
-func (h *Hub) settingsPage(section string) settingsData {
-	data := settingsData{homeData: h.pageData(), SettingsSection: validSettingsSection(section)}
-	data.SettingsNav = template.HTML(hubNavFor("Settings", settingsNavLabel(data.SettingsSection)))
-	if h.root != "" {
-		data.Playbook = playbookRows(h.root)
-	}
-	return data
-}
-
-func (h *Hub) settingsSection(w http.ResponseWriter, status int, message, notice, section string) {
-	data := h.settingsPage(section)
-	data.Message, data.Notice = message, notice
-	h.render(w, status, settingsTemplate, data)
-}
-
-func (h *Hub) settingsRequest(w http.ResponseWriter, r *http.Request, status int, message, notice string) {
-	query := r.URL.Query()
-	data := h.settingsPage(query.Get("section"))
-	data.SettingsDraftClear = query.Get("clear")
-	if query.Has("sync_root") {
-		data.SyncRoot = query.Get("sync_root")
-	}
-	if query.Get("browse_cancel") == "1" {
-		notice = "Folder selection canceled. The typed path remains here; the saved location is unchanged."
-	}
-	if query.Get("browse_error") == "1" {
-		message = "The folder chooser could not open. Paste the folder path instead."
-	}
-	data.Message, data.Notice = message, notice
-	h.render(w, status, settingsTemplate, data)
-}
-
-func validSettingsSection(section string) string {
-	switch section {
-	case "preferences", "files", "system":
-		return section
-	default:
-		return "connections"
-	}
-}
-
-func settingsNavLabel(section string) string {
-	switch section {
-	case "preferences":
-		return "Preferences"
-	case "files":
-		return "Files"
-	case "system":
-		return "System"
-	default:
-		return "Connections"
-	}
-}
-
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.headers(w, r)
 	if "http://"+r.Host != h.origin {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
-	if r.Method == http.MethodGet && (r.URL.Path == "/" || r.URL.Path == "/settings") {
-		h.ensureCanvasHealth()
-	}
-	// Routes that run before h.mu is taken. Their handlers may block on external
-	// I/O (Canvas, the folder chooser, the Sync folder), so they must take h.mu
-	// themselves before touching hub fields. Static scripts need no hub state.
+	// Static scripts need no hub state and are served before page lookup.
 	if serveScript(w, r) {
 		return
 	}
-	if handle, ok := unlockedRoutes[r.URL.Path]; ok {
-		handle(h, w, r)
+	p := pages[r.URL.Path]
+	if p == nil {
+		http.NotFound(w, r)
 		return
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	switch r.URL.Path {
-	case "/":
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", "GET")
-			http.Error(w, "Method not allowed", 405)
-			return
-		}
-		h.home(w, 200, "", "")
-	case "/settings":
-		if r.Method == http.MethodPost {
-			h.saveSettings(w, r)
-			return
-		}
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", "GET")
-			http.Error(w, "Method not allowed", 405)
-			return
-		}
-		message, notice := h.takeFlash()
-		h.settingsRequest(w, r, 200, message, notice)
-	case "/setup":
-		h.setup.initialOrigin = h.knownOrigin()
-		h.setup.ServeHTTP(w, r)
-	case "/setup/status":
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", "GET")
-			http.Error(w, "Method not allowed", 405)
-			return
-		}
-		saved := false
-		if h.credentialSavedFn != nil {
-			saved = h.credentialSavedFn()
-		} else {
-			_, credentialErr := platform.LoadCredential()
-			saved = credentialErr == nil
-		}
-		outcome := "not_saved"
-		if saved {
-			outcome = "saved_not_tested"
-		}
-		if saved && h.setupSaved {
-			outcome = "saved_this_session"
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(struct {
-			CredentialSaved     bool   `json:"credential_saved"`
-			SetupOutcome        string `json:"setup_outcome"`
-			ValidationSucceeded bool   `json:"validation_succeeded"`
-			ConnectionTested    bool   `json:"connection_tested"`
-		}{saved, outcome, h.setupValidated, h.connectionTested})
-	case "/_cse/hub-identity":
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", "GET")
-			http.Error(w, "Method not allowed", 405)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(struct {
-			InstallRoot string `json:"install_root"`
-		}{hubcoord.CanonicalRoot(h.root)})
-	case "/_cse/canvas-health":
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", "GET")
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(struct {
-			State   string `json:"state"`
-			Note    string `json:"note"`
-			Account string `json:"account"`
-		}{h.canvasHealth, h.canvasHealthNote, h.canvasUser})
-	case "/connect":
-		h.connectionPage(w, r)
-	case "/connect/extension":
-		if r.Method != http.MethodGet || h.connection.Result.ExtensionPath == "" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Disposition", `attachment; filename="CanvasExpert-SE.mcpb"`)
-		http.ServeFile(w, r, h.connection.Result.ExtensionPath)
-	case "/students":
-		h.studentsPage(w, r)
-	case "/students/refresh":
-		h.refreshStudents(w, r)
-	case "/courses":
-		h.coursesPage(w, r)
-	case "/grading":
-		h.saveGrading(w, r)
-	case "/rules-location":
-		h.saveRulesLocation(w, r)
-	case "/how":
-		h.howPage(w, r)
-	case "/capabilities":
-		h.capabilitiesPage(w, r)
-	case "/playbook/replace":
-		h.replacePlaybook(w, r)
-	case "/canvas/forget":
-		h.forgetCanvas(w, r)
-	case "/quit":
-		if !h.checkPost(w, r) {
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Hub closed</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Bye!</h1><p>The hub has shut down. You can close this tab.</p></main></html>")
-		h.quitOnce.Do(func() { close(h.quit) })
-	default:
-		http.NotFound(w, r)
+	h.servePage(p, w, r)
+}
+
+func init() {
+	register(
+		page{Path: "/_cse/hub-identity", Handle: (*Hub).hubIdentity},
+		page{Path: "/quit", Methods: []string{http.MethodPost}, Handle: (*Hub).quitHub},
+	)
+}
+
+func (h *Hub) hubIdentity(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		InstallRoot string `json:"install_root"`
+	}{hubcoord.CanonicalRoot(h.root)})
+}
+
+func (h *Hub) quitHub(w http.ResponseWriter, r *http.Request) {
+	if !h.checkPost(w, r) {
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Hub closed</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Bye!</h1><p>The hub has shut down. You can close this tab.</p></main></html>")
+	h.quitOnce.Do(func() { close(h.quit) })
 }
 
 // knownOrigin prefers the workspace's configured instance, then a saved credential's.
@@ -639,10 +405,4 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 		}
 		return nil
 	}
-}
-
-var unlockedRoutes = map[string]func(*Hub, http.ResponseWriter, *http.Request){
-	"/canvas/test":  (*Hub).testCanvas,
-	"/rules/browse": (*Hub).browseRules,
-	"/rules/test":   (*Hub).testRulesLocation,
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,6 +16,104 @@ import (
 	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workspace"
 )
+
+// settingsData is homeData plus what only the Settings page needs.
+type settingsData struct {
+	homeData
+	SettingsSection    string
+	SettingsNav        template.HTML
+	SettingsDraftClear string
+	Playbook           []playbookRow
+	Voice              string
+	FeedbackGuidance   string
+}
+
+// settingsSections are the Settings tabs; each is a sub-tab of /settings. Agent
+// (/connect) sits between Files and System in the same nav group.
+var settingsSections = []struct{ Key, Label string }{
+	{"connections", "Connections"}, {"preferences", "Preferences"}, {"files", "Files"}, {"system", "System"},
+}
+
+func init() {
+	nav := []navSlot{{Primary: "Settings", Order: 30}}
+	for i, s := range settingsSections {
+		order := 31 + i
+		if s.Key == "system" {
+			order = 36 // after Agent (35)
+		}
+		nav = append(nav, navSlot{Primary: "Settings", Label: s.Label, Order: order, Href: "/settings?section=" + s.Key})
+	}
+	register(
+		page{Path: "/settings", Methods: []string{http.MethodGet, http.MethodPost}, Template: "settings",
+			Scripts: []string{"canvas-health.js", "drafts.js"}, Connect: true, Nav: nav, Handle: (*Hub).settingsPageHandler},
+		page{Path: "/rules-location", Methods: []string{http.MethodPost}, Handle: (*Hub).saveRulesLocation},
+		page{Path: "/rules/browse", Methods: []string{http.MethodPost}, Unlocked: true, Handle: (*Hub).browseRules},
+		page{Path: "/rules/test", Methods: []string{http.MethodPost}, Unlocked: true, Handle: (*Hub).testRulesLocation},
+	)
+}
+
+func (h *Hub) settingsPageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		h.saveSettings(w, r)
+		return
+	}
+	message, notice := h.takeFlash()
+	h.settingsRequest(w, r, 200, message, notice)
+}
+
+// settingsPage gathers the Settings page data for one section.
+func (h *Hub) settingsPage(section string) settingsData {
+	data := settingsData{homeData: h.pageData(), SettingsSection: validSettingsSection(section)}
+	data.SettingsNav = template.HTML(hubNavFor("Settings", settingsNavLabel(data.SettingsSection)))
+	if h.root != "" {
+		data.Playbook = playbookRows(h.root)
+		if g, _, err := readGrading(h.root); err == nil {
+			data.Voice, data.FeedbackGuidance = g.Voice, g.FeedbackGuidance
+		}
+	}
+	return data
+}
+
+func (h *Hub) settingsSection(w http.ResponseWriter, status int, message, notice, section string) {
+	data := h.settingsPage(section)
+	data.Message, data.Notice = message, notice
+	h.render(w, status, tmpl("settings"), data)
+}
+
+func (h *Hub) settingsRequest(w http.ResponseWriter, r *http.Request, status int, message, notice string) {
+	query := r.URL.Query()
+	data := h.settingsPage(query.Get("section"))
+	data.SettingsDraftClear = query.Get("clear")
+	if query.Has("sync_root") {
+		data.SyncRoot = query.Get("sync_root")
+	}
+	if query.Get("browse_cancel") == "1" {
+		notice = "Folder selection canceled. The typed path remains here; the saved location is unchanged."
+	}
+	if query.Get("browse_error") == "1" {
+		message = "The folder chooser could not open. Paste the folder path instead."
+	}
+	data.Message, data.Notice = message, notice
+	h.render(w, status, tmpl("settings"), data)
+}
+
+func validSettingsSection(section string) string {
+	for _, s := range settingsSections {
+		if s.Key == section {
+			return section
+		}
+	}
+	return settingsSections[0].Key
+}
+
+func settingsNavLabel(section string) string {
+	for _, s := range settingsSections {
+		if s.Key == section {
+			return s.Label
+		}
+	}
+	return settingsSections[0].Label
+}
 
 func (h *Hub) saveSettings(w http.ResponseWriter, r *http.Request) {
 	if !h.checkPost(w, r) {

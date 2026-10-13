@@ -14,13 +14,26 @@ type connectionData struct {
 	Check                                                  installation.CheckResult
 }
 
+func init() {
+	register(
+		page{Path: "/connect", Methods: []string{http.MethodGet, http.MethodPost}, Template: "connect",
+			Nav:    []navSlot{{Primary: "Settings", Label: "Agent", Order: 35}},
+			Handle: (*Hub).connectionPage},
+		page{Path: "/connect/extension", Handle: (*Hub).connectionExtension},
+	)
+}
 
-func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		w.Header().Set("Allow", "GET, POST")
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+// connectionExtension serves the prepared Cowork extension, if any.
+func (h *Hub) connectionExtension(w http.ResponseWriter, r *http.Request) {
+	if h.connection.Result.ExtensionPath == "" {
+		http.NotFound(w, r)
 		return
 	}
+	w.Header().Set("Content-Disposition", `attachment; filename="CanvasExpert-SE.mcpb"`)
+	http.ServeFile(w, r, h.connection.Result.ExtensionPath)
+}
+
+func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		if !h.checkPost(w, r) || h.needWorkspace(w) {
 			return
@@ -58,7 +71,7 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 	h.connection.Secret, h.connection.Root = h.secret, h.root
 	h.connection.ResultLabel = connectionResultLabel(h.connection.Result)
 	h.connection.CheckLabel = connectionCheckLabel(h.connection.Check)
-	h.render(w, http.StatusOK, connectionTemplate, h.connection)
+	h.render(w, http.StatusOK, tmpl("connect"), h.connection)
 }
 
 func connectionResultLabel(result installation.Result) string {
