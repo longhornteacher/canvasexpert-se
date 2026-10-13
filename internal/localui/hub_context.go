@@ -24,14 +24,31 @@ import (
 // the agent's always-read settings files.
 const maxContextText = 8000
 
+// Canvas health states are stable keys: they are used by Go, data-state, CSS and
+// canvas-health.js. The words shown to the teacher live in canvasHealthLabel.
 const (
-	canvasHealthChecking      = "Checking…"
-	canvasHealthConnected     = "Connected"
-	canvasHealthRejected      = "Token rejected"
-	canvasHealthUnavailable   = "Unavailable"
-	canvasHealthNotConnected  = "Not connected"
+	canvasHealthChecking      = "checking"
+	canvasHealthConnected     = "connected"
+	canvasHealthRejected      = "rejected"
+	canvasHealthUnavailable   = "unavailable"
+	canvasHealthNotConnected  = "not_connected"
 	defaultCanvasHealthWindow = 8 * time.Second // the page polls for 15s; keep this well inside it
 )
+
+func canvasHealthLabel(state string) string {
+	switch state {
+	case canvasHealthChecking:
+		return "Checking…"
+	case canvasHealthConnected:
+		return "Connected"
+	case canvasHealthRejected:
+		return "Token rejected"
+	case canvasHealthUnavailable:
+		return "Unavailable"
+	default:
+		return "Not connected"
+	}
+}
 
 func init() {
 	register(
@@ -47,9 +64,10 @@ func (h *Hub) canvasHealthJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(struct {
 		State   string `json:"state"`
+		Label   string `json:"label"`
 		Note    string `json:"note"`
 		Account string `json:"account"`
-	}{h.canvasHealth, h.canvasHealthNote, h.canvasUser})
+	}{h.canvasHealth, canvasHealthLabel(h.canvasHealth), h.canvasHealthNote, h.canvasUser})
 }
 
 func (h *Hub) loadSavedCredential() (platform.Credential, error) {

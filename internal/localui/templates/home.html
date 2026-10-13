@@ -9,10 +9,10 @@
 <section class="home-status-grid" aria-label="Connection status">
 <section class="card home-status" id="home-canvas" data-canvas-health data-state="{{.CanvasHealth}}">
 <h2><span class="status-mark" data-health-mark aria-hidden="true"></span>Canvas</h2>
-<p class="health-state" data-health-state aria-live="polite">{{.CanvasHealth}}</p>
-<p class="health-note" data-health-note>{{.CanvasHealthNote}}</p>
+<p class="health-state" data-health-state aria-live="polite">{{.CanvasHealthLabel}}</p>
+<p class="health-note" data-health-note aria-live="polite">{{.CanvasHealthNote}}</p>
 <div class="inline">
-{{if .Connected}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" data-canvas-test class="small" {{if eq .CanvasHealth "Checking…"}}disabled{{end}}>Test</button></form><a class="go" href="/settings?section=connections">Connection</a><a class="go" href="/setup">Replace token</a>{{else}}<a class="go" href="/setup">Connect Canvas</a><a class="go" href="/settings?section=connections">Connection</a>{{end}}
+{{if .Connected}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" data-canvas-test class="small" {{if .CanvasChecking}}disabled{{end}}>Test</button></form><a class="go" href="/settings?section=connections">Connection</a><a class="go" href="/setup">Replace token</a>{{else}}<a class="go" href="/setup">Connect Canvas</a><a class="go" href="/settings?section=connections">Connection</a>{{end}}
 </div>
 <details><summary>Get an Access token</summary><ol><li>Sign in to Canvas and open Account → Settings.</li><li>Under Approved Integrations, choose New Access Token.</li><li>Copy the token when Canvas shows it. Enter it under Settings → Connections.</li></ol><p>The token is kept in Windows Credential Manager on this computer.</p></details>
 </section>
@@ -22,7 +22,7 @@
 <p class="health-note">{{.SyncHealthNote}}</p>
 <div class="inline">
 <a class="go" href="/settings?section=connections#rules">Choose Sync folder</a>
-<form method="post" action="/rules/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="sync_root" value="{{.SyncRoot}}"><button class="small secondary" type="submit">Test saved folder</button></form>
+{{if eq .RulesMode "sync"}}<form method="post" action="/rules/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="sync_root" value="{{.SyncRoot}}"><button class="small secondary" type="submit">Test saved folder</button></form>{{end}}
 <a class="go" href="/settings?section=connections">Teaching rules settings</a>
 </div>
 </section>

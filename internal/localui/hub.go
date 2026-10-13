@@ -265,10 +265,15 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 		hub.programDir = filepath.Dir(exe)
 	}
 	hub.setup = &setupHandler{origin: origin, secret: secret, ctx: ctx, validate: validateCredential, save: platform.SaveCredential, persistent: true, hub: true, done: make(chan struct{})}
+	hub.setup.knownOrigin = hub.knownOrigin
+	// The setup handler runs without hub.mu (its validation call is slow), so the
+	// callbacks below take it around every hub field they touch.
 	hub.setup.after = func(c platform.Credential) string {
+		hub.mu.Lock()
 		hub.canvasUser = ""
 		hub.connectionTested = true
 		hub.markCanvasValidated(c)
+		hub.mu.Unlock()
 		if hub.root == "" {
 			return ""
 		}
@@ -295,6 +300,8 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 		return "CE-SE settings now use this Canvas address."
 	}
 	hub.setup.onValidation = func(valid bool) {
+		hub.mu.Lock()
+		defer hub.mu.Unlock()
 		hub.setupValidated = valid
 		hub.setupSaved = false
 		hub.connectionTested = false
@@ -312,7 +319,9 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 		}
 	}
 	hub.setup.onSaved = func() {
+		hub.mu.Lock()
 		hub.setupSaved = true
+		hub.mu.Unlock()
 		if err := installlog.Append(hub.root, version, installlog.Entry{Step: "credential_save", Client: hub.installClient, Outcome: "succeeded", InstallPath: hub.root}); err != nil {
 			fmt.Fprintln(output, "Install log unavailable; setup continues.")
 		}

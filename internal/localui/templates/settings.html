@@ -4,19 +4,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CanvasExpert-SE settings</title>
 <style>{{pageCSS}}</style>
-<main class="wide" data-draft-key="{{.Secret}}" data-draft-key-prefix="settings:" data-draft-fields="aliases sync_root voice feedback_guidance" data-clear-draft="{{.SettingsDraftClear}}">
+<main class="wide" data-draft-key="{{.Secret}}" data-draft-key-prefix="settings:" data-draft-fields="aliases sync_root voice feedback_guidance" data-draft-groups="prefs:aliases grading:voice,feedback_guidance sync:sync_root" data-clear-draft="{{.SettingsDraftClear}}">
 {{.SettingsNav}}
 <h1>Settings</h1>
 {{if .Message}}<p class="error" role="alert">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok" role="status">{{.Notice}}</p>{{end}}
 {{if eq .SettingsSection "connections"}}
 <section id="connections" class="settings-section home-status" data-canvas-health data-state="{{.CanvasHealth}}">
 <h2><span class="status-mark" data-health-mark aria-hidden="true"></span>Canvas connection</h2>
-<p class="health-state" data-health-state aria-live="polite">{{.CanvasHealth}}</p>
-<p class="health-note" data-health-note>{{.CanvasHealthNote}}</p>
+<p class="health-state" data-health-state aria-live="polite">{{.CanvasHealthLabel}}</p>
+<p class="health-note" data-health-note aria-live="polite">{{.CanvasHealthNote}}</p>
 {{if .Connected}}<p><code>{{.CanvasOrigin}}</code></p>
 <p data-health-account-row {{if not .CanvasUser}}hidden{{end}}>Signed in as <b data-health-account>{{.CanvasUser}}</b></p>
 <div class="inline">
-<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" data-canvas-test class="small" {{if eq .CanvasHealth "Checking…"}}disabled{{end}}>Test</button></form>
+<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" data-canvas-test class="small" {{if .CanvasChecking}}disabled{{end}}>Test</button></form>
 <a class="go" href="/setup">Replace token</a>
 </div>
 <details class="forget"><summary>Remove the saved token from this PC</summary>

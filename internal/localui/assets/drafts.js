@@ -15,8 +15,10 @@ const persist=()=>{try{if(Object.keys(values).length)sessionStorage.setItem(key,
 const cleanURL=(u,...params)=>{for(const p of params)u.searchParams.delete(p);history.replaceState(null,"",u.pathname+u.search+u.hash)};
 
 // A saved form clears its own drafts: "true" clears every field on the page,
-// a group name clears just that Settings form.
-const groups={prefs:["aliases"],grading:["voice","feedback_guidance"],sync:["sync_root"]};
+// a group name clears just that form's fields. The page declares its groups in
+// data-draft-groups="name:field,field name:field".
+const groups={};
+for(const g of (root.dataset.draftGroups||"").split(/\s+/).filter(Boolean)){const[name,list]=g.split(":");groups[name]=(list||"").split(",").filter(Boolean)}
 const clear=root.dataset.clearDraft;
 if(clear&&clear!=="false"){
  const names=clear==="true"?fields().map(e=>e.name):(groups[clear]||[]);

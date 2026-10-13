@@ -340,9 +340,22 @@ func TestHomeRoutesCanvasAndSyncActionsToExistingSettingsAndChecks(t *testing.T)
 	h := newTestHub()
 	h.root = makeWorkspace(t)
 	body := hubGet(h, "/").Body.String()
-	for _, want := range []string{`href="/settings?section=connections">Connection</a>`, `href="/settings?section=connections#rules">Choose Sync folder</a>`, `action="/rules/test"`, `name="request_secret" value="nonce"`, `name="sync_root"`} {
+	for _, want := range []string{`href="/settings?section=connections">Connection</a>`, `href="/settings?section=connections#rules">Choose Sync folder</a>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Home missing action %q", want)
+		}
+	}
+	if strings.Contains(body, `action="/rules/test"`) {
+		t.Error("Home offers a saved-folder test while rules are on this PC")
+	}
+	if w := hubPost(h, "/rules-location", url.Values{"request_secret": {"nonce"}, "sync_root": {t.TempDir()}}, h.origin); w.Code != 303 {
+		t.Fatalf("bind Sync: %d", w.Code)
+	}
+	h.flash, h.flashErr = "", ""
+	body = hubGet(h, "/").Body.String()
+	for _, want := range []string{`action="/rules/test"`, `name="request_secret" value="nonce"`, `name="sync_root"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Home with Sync missing %q", want)
 		}
 	}
 }

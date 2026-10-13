@@ -9,18 +9,19 @@ import (
 )
 
 type homeData struct {
-	Secret, Message, Notice, CanvasOrigin, Root string
-	Program, Version                            string
-	CanvasHealth, CanvasHealthNote              string
-	SyncHealth, SyncHealthNote                  string
-	ActiveCourses                               int
-	CourseRows                                  []homeCourse
-	Connected                                   bool
-	ConnectionTested                            bool
-	Preferences, Aliases                        bool
-	Students, Monitored                         int
-	CanvasUser                                  string
-	RulesMode, RulesRoot, SyncRoot, RulesError  string
+	Secret, Message, Notice, CanvasOrigin, Root       string
+	Program, Version                                  string
+	CanvasHealth, CanvasHealthLabel, CanvasHealthNote string
+	CanvasChecking                                    bool
+	SyncHealth, SyncHealthNote                        string
+	ActiveCourses                                     int
+	CourseRows                                        []homeCourse
+	Connected                                         bool
+	ConnectionTested                                  bool
+	Preferences, Aliases                              bool
+	Students, Monitored                               int
+	CanvasUser                                        string
+	RulesMode, RulesRoot, SyncRoot, RulesError        string
 }
 
 type homeCourse struct {
@@ -52,6 +53,7 @@ func (h *Hub) pageData() homeData {
 	if data.CanvasHealth == "" {
 		data.CanvasHealth, data.CanvasHealthNote = canvasHealthNotConnected, canvasHealthNote(canvasHealthNotConnected)
 	}
+	data.CanvasHealthLabel, data.CanvasChecking = canvasHealthLabel(data.CanvasHealth), data.CanvasHealth == canvasHealthChecking
 	if c, err := h.loadSavedCredential(); err == nil {
 		data.Connected, data.CanvasOrigin, data.CanvasUser = true, c.Origin, h.canvasUser
 	}

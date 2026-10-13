@@ -22,12 +22,15 @@ import (
 type setupHandler struct {
 	origin, secret string
 	initialOrigin  string
-	ctx            context.Context
-	validate       func(context.Context, platform.Credential) error
-	save           func(platform.Credential) error
-	done           chan struct{}
-	mu             sync.Mutex
-	complete       bool
+	// knownOrigin, when set, supplies the pre-filled Canvas address afresh for
+	// each page instead of initialOrigin.
+	knownOrigin func() string
+	ctx         context.Context
+	validate    func(context.Context, platform.Credential) error
+	save        func(platform.Credential) error
+	done        chan struct{}
+	mu          sync.Mutex
+	complete    bool
 	// persistent keeps the form usable after a save (the hub stays open).
 	persistent bool
 	hub        bool
@@ -42,14 +45,12 @@ type setupHandler struct {
 
 func init() {
 	register(
-		page{Path: "/setup", Methods: []string{http.MethodGet, http.MethodPost}, Template: "setup", Handle: (*Hub).setupPage},
+		// Unlocked: validating a token is a slow network call; the setup handler has
+		// its own mutex and its hub callbacks lock h.mu around hub fields.
+		page{Path: "/setup", Methods: []string{http.MethodGet, http.MethodPost}, Template: "setup", Unlocked: true,
+			Handle: func(h *Hub, w http.ResponseWriter, r *http.Request) { h.setup.ServeHTTP(w, r) }},
 		page{Path: "/setup/status", Handle: (*Hub).setupStatus},
 	)
-}
-
-func (h *Hub) setupPage(w http.ResponseWriter, r *http.Request) {
-	h.setup.initialOrigin = h.knownOrigin()
-	h.setup.ServeHTTP(w, r)
 }
 
 // setupStatus reports non-secret setup progress for the installer to poll.
@@ -94,17 +95,24 @@ func validateCredential(ctx context.Context, credential platform.Credential) err
 	return nil
 }
 
-func (h *setupHandler) page(w http.ResponseWriter, status int, message string) {
-	h.pageNotice(w, status, message, "")
+func (h *setupHandler) prefill() string {
+	if h.knownOrigin != nil {
+		return h.knownOrigin()
+	}
+	return h.initialOrigin
 }
 
-func (h *setupHandler) pageNotice(w http.ResponseWriter, status int, message, notice string) {
+func (h *setupHandler) page(w http.ResponseWriter, status int, message string) {
+	h.pageNotice(w, status, message, "", h.prefill())
+}
+
+func (h *setupHandler) pageNotice(w http.ResponseWriter, status int, message, notice, origin string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = tmpl("setup").Execute(w, struct {
 		Secret, Message, Notice, Origin string
 		Hub                             bool
-	}{h.secret, message, notice, h.initialOrigin, h.hub})
+	}{h.secret, message, notice, origin, h.hub})
 }
 
 func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -198,8 +206,7 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				notice += " " + extra
 			}
 		}
-		h.initialOrigin = credential.Origin
-		h.pageNotice(w, 200, "", notice)
+		h.pageNotice(w, 200, "", notice, credential.Origin)
 		return
 	}
 	h.complete = true

@@ -1,6 +1,7 @@
 package localui
 
 import (
+	"bytes"
 	"context"
 	"html/template"
 	"math/rand/v2"
@@ -80,10 +81,18 @@ func (h *Hub) needWorkspace(w http.ResponseWriter) bool {
 	}
 	return false
 }
+
+// render executes into a buffer so a template error sends a plain 500 instead
+// of a truncated page with a success status.
 func (h *Hub) render(w http.ResponseWriter, status int, t *template.Template, data any) {
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		http.Error(w, "This page could not be displayed.", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_ = t.Execute(w, data)
+	_, _ = w.Write(buf.Bytes())
 }
 
 func randomAlias(available []string) string { return available[rand.IntN(len(available))] }
