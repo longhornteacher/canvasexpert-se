@@ -130,7 +130,7 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var ce *canvas.Error
 		if errors.As(err, &ce) {
 			if ce.Kind == "authentication" {
-				message = "Canvas rejected this token. Check the Canvas address and token. Your saved credential has not changed."
+				message = "Canvas rejected this token. Check the Canvas address and that you copied the whole token. Your saved credential has not changed."
 			} else {
 				message = ce.Error() + ". Your saved credential has not changed; this does not show that your PAT needs replacing."
 			}
@@ -155,7 +155,7 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.onSaved()
 	}
 	if h.persistent {
-		notice := "Connected to " + credential.Origin + ". Token saved on this machine."
+		notice := "Canvas connection ready for " + credential.Origin + ". Your token is saved on this PC. Next, choose your courses."
 		if h.after != nil {
 			if extra := h.after(credential); extra != "" {
 				notice += " " + extra
@@ -167,7 +167,7 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	h.complete = true
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Canvas connected</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Connected</h1><p>Canvas accepted the Access token. You can close this page.</p></main></html>")
+	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Canvas connected</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Canvas connection ready</h1><p>Your token is saved on this PC. Next, pick your courses or go back to your teaching app. You can close this page.</p></main></html>")
 	close(h.done)
 }
 

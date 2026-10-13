@@ -116,7 +116,7 @@ func TestHomeShowsResolvedLocalLocations(t *testing.T) {
 	h := newTestHub()
 	h.root = makeWorkspace(t)
 	page := hubGet(h, "/").Body.String()
-	if !strings.Contains(page, "Local only") || !strings.Contains(page, "Teacher rules are stored in this Install.") {
+	if !strings.Contains(page, "Local only") || !strings.Contains(page, "Your teaching rules are kept on this PC. Add a Sync folder only if you want to share them with another PC.") {
 		t.Fatal("home summary missing local rules status")
 	}
 	if strings.Contains(page, `action="/rules-location"`) {
@@ -340,7 +340,7 @@ func TestHomeRoutesCanvasAndSyncActionsToExistingSettingsAndChecks(t *testing.T)
 	h := newTestHub()
 	h.root = makeWorkspace(t)
 	body := hubGet(h, "/").Body.String()
-	for _, want := range []string{`href="/settings?section=connections">Connection</a>`, `href="/settings?section=connections#rules">Browse</a>`, `action="/rules/test"`, `name="request_secret" value="nonce"`, `name="sync_root"`} {
+	for _, want := range []string{`href="/settings?section=connections">Connection</a>`, `href="/settings?section=connections#rules">Choose Sync folder</a>`, `action="/rules/test"`, `name="request_secret" value="nonce"`, `name="sync_root"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Home missing action %q", want)
 		}

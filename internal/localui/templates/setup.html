@@ -7,7 +7,7 @@
 <main>
 {{if .Hub}}{{nav "Settings" "Connections"}}{{end}}
 <h1>Connect Canvas</h1>
-<p>Your Access token is stored in Windows Credential Manager on this machine. It is never written to a file.</p>
+<p>CE-SE needs an Access token from your Canvas account to work with your courses. It is kept in Windows Credential Manager on this PC and never written to a file.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <form method="post" action="/setup" autocomplete="off">
 <input type="hidden" name="request_secret" value="{{.Secret}}">

@@ -7,17 +7,17 @@
 <main class="wide">
 {{nav "Settings" "Agent"}}
 <h1>Connect your teaching assistant</h1>
-<p>This connects the Engine in this Install: <code>{{.Root}}</code>. Choose the app where you want to teach.</p>
+<p>Pick the app where you want to teach, and CE-SE will be set up there to work with the files in <code>{{.Root}}</code>.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 {{if .Root}}<section class="card"><h2>Register an app</h2>
 <form method="post" action="/connect"><input type="hidden" name="request_secret" value="{{.Secret}}">
 <label for="client">Teaching app</label><select id="client" name="client"><option value="work" {{if eq .Client "work"}}selected{{end}}>Work (local desktop)</option><option value="cowork" {{if eq .Client "cowork"}}selected{{end}}>Cowork (Claude desktop)</option></select>
 {{if .ExistingInstall}}<p>The CE-SE connection currently points to <code>{{.ExistingInstall}}</code>. Replacing it will point this app to <code>{{.Root}}</code>; both Installs keep their files.</p><label class="check"><input type="checkbox" name="replace" required> Replace this app's CE-SE connection</label>{{end}}
 <button name="action" value="register" type="submit">Register or prepare selected app</button></form></section>{{else}}<p>Open the hub from the extracted Install using webui.cmd to connect an agent.</p>{{end}}
-{{if .Result.State}}<section class="card"><h2>Registration result</h2><p><b>{{.ResultLabel}}</b></p>{{if .Result.NextAction}}<p>{{.Result.NextAction}}</p>{{end}}{{if .Result.ConfigPath}}<p>Work configuration: <code>{{.Result.ConfigPath}}</code>{{if .Result.BackupPath}}. Previous configuration backup: <code>{{.Result.BackupPath}}</code>{{end}}</p>{{end}}{{if .Result.ExtensionPath}}<p>Prepared Cowork extension: <code>{{.Result.ExtensionPath}}</code></p><p><a class="go" href="/connect/extension">Download the extension</a></p>{{end}}<p>This confirms local registration or preparation only. Finish setup and check for CE-SE tools in the selected app.</p></section>{{end}}
-<section class="card"><h2>Local tool check</h2>
-<p>Starts this Install's Engine, discovers tools, and reads instructions and configured courses. It makes no Canvas writes and does not check the destination app.</p>
-{{if .Root}}<form method="post" action="/connect"><input type="hidden" name="request_secret" value="{{.Secret}}"><button name="action" value="check" type="submit">Check this Install</button></form>{{end}}
+{{if .Result.State}}<section class="card"><h2>Registration result</h2><p><b>{{.ResultLabel}}</b></p>{{if .Result.NextAction}}<p>{{.Result.NextAction}}</p>{{end}}{{if .Result.ConfigPath}}<p>Work configuration: <code>{{.Result.ConfigPath}}</code>{{if .Result.BackupPath}}. Previous configuration backup: <code>{{.Result.BackupPath}}</code>{{end}}</p>{{end}}{{if .Result.ExtensionPath}}<p>Prepared Cowork extension: <code>{{.Result.ExtensionPath}}</code></p><p><a class="go" href="/connect/extension">Download the extension</a></p>{{end}}<p>This only confirms that CE-SE is registered on this PC. Finish the app's own setup, then check that the CE-SE tools show up there.</p></section>{{end}}
+<section class="card"><h2>Check CE-SE on this PC</h2>
+<p>Starts CE-SE here and confirms it can list its tools and read your instructions and saved courses. It changes nothing in Canvas and does not check the destination app, only this PC.</p>
+{{if .Root}}<form method="post" action="/connect"><input type="hidden" name="request_secret" value="{{.Secret}}"><button name="action" value="check" type="submit">Run the check</button></form>{{end}}
 {{if .Check.State}}<p><b>{{.CheckLabel}}</b>: {{.Check.ToolCount}} tools; adapter <code>{{.Check.AdapterVersion}}</code>.</p><p>Instructions read: {{.Check.InstructionsRead}}. Configured courses read: {{.Check.ConfiguredCoursesRead}}.</p>{{end}}</section>
 <details class="card"><summary><b>Finish in your teaching app</b></summary>
 <p>After finishing the app's setup prompt, send this in the app:</p>

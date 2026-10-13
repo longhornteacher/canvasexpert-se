@@ -185,7 +185,7 @@ func (h *Hub) home(w http.ResponseWriter, status int, message, notice string) {
 }
 
 func (h *Hub) pageData() homeData {
-	data := homeData{Secret: h.secret, Root: h.root, Program: h.programDir, Version: h.version, SyncHealth: "Local only", SyncHealthNote: "Teacher rules are stored in this Install."}
+	data := homeData{Secret: h.secret, Root: h.root, Program: h.programDir, Version: h.version, SyncHealth: "Local only", SyncHealthNote: "Your teaching rules are kept on this PC."}
 	data.ConnectionTested = h.connectionTested
 	data.CanvasHealth, data.CanvasHealthNote = h.canvasHealth, h.canvasHealthNote
 	if data.CanvasHealth == "" {

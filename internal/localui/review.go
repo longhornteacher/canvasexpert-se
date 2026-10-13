@@ -252,7 +252,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.outcome = &out
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	msg := fmt.Sprintf("%d approved, %d sent back for revision, %d held.", len(out.Approved), len(out.Revise), len(out.Held))
-	msg = "Outcome: " + out.Status + ". " + msg + " Results are in the agent's session."
+	msg = "Your review is saved: " + msg + " The agent has the results, so you can go back to your chat."
 	_, _ = io.WriteString(w, `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Review finished</title><style>`+string(reviewCSS)+`</style><main class="end-page"><h1>Review outcome: `+template.HTMLEscapeString(out.Status)+`</h1><p>`+template.HTMLEscapeString(msg)+`</p>`)
 	if out.PostSummary != "" {
 		_, _ = io.WriteString(w, `<p>`+template.HTMLEscapeString(out.PostSummary)+`</p>`)

@@ -42,18 +42,25 @@ func (h *Hub) loadSavedCredential() (platform.Credential, error) {
 func canvasHealthNote(state string) string {
 	switch state {
 	case canvasHealthChecking:
-		return "Checking the saved token with Canvas."
+		return "Checking your Canvas connection…"
 	case canvasHealthConnected:
-		return "Canvas accepted the saved token."
+		return canvasConnectedNote("")
 	case canvasHealthRejected:
-		return "Canvas rejected the saved token. Replace it to reconnect."
+		return "Canvas didn't accept the saved token. It may have expired or been deleted in Canvas. Replace it to reconnect; your CE-SE files aren't affected."
 	case canvasHealthUnavailable:
 		return "Canvas could not be reached. The saved token may still be valid; try again."
 	default:
-		return "No Canvas access token is saved on this computer."
+		return "CE-SE needs a Canvas access token to work with your courses. It's kept in Windows Credential Manager on this PC. Choose Connect Canvas to add one."
 	}
 }
 
+// canvasConnectedNote names the signed-in account when Canvas reported one.
+func canvasConnectedNote(account string) string {
+	if account = strings.TrimSpace(account); account != "" {
+		return "Canvas connection ready: signed in as " + account + "."
+	}
+	return "Canvas connection ready."
+}
 func (h *Hub) invalidateCanvasHealth() {
 	h.canvasHealthGeneration++
 	h.canvasHealthFingerprint = ""
@@ -146,7 +153,7 @@ func (h *Hub) startCanvasHealthCheck(force, manual bool) {
 			return
 		}
 		if checkErr == nil {
-			h.canvasHealth, h.canvasHealthNote = canvasHealthConnected, canvasHealthNote(canvasHealthConnected)
+			h.canvasHealth, h.canvasHealthNote = canvasHealthConnected, canvasConnectedNote(name)
 			h.canvasUser = name
 			if manual || h.canvasManualPending {
 				h.connectionTested = true

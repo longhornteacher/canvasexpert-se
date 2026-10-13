@@ -19,16 +19,17 @@
 <form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" data-canvas-test class="small" {{if eq .CanvasHealth "Checking…"}}disabled{{end}}>Test</button></form>
 <a class="go" href="/setup">Replace token</a>
 </div>
-<details class="forget"><summary>Forget token on this computer</summary>
-<p>The token is stored in Windows Credential Manager.</p>
-<form method="post" action="/canvas/forget"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="confirm" required> Yes, remove it. I can reconnect later.</label><button type="submit" class="small danger">Remove token</button></form>
+<details class="forget"><summary>Remove the saved token from this PC</summary>
+<p>This deletes the token from Windows Credential Manager on this PC. Your courses, drafts and CE-SE files stay as they are; you can reconnect any time with a new token.</p>
+<form method="post" action="/canvas/forget"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="confirm" required> Yes, remove it.</label><button type="submit" class="small danger">Remove token</button></form>
 </details>
 {{else}}<a class="go" href="/setup">Connect Canvas</a>{{end}}
 </section>
 {{if .Root}}
 <section class="settings-section" id="rules">
-<h2>Teacher rules location</h2>
-<p>Saved mode: <b>{{.RulesMode}}</b>{{if .RulesRoot}} · <code>{{.RulesRoot}}</code>{{end}}</p>
+<h2>Where your teaching rules live</h2>
+<p>Your teaching rules are the playbooks, grading habits and preferences the agent follows. Keep them on this PC, or in a Sync folder (OneDrive or Google Drive) to share them with another PC. Courses, students and student work always stay on this PC.</p>
+<p>Now: <b>{{if eq .RulesMode "sync"}}shared Sync folder{{else}}this PC{{end}}</b>{{if .RulesRoot}} · <code>{{.RulesRoot}}</code>{{end}}</p>
 <p><span class="pill {{if eq .SyncHealth "Available"}}on{{else if eq .SyncHealth "Unavailable"}}off{{end}}">{{.SyncHealth}}</span> {{.SyncHealthNote}}</p>
 {{if .RulesError}}<p class="error" role="alert">{{.RulesError}}</p>{{end}}
 <details><summary>How Install and Sync work</summary>
@@ -39,7 +40,7 @@
 <input type="hidden" name="request_secret" value="{{.Secret}}">
 <label for="sync_root">Sync folder path</label>
 <div class="inline"><input id="sync_root" name="sync_root" value="{{.SyncRoot}}" maxlength="4000" autocomplete="off"><button type="submit" formaction="/rules/browse" formmethod="post" class="secondary">Browse</button></div>
-<div class="inline"><button type="submit" name="action" value="save">Use Sync folder</button><button type="submit" name="action" value="local" class="secondary">Use Install</button><button type="submit" formaction="/rules/test" formmethod="post" class="secondary">Test saved folder</button></div>
+<div class="inline"><button type="submit" name="action" value="save">Use this Sync folder</button><button type="submit" name="action" value="local" class="secondary">Keep on this PC</button><button type="submit" formaction="/rules/test" formmethod="post" class="secondary">Test saved folder</button></div>
 </form>
 </section>
 {{end}}{{end}}

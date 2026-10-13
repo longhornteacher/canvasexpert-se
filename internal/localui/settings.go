@@ -88,7 +88,7 @@ func inspectRulesLocation(root string) (workspace.RulesLocation, string, string,
 		return loc, "Unavailable", "The saved teacher-rules location is unavailable. CE-SE will not fall back to another copy.", err
 	}
 	if loc.Mode != "sync" {
-		return loc, "Local only", "Teacher rules are stored in this Install.", nil
+		return loc, "Local only", "Your teaching rules are kept on this PC. Add a Sync folder only if you want to share them with another PC.", nil
 	}
 	directory, err := os.Open(loc.RulesRoot)
 	if err == nil {
@@ -98,7 +98,7 @@ func inspectRulesLocation(root string) (workspace.RulesLocation, string, string,
 	if err != nil && !errors.Is(err, io.EOF) {
 		return loc, "Unavailable", "The saved Sync folder cannot be read. CE-SE will not fall back to another copy.", fmt.Errorf("configured Sync rules directory %s cannot be read: %w", loc.RulesRoot, err)
 	}
-	return loc, "Available", "The saved Sync folder is readable here. Cloud-provider delivery is not checked.", nil
+	return loc, "Available", "Your teaching rules are shared through " + loc.RulesRoot + ". Your sync app (OneDrive or Google Drive) keeps other PCs up to date; CE-SE does not check that delivery.", nil
 }
 
 func (h *Hub) browseRules(w http.ResponseWriter, r *http.Request) {

@@ -20,20 +20,19 @@
 <h2><span class="status-mark" aria-hidden="true"></span>Sync</h2>
 <p class="health-state">{{.SyncHealth}}</p>
 <p class="health-note">{{.SyncHealthNote}}</p>
-{{if eq .RulesMode "sync"}}<p><code>{{.RulesRoot}}</code></p>{{end}}
 <div class="inline">
-<a class="go" href="/settings?section=connections#rules">Browse</a>
+<a class="go" href="/settings?section=connections#rules">Choose Sync folder</a>
 <form method="post" action="/rules/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="sync_root" value="{{.SyncRoot}}"><button class="small secondary" type="submit">Test saved folder</button></form>
-<a class="go" href="/settings?section=connections">Manage teacher rules</a>
+<a class="go" href="/settings?section=connections">Teaching rules settings</a>
 </div>
 </section>
 </section>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <section class="home-courses">
 <div class="section-head"><h2>Active courses <span class="count">{{.ActiveCourses}}</span></h2><a href="/courses">Manage</a></div>
-{{if .CourseRows}}<ul class="home-course-list">{{range .CourseRows}}<li><a href="/students?course={{.ID}}">{{.Nickname}}</a><span>Canvas course {{.ID}}</span></li>{{end}}</ul>{{else}}<p class="health-note">No active courses selected. Choose courses to show them here.</p><a class="go" href="/courses">Choose courses</a>{{end}}
+{{if .CourseRows}}<ul class="home-course-list">{{range .CourseRows}}<li><a href="/students?course={{.ID}}">{{.Nickname}}</a><span>Canvas course {{.ID}}</span></li>{{end}}</ul>{{else}}<p class="health-note">No active courses yet. Pick the courses you teach this term and they will show up here, ready for student and grading work.</p><a class="go" href="/courses">Choose courses</a>{{end}}
 </section>
-<p class="home-agent"><span>Agent setup</span><a href="/connect">Connect this Install to your teaching app</a></p>
+<p class="home-agent"><span>Teaching app</span><a href="/connect">Connect CE-SE to the app where you teach</a></p>
 <script src="/_cse/canvas-health.js" defer></script>
 </main>
 </html>
