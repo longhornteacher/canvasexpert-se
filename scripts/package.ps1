@@ -15,7 +15,9 @@ if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repoRoot 'dist' }
 $distRoot = [IO.Path]::GetFullPath($OutputDirectory)
 # Single-folder package: the starter workspace with the Engine in engine\. Extracting it
 # with Windows' Extract All gives a CanvasExpert-SE folder the teacher points the agent at.
-$packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE.zip'))
+# The teacher download carries the product version so archived copies are self-describing.
+$zipName = "CanvasExpert-SE-$([IO.File]::ReadAllText((Join-Path $repoRoot 'VERSION')).Trim()).zip"
+$packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot $zipName))
 $pathSeparator = [IO.Path]::DirectorySeparatorChar
 
 if (-not (Test-Path -LiteralPath $templateRoot -PathType Container)) {
@@ -230,11 +232,11 @@ try {
     New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
     $zipSum = (Get-FileHash -LiteralPath $zipTempFullPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $sumsStage = Join-Path $stageRoot 'SHA256SUMS.txt'
-    [IO.File]::WriteAllText($sumsStage, "$zipSum  CanvasExpert-SE.zip`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($sumsStage, "$zipSum  $zipName`n", [Text.UTF8Encoding]::new($false))
     $current = [ordered]@{
         'cse.exe'                = $binaryPath
         'cse-mcp-launcher.exe'   = (Join-Path $buildRoot 'cse-mcp-launcher.exe')
-        'CanvasExpert-SE.zip'    = $zipTempFullPath
+        $zipName                = $zipTempFullPath
         'SHA256SUMS.txt'         = $sumsStage
     }
     foreach ($name in $current.Keys) {

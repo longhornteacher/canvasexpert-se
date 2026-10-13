@@ -22,14 +22,14 @@ The Engine embeds the canonical version from root `VERSION` (currently `1.0.0-be
 
 ## Output contract
 
-`dist/` contains exactly four files:
+`dist/` holds these current files (plus any earlier versions' ZIPs you chose to keep):
 
 - `dist/cse.exe`: the Engine used by Source tooling, copied byte-for-byte into the ZIP.
 - `dist/cse-mcp-launcher.exe`: the thin MCP launcher.
-- `dist/CanvasExpert-SE.zip`: the one teacher download.
+- `dist/CanvasExpert-SE-<VERSION>.zip` (for example `CanvasExpert-SE-1.0.0-beta.1.zip`): the one teacher download. Rebuilding the same version replaces it; a new version adds a new file and leaves earlier versions in `dist/` as an archive until you delete them.
 - `dist/SHA256SUMS.txt`: checksums.
 
-No dated or versioned duplicates are written. The Cowork extension (MCPB) is generated in staging and exists only inside the ZIP at `engine/CanvasExpert-SE-Cowork.mcpb`; it is not a separate download.
+No dated duplicates are written; the version in the ZIP name is the only variation. The Cowork extension (MCPB) is generated in staging and exists only inside the ZIP at `engine/CanvasExpert-SE-Cowork.mcpb`; it is not a separate download.
 
 `-OutputDirectory` selects a different output folder. `-Release` requires a clean checkout at the matching existing immutable version tag and additionally writes the versioned public assets to `dist/release/`; see [releasing.md](releasing.md).
 
