@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"net"
 	"net/http"
@@ -19,15 +18,6 @@ import (
 	"canvasexpertse/internal/platform"
 )
 
-var setupTemplate = template.Must(template.New("setup").Parse(`<!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CanvasExpert-SE setup</title><style>` + funkyCSS + `</style><main><div class="badge">CanvasExpert: SE</div>{{if .Hub}}` + hubNavConnections + `{{end}}<h1>Connect Canvas</h1><p>Your Access token is stored in Windows Credential Manager on this machine. It is never written to a file.</p>
-{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
-<form method="post" action="/setup" autocomplete="off">
-<input type="hidden" name="request_secret" value="{{.Secret}}">
-<label for="origin">Canvas address</label><input id="origin" name="origin" type="url" value="{{.Origin}}" placeholder="https://your-school.instructure.com" required autocomplete="off">
-<label for="token">Access token</label><input id="token" name="token" type="password" required autocomplete="off" spellcheck="false">
-<button type="submit">Connect</button></form></main></html>`))
 
 type setupHandler struct {
 	origin, secret string
@@ -177,7 +167,7 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	h.complete = true
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Canvas connected</title><style>"+funkyCSS+"</style><main class=\"done\"><h1>Connected</h1><p>Canvas accepted the Access token. You can close this page.</p></main></html>")
+	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Canvas connected</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Connected</h1><p>Canvas accepted the Access token. You can close this page.</p></main></html>")
 	close(h.done)
 }
 

@@ -31,19 +31,6 @@ import (
 // back to any free loopback port when it is taken.
 const preferredHubAddr = "127.0.0.1:47831"
 
-var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CanvasExpert: Special Edition</title><style>` + funkyCSS + `</style><main class="wide">` + hubNavHome + `
-<section class="home-status-grid" aria-label="Connection status">
-<section class="card home-status" id="home-canvas" data-canvas-health data-state="{{.CanvasHealth}}"><h2><span class="status-mark" data-health-mark aria-hidden="true"></span>Canvas</h2><p class="health-state" data-health-state aria-live="polite">{{.CanvasHealth}}</p><p class="health-note" data-health-note>{{.CanvasHealthNote}}</p>
-<div class="inline">{{if .Connected}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" data-canvas-test class="small" {{if eq .CanvasHealth "Checking…"}}disabled{{end}}>Test</button></form><a class="go" href="/settings?section=connections">Connection</a><a class="go" href="/setup">Replace token</a>{{else}}<a class="go" href="/setup">Connect Canvas</a><a class="go" href="/settings?section=connections">Connection</a>{{end}}</div>
-<details><summary>Get an Access token</summary><ol><li>Sign in to Canvas and open Account → Settings.</li><li>Under Approved Integrations, choose New Access Token.</li><li>Copy the token when Canvas shows it. Enter it under Settings → Connections.</li></ol><p>The token is kept in Windows Credential Manager on this computer.</p></details></section>
-		<section class="card home-status" id="home-sync"><h2><span class="status-mark" aria-hidden="true"></span>Sync</h2><p class="health-state">{{.SyncHealth}}</p><p class="health-note">{{.SyncHealthNote}}</p>{{if eq .RulesMode "sync"}}<p><code>{{.RulesRoot}}</code></p>{{end}}<div class="inline"><a class="go" href="/settings?section=connections#rules">Browse</a><form method="post" action="/rules/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="sync_root" value="{{.SyncRoot}}"><button class="small secondary" type="submit">Test saved folder</button></form><a class="go" href="/settings?section=connections">Manage teacher rules</a></div></section>
-</section>
-{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
-<section class="home-courses"><div class="section-head"><h2>Active courses <span class="count">{{.ActiveCourses}}</span></h2><a href="/courses">Manage</a></div>
-{{if .CourseRows}}<ul class="home-course-list">{{range .CourseRows}}<li><a href="/students?course={{.ID}}">{{.Nickname}}</a><span>Canvas course {{.ID}}</span></li>{{end}}</ul>{{else}}<p class="health-note">No active courses selected. Choose courses to show them here.</p><a class="go" href="/courses">Choose courses</a>{{end}}</section>
-<p class="home-agent"><span>Agent setup</span><a href="/connect">Connect this Install to your teaching app</a></p>
-<script src="/_cse/canvas-health.js" defer></script></main></html>`))
-
 type homeData struct {
 	Secret, Message, Notice, CanvasOrigin, Root string
 	Program, Version                            string
@@ -56,11 +43,16 @@ type homeData struct {
 	Preferences, Aliases                        bool
 	Students, Monitored                         int
 	CanvasUser, Voice, FeedbackGuidance         string
-	SettingsSection                             string
-	SettingsNav                                 template.HTML
-	SettingsDraftClear                          string
 	RulesMode, RulesRoot, SyncRoot, RulesError  string
-	Playbook                                    []playbookRow
+}
+
+// settingsData is homeData plus what only the Settings page needs.
+type settingsData struct {
+	homeData
+	SettingsSection    string
+	SettingsNav        template.HTML
+	SettingsDraftClear string
+	Playbook           []playbookRow
 }
 
 type homeCourse struct {
@@ -96,7 +88,10 @@ type Hub struct {
 	connectionTested                                        bool
 	canvasHealth, canvasHealthNote, canvasHealthFingerprint string
 	canvasHealthGeneration                                  uint64
-	canvasHealthTimeout                                     time.Duration
+	// canvasManualPending records a Test click made while an automatic check was
+	// already running, so that check's result counts as the manual test.
+	canvasManualPending bool
+	canvasHealthTimeout time.Duration
 	// seedNotice reports starter files added when the installation opened;
 	// Home shows it once.
 	seedNotice        string
@@ -222,7 +217,6 @@ func (h *Hub) pageData() homeData {
 				}
 			}
 		}
-		data.Playbook = playbookRows(h.root)
 		if g, _, err := readGrading(h.root); err == nil {
 			data.Voice, data.FeedbackGuidance = g.Voice, g.FeedbackGuidance
 		}
@@ -242,20 +236,25 @@ func (h *Hub) settings(w http.ResponseWriter, status int, message, notice string
 	h.settingsSection(w, status, message, notice, "connections")
 }
 
-func (h *Hub) settingsSection(w http.ResponseWriter, status int, message, notice, section string) {
-	data := h.pageData()
-	data.SettingsSection = validSettingsSection(section)
+// settingsPage gathers the Settings page data for one section.
+func (h *Hub) settingsPage(section string) settingsData {
+	data := settingsData{homeData: h.pageData(), SettingsSection: validSettingsSection(section)}
 	data.SettingsNav = template.HTML(hubNavFor("Settings", settingsNavLabel(data.SettingsSection)))
-	data.SettingsDraftClear = ""
+	if h.root != "" {
+		data.Playbook = playbookRows(h.root)
+	}
+	return data
+}
+
+func (h *Hub) settingsSection(w http.ResponseWriter, status int, message, notice, section string) {
+	data := h.settingsPage(section)
 	data.Message, data.Notice = message, notice
 	h.render(w, status, settingsTemplate, data)
 }
 
 func (h *Hub) settingsRequest(w http.ResponseWriter, r *http.Request, status int, message, notice string) {
-	data := h.pageData()
 	query := r.URL.Query()
-	data.SettingsSection = validSettingsSection(query.Get("section"))
-	data.SettingsNav = template.HTML(hubNavFor("Settings", settingsNavLabel(data.SettingsSection)))
+	data := h.settingsPage(query.Get("section"))
 	data.SettingsDraftClear = query.Get("clear")
 	if query.Has("sync_root") {
 		data.SyncRoot = query.Get("sync_root")
@@ -301,16 +300,14 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet && (r.URL.Path == "/" || r.URL.Path == "/settings") {
 		h.ensureCanvasHealth()
 	}
-	if r.URL.Path == "/canvas/test" {
-		h.testCanvas(w, r)
+	// Routes that run before h.mu is taken. Their handlers may block on external
+	// I/O (Canvas, the folder chooser, the Sync folder), so they must take h.mu
+	// themselves before touching hub fields. Static scripts need no hub state.
+	if serveScript(w, r) {
 		return
 	}
-	if r.URL.Path == "/rules/browse" {
-		h.browseRules(w, r)
-		return
-	}
-	if r.URL.Path == "/rules/test" {
-		h.testRulesLocation(w, r)
+	if handle, ok := unlockedRoutes[r.URL.Path]; ok {
+		handle(h, w, r)
 		return
 	}
 	h.mu.Lock()
@@ -387,30 +384,6 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Note    string `json:"note"`
 			Account string `json:"account"`
 		}{h.canvasHealth, h.canvasHealthNote, h.canvasUser})
-	case "/_cse/canvas-health.js":
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", "GET")
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		_, _ = io.WriteString(w, canvasHealthScript)
-	case "/_cse/drafts.js":
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", "GET")
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		_, _ = io.WriteString(w, classroomDraftScript)
-	case "/_cse/settings-drafts.js":
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", "GET")
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		_, _ = io.WriteString(w, settingsDraftScript)
 	case "/connect":
 		h.connectionPage(w, r)
 	case "/connect/extension":
@@ -443,7 +416,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Hub closed</title><style>"+funkyCSS+"</style><main class=\"done\"><h1>Bye!</h1><p>The hub has shut down. You can close this tab.</p></main></html>")
+		_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Hub closed</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Bye!</h1><p>The hub has shut down. You can close this tab.</p></main></html>")
 		h.quitOnce.Do(func() { close(h.quit) })
 	default:
 		http.NotFound(w, r)
@@ -666,4 +639,10 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 		}
 		return nil
 	}
+}
+
+var unlockedRoutes = map[string]func(*Hub, http.ResponseWriter, *http.Request){
+	"/canvas/test":  (*Hub).testCanvas,
+	"/rules/browse": (*Hub).browseRules,
+	"/rules/test":   (*Hub).testRulesLocation,
 }

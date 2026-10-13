@@ -269,7 +269,7 @@ func TestConnectionsKeepsHiddenAccountSlotWhileChecking(t *testing.T) {
 	}
 	close(release)
 	waitForCanvasHealth(t, h, canvasHealthConnected)
-	if h.canvasUser != "Teacher Account" || !strings.Contains(canvasHealthScript, "accountRow.hidden=!s.account") {
+	if h.canvasUser != "Teacher Account" || !strings.Contains(assetText("assets/canvas-health.js"), "accountRow.hidden=!s.account") {
 		t.Fatal("successful check did not populate the account slot")
 	}
 }

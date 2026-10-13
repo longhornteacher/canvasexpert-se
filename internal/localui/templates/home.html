@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CanvasExpert: Special Edition</title>
+<style>{{pageCSS}}</style>
+<main class="wide">
+{{nav "Home" ""}}
+<section class="home-status-grid" aria-label="Connection status">
+<section class="card home-status" id="home-canvas" data-canvas-health data-state="{{.CanvasHealth}}">
+<h2><span class="status-mark" data-health-mark aria-hidden="true"></span>Canvas</h2>
+<p class="health-state" data-health-state aria-live="polite">{{.CanvasHealth}}</p>
+<p class="health-note" data-health-note>{{.CanvasHealthNote}}</p>
+<div class="inline">
+{{if .Connected}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" data-canvas-test class="small" {{if eq .CanvasHealth "Checking…"}}disabled{{end}}>Test</button></form><a class="go" href="/settings?section=connections">Connection</a><a class="go" href="/setup">Replace token</a>{{else}}<a class="go" href="/setup">Connect Canvas</a><a class="go" href="/settings?section=connections">Connection</a>{{end}}
+</div>
+<details><summary>Get an Access token</summary><ol><li>Sign in to Canvas and open Account → Settings.</li><li>Under Approved Integrations, choose New Access Token.</li><li>Copy the token when Canvas shows it. Enter it under Settings → Connections.</li></ol><p>The token is kept in Windows Credential Manager on this computer.</p></details>
+</section>
+<section class="card home-status" id="home-sync">
+<h2><span class="status-mark" aria-hidden="true"></span>Sync</h2>
+<p class="health-state">{{.SyncHealth}}</p>
+<p class="health-note">{{.SyncHealthNote}}</p>
+{{if eq .RulesMode "sync"}}<p><code>{{.RulesRoot}}</code></p>{{end}}
+<div class="inline">
+<a class="go" href="/settings?section=connections#rules">Browse</a>
+<form method="post" action="/rules/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="sync_root" value="{{.SyncRoot}}"><button class="small secondary" type="submit">Test saved folder</button></form>
+<a class="go" href="/settings?section=connections">Manage teacher rules</a>
+</div>
+</section>
+</section>
+{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
+<section class="home-courses">
+<div class="section-head"><h2>Active courses <span class="count">{{.ActiveCourses}}</span></h2><a href="/courses">Manage</a></div>
+{{if .CourseRows}}<ul class="home-course-list">{{range .CourseRows}}<li><a href="/students?course={{.ID}}">{{.Nickname}}</a><span>Canvas course {{.ID}}</span></li>{{end}}</ul>{{else}}<p class="health-note">No active courses selected. Choose courses to show them here.</p><a class="go" href="/courses">Choose courses</a>{{end}}
+</section>
+<p class="home-agent"><span>Agent setup</span><a href="/connect">Connect this Install to your teaching app</a></p>
+<script src="/_cse/canvas-health.js" defer></script>
+</main>
+</html>

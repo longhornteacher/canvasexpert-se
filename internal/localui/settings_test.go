@@ -77,10 +77,10 @@ func TestSettingsSectionsKeepFormsAndUseTabScopedDrafts(t *testing.T) {
 	if csp := preferences.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") {
 		t.Fatalf("Settings scripts are not allowed by CSP: %s", csp)
 	}
-	if !strings.Contains(preferences.Body.String(), `src="/_cse/settings-drafts.js"`) || !strings.Contains(preferences.Body.String(), `data-draft-key="nonce"`) {
+	if !strings.Contains(preferences.Body.String(), `src="/_cse/drafts.js"`) || !strings.Contains(preferences.Body.String(), `data-draft-key="nonce"`) {
 		t.Fatal("Settings draft retention is not attached to the current hub session")
 	}
-	script := hubGet(h, "/_cse/settings-drafts.js").Body.String()
+	script := hubGet(h, "/_cse/drafts.js").Body.String()
 	if !strings.Contains(script, "sessionStorage") || strings.Contains(script, "localStorage") || strings.Contains(script, "request_secret") {
 		t.Fatal("Settings drafts must be tab-scoped and exclude request secrets")
 	}

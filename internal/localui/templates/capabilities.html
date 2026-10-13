@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CanvasExpert-SE capabilities</title>
+<style>{{pageCSS}}</style>
+<main class="wide cap-page">
+{{nav "Guide" "Capabilities"}}
+<h1>What can CE-SE do?</h1>
+<p class="reassure"><b>Reviewed <time datetime="{{.Reviewed}}">{{.Reviewed}}</time>.</b> This recorded evidence and remaining human checks do not show real-time Canvas health. Open a feature to read its evidence, local checks and limits.</p>
+{{range .Groups}}{{$status := .Status}}<section class="cap-group"><h2>{{.Title}} <span class="pill">{{len .Items}} features</span></h2><p>{{.Summary}}</p><ul class="cap-list">{{range .Items}}<li><details class="cap-item {{$status}}"><summary><span class="cap-state-mark" aria-hidden="true">{{if eq $status "green"}}✓{{else if eq $status "yellow"}}!{{else}}×{{end}}</span>{{.Title}}<span class="cap-status-sr"> — {{if eq $status "green"}}working with recorded evidence{{else if eq $status "yellow"}}partial or awaiting validation{{else}}not implemented{{end}}</span></summary><p>{{.Detail}}</p></details></li>{{end}}</ul></section>{{end}}
+</main>
+</html>
