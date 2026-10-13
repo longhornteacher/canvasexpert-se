@@ -16,6 +16,6 @@ Published objects can be visible to enrolled students; clean those up first.
 | Assignment 3698181 | **Published**; Test Student score 16 and comment; Canvas refused unpublish (HTTP 400) | Review page tests, 2026-10-10 |
 | New Quiz 3698128 "All Question Types Sampler (CS)" | Unpublished; left for teacher preview | Quiz push, 2026-10-09 |
 | New Quiz 3698178, assignment 3698180 | Unpublished `[CSE FIELD PROBE]` | Field API probe, 2026-10-10 |
-| New Quizzes 3698182, 3698183 | Unpublished `[CSE FIELD PROBE]`; 3698183 is the optional Build/Preview check in `handoffs/active/NEW-QUIZ-SCORING-PROBE.md` | Written-item probe, 2026-10-10 |
+| New Quizzes 3698182, 3698183 | Unpublished `[CSE FIELD PROBE]`; 3698183 is the optional Build/Preview check in `handoffs/retired/NEW-QUIZ-SCORING-PROBE.md` | Written-item probe, 2026-10-10 |
 
 All Engine unattended assignments have `omit_from_final_grade: true` and `post_to_sis: false`. Remove a row when its object is deleted.

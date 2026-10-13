@@ -25,6 +25,13 @@ Delete the feature's `.go` file, its template, any script only it used, and its 
 
 `go build` and `go test ./...` fail at init or in the first test if a declared template or script is missing.
 
+## Conventions
+
+- Health states use stable keys (`checking`, `connected`, `rejected`, `unavailable`, `not_connected`) in Go, CSS `data-state`, scripts and the JSON `state`; the human label is separate display text. Never use copy as an identifier.
+- `h.render` executes into a buffer and writes only on success, so a template error is a plain 500, not a truncated page.
+- Handlers that wait on the network (such as `/setup`) are `Unlocked` and take `h.mu` only around hub fields.
+- Retired design history: [WEBUI-BENCH-CONVERSION](../../handoffs/retired/WEBUI-BENCH-CONVERSION.md), [WEBUI-ASSET-EXTRACTION](../../handoffs/retired/WEBUI-ASSET-EXTRACTION.md), [WEBUI-EXTENSIBILITY](../../handoffs/retired/WEBUI-EXTENSIBILITY.md).
+
 ## Derived, so never edited by hand
 
 Route table and method rules (`pages`), CSP script/connect sources (`headers`), primary and sub-navigation (`hubNavFor`), template parsing and script/template consistency (`register`).

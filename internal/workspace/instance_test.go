@@ -66,3 +66,31 @@ func TestSyncInstanceReportsUnreadableConfiguration(t *testing.T) {
 		t.Fatal("expected configuration read failure")
 	}
 }
+
+func TestOriginMismatchMessageShowsOnlySanitizedOrigins(t *testing.T) {
+	msg := OriginMismatchMessage("https://user:pw@Old.Instructure.com/path?access_token=LEAK#frag", "https://new.instructure.com")
+	for _, want := range []string{"https://old.instructure.com", "https://new.instructure.com", "cse setup", "instance line"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("missing %q: %s", want, msg)
+		}
+	}
+	for _, leak := range []string{"pw", "LEAK", "access_token", "frag", "/path"} {
+		if strings.Contains(msg, leak) {
+			t.Fatalf("leaked %q: %s", leak, msg)
+		}
+	}
+	if got := SafeOrigin("%%bad"); strings.Contains(got, "bad") {
+		t.Fatalf("unusable value echoed: %s", got)
+	}
+}
+
+func TestSyncInstanceTreatsCaseOnlyDifferenceAsSameOrigin(t *testing.T) {
+	root := t.TempDir()
+	config := domain.CourseConfig{Schema: 1, Instance: "https://School.instructure.com", Courses: []domain.Course{{Nickname: "CS", ID: 1, Current: true}}}
+	if err := WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := SyncInstance(root, "https://school.instructure.com"); err != nil || !changed {
+		t.Fatalf("sync = %v, %v", changed, err)
+	}
+}

@@ -2,15 +2,17 @@
 param(
     [Parameter()]
     [string]$GoExecutable = 'go',
-    [Parameter()][switch]$Release
+    [Parameter()][switch]$Release,
+    # Where the current output set is published. Defaults to Source's dist/; tests may point elsewhere.
+    [Parameter()][string]$OutputDirectory
 )
 
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $templateRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'workspace-template'))
-$binaryPath = [IO.Path]::GetFullPath((Join-Path $repoRoot 'dist/cse.exe'))
-$distRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'dist'))
+if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repoRoot 'dist' }
+$distRoot = [IO.Path]::GetFullPath($OutputDirectory)
 # Single-folder package: the starter workspace with the Engine in engine\. Extracting it
 # with Windows' Extract All gives a CanvasExpert-SE folder the teacher points the agent at.
 $packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot 'CanvasExpert-SE.zip'))
@@ -20,22 +22,19 @@ if (-not (Test-Path -LiteralPath $templateRoot -PathType Container)) {
     throw "Missing starter template: $templateRoot"
 }
 
-# Always rebuild so the archive contains the executable produced from this source tree.
-& (Join-Path $PSScriptRoot 'build.ps1') -GoExecutable $GoExecutable -Release:$Release
-if (-not (Test-Path -LiteralPath $binaryPath -PathType Leaf)) {
-    throw "Missing built executable: $binaryPath"
+$tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+$stageName = "CanvasExpert-SE-package-$([Guid]::NewGuid().ToString('N'))"
+$stageRoot = [IO.Path]::GetFullPath((Join-Path $tempRoot $stageName))
+$stagePrefix = $tempRoot.TrimEnd('\', '/') + $pathSeparator
+if (-not $stageRoot.StartsWith($stagePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Staging path is outside the system temp directory: $stageRoot"
 }
-$productVersion = [IO.File]::ReadAllText((Join-Path $repoRoot 'VERSION')).Trim()
-$identity = & $binaryPath version --json | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0 -or $identity.version -cne $productVersion) { throw 'Built Engine does not match VERSION.' }
-$artifactIdentity = $productVersion
-if ($identity.build_kind -ne 'release') {
-    $safeRevision = $identity.revision.Replace('+', '.')
-    $safeTime = ([DateTimeOffset]$identity.built_at).ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'", [Globalization.CultureInfo]::InvariantCulture)
-    $artifactIdentity += "-dev.$safeRevision.$safeTime"
-}
-$versionedPackagePath = Join-Path $distRoot "CanvasExpert-SE-$artifactIdentity-windows-amd64.zip"
-if ($Release -and (Test-Path -LiteralPath $versionedPackagePath)) { throw "Refusing to overwrite immutable release artifact $versionedPackagePath" }
+
+$buildRoot = Join-Path $stageRoot 'build'
+$contentRoot = Join-Path $stageRoot 'content'
+$zipTempFullPath = Join-Path $stageRoot 'package.zip'
+$mcpbPath = Join-Path $stageRoot 'CanvasExpert-SE-Cowork.mcpb'
+$binaryPath = Join-Path $buildRoot 'cse.exe'
 
 # Windows PowerShell 5.1 (.NET Framework) writes backslash entry names with
 # ZipFile.CreateFromDirectory, which is not a conforming ZIP. Write entries with
@@ -111,23 +110,29 @@ if ($claudeSettings.permissions.deny -notcontains 'Read(./.cse/**)') {
     throw 'The starter Claude settings must deny Read access to .cse/**.'
 }
 
-$tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
-$stageName = "CanvasExpert-SE-package-$([Guid]::NewGuid().ToString('N'))"
-$stageRoot = [IO.Path]::GetFullPath((Join-Path $tempRoot $stageName))
-$stagePrefix = $tempRoot.TrimEnd('\', '/') + $pathSeparator
-if (-not $stageRoot.StartsWith($stagePrefix, [StringComparison]::OrdinalIgnoreCase)) {
-    throw "Staging path is outside the system temp directory: $stageRoot"
-}
-
-$zipTempPath = Join-Path $distRoot (".CanvasExpert-SE-package-$([Guid]::NewGuid().ToString('N')).zip")
-$zipTempFullPath = [IO.Path]::GetFullPath($zipTempPath)
-$distPrefix = $distRoot.TrimEnd('\', '/') + $pathSeparator
-if (-not $zipTempFullPath.StartsWith($distPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-    throw "Temporary archive path is outside dist: $zipTempFullPath"
-}
-
 try {
-    New-Item -ItemType Directory -Path $stageRoot | Out-Null
+    New-Item -ItemType Directory -Path $contentRoot | Out-Null
+    New-Item -ItemType Directory -Path $buildRoot | Out-Null
+    # Compile once. Everything below packages these exact bytes; nothing is published until all of it passes.
+    & (Join-Path $PSScriptRoot 'compile.ps1') -GoExecutable $GoExecutable -Release:$Release -OutputDirectory $buildRoot
+    if (-not $?) { throw 'Compile step failed.' }
+    if (-not (Test-Path -LiteralPath $binaryPath -PathType Leaf)) { throw "Missing built executable: $binaryPath" }
+    $productVersion = [IO.File]::ReadAllText((Join-Path $repoRoot 'VERSION')).Trim()
+    $identity = & $binaryPath version --json | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or $identity.version -cne $productVersion) { throw 'Built Engine does not match VERSION.' }
+    $artifactIdentity = $productVersion
+    if ($identity.build_kind -ne 'release') {
+        $safeRevision = $identity.revision.Replace('+', '.')
+        $safeTime = ([DateTimeOffset]$identity.built_at).ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'", [Globalization.CultureInfo]::InvariantCulture)
+        $artifactIdentity += "-dev.$safeRevision.$safeTime"
+    }
+    $releaseRoot = Join-Path $distRoot 'release'
+    $releasePackagePath = Join-Path $releaseRoot "CanvasExpert-SE-$artifactIdentity-windows-amd64.zip"
+    $releaseMcpbPath = Join-Path $releaseRoot "CanvasExpert-SE-Cowork-$artifactIdentity-windows-amd64.mcpb"
+    if ($Release -and ((Test-Path -LiteralPath $releasePackagePath) -or (Test-Path -LiteralPath $releaseMcpbPath))) {
+        throw "Refusing to overwrite immutable release artifact in $releaseRoot"
+    }
+    $contentPrefix = $contentRoot.TrimEnd('\', '/') + $pathSeparator
     $expectedEntries = [Collections.Generic.List[string]]::new()
     $sourcePrefix = $templateRoot.TrimEnd('\', '/') + $pathSeparator
 
@@ -142,9 +147,9 @@ try {
             throw "Template file is outside the package allowlist: $relativePath"
         }
 
-        $destination = [IO.Path]::GetFullPath((Join-Path $stageRoot ($relativePath.Replace('/', $pathSeparator))))
-        $stagePrefixWithSeparator = $stageRoot.TrimEnd('\', '/') + $pathSeparator
-        if (-not $destination.StartsWith($stagePrefixWithSeparator, [StringComparison]::OrdinalIgnoreCase)) {
+        $destination = [IO.Path]::GetFullPath((Join-Path $contentRoot ($relativePath.Replace('/', $pathSeparator))))
+        $contentPrefix = $contentRoot.TrimEnd('\', '/') + $pathSeparator
+        if (-not $destination.StartsWith($contentPrefix, [StringComparison]::OrdinalIgnoreCase)) {
             throw "Template path escapes the staging directory: $relativePath"
         }
         $destinationDirectory = Split-Path -Parent $destination
@@ -160,23 +165,24 @@ try {
     if ($expectedEntries -contains 'webui.cmd') {
         throw 'The workspace template must not contain webui.cmd; the bundle adds it.'
     }
-    New-Item -ItemType Directory -Path (Join-Path $stageRoot 'engine') | Out-Null
-    Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $stageRoot 'engine/cse.exe')
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'VERSION') -Destination (Join-Path $stageRoot 'VERSION')
+    New-Item -ItemType Directory -Path (Join-Path $contentRoot 'engine') | Out-Null
+    Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $contentRoot 'engine/cse.exe')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'VERSION') -Destination (Join-Path $contentRoot 'VERSION')
     $expectedEntries.Add('VERSION')
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $stageRoot 'LICENSE')
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD_PARTY_NOTICES.md') -Destination (Join-Path $stageRoot 'engine/THIRD_PARTY_NOTICES.md')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $contentRoot 'LICENSE')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD_PARTY_NOTICES.md') -Destination (Join-Path $contentRoot 'engine/THIRD_PARTY_NOTICES.md')
     $expectedEntries.Add('LICENSE')
     $expectedEntries.Add('engine/THIRD_PARTY_NOTICES.md')
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/package-webui.cmd') -Destination (Join-Path $stageRoot 'webui.cmd')
-    & (Join-Path $PSScriptRoot 'package-mcp.ps1') -BinaryPath $binaryPath
-    Copy-Item -LiteralPath (Join-Path $distRoot 'CanvasExpert-SE-Cowork.mcpb') -Destination (Join-Path $stageRoot 'engine/CanvasExpert-SE-Cowork.mcpb')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/package-webui.cmd') -Destination (Join-Path $contentRoot 'webui.cmd')
+    & (Join-Path $PSScriptRoot 'package-mcp.ps1') -BinaryPath $binaryPath -OutputPath $mcpbPath
+    if (-not $?) { throw 'Extension packaging failed.' }
+    Copy-Item -LiteralPath $mcpbPath -Destination (Join-Path $contentRoot 'engine/CanvasExpert-SE-Cowork.mcpb')
     $expectedEntries.Add('engine/CanvasExpert-SE-Cowork.mcpb')
     $expectedEntries.Add('engine/cse.exe')
     $expectedEntries.Add('webui.cmd')
 
-    $stagedFiles = @(Get-ChildItem -LiteralPath $stageRoot -Force -Recurse -File)
-    $stagedEntries = @($stagedFiles | ForEach-Object { $_.FullName.Substring(($stageRoot.TrimEnd('\', '/') + $pathSeparator).Length).Replace('\', '/') })
+    $stagedFiles = @(Get-ChildItem -LiteralPath $contentRoot -Force -Recurse -File)
+    $stagedEntries = @($stagedFiles | ForEach-Object { $_.FullName.Substring(($contentRoot.TrimEnd('\', '/') + $pathSeparator).Length).Replace('\', '/') })
     $expectedSorted = @($expectedEntries | Sort-Object)
     $stagedSorted = @($stagedEntries | Sort-Object)
     if (($stagedSorted -join "`n") -cne ($expectedSorted -join "`n")) {
@@ -186,7 +192,7 @@ try {
         throw 'Staging directory contains private runtime state or pulled course data.'
     }
 
-    New-PortableZip -SourceDirectory $stageRoot -DestinationPath $zipTempFullPath
+    New-PortableZip -SourceDirectory $contentRoot -DestinationPath $zipTempFullPath
 
     $archive = [IO.Compression.ZipFile]::OpenRead($zipTempFullPath)
     try {
@@ -219,32 +225,40 @@ try {
         $archive.Dispose()
     }
 
-    # Replace only the requested archive file after the new archive has passed validation.
-    $distFullPath = [IO.Path]::GetFullPath($distRoot)
-    if (-not $packagePath.StartsWith(($distFullPath.TrimEnd('\', '/') + $pathSeparator), [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Package output path is outside dist: $packagePath"
+    # Publish the current set only now that everything passed. The Engine goes first: if a running
+    # copy of dist/cse.exe is locked, this fails before any other current file changes.
+    New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
+    $zipSum = (Get-FileHash -LiteralPath $zipTempFullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sumsStage = Join-Path $stageRoot 'SHA256SUMS.txt'
+    [IO.File]::WriteAllText($sumsStage, "$zipSum  CanvasExpert-SE.zip`n", [Text.UTF8Encoding]::new($false))
+    $current = [ordered]@{
+        'cse.exe'                = $binaryPath
+        'cse-mcp-launcher.exe'   = (Join-Path $buildRoot 'cse-mcp-launcher.exe')
+        'CanvasExpert-SE.zip'    = $zipTempFullPath
+        'SHA256SUMS.txt'         = $sumsStage
     }
-    if (Test-Path -LiteralPath $packagePath -PathType Leaf) {
-        Remove-Item -LiteralPath $packagePath -Force
+    foreach ($name in $current.Keys) {
+        $pending = Join-Path $distRoot ".$name.new"
+        Copy-Item -LiteralPath $current[$name] -Destination $pending -Force
     }
-    Move-Item -LiteralPath $zipTempFullPath -Destination $packagePath
-    Copy-Item -LiteralPath $packagePath -Destination $versionedPackagePath
+    foreach ($name in $current.Keys) {
+        Move-Item -LiteralPath (Join-Path $distRoot ".$name.new") -Destination (Join-Path $distRoot $name) -Force
+    }
+    if ($Release) {
+        # Explicit, separate location for the immutable public release set; ordinary builds never write here.
+        New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
+        Copy-Item -LiteralPath $zipTempFullPath -Destination $releasePackagePath
+        Copy-Item -LiteralPath $mcpbPath -Destination $releaseMcpbPath
+        $releaseSums = @($releasePackagePath, $releaseMcpbPath) | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($_) }
+        [IO.File]::WriteAllText((Join-Path $releaseRoot "SHA256SUMS-$artifactIdentity.txt"), ($releaseSums -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
+    }
 
-    $versionedMCPPath = Join-Path $distRoot "CanvasExpert-SE-Cowork-$artifactIdentity-windows-amd64.mcpb"
-    $sumLines = @($versionedPackagePath, $versionedMCPPath) | ForEach-Object {
-        (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($_)
-    }
-    $sumPath = Join-Path $distRoot "SHA256SUMS-$artifactIdentity.txt"
-    [IO.File]::WriteAllText($sumPath, ($sumLines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
-    Copy-Item -LiteralPath $sumPath -Destination (Join-Path $distRoot 'SHA256SUMS.txt') -Force
-
-    $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    Write-Host "Packaged $packagePath"
-    Write-Host "SHA256 $hash"
+    Write-Host "Packaged $packagePath ($($identity.version), revision $($identity.revision), built $($identity.built_at), $($identity.build_kind))"
+    Write-Host "SHA256 $zipSum"
 }
 finally {
-    if (Test-Path -LiteralPath $zipTempFullPath -PathType Leaf) {
-        Remove-Item -LiteralPath $zipTempFullPath -Force
+    foreach ($leftover in Get-ChildItem -LiteralPath $distRoot -Force -Filter '.*.new' -ErrorAction SilentlyContinue) {
+        Remove-Item -LiteralPath $leftover.FullName -Force
     }
     if (Test-Path -LiteralPath $stageRoot -PathType Container) {
         $resolvedStage = [IO.Path]::GetFullPath($stageRoot)

@@ -1,3 +1,5 @@
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+
 # WebUI asset extraction and copy warmth pass
 
 Status: **ready**, 2026-10-13. One agent, one session, **two commits**, in order:

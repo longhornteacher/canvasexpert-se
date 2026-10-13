@@ -1,3 +1,5 @@
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+
 # Promote two verified Engine capabilities
 
 Agreed with the teacher on 2026-10-12. This handoff is limited to the two status moves below. MCP review/client validation is deferred; do not include it in this task.

@@ -203,6 +203,9 @@ func (h *Hub) knownOrigin() string {
 	return ""
 }
 
+// openBrowser is a seam so tests never launch a real browser.
+var openBrowser = platform.OpenBrowser
+
 // RunHub serves every local page until ctx ends or the user quits. root may be
 // empty for a development launch; no remembered folder is restored.
 func RunHub(ctx context.Context, root, version string, output io.Writer) error {
@@ -231,7 +234,7 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 			hubUnlock()
 		}
 	}()
-	if root != "" && options.ReadyFile == "" {
+	if root != "" {
 		root = hubcoord.CanonicalRoot(root)
 		unlock, lockErr := hubcoord.Acquire(root, 5*time.Second)
 		if lockErr != nil {
@@ -266,71 +269,7 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 	}
 	hub.setup = &setupHandler{origin: origin, secret: secret, ctx: ctx, validate: validateCredential, save: platform.SaveCredential, persistent: true, hub: true, done: make(chan struct{})}
 	hub.setup.knownOrigin = hub.knownOrigin
-	// The setup handler runs without hub.mu (its validation call is slow), so the
-	// callbacks below take it around every hub field they touch.
-	hub.setup.after = func(c platform.Credential) string {
-		hub.mu.Lock()
-		hub.canvasUser = ""
-		hub.connectionTested = true
-		hub.markCanvasValidated(c)
-		hub.mu.Unlock()
-		if hub.root == "" {
-			return ""
-		}
-		changed, err := workspace.SyncInstance(hub.root, c.Origin)
-		logOutcome := "updated"
-		if err != nil {
-			logOutcome = "failed"
-		} else if !changed {
-			logOutcome = "unchanged"
-		}
-		rulesPath := ""
-		if location, locationErr := workspace.GetRulesLocation(hub.root); locationErr == nil {
-			rulesPath = location.RulesRoot
-		}
-		if logErr := installlog.Append(hub.root, version, installlog.Entry{Step: "origin_configuration", Client: hub.installClient, Outcome: logOutcome, ErrorCategory: map[bool]string{true: "configuration"}[err != nil], InstallPath: hub.root, RulesPath: rulesPath}); logErr != nil {
-			fmt.Fprintln(output, "Install log unavailable; setup continues.")
-		}
-		switch {
-		case err != nil:
-			return "The credential was saved, but context/courses.md could not be updated; fix that file before running remote commands."
-		case !changed:
-			return "Saved origin differs from configured courses; update context/courses.md before remote commands."
-		}
-		return "CE-SE settings now use this Canvas address."
-	}
-	hub.setup.onValidation = func(valid bool) {
-		hub.mu.Lock()
-		defer hub.mu.Unlock()
-		hub.setupValidated = valid
-		hub.setupSaved = false
-		hub.connectionTested = false
-		hub.canvasUser = ""
-		hub.invalidateCanvasHealth()
-	}
-	hub.setup.onValidationResult = func(valid bool) {
-		outcome := "failed"
-		category := "validation"
-		if valid {
-			outcome, category = "succeeded", ""
-		}
-		if err := installlog.Append(hub.root, version, installlog.Entry{Step: "credential_validation", Client: hub.installClient, Outcome: outcome, ErrorCategory: category, InstallPath: hub.root}); err != nil {
-			fmt.Fprintln(output, "Install log unavailable; setup continues.")
-		}
-	}
-	hub.setup.onSaved = func() {
-		hub.mu.Lock()
-		hub.setupSaved = true
-		hub.mu.Unlock()
-		if err := installlog.Append(hub.root, version, installlog.Entry{Step: "credential_save", Client: hub.installClient, Outcome: "succeeded", InstallPath: hub.root}); err != nil {
-			fmt.Fprintln(output, "Install log unavailable; setup continues.")
-		}
-	}
-	hub.setup.onSaveFailed = func() {
-		if err := installlog.Append(hub.root, version, installlog.Entry{Step: "credential_save", Client: hub.installClient, Outcome: "failed", ErrorCategory: "credential_store", InstallPath: hub.root}); err != nil {
-			fmt.Fprintln(output, "Install log unavailable; setup continues.")
-		}
-	}
+	wireSetupCallbacks(hub, version, output)
 	hub.root = root
 	if root != "" {
 		hub.seedNotice = strings.TrimSpace(strings.Join([]string{addMissingSeed(root), seedAdoptionNotice(root)}, " "))
@@ -365,7 +304,7 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 		}
 	}
 	browserOutcome := "launch_requested"
-	if err = platform.OpenBrowser(origin + firstPage); err != nil {
+	if err = openBrowser(origin + firstPage); err != nil {
 		browserOutcome = "launch_failed"
 	}
 	if root != "" {
@@ -378,24 +317,8 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 		}
 	}
 	if options.ReadyFile != "" {
-		ready, marshalErr := json.Marshal(struct {
-			URL            string `json:"url"`
-			InstallRoot    string `json:"install_root"`
-			SetupStatusURL string `json:"setup_status_url"`
-			Reused         bool   `json:"reused"`
-			BrowserOutcome string `json:"browser_outcome"`
-		}{origin + firstPage, root, origin + "/setup/status", false, browserOutcome})
-		if marshalErr != nil {
-			return marshalErr
-		}
-		// Rename prevents the installing process from reading a partial marker.
-		tempReady := options.ReadyFile + ".tmp"
-		if err = os.WriteFile(tempReady, ready, 0o600); err != nil {
-			return fmt.Errorf("could not report hub readiness: %w", err)
-		}
-		if err = os.Rename(tempReady, options.ReadyFile); err != nil {
-			_ = os.Remove(tempReady)
-			return fmt.Errorf("could not report hub readiness: %w", err)
+		if err = writeHubReady(options.ReadyFile, origin+firstPage, root, origin+"/setup/status", false, browserOutcome); err != nil {
+			return err
 		}
 	}
 	if browserOutcome == "launch_failed" {
@@ -413,5 +336,76 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 			return errors.New("local hub stopped")
 		}
 		return nil
+	}
+}
+
+// wireSetupCallbacks connects the setup form to this hub's state, the Install's
+// course configuration and the install log. Split out so tests can drive the real
+// callbacks with mocked validation and credential storage.
+func wireSetupCallbacks(hub *Hub, version string, output io.Writer) {
+	// The setup handler runs without hub.mu (its validation call is slow), so the
+	// callbacks below take it around every hub field they touch.
+	hub.setup.after = func(c platform.Credential) string {
+		hub.mu.Lock()
+		hub.canvasUser = ""
+		hub.connectionTested = true
+		hub.markCanvasValidated(c)
+		hub.mu.Unlock()
+		if hub.root == "" {
+			return ""
+		}
+		changed, err := workspace.SyncInstance(hub.root, c.Origin)
+		logOutcome := "updated"
+		if err != nil {
+			logOutcome = "failed"
+		} else if !changed {
+			logOutcome = "unchanged"
+		}
+		rulesPath := ""
+		if location, locationErr := workspace.GetRulesLocation(hub.root); locationErr == nil {
+			rulesPath = location.RulesRoot
+		}
+		if logErr := installlog.Append(hub.root, version, installlog.Entry{Step: "origin_configuration", Client: hub.installClient, Outcome: logOutcome, ErrorCategory: map[bool]string{true: "configuration"}[err != nil], InstallPath: hub.root, RulesPath: rulesPath}); logErr != nil {
+			fmt.Fprintln(output, "Install log unavailable; setup continues.")
+		}
+		switch {
+		case err != nil:
+			return "The credential was saved, but context/courses.md could not be updated; fix that file before running remote commands."
+		case !changed:
+			return "The credential was saved, but course settings were not changed. " + workspace.OriginMismatchMessage(workspace.ConfiguredInstance(hub.root), c.Origin)
+		}
+		return "CE-SE settings now use this Canvas address."
+	}
+	hub.setup.onValidation = func(valid bool) {
+		hub.mu.Lock()
+		defer hub.mu.Unlock()
+		hub.setupValidated = valid
+		hub.setupSaved = false
+		hub.connectionTested = false
+		hub.canvasUser = ""
+		hub.invalidateCanvasHealth()
+	}
+	hub.setup.onValidationResult = func(valid bool) {
+		outcome := "failed"
+		category := "validation"
+		if valid {
+			outcome, category = "succeeded", ""
+		}
+		if err := installlog.Append(hub.root, version, installlog.Entry{Step: "credential_validation", Client: hub.installClient, Outcome: outcome, ErrorCategory: category, InstallPath: hub.root}); err != nil {
+			fmt.Fprintln(output, "Install log unavailable; setup continues.")
+		}
+	}
+	hub.setup.onSaved = func() {
+		hub.mu.Lock()
+		hub.setupSaved = true
+		hub.mu.Unlock()
+		if err := installlog.Append(hub.root, version, installlog.Entry{Step: "credential_save", Client: hub.installClient, Outcome: "succeeded", InstallPath: hub.root}); err != nil {
+			fmt.Fprintln(output, "Install log unavailable; setup continues.")
+		}
+	}
+	hub.setup.onSaveFailed = func() {
+		if err := installlog.Append(hub.root, version, installlog.Entry{Step: "credential_save", Client: hub.installClient, Outcome: "failed", ErrorCategory: "credential_store", InstallPath: hub.root}); err != nil {
+			fmt.Fprintln(output, "Install log unavailable; setup continues.")
+		}
 	}
 }

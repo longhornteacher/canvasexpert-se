@@ -100,14 +100,15 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	}
 	configuredOrigin, originErr := canvas.New(config.Instance, "validate-origin-only")
 	if originErr != nil || configuredOrigin.Origin() != c.Origin() {
-		return fail(inputError(fmt.Errorf("context/courses.md instance differs from this machine's saved Canvas origin; update the configuration")), progress)
+		return fail(inputError(errors.New(workspace.OriginMismatchMessage(config.Instance, c.Origin()))), progress)
 	}
 	service := &workflow.Service{Root: root, Client: c, Config: config}
 	start := time.Now()
+	status := statusWriter(progress)
 	defer func() {
-		fmt.Fprintf(progress, "%s: %s, %d HTTP requests\n", cmd, time.Since(start).Round(time.Millisecond), c.Requests())
+		fmt.Fprintf(status, "%s: %s, %d HTTP requests\n", cmd, time.Since(start).Round(time.Millisecond), c.Requests())
 	}()
-	fmt.Fprintf(progress, "%s…\n", cmd)
+	fmt.Fprintf(status, "%s…\n", cmd)
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	switch cmd {
 	case "upload-file":
@@ -460,4 +461,17 @@ func parseCourseUpload(root string, args []string) (string, workflow.CourseUploa
 		}
 	}
 	return source, opts, nil
+}
+
+// statusWriter returns where routine status lines ("courses…", timings) go.
+// When stderr is redirected or captured (an agent shell, a pipe), those lines
+// are dropped: Windows PowerShell 5.1 turns any captured native stderr into a
+// NativeCommandError even for a successful command. Errors still use progress.
+func statusWriter(progress io.Writer) io.Writer {
+	if f, ok := progress.(*os.File); ok {
+		if info, err := f.Stat(); err != nil || info.Mode()&os.ModeCharDevice == 0 {
+			return io.Discard
+		}
+	}
+	return progress
 }

@@ -1,9 +1,7 @@
 # Handoffs
 
-Handoffs should say whether a change belongs to the Engine or the Playbook. Put open, bounded work in `active/` and completed or superseded handoffs in `retired/`. Current development authority lives in the root `AGENTS.md`, `ARCHITECTURE.md`, and `SCORING-RULES.md`; build instructions and historical observations remain under `docs/`.
+A handoff is bounded execution work for an agent session. It should say whether a change belongs to the Engine or the playbooks. Open work lives in `active/`; completed or superseded handoffs move to `retired/` with a retirement banner. Retired files are history and evidence, not instructions. Retiring one does not mean every observation in it was verified.
 
-Implemented in Source 2026-10-12; fresh-user pilot pending: [Teacher-first installation and MCP handoff](active/TEACHER-FIRST-INSTALL.md). User target: unzip, open Install in Code/Codex, say "install this", then enter the PAT in the WebUI. Bundled selected-client registration/local checks, a thin Cowork launcher, hub connection action and teaching-context onboarding are implemented. Actual destination adoption and the standard-account journey remain pending; local mechanics do not establish destination success.
+Current development authority lives in the root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`; build instructions and dated observations live under `docs/`.
 
-Implemented in Source 2026-10-12: [Optional Sync as the authority for teacher rules](active/SHARED-TEACHER-RULES-SYNC.md). Engine routing/settings and agent documentation preserve the one-folder default and make selected teacher rules authoritative across PCs. Local temporary fixtures verify file routing; real provider/client adoption remains unobserved, and no live Install has been migrated.
-
-Implemented in Source 2026-10-12; destination validation pending: [Improve 1.0b1: findings and execution slices](active/FRESH-INSTALL-PILOT-FINDINGS-20261012.md). All ten slices passed local checks and a pinned package run. Cowork trust/restart, Work restart, destination tool use, browser visibility and provider delivery remain unobserved.
+There are no active handoffs. The 2026-10-13 cleanup, single-build and first-install-repair briefs are retired ([01](retired/01-HANDOFF-CLEANUP.md), [02](retired/02-ONE-CURRENT-BUILD.md), [03](retired/03-FIRST-INSTALL-REPAIR.md)); their durable rules live in `docs/build.md`, `docs/releasing.md`, `docs/development-notes.md` and the capability records. Add a new brief to `active/` only for new bounded work.

@@ -134,6 +134,7 @@ func TestConnectionOutcomeLabelsDescribeLocalEvidence(t *testing.T) {
 		{installation.Result{State: "settings-saved"}, "Work registration saved"},
 		{installation.Result{State: "settings-already-saved"}, "Work already points to this Install"},
 		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "launch_requested"}, "Cowork extension prepared; opening was requested"},
+		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "file_revealed"}, "Cowork extension prepared; file shown in File Explorer for manual install"},
 		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "launch_failed"}, "Cowork extension prepared; automatic opening did not work"},
 	}
 	for _, tc := range cases {

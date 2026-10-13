@@ -9,6 +9,12 @@ This checkout is **Source**. **Install** is the local runnable CE-SE folder and 
 - The working copy uses **CRLF** in many files, so `gofmt -l` lists nearly everything. Format only files you change, and preserve line endings (use the Edit tool or CRLF-aware scripts).
 - Git Bash rewrites leading `/api/...` paths; set `MSYS_NO_PATHCONV=1`. Long heredocs with quotes can break the Bash tool; write scripts to files instead.
 
+## Briefs, builds and scratch files
+
+- Work from the current brief in `handoffs/active/`. When its work lands, record the outcome and move it to `handoffs/retired/` with a banner; retired briefs are history, so durable rules go into `AGENTS.md`, `ARCHITECTURE.md` or these notes.
+- Scratch binaries and extracted packages live in task-owned temporary directories and are deleted afterward. Only the canonical packaging path produces the current teacher download; other builds are not delivered. The build contract is in [build.md](build.md) (execution record: [02-ONE-CURRENT-BUILD.md](../handoffs/retired/02-ONE-CURRENT-BUILD.md)).
+- Historical hashes, build identities and dated observations stay in retired records and [engine-capabilities.md](engine-capabilities.md), not in this guide.
+
 ## Live Canvas reads
 
 - Ask the teacher for fresh, concrete authorization before any Canvas write. Authorization from an earlier session does not carry over.

@@ -20,26 +20,27 @@ func reportExistingHub(loc hubcoord.Location, root string, output io.Writer, opt
 	}
 	pageURL := loc.URL + firstPage
 	_, _ = fmt.Fprintf(output, "Reusing the running CanvasExpert-SE hub for this Install: %s (this command does not own or stop it)\n", pageURL)
-	if options.ReadyFile != "" {
-		if err := writeHubReady(options.ReadyFile, pageURL, root, loc.URL+"/setup/status"); err != nil {
-			return err
-		}
-	}
-	if err := platform.OpenBrowser(pageURL); err != nil {
+	browserOutcome := "launch_requested"
+	if err := openBrowser(pageURL); err != nil {
+		browserOutcome = "launch_failed"
 		_, _ = fmt.Fprintln(output, "The browser could not open automatically; open the local URL above.")
 	} else {
 		_, _ = fmt.Fprintln(output, "A browser launch was requested for the local hub; this does not confirm that a page appeared.")
 	}
+	if options.ReadyFile != "" {
+		return writeHubReady(options.ReadyFile, pageURL, root, loc.URL+"/setup/status", true, browserOutcome)
+	}
 	return nil
 }
 
-func writeHubReady(path, pageURL, root, statusURL string) error {
+func writeHubReady(path, pageURL, root, statusURL string, reused bool, browserOutcome string) error {
 	ready, err := json.Marshal(struct {
 		URL            string `json:"url"`
 		InstallRoot    string `json:"install_root"`
 		SetupStatusURL string `json:"setup_status_url"`
 		Reused         bool   `json:"reused"`
-	}{pageURL, root, statusURL, true})
+		BrowserOutcome string `json:"browser_outcome"`
+	}{pageURL, root, statusURL, reused, browserOutcome})
 	if err != nil {
 		return err
 	}

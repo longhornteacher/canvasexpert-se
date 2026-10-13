@@ -185,7 +185,7 @@ func TestDoctorOriginMismatchNeverIncludesToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if find(r, "saved_origin").Status != "fail" || strings.Contains(string(encoded), "secret-synthetic-token") {
+	if find(r, "saved_origin").Status != "fail" || strings.Contains(string(encoded), "secret-synthetic-token") || !strings.Contains(string(encoded), "https://different.example") {
 		t.Fatalf("origin result leaked or was not flagged: %s", encoded)
 	}
 }

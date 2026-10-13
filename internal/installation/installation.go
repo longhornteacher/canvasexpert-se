@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"canvasexpertse/internal/platform"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/pelletier/go-toml/v2"
 )
@@ -101,22 +103,45 @@ func Register(root, client string, replace bool) (Result, error) {
 	}
 }
 
-// CoworkLaunchOutcome records only the OS request outcome. It cannot establish
-// that Claude accepted the extension or connected to its destination.
-func CoworkLaunchOutcome(result Result, automatic bool, open func(string) error) Result {
+// Launcher is how the prepared extension is handed to Claude Desktop. Fields
+// are injectable so tests never start an app.
+type Launcher struct {
+	Find   func() (string, bool)                  // locates the Claude Desktop launcher
+	Launch func(exe string, args ...string) error // starts it
+	Reveal func(path string) error                // selects the prepared file in the file manager
+}
+
+// DefaultLauncher uses the observed stable Windows Claude Desktop location.
+var DefaultLauncher = Launcher{Find: platform.ClaudeDesktopPath, Launch: platform.LaunchApp, Reveal: platform.RevealFile}
+
+// CoworkLaunchOutcome records only what was requested of the OS: the app was
+// asked to open the file (launch_requested), the file was revealed because the
+// app could not be launched (file_revealed), or neither worked (launch_failed).
+// None establishes that Claude accepted the extension or connected.
+func CoworkLaunchOutcome(result Result, automatic bool, l Launcher) Result {
 	if result.Client != "cowork" || result.ExtensionPath == "" {
 		return result
 	}
 	result.CoworkLaunchOutcome = "prepared"
-	if automatic {
-		if open == nil || open(result.ExtensionPath) != nil {
-			result.CoworkLaunchOutcome = "launch_failed"
-			result.NextAction += " Automatic opening failed; manually open the prepared extension at " + result.ExtensionPath + "."
-		} else {
+	if !automatic {
+		result.NextAction += " Opening was not requested; nothing is installed or trusted yet."
+		return result
+	}
+	if l.Find != nil && l.Launch != nil {
+		if exe, ok := l.Find(); ok && l.Launch(exe, result.ExtensionPath) == nil {
 			result.CoworkLaunchOutcome = "launch_requested"
+			result.NextAction += " Claude Desktop was asked to open the prepared extension. Launching does not confirm installation or trust: accept its install prompt, then restart Claude if asked."
+			return result
 		}
 	}
-	result.NextAction += " OS launch does not confirm trust or installation; accept Claude Desktop's prompt and restart if requested."
+	manual := " In Claude Desktop open Settings > Extensions, choose Install Extension (or drag the file into the window), pick the prepared file at " + result.ExtensionPath + ", and accept the trust prompt."
+	if l.Reveal != nil && l.Reveal(result.ExtensionPath) == nil {
+		result.CoworkLaunchOutcome = "file_revealed"
+		result.NextAction += " Claude Desktop could not be launched automatically, so the prepared file is selected in File Explorer. Nothing is installed or trusted yet." + manual
+		return result
+	}
+	result.CoworkLaunchOutcome = "launch_failed"
+	result.NextAction += " Claude Desktop could not be launched and the file could not be shown. Nothing is installed or trusted yet." + manual
 	return result
 }
 
@@ -351,9 +376,34 @@ func Check(ctx context.Context, root string) (CheckResult, error) {
 	if err != nil || versionReply.IsError {
 		return result, errors.New("child Engine version check failed")
 	}
-	result.ChildEngineVersion = replyText(versionReply)
+	result.ChildEngineVersion = compactEngineVersion(replyText(versionReply))
 	result.State = "local-check-passed"
 	return result, nil
+}
+
+// compactEngineVersion keeps the build identity (version, revision, build time
+// and kind) from the child Engine's `version` text and drops the dependency
+// listing and platform lines. Revision/build time distinguish a loaded adapter
+// from the executable on disk; the product version alone does not.
+func compactEngineVersion(text string) string {
+	var out []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "CanvasExpert-SE "):
+			version := strings.TrimPrefix(line, "CanvasExpert-SE ")
+			if i := strings.Index(version, " ("); i >= 0 {
+				version = version[:i]
+			}
+			out = append(out, "version "+version)
+		case strings.HasPrefix(line, "revision "), strings.HasPrefix(line, "built "), strings.HasPrefix(line, "build_kind "):
+			out = append(out, line)
+		}
+	}
+	if len(out) == 0 {
+		return strings.TrimSpace(text)
+	}
+	return strings.Join(out, "\n")
 }
 
 func replyText(response *mcp.CallToolResult) string {

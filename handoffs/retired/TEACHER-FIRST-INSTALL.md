@@ -1,3 +1,5 @@
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+
 # Teacher-first installation and MCP handoff
 
 2026-10-12. Status: Engine/release and Playbook/onboarding slices implemented in Source; fresh-user destination validation pending. The complete teacher journey is not yet marked delivered. This work spans **Engine** installation/connection mechanics and **Playbook** onboarding/teaching context. Read Source AGENTS.md, ARCHITECTURE.md and SCORING-RULES.md first.

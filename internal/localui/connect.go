@@ -84,6 +84,8 @@ func connectionResultLabel(result installation.Result) string {
 		switch result.CoworkLaunchOutcome {
 		case "launch_requested":
 			return "Cowork extension prepared; opening was requested"
+		case "file_revealed":
+			return "Cowork extension prepared; file shown in File Explorer for manual install"
 		case "launch_failed":
 			return "Cowork extension prepared; automatic opening did not work"
 		default:

@@ -12,6 +12,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -95,6 +98,33 @@ func validateCredential(ctx context.Context, credential platform.Credential) err
 	return nil
 }
 
+var schemeLike = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*:`)
+
+// normalizeCanvasOrigin accepts a bare host ("school.instructure.com") or a
+// pasted HTTPS Canvas link and reduces it to scheme://host[:port], dropping any
+// path, query or fragment. Anything unsafe (other schemes, embedded
+// credentials) is returned unchanged so canvas.New rejects it.
+func normalizeCanvasOrigin(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+	if !strings.Contains(raw, "://") {
+		if m := schemeLike.FindString(raw); m != "" {
+			rest := raw[len(m):]
+			if rest == "" || rest[0] < '0' || rest[0] > '9' {
+				return raw // javascript:, mailto:, etc.
+			}
+		}
+		raw = "https://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
+		return raw
+	}
+	return "https://" + u.Host
+}
+
 func (h *setupHandler) prefill() string {
 	if h.knownOrigin != nil {
 		return h.knownOrigin()
@@ -155,7 +185,7 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.persistent && h.hub && h.onValidation != nil {
 		h.onValidation(false)
 	}
-	credential := platform.Credential{Origin: r.PostForm.Get("origin"), Token: r.PostForm.Get("token")}
+	credential := platform.Credential{Origin: normalizeCanvasOrigin(r.PostForm.Get("origin")), Token: r.PostForm.Get("token")}
 	client, err := canvas.New(credential.Origin, credential.Token)
 	if err != nil {
 		h.page(w, 400, "Use the HTTPS Canvas address and a nonempty access token.")

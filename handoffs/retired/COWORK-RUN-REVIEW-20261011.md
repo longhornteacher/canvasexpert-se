@@ -1,3 +1,5 @@
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+
 # Cowork run review and proposed improvements
 
 Reviewed 2026-10-11. This is a diagnosis and proposed implementation scope for discussion, not authorization to implement every suggestion. Follow source AGENTS.md, ARCHITECTURE.md and SCORING-RULES.md.

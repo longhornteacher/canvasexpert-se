@@ -1,3 +1,5 @@
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+
 # Single-folder WebUI and MCP implementation
 
 Status: completed (2026-10-11; source and package verification).

@@ -1,3 +1,5 @@
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+
 # One lesson, multiple capability observations
 
 Designed 2026-10-12 for teacher discussion. This is a proposed scenario, not authorization to select a live course, publish test content, submit as students or post assessment outputs. MCP validation remains deferred. Read Source AGENTS.md, ARCHITECTURE.md and SCORING-RULES.md before development; teacher execution reads Install AGENTS.md and the relevant playbooks first.

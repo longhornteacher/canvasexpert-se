@@ -1,4 +1,4 @@
-> **Retired 2026-10-10.** Classic Quizzes are removed. The remaining open item (New Quiz written responses) and its prior-art facts moved to handoffs/active/NEW-QUIZ-SCORING-PROBE.md, which replaced the scoring probe described below with whole-quiz commentary.
+> **Retired 2026-10-10.** Classic Quizzes are removed. The remaining open item (New Quiz written responses) and its prior-art facts moved to handoffs/retired/NEW-QUIZ-SCORING-PROBE.md, which replaced the scoring probe described below with whole-quiz commentary.
 
 # New Quiz written responses: scoring (open)
 

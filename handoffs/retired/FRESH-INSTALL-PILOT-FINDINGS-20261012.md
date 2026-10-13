@@ -1,3 +1,5 @@
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+
 # Improve 1.0b1: fresh-install findings and execution slices
 
 2026-10-12. Status: **all ten Source implementation slices complete; temporary package checks passed; Cowork/Work adoption and provider delivery remain unobserved**. Product version: `1.0.0-beta.1` (1.0b1). Most items belong to the **Engine** (hub/setup/install mechanics); onboarding and rule adoption also involve **Playbook** changes. Read Source `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md` first. This extends [TEACHER-FIRST-INSTALL.md](TEACHER-FIRST-INSTALL.md) and incorporates the subsequent Cowork feedback. The execution directions below supersede speculative remedies in the original findings.

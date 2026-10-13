@@ -129,6 +129,9 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		return 0
 	}
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" {
+		if len(args) > 1 && args[0] == "help" {
+			fmt.Fprintf(out, "No separate help for %q. Detailed help topics: formats, fields, examples. The command list below shows what each command does.\n\n", args[1])
+		}
 		fmt.Fprint(out, help)
 		return 0
 	}
@@ -315,26 +318,8 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			}
 		}
 		if installUIEnabled(*checkOnly, *noUI) {
-			ready, err := launchInstallUI(ctx, root, *client)
-			if err != nil {
-				logEvent("hub", "failed", "startup", *client)
+			if err := reportInstallUI(ctx, root, *client, launchInstallUI, out, progress, logEvent); err != nil {
 				installErrors = append(installErrors, err)
-			} else {
-				outcome := "started"
-				if ready.Reused {
-					outcome = "reused"
-				}
-				logEvent("hub", outcome, "", *client)
-				if ready.BrowserOutcome == "launch_failed" || ready.BrowserOutcome == "launch_requested" {
-					logEvent("browser", ready.BrowserOutcome, map[bool]string{true: "browser"}[ready.BrowserOutcome == "launch_failed"], *client)
-				}
-				data, _ := json.Marshal(ready)
-				fmt.Fprintln(out, string(data))
-				if ready.Reused {
-					fmt.Fprintln(progress, "Reused the running private WebUI for this Install; it remains open independently of this install call.")
-				} else {
-					fmt.Fprintln(progress, "Private WebUI launched; enter Canvas credentials only there.")
-				}
 			}
 		}
 		if !*checkOnly {
@@ -345,7 +330,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			} else {
 				logEvent("registration", "succeeded", "", *client)
 				if *client == "cowork" {
-					result = installation.CoworkLaunchOutcome(result, !*noUI, platform.OpenDefaultFile)
+					result = installation.CoworkLaunchOutcome(result, !*noUI, installation.DefaultLauncher)
 					launch := result.CoworkLaunchOutcome
 					logEvent("cowork_extension", launch, "", *client)
 				}
@@ -416,7 +401,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 				return fail(fmt.Errorf("Canvas credential was saved, but context/courses.md could not be updated; fix that file before remote commands: %w", err), progress)
 			}
 			if !changed {
-				fmt.Fprintln(progress, "Saved Canvas origin differs from configured courses; update context/courses.md before remote commands.")
+				fmt.Fprintln(progress, "Canvas credential was saved, but course settings were not changed. "+workspace.OriginMismatchMessage(workspace.ConfiguredInstance(setupRoot), credential.Origin))
 			}
 		}
 		return 0

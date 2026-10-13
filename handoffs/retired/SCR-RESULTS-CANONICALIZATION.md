@@ -1,3 +1,5 @@
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+
 # Re-express saved SCR 4/5/6 judgments
 
 Carried forward 2026-10-11 from [the Cowork run review](COWORK-RUN-REVIEW-20261011.md). This is a separate teacher task; the source implementation did not read, rewrite, or post student results.

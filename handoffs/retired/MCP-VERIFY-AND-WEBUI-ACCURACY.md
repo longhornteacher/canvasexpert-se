@@ -1,3 +1,5 @@
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+
 # Verify everything through MCP, and make the WebUI tell the truth
 
 Written 2026-10-11 by Claude for Codex. Belongs mostly to the **Engine** (verification, small fixes) with **playbook/instruction** follow-through. Read repository `AGENTS.md`, `ARCHITECTURE.md`, `SCORING-RULES.md` first. Two jobs:
@@ -25,15 +27,15 @@ Toolchain gotcha: `scripts/build.ps1` requires exactly go1.27.1. PowerShell's `g
 | Change | Where | Verified so far |
 |---|---|---|
 | SCR 4/5/6 scores posted from canonical results files (SCR 4: 4 students, SCR 5: 3, SCR 6: 10) | `courses/CS8/assignments/*/scoring/results-canonical.md` | Canvas Live: SCR 4 grades and comments confirmed present. SCR 5/6 posted through the review page; deliberately not re-checked. |
-| Quiz authoring contract: embedded MC/TF/ESSAY example, unknown-key and inline-rationale errors, rationales in review, settings validated locally the same as push, `allowed_attempts` needs `allow_multiple_attempts`, publish after module placement, new rubrics refuse `use_for_grading: true`, format-based review dispatch with course-mismatch guard, structured review status | batch 1 and 2 of `handoffs/active/COWORK-RUN-REVIEW-20261011.md` | Local tests only (workflow, cmd, mcpserver) |
+| Quiz authoring contract: embedded MC/TF/ESSAY example, unknown-key and inline-rationale errors, rationales in review, settings validated locally the same as push, `allowed_attempts` needs `allow_multiple_attempts`, publish after module placement, new rubrics refuse `use_for_grading: true`, format-based review dispatch with course-mismatch guard, structured review status | batch 1 and 2 of `handoffs/retired/COWORK-RUN-REVIEW-20261011.md` | Local tests only (workflow, cmd, mcpserver) |
 | Scoring parse hint pointing to `interpretation.mapping` and `grade.components` | `internal/workspace/document.go` | Local tests; used for real when writing the canonical SCR files |
 | Accepted writes count as done (comment, grade, rubric): removed `confirmedRubric`/`confirmedGrade` and the post-PUT comment match | `internal/workflow/post.go` | Local tests; SCR 4 posts were Canvas-live before this change (they exposed the false "uncertain") |
 | Review page opens the teacher's browser itself (`platform.OpenBrowser` in `internal/localui/review.go`) | review.go | **Not yet seen working.** Needs a real MCP `start_review` run |
 | Review cards show the student's submission above "Feedback to be posted" (`ReviewCard.Submission`, `submissionText` in `internal/workflow/review.go`) | review.go, localui/review.go | Local tests pass; no test asserts the new display and it has **not been seen on a real review page** |
 | Review completion output trimmed (`remote.go`: no `Post:` line when completed) | cmd/cse/remote.go | Local tests |
 | Teacher AGENTS.md: Engine opens the page; after posting report in one line and stop | `workspace-template/AGENTS.md` | Not adopted into the installed copy |
-| New Quiz written-work spec with the file-download chain verified live once | `docs/new-quiz-written-work-spec.md`, `handoffs/active/NEW-QUIZ-SCORING-PROBE.md` | Canvas Live, one student, one file, byte-exact, hand-run. **Not built in the Engine** |
-| Single-folder WebUI/MCP configuration, Cowork manifest, 26 MCP tools | see `handoffs/active/SINGLE-FOLDER-WEBUI-MCP.md` and `docs/mcp-adapter.md` | Local tests; Cowork initialization and read-only calls verified 2026-10-11; **full task workflows pending human validation** |
+| New Quiz written-work spec with the file-download chain verified live once | `docs/new-quiz-written-work-spec.md`, `handoffs/retired/NEW-QUIZ-SCORING-PROBE.md` | Canvas Live, one student, one file, byte-exact, hand-run. **Not built in the Engine** |
+| Single-folder WebUI/MCP configuration, Cowork manifest, 26 MCP tools | see `handoffs/retired/SINGLE-FOLDER-WEBUI-MCP.md` and `docs/mcp-adapter.md` | Local tests; Cowork initialization and read-only calls verified 2026-10-11; **full task workflows pending human validation** |
 
 ## Job 1: verify through MCP only
 

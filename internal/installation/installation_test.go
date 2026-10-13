@@ -165,23 +165,54 @@ func TestConfiguredCodexHome(t *testing.T) {
 
 func TestCoworkLaunchOutcomesAreNarrowAndHonest(t *testing.T) {
 	prepared := Result{Client: "cowork", ExtensionPath: `C:\Install with spaces\engine\prepared.mcpb`, NextAction: "Manual extension path."}
-	called := false
-	requested := CoworkLaunchOutcome(prepared, true, func(path string) error {
-		called = true
-		if path != prepared.ExtensionPath {
-			t.Fatalf("wrong extension %q", path)
-		}
+	const exe = `C:\Users\T\AppData\Local\AnthropicClaude\claude.exe`
+	found := func() (string, bool) { return exe, true }
+	missing := func() (string, bool) { return "", false }
+	noReveal := func(string) error { t.Fatal("revealed after direct launch"); return nil }
+
+	var gotExe string
+	var gotArgs []string
+	requested := CoworkLaunchOutcome(prepared, true, Launcher{Find: found, Reveal: noReveal, Launch: func(e string, a ...string) error {
+		gotExe, gotArgs = e, a
 		return nil
-	})
-	if !called || requested.CoworkLaunchOutcome != "launch_requested" || strings.Contains(strings.ToLower(requested.NextAction), "installed") {
+	}})
+	if requested.CoworkLaunchOutcome != "launch_requested" || gotExe != exe || len(gotArgs) != 1 || gotArgs[0] != prepared.ExtensionPath {
+		t.Fatalf("direct launch must pass the path as one argument: %q %q %+v", gotExe, gotArgs, requested)
+	}
+	if strings.Contains(strings.ToLower(requested.NextAction), "is installed") || !strings.Contains(requested.NextAction, "does not confirm") {
 		t.Fatalf("misleading launch result: %+v", requested)
 	}
-	failed := CoworkLaunchOutcome(prepared, true, func(string) error { return errors.New("synthetic handler failure containing PAT_SYNTHETIC") })
-	if failed.CoworkLaunchOutcome != "launch_failed" || !strings.Contains(failed.NextAction, "manually open") || strings.Contains(failed.NextAction, "PAT_SYNTHETIC") {
-		t.Fatalf("bad fallback: %+v", failed)
+
+	var revealed string
+	reveal := func(p string) error { revealed = p; return nil }
+	for name, l := range map[string]Launcher{
+		"not found":     {Find: missing, Launch: func(string, ...string) error { t.Fatal("launched missing app"); return nil }, Reveal: reveal},
+		"launch failed": {Find: found, Launch: func(string, ...string) error { return errors.New("synthetic failure PAT_SYNTHETIC") }, Reveal: reveal},
+	} {
+		revealed = ""
+		r := CoworkLaunchOutcome(prepared, true, l)
+		if r.CoworkLaunchOutcome != "file_revealed" || revealed != prepared.ExtensionPath || !strings.Contains(r.NextAction, "Settings > Extensions") || strings.Contains(r.NextAction, "PAT_SYNTHETIC") {
+			t.Fatalf("%s: bad fallback: %+v", name, r)
+		}
 	}
-	noUI := CoworkLaunchOutcome(prepared, false, func(string) error { t.Fatal("no-UI invoked handler"); return nil })
+
+	failed := CoworkLaunchOutcome(prepared, true, Launcher{Find: missing, Reveal: func(string) error { return errors.New("no explorer") }})
+	if failed.CoworkLaunchOutcome != "launch_failed" || !strings.Contains(failed.NextAction, prepared.ExtensionPath) || !strings.Contains(failed.NextAction, "Settings > Extensions") {
+		t.Fatalf("bad failure: %+v", failed)
+	}
+
+	never := func() { t.Fatal("no-UI opened something") }
+	noUI := CoworkLaunchOutcome(prepared, false, Launcher{
+		Find: func() (string, bool) { never(); return "", false }, Launch: func(string, ...string) error { never(); return nil }, Reveal: func(string) error { never(); return nil }})
 	if noUI.CoworkLaunchOutcome != "prepared" {
 		t.Fatalf("no-UI outcome: %+v", noUI)
+	}
+}
+
+func TestCompactEngineVersionKeepsBuildIdentityOnly(t *testing.T) {
+	in := "CanvasExpert-SE 0.9.1 (SE = x)\nrevision abc123+dirty\nbuilt 2026-10-12T23:09:05Z\nbuild_kind release\ngo1.27 windows/amd64\ndependency a/b v1\ndependency c/d v2\n"
+	want := "version 0.9.1\nrevision abc123+dirty\nbuilt 2026-10-12T23:09:05Z\nbuild_kind release"
+	if got := compactEngineVersion(in); got != want {
+		t.Fatalf("got %q", got)
 	}
 }

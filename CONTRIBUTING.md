@@ -18,7 +18,7 @@ From Source:
 .\scripts\build.ps1
 ```
 
-The build runs Go tests and vet and produces the Engine and thin MCP launcher. Run focused tests while developing, then complete the required build checks before submitting a code change. Format only changed Go files with `gofmt`. To verify release assembly:
+The build runs Go tests and vet and produces the single current output set in `dist/` (Engine, thin MCP launcher, `CanvasExpert-SE.zip`, checksums); see [docs/build.md](docs/build.md). Run focused tests while developing, then complete the required build checks before submitting a code change. Format only changed Go files with `gofmt`. To verify release assembly:
 
 ```powershell
 .\scripts\package.ps1

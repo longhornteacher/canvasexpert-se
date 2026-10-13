@@ -157,7 +157,7 @@ func runMode(root, exe, build string, offline bool, loadCredential func() (platf
 		case sameOrigin(credential.Origin, config.Instance):
 			r.add("saved_origin", "pass", "Saved Canvas origin matches context/courses.md.", "")
 		default:
-			r.add("saved_origin", "fail", "Saved Canvas origin differs from context/courses.md.", "Use cse setup for the intended Canvas instance or correct context/courses.md.")
+			r.add("saved_origin", "fail", fmt.Sprintf("Saved Canvas origin %s differs from context/courses.md instance %s.", workspace.SafeOrigin(credential.Origin), workspace.SafeOrigin(config.Instance)), fmt.Sprintf("If %s is correct, run cse setup and enter that address. If %s is correct, change the instance line in context/courses.md to %s (cse setup also updates it when no courses are saved).", workspace.SafeOrigin(config.Instance), workspace.SafeOrigin(credential.Origin), workspace.SafeOrigin(credential.Origin)))
 		}
 	}
 

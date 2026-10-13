@@ -1,3 +1,5 @@
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+
 # Optional Sync as the authority for teacher rules
 
 Status: **implemented in Source, 2026-10-12; provider/client adoption remains unobserved**. The implementation follows this bounded direction; the original requirements below remain its contract. This belongs to the **Engine** (file routing, configuration and settings) and **playbooks/context** (instructions and documentation). No real Sync directory or live Install was selected or migrated in this implementation session.
