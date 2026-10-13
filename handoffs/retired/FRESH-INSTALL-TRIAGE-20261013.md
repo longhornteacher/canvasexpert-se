@@ -1,8 +1,8 @@
-> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
 
 # Fresh laptop install: development triage
 
-Reviewed 2026-10-13 against Source `288129f`, the [session notes](install-session-notes-2026-10-13.md), [previous implementation/package record](FRESH-INSTALL-PILOT-FINDINGS-20261012.md), architecture and scoring rules. This is a proposed development order, not authorization to execute the implementation. No Install, credentials, client settings or Canvas data were changed during triage.
+Reviewed 2026-10-13 against Source `288129f`, the [session notes](install-session-notes-2026-10-13.md), previous implementation/package record, architecture and scoring rules. This is a proposed development order, not authorization to execute the implementation. No Install, credentials, client settings or Canvas data were changed during triage.
 
 ## Recommendation
 

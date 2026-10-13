@@ -1,4 +1,4 @@
-> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Today's scope and dispositions are in [01 — Handoff cleanup](01-HANDOFF-CLEANUP.md). Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
+> **Retired 2026-10-13.** Historical instructions and evidence; do not execute this plan. Retirement does not establish completion or new validation; preserve the dated evidence and teacher work described below.
 
 # Verify everything through MCP, and make the WebUI tell the truth
 

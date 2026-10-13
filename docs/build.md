@@ -1,52 +1,62 @@
 # Build and package CanvasExpert-SE
 
-Folder names: **Source** is this development checkout, including code, starter templates and generated `dist/` artifacts. **Install** is the extracted local CE-SE folder containing the Engine and operational/student state. Optional **Sync** is a dedicated locally accessible OneDrive/Google Drive directory for authoritative teacher rules. Each Install accesses those files directly; the provider synchronizes them. With no binding, teacher files stay in Install. Develop in Source and do teacher work in Install, regardless of the agent app. Teachers need only Install. The internal `workspace` term in commands and file contracts refers to Install during teacher work.
+**Source** is this development checkout (code, starter templates, generated `dist/`); **Install** is the extracted local CE-SE folder a teacher actually uses, and the internal `workspace` term refers to Install during teacher work. Develop in Source and do teacher work in Install; optional Sync is explained in [ARCHITECTURE.md](../ARCHITECTURE.md).
 
-The source build targets a portable Windows 11 executable. Building requires the exact Go version declared in `go.mod` (currently Go 1.27.1) and PowerShell. The scripts do not install a toolchain, modify `PATH`, or change persistent environment settings. There is one producer, `package.ps1`, and `build.ps1` is the ordinary entry that calls it. It compiles once (internal `compile.ps1` sets Windows/amd64 and `CGO_ENABLED=0` only for its child Go processes, checks the Go executable's exact version, then runs `go test ./...`, `go vet ./...` and builds the Engine and thin launcher), assembles everything in a temporary staging folder and replaces the current output only after every step succeeded. A failed run leaves the previous `dist/` set intact. The current output is exactly four files: `dist/cse.exe` (the Engine used by Source tooling and copied byte-for-byte into the ZIP), `dist/cse-mcp-launcher.exe`, `dist/CanvasExpert-SE.zip` (the one teacher download) and `dist/SHA256SUMS.txt`. Agents that need a scratch binary compile into a task-owned temporary folder and delete it; only this path produces the download.
+## Requirements
 
-From the Source root:
+The source build targets a portable Windows 11 executable. It needs the exact Go version declared in `go.mod` (currently Go 1.27.1) and PowerShell. The scripts do not install a toolchain, modify `PATH`, or change persistent environment settings. Teachers need neither: the packaged executable runs without Go or any other runtime.
+
+## The one producer
+
+`scripts/package.ps1` is the only script that produces the download. `scripts/build.ps1` is the ordinary entry and simply calls it. `compile.ps1` and `package-mcp.ps1` are internal helpers.
 
 ```powershell
 .\scripts\build.ps1
 .\scripts\build.ps1 -GoExecutable 'C:\tools\go\bin\go.exe'
-.\scripts\build.ps1 -GoExecutable '.\.tools\go1.27.1\go\bin\go.exe'
-```
-
-The executable embeds the canonical version from root `VERSION` (currently `1.0.0-beta.1`, displayed as 1.0 beta), the current short Git revision with `+dirty` when the working tree has changes, a UTC build timestamp, and an explicit development/release build kind. `-trimpath` removes local source paths from the binary. The scripts do not format source files automatically.
-
-To create the distributable starter Install:
-
-```powershell
-.\scripts\package.ps1
 .\scripts\package.ps1 -GoExecutable '.\.tools\go1.27.1\go\bin\go.exe'
 ```
 
-Packaging always rebuilds first. The Cowork extension (MCPB) is generated in staging and exists only inside the ZIP at `engine/CanvasExpert-SE-Cowork.mcpb`; it is not a separate download, and no dated or versioned duplicates are written. Version, revision and build time (`+dirty` when Source has uncommitted changes) are diagnostic provenance inside the Engine (`cse version --json`), not a family of builds to choose from. `-Release` requires a clean checkout at the matching existing immutable version tag and additionally writes the versioned public assets to `dist/release/`; see [releasing.md](releasing.md). It is the single-folder package colleagues get. It holds the allowlisted `workspace-template` files (including installation instructions, the teaching profile/starter, `cse.cmd` and the hidden `.claude/settings.json` rule), the Engine at `engine/cse.exe`, the ready Cowork extension at `engine/CanvasExpert-SE-Cowork.mcpb`, and `webui.cmd` (from `scripts/package-webui.cmd`) at its root. Product VERSION and MIT LICENSE are at the root, with third-party notices under `engine/`; they are distribution metadata outside the teacher seed. It has no top-level folder, so Windows' Extract All produces a `CanvasExpert-SE` folder that is the workspace. Example files are accepted only when their content explicitly labels them synthetic. The starter settings files must retain their empty-template markers; private `.cse` state, pulled course data, scoring files, build caches, and compiler files are not package inputs. Course configuration lives at `context/courses.md`, the same path the Engine uses to recognize a workspace.
+Packaging always rebuilds first. Internal `compile.ps1` sets Windows/amd64 and `CGO_ENABLED=0` only for its child Go processes, checks the Go executable's exact version, runs `go test ./...` and `go vet ./...`, then builds the Engine and the thin launcher with `-trimpath` (no local source paths in the binary). Everything is assembled in a temporary staging folder and the current output is replaced only after every step succeeded, so a failed run leaves the previous `dist/` set intact. The scripts do not format source files. Agents that need a scratch binary compile into a task-owned temporary folder and delete it; only this path produces the download.
+
+The Engine embeds the canonical version from root `VERSION` (currently `1.0.0-beta.1`, displayed as 1.0 beta), the short Git revision (`+dirty` when the working tree has changes), a UTC build timestamp, and a development/release build kind. These are diagnostic provenance (`cse version --json`), not a family of builds to choose from.
+
+## Output contract
+
+`dist/` contains exactly four files:
+
+- `dist/cse.exe`: the Engine used by Source tooling, copied byte-for-byte into the ZIP.
+- `dist/cse-mcp-launcher.exe`: the thin MCP launcher.
+- `dist/CanvasExpert-SE.zip`: the one teacher download.
+- `dist/SHA256SUMS.txt`: checksums.
+
+No dated or versioned duplicates are written. The Cowork extension (MCPB) is generated in staging and exists only inside the ZIP at `engine/CanvasExpert-SE-Cowork.mcpb`; it is not a separate download.
+
+`-OutputDirectory` selects a different output folder. `-Release` requires a clean checkout at the matching existing immutable version tag and additionally writes the versioned public assets to `dist/release/`; see [releasing.md](releasing.md).
+
+## Package contents
+
+The ZIP is the single-folder package colleagues get. It has no top-level folder, so Windows' Extract All produces a `CanvasExpert-SE` folder that is the Install. It holds:
+
+- the allowlisted `workspace-template` files, including installation instructions, the teaching profile/starter, `cse.cmd` and the hidden `.claude/settings.json` rule;
+- the Engine at `engine/cse.exe` and the ready Cowork extension at `engine/CanvasExpert-SE-Cowork.mcpb`;
+- `webui.cmd` (from `scripts/package-webui.cmd`) at the root;
+- product `VERSION` and MIT `LICENSE` at the root, with third-party notices under `engine/` (distribution metadata outside the teacher seed).
+
+Privacy and allowlist rules: example files are accepted only when their content explicitly labels them synthetic; the starter settings files must retain their empty-template markers; private `.cse` state, pulled course data, scoring files, build caches and compiler files are never package inputs. Packages ship no Sync binding or teacher data. Course configuration lives at `context/courses.md`, the same path the Engine uses to recognize an Install.
 
 ZIP entries are written with forward slashes by the script itself, because Windows PowerShell 5.1's `CreateFromDirectory` writes backslashes.
 
-Colleagues unzip `CanvasExpert-SE.zip` on a local drive, open that folder in Code/Codex and say "install this for Cowork" or "install this for Work", then enter their Canvas PAT in the private WebUI. The installing agent uses the bundled installation command; no separate Codex CLI is required. The installation's `cse.cmd` runs `engine\cse.exe`; its bundled Engine selects the installation beside `engine/` independently of the invoking directory. A conflicting `--workspace` fails clearly. The teacher never selects a second CE-SE folder in the hub. Developer test roots retain advanced explicit roots; the launcher's linked-Engine fallback supports those development roots. The agent's own synced folder is independent.
+A successful build or ZIP inspection verifies the local build and package, not every possible Canvas response or district configuration.
 
-The packaged executable is intended to run without a Go or other language runtime installed on the teacher's computer. A successful source build or ZIP inspection verifies the local build and package, not every possible Canvas response or district configuration. Use current API responses and the task guides; see [0.1b-evidence.md](0.1b-evidence.md) for historical observations, not operation prerequisites. The bundled Engine resolves its installation automatically, for example `.\engine\cse.exe --help` from the package root. Explicit `--workspace PATH` remains an advanced option for development/test binaries and Engine-only extensions; it must match the installation when using a bundled Engine.
+## WebUI launcher
 
-## Local MCP adapter
+`webui.cmd` (also `.\scripts\webui.ps1` or `cse ui`) starts the local WebUI. The development launcher rebuilds through the same producer first when any Go source, `go.mod`/`go.sum`, `VERSION`, the workspace template, `engine-docs` or a WebUI template/asset (HTML, CSS, JS) is newer than `dist/cse.exe`, using `.tools/go1.27.1` if present. A source-development launch without a root explains `cse --workspace PATH ui`; the PowerShell launcher also accepts `-Workspace PATH` or `CSE_WORKSPACE`.
 
-Settings → Teacher rules, CLI `rules-location` and MCP `engine_info` configure the same per-Install binding. CLI status is `cse rules-location`; explicit changes use `--sync "ABSOLUTE PATH"` or `--local`. Keep MCP registration and commands pointed at Install. Shared categories are teacher AGENTS.md/CLAUDE.md, playbooks, root .md/.txt guides except product README.md, and context references except courses.md/students.md. Engine, launchers, integration glue, private state and course work remain local. Updates add missing seed files at their active location and preserve existing teacher files. Selecting empty Sync preserves current customized rules; an existing shared directory wins, with inactive local originals preserved. Explicit return to local preserves readable shared files and archives differing local versions. Packages ship no Sync binding or teacher data. Source packaging is not an update to a live Install. Provider delivery and human-client adoption remain pending observation.
+## Where else to look
 
-The packaged `engine\cse.exe` also supports `mcp`, a stdio server with 26 typed tools for all currently supported Engine commands, scoped workspace text/assets, review flow, and teacher-only local pages. It preserves the playbooks' review default and direct-write/resume exceptions without an extra approval token. It does not expose arbitrary commands, arbitrary HTTP writes, or private `.cse` files. Read-only API JSON can contain real names.
-
-The installing agent runs Install's `cse install --client work|cowork`; Source's `scripts/connect-mcp.ps1` is only a developer convenience. Work registration updates the selected `CODEX_HOME/config.toml` (default user `.codex`) through a TOML parser, preserving other settings and backing up existing configuration. Cowork preparation binds the supplied MCPB to this absolute Install; the client owns extension installation and trust. Its thin launcher forwards stdio to Install's Engine, so an Engine update does not require replacing a second Engine inside the extension. The bundle contains no teacher files or credentials. Saved configuration, a prepared extension and the SDK local check are distinct from destination tools actually being used. Hosted Work is a separate remote-plugin route. See [MCP adapter setup](mcp-adapter.md) for boundaries and official connection documentation. Prior client observations do not establish the new fresh-user route; Cowork extension adoption, Work destination calls and the standard-account installation journey remain pending human validation.
-
-## Local web pages (the hub)
-
-Double-click `webui.cmd` in the repository root (or run `webui`, `.\scripts\webui.ps1`, or `cse ui`). One loopback server hosts Home (course/student status and Quit), Canvas setup, Courses (select active courses, saved to `context/courses.md` as `current: true`), Students (one tab per active course, aliases, monitoring, extra time, and Canvas differentiation tags), and Settings (Canvas connection, program information, read-only CE-SE installation location, aliases, feedback voice and playbook status/replacement). Students pulls each selected course's active roster and read-only differentiation tags once per hub session; **Refresh from Canvas** updates that course again. Course memberships and tags are cached privately in `.cse/rosters.json` for offline use. Extra time is saved in `.cse/students.csv` for later use and does not yet alter Canvas deadlines or grading. Existing student tables are upgraded when saved, preserving identities and aliases.
-
-The hub stays open until you press Quit or Ctrl+C. It tries port 47831 first, so a bookmark works, and falls back to a free port. There is no folder picker, creation flow or remembered teacher-folder fallback. A source-development launch without a root explains `cse --workspace PATH ui`; the development PowerShell launcher also accepts `-Workspace PATH` or `CSE_WORKSPACE`. Hub and MCP startup add missing embedded seed files without overwriting teacher edits. `list_courses` defaults to saved selections, reading the file anew on each call so hub active-course changes appear immediately; explicit `source: canvas` retains live catalog discovery. Existing clients registered to old folders need re-registration/restart; no teacher data is moved or merged automatically. The launcher rebuilds through the same producer first when any Go source, `go.mod`/`go.sum`, `VERSION`, the workspace template, `engine-docs` or a WebUI template/asset (HTML, CSS, JS) is newer than `dist/cse.exe`, using `.tools/go1.27.1` if present. `cse setup` and `cse students` remain as one-shot commands.
-
-The **Capabilities** page (`/capabilities`) shows the recorded green/yellow/red Canvas Live feature map, evidence limits, and review date. It is linked from Home and the shared navigation and works without a configured workspace or Canvas connection. Keep its status data in `internal/localui/capabilities.go` aligned with [engine-capabilities.md](engine-capabilities.md).
-
-New pages are declared once in `internal/localui` (see [its README](../internal/localui/README.md)); every form must pass the hub's Host/Origin/secret checks.
-
-Working notes for developing in this checkout (shell quirks, live-read rules, test fixtures, quiz prior art) are in [development-notes.md](development-notes.md).
-
-Existing installations retain their current `AGENTS.md` and `playbooks/setup.md`, even after an Engine update. To adopt the revised course-discovery instructions, use Settings -> Your playbooks and context -> Get the new version for those files; their previous copies are archived under `playbook-old/`. Review any teacher customizations and carry them forward as needed. No existing instruction or context file is automatically overwritten.
+- [releasing.md](releasing.md): release assets and tagging.
+- [development-notes.md](development-notes.md): shell quirks, live-read rules, test fixtures, quiz prior art.
+- [mcp-adapter.md](mcp-adapter.md): MCP adapter tools, client registration and the install journey.
+- [../internal/localui/README.md](../internal/localui/README.md): how WebUI pages are declared and secured.
+- `internal/localui/capabilities.go` and [engine-capabilities.md](engine-capabilities.md): the Capabilities page status data; keep them aligned.
+- [../ARCHITECTURE.md](../ARCHITECTURE.md): Sync and shared teacher rules.

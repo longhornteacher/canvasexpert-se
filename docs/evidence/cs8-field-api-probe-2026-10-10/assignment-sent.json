@@ -1,3 +1,0 @@
-{
-  "description": "<h1>Heading one</h1><h2>Heading two</h2><h3>Heading three</h3><h4>Heading four</h4><h5>Heading five</h5><h6>Heading six</h6><p>A paragraph with <strong>bold text</strong>, <em>star italic</em>, and <em>underscore italic</em>. Raw &lt;b&gt;tag&lt;/b&gt; stays text, and 2*3*4 stays as typed.</p><ul><li>List item with <strong>bold</strong></li><li>List item with a <a href=\"/courses/121046/pages/cse-field-probe-page-html-canaries-2026-10-10\">course page link</a></li></ul><ol><li>Ordered item with <em>italic</em></li><li>Ordered item with an <a href=\"https://www.python.org/\">external <strong>link</strong></a></li></ol><pre><code>if x &lt; 10 and y &gt; 2:\n    print(&#34;a &amp; b&#34;)</code></pre>"
-}

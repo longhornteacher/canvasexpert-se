@@ -30,7 +30,7 @@ Delete the feature's `.go` file, its template, any script only it used, and its 
 - Health states use stable keys (`checking`, `connected`, `rejected`, `unavailable`, `not_connected`) in Go, CSS `data-state`, scripts and the JSON `state`; the human label is separate display text. Never use copy as an identifier.
 - `h.render` executes into a buffer and writes only on success, so a template error is a plain 500, not a truncated page.
 - Handlers that wait on the network (such as `/setup`) are `Unlocked` and take `h.mu` only around hub fields.
-- Retired design history: [WEBUI-BENCH-CONVERSION](../../handoffs/retired/WEBUI-BENCH-CONVERSION.md), [WEBUI-ASSET-EXTRACTION](../../handoffs/retired/WEBUI-ASSET-EXTRACTION.md), [WEBUI-EXTENSIBILITY](../../handoffs/retired/WEBUI-EXTENSIBILITY.md).
+- Earlier design briefs for this layout are in Git history.
 
 ## Derived, so never edited by hand
 
