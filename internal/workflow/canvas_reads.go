@@ -135,6 +135,16 @@ type Submission struct {
 	Attachments                   []Attachment           `json:"attachments"`
 	Comments                      []SubmissionComment    `json:"submission_comments"`
 	RubricAssessment              map[string]RubricScore `json:"rubric_assessment"`
+	URL                           string                 `json:"url"`
+	MediaComment                  *struct {
+		URL         string `json:"url"`
+		DisplayName string `json:"display_name"`
+		MediaType   string `json:"media_type"`
+	} `json:"media_comment"`
+	DiscussionEntries []struct {
+		Message   string `json:"message"`
+		CreatedAt string `json:"created_at"`
+	} `json:"discussion_entries"`
 }
 type RubricScore struct {
 	Points   *json.Number `json:"points"`
@@ -259,6 +269,33 @@ func FindAssignment(ctx context.Context, c *canvas.Client, courseID int64, query
 		return Assignment{}, fmt.Errorf("no matching assignment; use its Canvas ID or exact title")
 	}
 	return Assignment{}, fmt.Errorf("select an assignment by ID; candidates: %s", strings.Join(candidates, "; "))
+}
+
+// unpullableAssignment lists only what makes reading student work pointless or
+// unsafe. Every submission type and grading type is read; what the Engine
+// cannot open is reported per student on the pulled work.
+func unpullableAssignment(a Assignment) string {
+	if a.Anonymous {
+		return "anonymous grading isn't supported yet"
+	}
+	if a.Moderated {
+		return "moderated grading isn't supported yet"
+	}
+	if a.GroupCategoryID != nil && *a.GroupCategoryID != 0 {
+		return "group submissions aren't supported yet"
+	}
+	if a.QuizID != nil && !a.NewQuiz {
+		return "quizzes aren't supported yet"
+	}
+	if a.NewQuiz || len(a.SubmissionTypes) == 0 {
+		return ""
+	}
+	for _, t := range a.SubmissionTypes {
+		if t != "none" && t != "on_paper" {
+			return ""
+		}
+	}
+	return "no student submission (none or on paper)"
 }
 
 func UnsupportedAssignment(a Assignment) string {

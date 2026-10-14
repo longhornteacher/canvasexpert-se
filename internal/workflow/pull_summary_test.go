@@ -17,7 +17,8 @@ func TestPullSummaryCountsObservedStatesAndSeparatesFetch(t *testing.T) {
 	excused.Excused = true
 	inactive := fixtureSubmission(8)
 	unsupported := fixtureSubmission(9)
-	unsupported.Type = "online_url"
+	visible := false
+	unsupported.AssignmentVisible = &visible
 	var origin string
 	s, server := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

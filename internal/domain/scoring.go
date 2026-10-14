@@ -271,17 +271,23 @@ func validateOutcome(o ActionOutcome) error {
 	}
 	return nil
 }
+// numericGradeType reports whether Canvas takes the Engine's computed points as
+// the grade. Letter and GPA-scale assignments map a points value onto the
+// course's own scale. Pass/fail and not-graded have no points to post.
+func numericGradeType(t string) bool {
+	switch t {
+	case "points", "percent", "letter_grade", "gpa_scale":
+		return true
+	}
+	return false
+}
+
 func validateNumericTarget(s AssignmentSnapshot) error {
-	if s.GradingType != "points" && s.GradingType != "percent" {
-		return fmt.Errorf("numeric scoring supports points/percent grading_type; observed %q", s.GradingType)
+	if !numericGradeType(s.GradingType) {
+		return fmt.Errorf("the Engine posts points grades; this assignment uses %q grading, so pull the work and enter the result in SpeedGrader", s.GradingType)
 	}
 	if s.AnonymousGrading || s.ModeratedGrading || s.GroupCategoryID != 0 {
 		return fmt.Errorf("anonymous, moderated, or group scoring is unsupported")
-	}
-	for _, kind := range s.SubmissionTypes {
-		if kind != "online_text_entry" && kind != "online_upload" {
-			return fmt.Errorf("unsupported submission type %q for numeric scoring", kind)
-		}
 	}
 	return nil
 }
@@ -411,7 +417,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			if s.Grade != nil || s.ReviseFeedback != nil || s.CommentOnly == nil {
 				return fail(fmt.Errorf("comment-only operation requires comment_only only; grade, rubric, and late writes forbidden"))
 			}
-			if !doc.Assignment.NewQuiz || (doc.Assignment.GradingType != "points" && doc.Assignment.GradingType != "percent") || doc.Assignment.AnonymousGrading || doc.Assignment.ModeratedGrading || doc.Assignment.GroupCategoryID != 0 {
+			if !doc.Assignment.NewQuiz || !numericGradeType(doc.Assignment.GradingType) || doc.Assignment.AnonymousGrading || doc.Assignment.ModeratedGrading || doc.Assignment.GroupCategoryID != 0 {
 				return fail(fmt.Errorf("comment-only requires a supported individual New Quiz assignment"))
 			}
 			c := s.CommentOnly

@@ -174,6 +174,9 @@ type ExistingComment struct {
 }
 type AttemptWork struct {
 	Ref              AttemptRef        `yaml:"ref"`
+	SubmissionType   string            `yaml:"submission_type,omitempty"`
+	URL              string            `yaml:"url,omitempty"`
+	Note             string            `yaml:"note,omitempty"`
 	BodyHTML         string            `yaml:"body_html,omitempty"`
 	ReadableText     string            `yaml:"readable_text,omitempty"`
 	WrittenResponses []WrittenResponse `yaml:"written_responses,omitempty"`

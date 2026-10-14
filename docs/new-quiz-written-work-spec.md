@@ -24,7 +24,7 @@ When the teacher asks to score a New Quiz's written items, the agent reads each 
 
 ## Part 1: responses and Student Analysis report
 
-- `pull-work COURSE QUIZ_ID` accepts New Quiz assignments only when explicitly named; broad class pulls skip them.
+- `pull-work COURSE [QUIZ_ID]` reads New Quiz written work whether the quiz is named or reached by a broad class pull (one report round per quiz that has submitted work).
 - The Engine launches Student Analysis, polls its progress, gets the signed result file over HTTPS with no authorization header, and joins essay answers to prompts from `/items`.
 - The packet keeps the pseudonymized `student_ref`, attempt and submit time, with written responses labelled by prompt and item id.
 - Identity: `student_data.id` must match the enrolled submission's user id and the attempt must match; otherwise that student is skipped with a one-line reason.

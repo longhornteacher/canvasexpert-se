@@ -36,10 +36,18 @@ type quizReportRow struct {
 		Answer   json.RawMessage `json:"answer"`
 	} `json:"item_responses"`
 }
+// writtenQuizItem is one entry of the New Quizzes items list. Canvas nests the
+// question type and body under "entry"; the outer id is the quiz-entry id and
+// entry.id is the item id, so either may be the id other reports use.
 type writtenQuizItem struct {
-	ID   json.Number `json:"id"`
-	Type string      `json:"interaction_type_slug"`
-	Body string      `json:"item_body"`
+	ID    json.Number `json:"id"`
+	Entry struct {
+		ID   json.Number `json:"id"`
+		Type string      `json:"interaction_type_slug"`
+		Body string      `json:"item_body"`
+	} `json:"entry"`
+	Type string `json:"-"`
+	Body string `json:"-"`
 }
 type newQuizRow struct {
 	Attempt     int
@@ -105,16 +113,18 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 		return nil, err
 	}
 	prompts := map[string]writtenQuizItem{}
-	for _, item := range items {
-		if item.ID != "" {
-			prompts[item.ID.String()] = item
-		}
-	}
 	fileItemIDs := []string{}
 	for _, item := range items {
+		item.Type, item.Body = item.Entry.Type, item.Entry.Body
 		typ := strings.ToLower(item.Type)
-		if typ == "file-upload" || typ == "file_upload" {
-			fileItemIDs = append(fileItemIDs, item.ID.String())
+		for _, id := range []json.Number{item.ID, item.Entry.ID} {
+			if id == "" {
+				continue
+			}
+			prompts[id.String()] = item
+			if typ == "file-upload" || typ == "file_upload" {
+				fileItemIDs = append(fileItemIDs, id.String())
+			}
 		}
 	}
 	out := map[int64]newQuizRow{}

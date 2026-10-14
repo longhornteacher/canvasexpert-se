@@ -95,7 +95,7 @@ func TestNewQuizResponsesMapsLatestStudentAttemptAndWrittenItems(t *testing.T) {
 {"student_data":{"id":5,"attempt":2,"submitted_at":"2026-10-07T12:00:00Z"},"item_responses":[{"item_id":21,"item_type":"essay","answer":"<p>Current <em>typed</em></p>"},{"item_id":22,"item_type":"file-upload","answer":"answer.docx"}]}
 ]`))
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/items"):
-			_, _ = w.Write([]byte(`[{"id":21,"interaction_type_slug":"essay","item_body":"<p>Explain your reasoning.</p>"},{"id":22,"interaction_type_slug":"file-upload","item_body":"Upload your work."},{"id":23,"interaction_type_slug":"multiple-choice","item_body":"Choose one."}]`))
+			_, _ = w.Write([]byte(`[{"id":"21","entry_type":"Item","entry":{"id":"121","interaction_type_slug":"essay","item_body":"<p>Explain your reasoning.</p>"}},{"id":"22","entry_type":"Item","entry":{"id":"122","interaction_type_slug":"file-upload","item_body":"Upload your work."}},{"id":"23","entry_type":"Item","entry":{"id":"123","interaction_type_slug":"choice","item_body":"Choose one."}}]`))
 		default:
 			t.Errorf("unexpected Student Analysis request: %s %s", r.Method, r.URL.Path)
 			http.NotFound(w, r)

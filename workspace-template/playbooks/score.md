@@ -12,7 +12,7 @@ Read this playbook and grading/calendar references through their logical MCP pat
 
 Read the packet and student files it writes. A fresh pull never overwrites unsent scoring work. Before judging anything, read `context/teaching-profile.md` for grade/subject, instructional priorities and relevant standards, `context/grading.md` (the teacher's `voice` and `feedback_guidance`; they override style defaults here, never the rubric or posting rules) and `context/students.md`. Use this teacher's preferences, never another teacher's course/tag policies. Student notes also arrive with each student's pulled work. Apply established accommodations without asking the teacher to repeat them. An incomplete profile does not block scoring when directions, rubric and work supply the needed evidence.
 
-New Quiz written items (`ESSAY`, `FILEUPLOAD`) are open for regular scoring. Pull the quiz explicitly by its assignment ID: `.\cse.cmd pull-work COURSE QUIZ_ID` (MCP: `pull_work` with that assignment ID). If the teacher gives a quiz name, resolve its assignment ID through `pull_assignment` (CLI `pull-item`) rather than asking them to find the ID. Broad class pulls skip New Quizzes. Their results are **comment-only**; follow the New Quiz section below instead of ordinary assignment grade/lateness instructions.
+New Quiz written items (`ESSAY`, `FILEUPLOAD`) are open for regular scoring. Pull the quiz explicitly by its assignment ID: `.\cse.cmd pull-work COURSE QUIZ_ID` (MCP: `pull_work` with that assignment ID). If the teacher gives a quiz name, resolve its assignment ID through `pull_assignment` (CLI `pull-item`) rather than asking them to find the ID. Broad class pulls include New Quizzes with submitted work. Their results are **comment-only**; follow the New Quiz section below instead of ordinary assignment grade/lateness instructions.
 
 ## Fix the scoring basis
 
@@ -30,7 +30,7 @@ Before scoring anyone, identify the required response units from the directions,
 
 ## New Quiz written items
 
-This path supports individual quizzes graded as points or percent. Anonymous, moderated and group grading are outside its current scope.
+This path supports individual quizzes graded as points, percent, letter grade or GPA scale. Anonymous, moderated and group grading are outside its current scope.
 
 The scoped pull reads typed Student Analysis essay responses and attempts to download uploaded files into the packet's `students/<student_ref>/files/attempt-N/` folder. File records include status and a reason when retrieval is unavailable; limits are 50 MB per file and 500 MB per pull. Open downloaded files with your normal document tools. An unavailable or unreadable file is `evidence: unknown`, not a missing response to score as zero. Explain the affected student, file and reason, hold that student's feedback, and continue independent students. The teacher can open the affected file in SpeedGrader.
 

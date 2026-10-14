@@ -198,14 +198,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			setPhase("discovery")
 			report.Assignments = append(report.Assignments, PullAssignmentSummary{Course: course.Nickname, AssignmentID: a.ID, Title: a.Name})
 			summary := &report.Assignments[len(report.Assignments)-1]
-			// New Quiz written work is intentionally available only through an
-			// explicit assignment-scoped pull.
-			if a.NewQuiz && query == "" {
-				summary.SkipReason = "New Quiz written work requires an explicit assignment pull"
-				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, summary.SkipReason))
-				continue
-			}
-			if reason := UnsupportedAssignment(a); reason != "" {
+			if reason := unpullableAssignment(a); reason != "" {
 				summary.SkipReason = reason
 				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, reason))
 				continue
@@ -258,7 +251,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			if e != nil {
 				return report, e
 			}
-			if reason := UnsupportedAssignment(a); reason != "" {
+			if reason := unpullableAssignment(a); reason != "" {
 				summary.SkipReason = reason
 				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, reason))
 				continue
@@ -402,9 +395,6 @@ func unsupportedSubmission(s Submission) string {
 	if s.SubmittedAt == nil || s.Attempt < 1 {
 		return "missing work has no actual submission; no automatic zero"
 	}
-	if s.Type != "online_text_entry" && s.Type != "online_upload" {
-		return "unsupported submission mode: " + s.Type
-	}
 	return ""
 }
 func liveHandled(s Submission) bool {
@@ -460,6 +450,31 @@ func (s *Service) attemptWork(ctx context.Context, relDir, ref string, sub Submi
 		if p := decimalPointer(r.Points); p != nil {
 			w.RubricAssessment = append(w.RubricAssessment, domain.CriterionScore{CriterionID: key, Points: *p, RatingID: r.RatingID, Comment: r.Comments})
 		}
+	}
+	w.SubmissionType = sub.Type
+	switch sub.Type {
+	case "online_url":
+		w.URL = sub.URL
+		w.Note = "Student submitted a web address; the Engine does not open it. Open it to read the work."
+	case "media_recording":
+		if sub.MediaComment != nil {
+			w.URL = sub.MediaComment.URL
+		}
+		w.Note = "Student submitted a recording; the Engine cannot read audio or video. Open it in SpeedGrader."
+	case "discussion_topic":
+		var posts []string
+		for _, entry := range sub.DiscussionEntries {
+			if text := render.HTMLText(entry.Message); text != "" {
+				posts = append(posts, text)
+			}
+		}
+		w.ReadableText = strings.Join(posts, "\n\n")
+		w.Note = "Student's discussion posts; replies from others are not included."
+	case "basic_lti_launch", "external_tool":
+		w.URL = sub.URL
+		w.Note = "Submitted through an external tool; the Engine cannot read it. Open it in SpeedGrader."
+	case "student_annotation":
+		w.Note = "Student annotation; the Engine cannot read it. Open it in SpeedGrader."
 	}
 	var e error
 	w.Attachments, e = s.downloadAttachments(ctx, relDir, ref, sub.Attempt, sub.Attachments)
