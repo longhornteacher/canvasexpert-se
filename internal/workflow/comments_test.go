@@ -91,7 +91,7 @@ func TestPullAndRevisePriorAttemptCommentFromHistoryOnly(t *testing.T) {
 	}
 }
 
-func TestKnownFeedbackCommentWithChangedAttemptHeld(t *testing.T) {
+func TestKnownFeedbackCommentIsKeptEvenIfAttemptAssociationDiffers(t *testing.T) {
 	live := fixtureSubmission(5)
 	other := 1
 	live.Comments = []SubmissionComment{{ID: 82, Comment: "Exact intended text", Attempt: &other}}
@@ -100,8 +100,8 @@ func TestKnownFeedbackCommentWithChangedAttemptHeld(t *testing.T) {
 	if e := s.addFeedback(context.Background(), domain.ResultsDocument{}, 5, attemptRef(live), out.PostedText, &out, live, func() error { return nil }); e != nil {
 		t.Fatal(e)
 	}
-	if out.Status != "held" {
-		t.Fatalf("wrong-attempt known comment satisfied feedback: %#v", out)
+	if out.Status != "preserved" {
+		t.Fatalf("a known comment already in Canvas should count as posted: %#v", out)
 	}
 }
 

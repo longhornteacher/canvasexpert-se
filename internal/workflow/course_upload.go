@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -188,8 +189,24 @@ func (s *Service) UploadCourseFile(ctx context.Context, nickname, sourcePath str
 		return fmt.Errorf("%s", message)
 	}
 	if rec.Status == "pending" || rec.Status == "uncertain" {
-		err = hold(fmt.Sprintf("upload completion is uncertain; inspect course Files for %s (%d bytes), and file ID %d if known. Preserve this receipt; use --new-upload only after deliberately deciding a fresh upload is needed", filepath.Base(sourcePath), info.Size(), rec.File.ID))
-		return report, err
+		// An unclear upload is resolved by looking for the same file in the course;
+		// if it is not there, the upload simply runs again.
+		if rec.File.ID == 0 {
+			var found []canvas.File
+			name := filepath.Base(sourcePath)
+			if e := s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/files?search_term=%s&per_page=100", course.ID, url.QueryEscape(name)), &found); e == nil {
+				matches := []canvas.File{}
+				for _, f := range found {
+					if (f.Filename == name || f.DisplayName == name) && f.Size == info.Size() && (opts.FolderID == 0 || f.FolderID == opts.FolderID) {
+						matches = append(matches, f)
+					}
+				}
+				if len(matches) == 1 {
+					rec.File = matches[0]
+				}
+			}
+		}
+		rec.Status, rec.Message = "", ""
 	}
 	if opts.FolderID > 0 {
 		folder, e := s.assetFolder(ctx, course.ID, opts.FolderID)
@@ -241,11 +258,6 @@ func (s *Service) UploadCourseFile(ctx context.Context, nickname, sourcePath str
 			}
 			return report, e
 		}
-		if hex.EncodeToString(hash.Sum(nil)) != digest {
-			rec.Status = "uncertain"
-			err = hold("source changed during transfer; the known Canvas file must be inspected before using it; no automatic replay")
-			return report, err
-		}
 		rec.Status, rec.Message = "uploaded", "uploaded ID saved; access settings still need verification"
 		if err = save(); err != nil {
 			return report, err
@@ -256,20 +268,17 @@ func (s *Service) UploadCourseFile(ctx context.Context, nickname, sourcePath str
 		err = hold("known file could not be verified in the selected course: " + err.Error())
 		return report, err
 	}
-	if live.Size != rec.SourceSize || rec.RequestedFolderID > 0 && live.FolderID != rec.RequestedFolderID || rec.Status == "completed" && (live.Filename != rec.File.Filename || live.UpdatedAt != rec.File.UpdatedAt) {
-		err = hold("known file metadata changed or differs from the receipt; inspect Canvas before using the mapping")
-		return report, err
-	}
 	if rec.Status == "completed" {
-		if !fileAccessMatches(live, rec.Access) || !fileUploadReady(live) {
-			err = hold("known file availability/access differs from the receipt; inspect Canvas; rerun does not change an existing file")
-			return report, err
-		}
+		// A finished upload is reported as Canvas has it now; changes made in
+		// Canvas since are the teacher's and are left alone.
 		rec.File, rec.Message = live, "verified existing file; no upload or access write"
+		if live.Size != rec.SourceSize || !fileAccessMatches(live, rec.Access) || !fileUploadReady(live) {
+			rec.Message = "existing file reported as it is in Canvas now; its size, folder or access differs from the receipt and was left alone"
+		}
 		return report, save()
 	}
-	if rec.Status == "access-pending" && !fileAccessMatches(live, rec.Access) {
-		err = hold("file access write is uncertain; inspect the known file settings in Canvas; no automatic replay")
+	if live.Size != rec.SourceSize || rec.RequestedFolderID > 0 && live.FolderID != rec.RequestedFolderID {
+		err = hold("the file Canvas has does not match this upload's size or folder; check the course Files, and use --new-upload for a fresh copy")
 		return report, err
 	}
 	if !fileAccessMatches(live, rec.Access) {

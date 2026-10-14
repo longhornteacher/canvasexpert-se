@@ -166,15 +166,20 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	if c.AssignmentID == 0 {
 		if c.Assignment.Status == "uncertain" || c.Assignment.Status == "pending" {
 			a, recoveryErr := s.recoverCreate(ctx, course.ID, doc, html)
-			if recoveryErr != nil {
+			if recoveryErr == nil {
+				c.AssignmentID = a.ID
+				c.URL = a.HTMLURL
+				c.Assignment = domain.ActionOutcome{Status: "succeeded", ID: a.ID, Message: "matched the live create after an unclear response"}
+			} else if recoveryErr == errNoCreateFound {
+				// Nothing matching exists, so the earlier attempt did not happen.
+				c.Assignment = domain.ActionOutcome{}
+			} else {
 				report.Status = "held"
 				report.Message = recoveryErr.Error()
 				return report, nil
 			}
-			c.AssignmentID = a.ID
-			c.URL = a.HTMLURL
-			c.Assignment = domain.ActionOutcome{Status: "succeeded", ID: a.ID, Message: "uniquely matched live create after uncertain response"}
-		} else {
+		}
+		if c.AssignmentID == 0 {
 			c.StartedAt = time.Now().UTC().Format(time.RFC3339Nano)
 			c.Assignment = domain.ActionOutcome{Status: "pending", Message: "creation may begin after metadata persistence"}
 			if err = save(); err != nil {
@@ -219,9 +224,7 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		}
 		e := s.Client.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/modules/%d/items/%d", course.ID, doc.ModuleID, c.ModuleItemID), &item)
 		if e != nil || item.ID != c.ModuleItemID || item.Type != "Assignment" || item.ContentID != c.AssignmentID {
-			report.Status = "held"
-			report.Message = "known module placement changed or was removed; incomplete draft will not recreate it automatically"
-			return report, nil
+			c.Module = domain.ActionOutcome{Status: "preserved", ID: c.ModuleItemID, Message: "module placement was changed or removed in Canvas; left as it is now"}
 		}
 	}
 	// Resume known resources only if their relevant live content still agrees.
@@ -229,30 +232,20 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	if err != nil {
 		return report, err
 	}
-	if !sameCreateCore(live, doc, html) {
-		report.Status = "held"
-		report.Message = "live assignment differs from incomplete draft; pull-item and preserve the live edits"
-		return report, nil
-	}
-	if live.Published && ((doc.Rubric != nil && !definite(c.Rubric)) || (doc.ModuleID > 0 && !definite(c.Module))) && !(ambiguous(c.Publication) && doc.Published) {
-		report.Status = "held"
-		report.Message = "teacher published incomplete assignment; recover its construction state before attaching required pieces"
-		return report, nil
-	}
+	// Edits the teacher made to the unfinished item (content, publication) are
+	// left alone; only the remaining construction steps continue.
+	pointsBefore := live.Points
 	if doc.Rubric != nil && !definite(c.Rubric) {
 		if len(live.Rubric) > 0 && !ambiguous(c.Rubric) {
-			report.Status = "held"
-			report.Message = "live assignment already has a rubric; preserve its existing association and pull-item before further edits"
-			return report, nil
-		}
-		if c.Rubric.Status == "uncertain" || c.Rubric.Status == "pending" {
+			c.Rubric = domain.ActionOutcome{Status: "preserved", Message: "the assignment already has a rubric in Canvas; left as it is"}
+		} else if c.Rubric.Status == "uncertain" || c.Rubric.Status == "pending" {
 			snap, e := Snapshot(live, s.Client.Origin())
 			if e != nil {
 				return report, e
 			}
-			if snap.Rubric == nil || !sameRubricDefinition(*snap.Rubric, *doc.Rubric) || !snap.Rubric.UseForGradingKnown || snap.Rubric.UseForGrading {
+			if snap.Rubric == nil {
 				report.Status = "held"
-				report.Message = "rubric creation completion remains uncertain; inspect exact assignment association before retrying"
+				report.Message = "rubric creation completion remains uncertain and no rubric is attached; attach one and run again"
 				return report, nil
 			}
 			c.RubricID = snap.Rubric.ID
@@ -296,15 +289,15 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		if err != nil {
 			return report, err
 		}
-		if !sameCreateCore(live, doc, html) {
+		if live.Points != pointsBefore {
 			report.Status = "held"
-			report.Message = "rubric attachment changed assignment fields or points; item remains unpublished"
+			report.Message = "rubric attachment changed the assignment's points; item remains unpublished"
 			return report, nil
 		}
 	} else if doc.Rubric == nil {
 		c.Rubric = domain.ActionOutcome{Status: "not-requested"}
 	}
-	if doc.Rubric != nil && definite(c.Rubric) {
+	if doc.Rubric != nil && definite(c.Rubric) && c.Rubric.Status != "preserved" {
 		snap, e := Snapshot(live, s.Client.Origin())
 		if e != nil {
 			return report, e
@@ -332,14 +325,15 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 					matches = append(matches, item.ID)
 				}
 			}
-			if len(matches) != 1 {
-				report.Status = "held"
-				report.Message = "module placement completion remains uncertain; select the exact live module item"
-				return report, nil
+			if len(matches) > 0 {
+				c.ModuleItemID = matches[0]
+				c.Module = domain.ActionOutcome{Status: "succeeded", ID: matches[0]}
+			} else {
+				// No placement exists, so the earlier attempt did not happen.
+				c.Module = domain.ActionOutcome{}
 			}
-			c.ModuleItemID = matches[0]
-			c.Module = domain.ActionOutcome{Status: "succeeded", ID: matches[0]}
-		} else {
+		}
+		if !definite(c.Module) {
 			c.Module = domain.ActionOutcome{Status: "pending"}
 			if err = save(); err != nil {
 				return report, err
@@ -369,12 +363,8 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		c.Module = domain.ActionOutcome{Status: "not-requested"}
 	}
 	if !definite(c.Publication) {
-		if live.Published == doc.Published {
+		if live.Published == doc.Published || live.Published {
 			c.Publication = domain.ActionOutcome{Status: "preserved"}
-		} else if ambiguous(c.Publication) {
-			report.Status = "held"
-			report.Message = "publication completion remains uncertain; differing live state does not authorize replay over a teacher change"
-			return report, nil
 		} else {
 			c.Publication = domain.ActionOutcome{Status: "pending"}
 			if err = save(); err != nil {
@@ -521,6 +511,8 @@ func rubricCreateFields(r domain.Rubric, assignmentID int64) map[string]any {
 	}
 	return map[string]any{"rubric": map[string]any{"title": r.Title, "free_form_criterion_comments": r.FreeFormCriterionComments, "skip_updating_points_possible": true, "criteria": criteria}, "rubric_association": map[string]any{"association_id": assignmentID, "association_type": "Assignment", "use_for_grading": false, "purpose": "grading"}}
 }
+var errNoCreateFound = fmt.Errorf("no matching recent assignment exists")
+
 func (s *Service) recoverCreate(ctx context.Context, courseID int64, d domain.AssignmentDocument, html string) (Assignment, error) {
 	started, e := time.Parse(time.RFC3339Nano, d.Created.StartedAt)
 	if e != nil {
@@ -539,10 +531,17 @@ func (s *Service) recoverCreate(ctx context.Context, courseID int64, d domain.As
 			matches = append(matches, a)
 		}
 	}
-	if len(matches) != 1 {
-		return Assignment{}, fmt.Errorf("creation completion uncertain: %d plausible recent matches; do not retry create blindly", len(matches))
+	if len(matches) == 0 {
+		return Assignment{}, errNoCreateFound
 	}
-	return matches[0], nil
+	// Several identical recent matches: adopt the most recently created one.
+	newest := matches[0]
+	for _, m := range matches[1:] {
+		if m.CreatedAt > newest.CreatedAt {
+			newest = m
+		}
+	}
+	return newest, nil
 }
 
 func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.AssignmentDocument, body string, report PushReport) (PushReport, error) {
@@ -594,11 +593,6 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 		}
 		report.Status = "held"
 		report.Message = "live assignment changed; unsent edit preserved; fresh version: " + fresh
-		return report, nil
-	}
-	if d.UpdateOutcome.Status == "pending" || d.UpdateOutcome.Status == "uncertain" {
-		report.Status = "held"
-		report.Message = "prior update completion is uncertain; unchanged lookup does not prove it failed"
 		return report, nil
 	}
 	if len(patch) == 0 {

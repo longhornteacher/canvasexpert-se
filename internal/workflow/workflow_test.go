@@ -364,7 +364,7 @@ func TestLostCommentResponseRecoveredWithoutDuplicate(t *testing.T) {
 	}
 }
 
-func TestUncertainCreateEmptyLookupNeverCreatesAgain(t *testing.T) {
+func TestUncertainCreateWithNoMatchCreatesAgain(t *testing.T) {
 	creates := 0
 	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
@@ -390,8 +390,8 @@ func TestUncertainCreateEmptyLookupNeverCreatesAgain(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if creates != 1 || second.Status != "held" {
-		t.Fatal("empty lookup triggered blind create")
+	if creates != 2 || second.Status != "uncertain" {
+		t.Fatalf("an unclear create with no matching assignment should be retried: creates=%d status=%s", creates, second.Status)
 	}
 	var persisted domain.AssignmentDocument
 	if _, e = workspace.ReadDocument(path, &persisted); e != nil {

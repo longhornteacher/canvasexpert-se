@@ -82,13 +82,13 @@ func TestQuizPointsChangesOnlyRequestedItemsAndReadsBack(t *testing.T) {
 	}
 }
 
-func TestQuizPointsHoldsOnceStudentsSubmitted(t *testing.T) {
+func TestQuizPointsChangesAfterSubmissionsAndWarnsAboutRegrade(t *testing.T) {
 	f := newPointsFixture()
 	f.submitted = true
 	s, _ := workflowFixture(t, f.handler(t))
 	r, e := s.QuizPoints(context.Background(), "TEST", "10", map[int]domain.Decimal{1: domain.MustDecimal("50")})
-	if e != nil || r.Status != "held" || len(f.patches) != 0 || !strings.Contains(r.Message, "regrade") {
-		t.Fatalf("submitted quiz not held: %+v %v %v", r, e, f.patches)
+	if e != nil || r.Status != "completed" || len(f.patches) != 1 || !strings.Contains(r.Message, "regrade") {
+		t.Fatalf("submitted quiz should change and warn: %+v %v %v", r, e, f.patches)
 	}
 	if r, e = s.QuizPoints(context.Background(), "TEST", "10", nil); e != nil || r.Status != "listed" || len(r.Items) != 2 {
 		t.Fatalf("listing failed: %+v %v", r, e)

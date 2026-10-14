@@ -309,10 +309,12 @@ func validateCreated(d AssignmentDocument) error {
 		if c.AssignmentID <= 0 || c.Assignment.Status != "succeeded" {
 			return fmt.Errorf("complete create requires succeeded assignment with id")
 		}
-		if d.Rubric != nil && (c.RubricID <= 0 || c.RubricAssociationID <= 0 || c.Rubric.Status != "succeeded") {
+		// A rubric or module placement the teacher already settled in Canvas is
+		// recorded as preserved and needs no ids of ours.
+		if d.Rubric != nil && c.Rubric.Status != "preserved" && (c.RubricID <= 0 || c.RubricAssociationID <= 0 || c.Rubric.Status != "succeeded") {
 			return fmt.Errorf("complete create requires succeeded requested rubric and association ids")
 		}
-		if d.ModuleID > 0 && (c.ModuleItemID <= 0 || c.Module.Status != "succeeded") {
+		if d.ModuleID > 0 && c.Module.Status != "preserved" && (c.ModuleItemID <= 0 || c.Module.Status != "succeeded") {
 			return fmt.Errorf("complete create requires succeeded requested module with id")
 		}
 		if c.Publication.Status != "succeeded" && c.Publication.Status != "preserved" {

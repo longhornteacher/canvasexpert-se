@@ -192,18 +192,8 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 			matches++
 		}
 	}
-	if matches == 1 {
+	if matches >= 1 {
 		c.Outcome = domain.ActionOutcome{Status: "preserved", PostedText: text, Message: "exact intended text is already present; ownership not assumed"}
-		return save()
-	}
-	if matches > 1 {
-		holdOutcome(&c.Outcome, "multiple exact feedback matches; select the precise comment")
-		c.Outcome.PostedText = text
-		return save()
-	}
-	if ambiguous(c.Outcome) {
-		holdOutcome(&c.Outcome, "comment completion remains uncertain; no exact match on the intended attempt")
-		c.Outcome.PostedText = text
 		return save()
 	}
 	c.Outcome = domain.ActionOutcome{Status: "pending", PostedText: text}
@@ -612,21 +602,16 @@ func (s *Service) addFeedback(ctx context.Context, doc domain.ResultsDocument, u
 	if out.ID > 0 {
 		for _, c := range submissionComments(live) {
 			if c.ID == out.ID {
-				if c.Attempt == nil || *c.Attempt != attempt.Attempt {
-					out.Status = "held"
-					out.Message = "known comment attempt association is unavailable or changed"
-				} else if c.Comment == out.PostedText {
-					out.Status = "preserved"
-					out.Message = "known comment remains present"
-				} else {
-					out.Status = "held"
-					out.Message = "known comment was teacher-edited; old feedback will not be restored"
+				out.Status = "preserved"
+				out.Message = "known comment remains present"
+				if c.Comment != out.PostedText {
+					out.Message = "known comment was edited in Canvas; the teacher's version is kept"
 				}
 				return nil
 			}
 		}
-		out.Status = "held"
-		out.Message = "known comment was deleted; old feedback will not be recreated"
+		out.Status = "preserved"
+		out.Message = "known comment was deleted in Canvas; it is not posted again"
 		return nil
 	}
 	matches := []SubmissionComment{}
@@ -635,19 +620,8 @@ func (s *Service) addFeedback(ctx context.Context, doc domain.ResultsDocument, u
 			matches = append(matches, c)
 		}
 	}
-	if len(matches) == 1 {
+	if len(matches) >= 1 {
 		*out = domain.ActionOutcome{Status: "preserved", PostedText: text, Message: "exact intended text is already present; ownership not assumed"}
-		return nil
-	}
-	if len(matches) > 1 {
-		holdOutcome(out, "multiple exact feedback matches; select the precise comment")
-		out.PostedText = text
-		return nil
-	}
-	if ambiguous(*out) {
-		out.Status = "uncertain"
-		out.PostedText = text
-		out.Message = "comment completion uncertain; no unambiguous attempt-associated exact match"
 		return nil
 	}
 	before := map[int64]bool{}

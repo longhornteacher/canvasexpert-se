@@ -109,7 +109,7 @@ func TestPushModuleCreatesNativeOrderedItemsPublishesAndResumes(t *testing.T) {
 	}
 	modulePublished = false // A later teacher edit must be preserved on another rerun.
 	third, err := s.PushModule(context.Background(), path)
-	if err != nil || third.Status != "held" || moduleCreates != 1 || itemPosts != 4 || publicationPuts != 1 {
+	if err != nil || third.Status != "completed" || moduleCreates != 1 || itemPosts != 4 || publicationPuts != 1 {
 		t.Fatalf("rerun overwrote later teacher publication change: report=%+v creates=%d itemPosts=%d publication=%d err=%v", third, moduleCreates, itemPosts, publicationPuts, err)
 	}
 }
@@ -210,15 +210,17 @@ func TestPushModuleResumesPartialItemBySavedExactID(t *testing.T) {
 	}
 }
 
-func TestPushModuleHoldsUncertainItemWithoutSavedID(t *testing.T) {
+func TestPushModuleRetriesUncertainItemOnlyWhenNoneExists(t *testing.T) {
 	posts := 0
 	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/api/v1/courses/1/modules/7":
 			_ = json.NewEncoder(w).Encode(canvasModule{ID: 7, CourseID: 1})
+		case r.Method == "GET" && r.URL.Path == "/api/v1/courses/1/modules/7/items":
+			_, _ = w.Write([]byte("[]"))
 		case r.Method == "POST":
 			posts++
-			http.Error(w, "must not replay", http.StatusInternalServerError)
+			http.Error(w, "rejected", http.StatusInternalServerError)
 		default:
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 			http.NotFound(w, r)
@@ -228,7 +230,7 @@ func TestPushModuleHoldsUncertainItemWithoutSavedID(t *testing.T) {
 		Items: []domain.ModuleItem{{Type: "SubHeader", Title: "Continue"}}, Created: &domain.ModuleCreated{ModuleID: 7,
 			Items: []domain.ModuleItemOutcome{{Index: 0, Type: "SubHeader", Title: "Continue", Outcome: domain.ActionOutcome{Status: "uncertain"}}}}})
 	report, err := s.PushModule(context.Background(), path)
-	if err != nil || report.Status != "held" || posts != 0 {
-		t.Fatalf("uncertain item was replayed: report=%+v posts=%d err=%v", report, posts, err)
+	if err != nil || report.Status == "completed" || posts != 1 {
+		t.Fatalf("no existing item was found, so placement should be tried once more: report=%+v posts=%d err=%v", report, posts, err)
 	}
 }

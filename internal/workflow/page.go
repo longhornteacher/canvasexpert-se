@@ -148,10 +148,13 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 			return report, fmt.Errorf("module response did not confirm selected course/module")
 		}
 	}
-	if c.PageID == 0 {
-		if ambiguous(c.Page) {
-			return held("Page creation completion is uncertain; use a bounded live Page lookup in this course and record the exact returned ID/slug; do not replay create")
+	if c.PageID == 0 && ambiguous(c.Page) {
+		// An unclear create is resolved by looking for the Page by exact title.
+		if found, ok := s.findPageByTitle(ctx, course.ID, d.Title); ok {
+			c.PageID, c.Slug = found.PageID, found.Slug
 		}
+	}
+	if c.PageID == 0 {
 		c.Page = domain.ActionOutcome{Status: "pending"}
 		if err = save(); err != nil {
 			return report, err
@@ -185,20 +188,15 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 		return report, err
 	}
 	if c.Slug == "" {
-		if p.Title != c.IntendedTitle || p.Body != c.SavedHTML {
-			return held("known Page create response was incomplete; exact ID retained, but content must be inspected before resuming")
-		}
-		c.Slug, c.URL = p.Slug, s.pageURL(course.ID, p)
+		c.Slug, c.URL, c.SavedHTML = p.Slug, s.pageURL(course.ID, p), p.Body
 		c.Page = domain.ActionOutcome{Status: "succeeded", ID: c.PageID}
 		if err = save(); err != nil {
 			return report, err
 		}
 	}
 	if !definite(c.Page) {
-		if p.Title != c.IntendedTitle || p.Body != c.SavedHTML || p.Slug != c.Slug {
-			return held("known Page create response was uncertain; exact ID retained, but differing live content must be inspected before resuming")
-		}
-		c.Page = domain.ActionOutcome{Status: "succeeded", ID: c.PageID, Message: "confirmed saved Page by exact ID"}
+		c.Slug, c.URL, c.SavedHTML = p.Slug, s.pageURL(course.ID, p), p.Body
+		c.Page = domain.ActionOutcome{Status: "succeeded", ID: c.PageID, Message: "adopted the live Page by exact ID"}
 		if err = save(); err != nil {
 			return report, err
 		}
@@ -206,15 +204,6 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 	if c.Complete {
 		report.Status, report.Message = "completed", "already created; pull-page before editing"
 		return report, nil
-	}
-	if p.Title != c.IntendedTitle || p.Body != c.SavedHTML || p.Slug != c.Slug {
-		return held("live Page differs from incomplete draft; pull-page to preserve teacher edits")
-	}
-	if p.Published && !d.Published {
-		return held("teacher published the incomplete Page; preserve live publication instead of unpublishing it")
-	}
-	if p.Published && d.ModuleID > 0 && !definite(c.Module) {
-		return held("Page was published before requested placement; preserve live state and recover construction")
 	}
 	if d.ModuleID == 0 {
 		c.Module = domain.ActionOutcome{Status: "not-requested"}
@@ -228,16 +217,22 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 			return report, e
 		}
 		if item.ID != c.ModuleItemID || item.Type != "Page" || item.PageURL != c.Slug {
-			return held("known Page module placement changed; it will not be recreated automatically")
+			c.Module = domain.ActionOutcome{Status: "preserved", ID: c.ModuleItemID, Message: "module placement was changed or removed in Canvas; left as it is now"}
+		} else {
+			c.Module = domain.ActionOutcome{Status: "succeeded", ID: c.ModuleItemID}
 		}
-		c.Module = domain.ActionOutcome{Status: "succeeded", ID: c.ModuleItemID}
 		if err = save(); err != nil {
 			return report, err
 		}
 	} else {
 		if ambiguous(c.Module) {
-			return held("Page module placement completion is uncertain; identify the exact live module item before retrying")
+			if id := s.findModulePageItem(ctx, course.ID, d.ModuleID, c.Slug); id > 0 {
+				c.ModuleItemID = id
+				c.Module = domain.ActionOutcome{Status: "succeeded", ID: id, Message: "adopted the existing module item for this Page"}
+			}
 		}
+	}
+	if d.ModuleID > 0 && c.ModuleItemID == 0 {
 		c.Module = domain.ActionOutcome{Status: "pending"}
 		if err = save(); err != nil {
 			return report, err
@@ -286,16 +281,8 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 		if err != nil {
 			return report, err
 		}
-		if p.Title != c.IntendedTitle || p.Body != c.SavedHTML || p.Slug != c.Slug {
-			return held("live Page changed before publication; incomplete draft preserved")
-		}
-		if p.Published && !d.Published {
-			return held("teacher published the incomplete Page; preserve live publication instead of unpublishing it")
-		}
-		if p.Published == d.Published {
+		if p.Published == d.Published || p.Published {
 			c.Publication = domain.ActionOutcome{Status: "preserved"}
-		} else if ambiguous(c.Publication) {
-			return held("Page publication completion is uncertain; preserve the differing live state")
 		} else {
 			c.Publication = domain.ActionOutcome{Status: "pending"}
 			if err = save(); err != nil {
@@ -325,6 +312,41 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 		}
 	}
 	return report, nil
+}
+
+// findPageByTitle returns the one Page in the course whose title matches
+// exactly, so an unclear create can be adopted instead of repeated.
+func (s *Service) findPageByTitle(ctx context.Context, courseID int64, title string) (NativePage, bool) {
+	var pages []NativePage
+	if e := s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/pages?search_term=%s&per_page=100", courseID, url.QueryEscape(title)), &pages); e != nil {
+		return NativePage{}, false
+	}
+	var match NativePage
+	n := 0
+	for _, p := range pages {
+		if p.Title == title && p.PageID > 0 && p.Slug != "" {
+			match, n = p, n+1
+		}
+	}
+	return match, n == 1
+}
+
+// findModulePageItem returns the module item that already places the Page.
+func (s *Service) findModulePageItem(ctx context.Context, courseID, moduleID int64, slug string) int64 {
+	var items []struct {
+		ID      int64  `json:"id"`
+		Type    string `json:"type"`
+		PageURL string `json:"page_url"`
+	}
+	if e := s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/modules/%d/items?per_page=100", courseID, moduleID), &items); e != nil {
+		return 0
+	}
+	for _, it := range items {
+		if it.Type == "Page" && it.PageURL == slug {
+			return it.ID
+		}
+	}
+	return 0
 }
 
 func pagePatchMatches(p NativePage, title, html string, published bool, patch map[string]any) bool {

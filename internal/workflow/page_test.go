@@ -180,6 +180,11 @@ func TestPageIncompleteResponsesKeepKnownIDsAndNeverReplayUnknownCreate(t *testi
 					}
 					return
 				}
+				if r.URL.Path == "/api/v1/courses/1/pages" {
+					// Exact-title lookup used to adopt a Page whose create was unclear.
+					json.NewEncoder(w).Encode([]NativePage{{PageID: 7, Slug: "saved-slug", Title: "Lesson"}})
+					return
+				}
 				if r.URL.Path != "/api/v1/courses/1/pages/page_id:7" {
 					t.Errorf("unsafe lookup %s", r.URL.Path)
 				}
@@ -197,11 +202,7 @@ func TestPageIncompleteResponsesKeepKnownIDsAndNeverReplayUnknownCreate(t *testi
 				t.Fatal("positive returned Page ID lost")
 			}
 			r, e = s.PushPage(context.Background(), path)
-			want := "held"
-			if known {
-				want = "completed"
-			}
-			if e != nil || r.Status != want || writes != 1 {
+			if e != nil || r.Status != "completed" || writes != 1 {
 				t.Fatalf("resume %#v writes %d err %v", r, writes, e)
 			}
 		})
@@ -235,7 +236,7 @@ func TestPageResumePreservesTeacherPublicationAndChecksModuleBeforeCreation(t *t
 				t.Fatal(e)
 			}
 			r, e := s.PushPage(context.Background(), path)
-			if writes != 0 || (!wrongModule && (e != nil || r.Status != "held")) || (wrongModule && e == nil) {
+			if writes != 0 || (!wrongModule && (e != nil || r.Status != "completed")) || (wrongModule && e == nil) {
 				t.Fatalf("preservation %#v writes %d err %v", r, writes, e)
 			}
 		})

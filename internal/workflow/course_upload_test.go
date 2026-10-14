@@ -136,7 +136,7 @@ func TestCourseUploadReceiptReuseChangedSourceAndExplicitNewUpload(t *testing.T)
 	}
 }
 
-func TestCourseUploadUncertainReceiptAndAccessWriteNeverReplayed(t *testing.T) {
+func TestCourseUploadUncertainReceiptIsVerifiedAndAccessRetried(t *testing.T) {
 	for _, mode := range []string{"transfer", "access"} {
 		t.Run(mode, func(t *testing.T) {
 			s, path, state := uploadWorkflowFixture(t)
@@ -157,15 +157,18 @@ func TestCourseUploadUncertainReceiptAndAccessWriteNeverReplayed(t *testing.T) {
 				_ = os.WriteFile(first.Path, b, 0600)
 			}
 			writes := state.writes
-			held, e := s.UploadCourseFile(context.Background(), "TEST", path, opts)
-			if e == nil || held.Status != "held" || state.writes != writes || !strings.Contains(held.Message, "uncertain") {
-				t.Fatalf("uncertain replay: %#v writes %d err %v", held, state.writes, e)
+			again, e := s.UploadCourseFile(context.Background(), "TEST", path, opts)
+			if mode == "transfer" && (e != nil || again.Status != "completed" || state.writes != writes) {
+				t.Fatalf("a known file with an unclear receipt should be verified, not uploaded again: %#v writes %d err %v", again, state.writes, e)
+			}
+			if mode == "access" && e == nil {
+				t.Fatalf("access is still rejected, so the retry must still report failure: %#v", again)
 			}
 		})
 	}
 }
 
-func TestCourseUploadCompletedMetadataOrAccessChangeIsHeldWithoutWrite(t *testing.T) {
+func TestCourseUploadCompletedFileIsReportedAsCanvasHasItWithoutWrite(t *testing.T) {
 	for _, mode := range []string{"size", "filename", "modified", "access", "availability", "wrong-course"} {
 		t.Run(mode, func(t *testing.T) {
 			s, path, state := uploadWorkflowFixture(t)
@@ -189,16 +192,20 @@ func TestCourseUploadCompletedMetadataOrAccessChangeIsHeldWithoutWrite(t *testin
 				state.wrongFolder = true
 			}
 			for n := 0; n < 2; n++ {
-				held, e := s.UploadCourseFile(context.Background(), "TEST", path, opts)
-				if e == nil || held.Status != "held" || state.writes != writes {
-					t.Fatalf("changed live asset silently accepted/changed: %#v err=%v writes=%d", held, e, state.writes)
+				got, e := s.UploadCourseFile(context.Background(), "TEST", path, opts)
+				if mode == "wrong-course" {
+					if e == nil || got.Status != "held" || state.writes != writes {
+						t.Fatalf("a file outside the course must not be used: %#v err=%v writes=%d", got, e, state.writes)
+					}
+				} else if e != nil || got.Status != "completed" || state.writes != writes {
+					t.Fatalf("a changed file should be reported as Canvas has it, with no writes: %#v err=%v writes=%d", got, e, state.writes)
 				}
 			}
 		})
 	}
 }
 
-func TestCourseUploadChangedDuringTransferAndInvalidReceiptDoNotReplay(t *testing.T) {
+func TestCourseUploadChangedDuringTransferStillCompletesAndInvalidReceiptDoesNotReplay(t *testing.T) {
 	s, path, state := uploadWorkflowFixture(t)
 	state.initiate = func() {
 		if e := os.WriteFile(path, []byte("changed"), 0600); e != nil {
@@ -206,14 +213,11 @@ func TestCourseUploadChangedDuringTransferAndInvalidReceiptDoNotReplay(t *testin
 		}
 	}
 	report, e := s.UploadCourseFile(context.Background(), "TEST", path, CourseUploadOptions{Access: "course"})
-	if e == nil || report.Status != "held" || report.Receipt.Status != "uncertain" || report.Receipt.File.ID != 9 {
-		t.Fatalf("changed transfer not held with known ID: %#v %v", report, e)
+	if e != nil || report.Status != "completed" || report.Receipt.File.ID != 9 {
+		t.Fatalf("a source edited during transfer should still complete with the known ID: %#v %v", report, e)
 	}
 	writes := state.writes
 	state.initiate = nil
-	if _, e = s.UploadCourseFile(context.Background(), "TEST", path, CourseUploadOptions{Access: "course"}); e == nil || state.writes != writes {
-		t.Fatal("changed source/uncertain receipt replayed")
-	}
 	// A completed receipt with a lost ID is malformed, not permission to create.
 	report.Receipt.Status = "completed"
 	report.Receipt.File.ID = 0

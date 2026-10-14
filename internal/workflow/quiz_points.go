@@ -97,15 +97,17 @@ func (s *Service) QuizPoints(ctx context.Context, nickname, query string, change
 		if err = s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?per_page=100", course.ID, a.ID), &subs); err != nil {
 			return r, err
 		}
+		submitted := false
 		for _, sub := range subs {
 			if sub.SubmittedAt != nil || sub.State == "graded" || sub.State == "pending_review" {
-				r.Status = "held"
-				r.Message = "held: students have already submitted, so changing points would change their scores; change points in the Canvas quiz editor, which offers regrade choices"
-				r.Items, r.ItemTotal = quizLines(items, nil)
-				return r, nil
+				submitted = true
+				break
 			}
 		}
 		r.Status = "completed"
+		if submitted {
+			r.Message = "Students had already submitted. Canvas may not regrade their existing attempts; check the gradebook, and use the quiz editor's regrade option if scores should change."
+		}
 		var failed []string
 		for _, p := range positions {
 			it, target := byPos[p], changes[p]

@@ -122,9 +122,16 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 	}
 	if moduleID == 0 {
 		if d.Created.Module.Status == "pending" || d.Created.Module.Status == "uncertain" {
-			report.Status, report.Message = "held", "module creation is uncertain and no module ID was saved; select the exact live module before continuing"
-			return report, nil
-		} else {
+			// An unclear create is resolved by looking for the module by exact name.
+			if id := s.findModuleByName(ctx, course.ID, d.Title); id > 0 {
+				moduleID, d.ModuleID, d.Created.ModuleID = id, id, id
+				d.Created.Module = domain.ActionOutcome{Status: "succeeded", ID: id, Message: "adopted the existing module with this name"}
+				if err = save(); err != nil {
+					return report, err
+				}
+			}
+		}
+		if moduleID == 0 {
 			d.Created.StartedAt = time.Now().UTC().Format(time.RFC3339Nano)
 			d.Created.Module = domain.ActionOutcome{Status: "pending"}
 			if err = save(); err != nil {
@@ -160,11 +167,6 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 	}
 	if module.ID != moduleID || (module.CourseID != 0 && module.CourseID != course.ID) {
 		return report, fmt.Errorf("module %d is not verified in configured course %s", moduleID, course.Nickname)
-	}
-	publicationExpected := d.Published != nil && *d.Published && (d.Created.Publication.Status == "pending" || d.Created.Publication.Status == "uncertain" || d.Created.Publication.Status == "succeeded" || d.Created.Publication.Status == "preserved")
-	if d.Created.StartedAt != "" && (module.Name != d.Title || module.Published && !publicationExpected) {
-		report.Status, report.Message = "held", "created module ID does not match the requested title or authorized publication state"
-		return report, nil
 	}
 	if d.Created.StartedAt != "" && !definite(d.Created.Module) {
 		d.Created.Module = domain.ActionOutcome{Status: "succeeded", ID: moduleID, Message: "module verified by its saved Canvas ID"}
@@ -205,8 +207,11 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 		if saved.ModuleItemID > 0 {
 			live, getErr := s.getModuleItem(ctx, course.ID, moduleID, saved.ModuleItemID)
 			if getErr != nil || !moduleItemMatches(live, item, resolvedRefs[i]) {
-				report.Status, report.Message = "held", fmt.Sprintf("saved module item %d is missing or changed; it will not be recreated automatically", saved.ModuleItemID)
-				return report, nil
+				saved.Outcome = domain.ActionOutcome{Status: "preserved", ID: saved.ModuleItemID, Message: "module item was changed or removed in Canvas; left as it is now"}
+				if err = save(); err != nil {
+					return report, err
+				}
+				continue
 			}
 			if !definite(saved.Outcome) {
 				saved.Outcome = domain.ActionOutcome{Status: "succeeded", ID: saved.ModuleItemID, Message: "placement verified by its saved Canvas ID"}
@@ -217,13 +222,26 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 			continue
 		}
 		if definite(saved.Outcome) {
-			report.Status, report.Message = "held", fmt.Sprintf("items[%d] is marked complete without a saved Canvas item ID; select the exact live module item", i)
-			return report, nil
+			continue
 		}
 		if saved.Outcome.Status == "pending" || saved.Outcome.Status == "uncertain" {
-			report.Status, report.Message = "held", fmt.Sprintf("items[%d] placement is uncertain; select the exact live module item before continuing", i)
-			report.Items = append([]domain.ModuleItemOutcome(nil), d.Created.Items...)
-			return report, nil
+			// An unclear placement is resolved by looking for the item in the module.
+			var existing []canvasModuleItem
+			if e := s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/modules/%d/items?per_page=100", course.ID, moduleID), &existing); e == nil {
+				for _, candidate := range existing {
+					if moduleItemMatches(candidate, item, resolvedRefs[i]) {
+						saved.ModuleItemID = candidate.ID
+						saved.Outcome = domain.ActionOutcome{Status: "succeeded", ID: candidate.ID, Message: "adopted the existing module item"}
+						break
+					}
+				}
+			}
+			if saved.ModuleItemID > 0 {
+				if err = save(); err != nil {
+					return report, err
+				}
+				continue
+			}
 		}
 		saved.Outcome = domain.ActionOutcome{Status: "pending"}
 		if err = save(); err != nil {
@@ -271,16 +289,7 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 		} else if module.Published {
 			d.Created.Publication = domain.ActionOutcome{Status: "preserved", Message: "module already published"}
 		} else if d.Created.Publication.Status == "succeeded" || d.Created.Publication.Status == "preserved" {
-			report.Status, report.Message = "held", "module publication changed after completion; live module is unpublished, so the teacher's change is preserved"
-			return report, nil
-		} else if d.Created.Publication.Status == "pending" || d.Created.Publication.Status == "uncertain" {
-			fresh, getErr := s.getModule(ctx, course.ID, moduleID)
-			if getErr != nil || !fresh.Published {
-				report.Status, report.Message = "held", "module publication completion is uncertain; live module is not confirmed published"
-				return report, nil
-			}
-			d.Created.Publication = domain.ActionOutcome{Status: "succeeded", Message: "publication recovered from live module"}
-			module = fresh
+			d.Created.Publication = domain.ActionOutcome{Status: "preserved", Message: "module was unpublished in Canvas after it was published; left as it is now"}
 		} else {
 			d.Created.Publication = domain.ActionOutcome{Status: "pending"}
 			if err = save(); err != nil {
@@ -320,6 +329,26 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 	report.Items = append([]domain.ModuleItemOutcome(nil), d.Created.Items...)
 	report.Status = "completed"
 	return report, nil
+}
+
+// findModuleByName returns the ID of the one module in the course with this
+// exact name, or zero, so an unclear create can be adopted instead of repeated.
+func (s *Service) findModuleByName(ctx context.Context, courseID int64, name string) int64 {
+	var modules []canvasModule
+	if e := s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/modules?per_page=100", courseID), &modules); e != nil {
+		return 0
+	}
+	var id int64
+	n := 0
+	for _, m := range modules {
+		if m.Name == name && m.ID > 0 {
+			id, n = m.ID, n+1
+		}
+	}
+	if n == 1 {
+		return id
+	}
+	return 0
 }
 
 func (s *Service) getModule(ctx context.Context, courseID, moduleID int64) (canvasModule, error) {
