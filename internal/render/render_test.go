@@ -132,3 +132,17 @@ func TestMarkdownHTMLRendersOnlyCourseAndWebLinks(t *testing.T) {
 		t.Fatalf("got %s\nwant %s", got, want)
 	}
 }
+
+func TestHeaderLetsTheTeacherControlWhatLeadsTheComment(t *testing.T) {
+	rubric := domain.Rubric{Criteria: []domain.Criterion{{ID: "a", Description: "Evidence", Points: domain.MustDecimal("4")}}}
+	interpretation := domain.Interpretation{Mapping: "direct", Rationale: "private", Components: []domain.Component{{Key: "one", Label: "Response 1", CriterionIDs: []string{"a"}, Weight: domain.MustDecimal("1")}}}
+	in := FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: []domain.ComponentScore{{Key: "one", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal("3")}}}}, Assessment: domain.MustDecimal("3"), AssignmentPoints: domain.MustDecimal("4"), Feedback: "32/40\nGreat work."}
+	in.Header = "none"
+	if got, err := RenderFeedback(in); err != nil || got != "32/40\nGreat work." {
+		t.Fatalf("header none must post the feedback exactly as written: %q %v", got, err)
+	}
+	in.Header = "score"
+	if got, err := RenderFeedback(in); err != nil || got != "Assessment: 3 / 4\n\n32/40\nGreat work." {
+		t.Fatalf("header score must lead with only the score line: %q %v", got, err)
+	}
+}

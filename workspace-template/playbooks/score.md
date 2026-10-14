@@ -55,7 +55,7 @@ If the due date, first genuine work, calendar coverage or accommodation details 
 
 ## Feedback
 
-For ordinary grades, the Engine starts the comment with the computed score and compact criterion lines. For New Quiz comment-only results, it starts with criterion lines and omits any aggregate quiz assessment. You write the rest as plain text in the teacher's voice: specific, respectful glows and grows grounded in the work, including meaningful changes from the strongest earlier attempt. Full rubric definitions stay in Canvas.
+For ordinary grades, the Engine starts the comment with the computed score and compact criterion lines. For New Quiz comment-only results, it starts with criterion lines and omits any aggregate quiz assessment. You write the rest as plain text in the teacher's voice: specific, respectful glows and grows grounded in the work, including meaningful changes from the strongest earlier attempt. Full rubric definitions stay in Canvas. The teacher decides the layout. By default the Engine leads with its score and criterion lines. For any student, set `header: score` (only the score line, `Assessment: X / Y`) or `header: none` (the Engine adds nothing and posts your text exactly as written) on the `grade`, `comment_only` or `revise_feedback` body, then put the score where the teacher wants it, such as `32/40` as the first line or a score beside each item. The Engine never rewrites the teacher's wording or layout.
 
 ## Save, review, post
 

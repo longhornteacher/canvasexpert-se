@@ -20,6 +20,10 @@ type FeedbackInput struct {
 	AssignmentPoints domain.Decimal
 	Feedback         string
 	OmitAssessment   bool
+	// Header is the teacher's choice of what leads the comment: "" or "default"
+	// (score and criterion lines), "score" (only the score line) or "none" (the
+	// feedback exactly as written, so the teacher controls any score text).
+	Header string
 }
 
 // RenderFeedback produces a deterministic Canvas comment. The order is the
@@ -43,6 +47,12 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		return "", fmt.Errorf("assessment %s does not match derived value %s", in.Assessment.String(), computed.Posted.String())
 	}
 
+	switch in.Header {
+	case "none":
+		return in.Feedback, nil
+	case "score":
+		return fmt.Sprintf("Assessment: %s / %s\n\n%s", in.Assessment.String(), in.AssignmentPoints.String(), in.Feedback), nil
+	}
 	var out strings.Builder
 	if !in.OmitAssessment {
 		fmt.Fprintf(&out, "Assessment: %s / %s", in.Assessment.String(), in.AssignmentPoints.String())

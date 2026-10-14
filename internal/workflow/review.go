@@ -274,7 +274,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			}
 		}
 		if c.Hold == "" && r.Grade != nil && doc.Basis() != nil {
-			text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback})
+			text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Header: r.Grade.Header})
 			if e != nil {
 				c.Hold = e.Error()
 			} else {
@@ -287,7 +287,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			if e != nil {
 				c.Hold = e.Error()
 			} else {
-				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: true})
+				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: true, Header: r.CommentOnly.Header})
 				if e != nil {
 					c.Hold = e.Error()
 				} else {

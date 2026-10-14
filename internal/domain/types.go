@@ -276,6 +276,7 @@ type GradeOperation struct {
 	Components     []ComponentScore `yaml:"components"`
 	Assessment     Decimal          `yaml:"assessment"`
 	Feedback       string           `yaml:"feedback"`
+	Header         string           `yaml:"header,omitempty"`
 	TeacherNote    string           `yaml:"teacher_note,omitempty"`
 	StrongestPrior *PriorComparison `yaml:"strongest_prior,omitempty"`
 	LateTiming     *LateTiming      `yaml:"late_timing,omitempty"`
@@ -291,6 +292,7 @@ type FeedbackRevision struct {
 	Attempt    AttemptRef          `yaml:"attempt"`
 	CommentID  int64               `yaml:"comment_id"`
 	Feedback   string              `yaml:"feedback"`
+	Header     string              `yaml:"header,omitempty"`
 	Assessment *FeedbackAssessment `yaml:"assessment,omitempty"`
 	Outcome    ActionOutcome       `yaml:"outcome,omitempty"`
 }
@@ -309,6 +311,7 @@ type CommentOnlyOperation struct {
 	Attempt    AttemptRef       `yaml:"attempt"`
 	Components []ComponentScore `yaml:"components"`
 	Feedback   string           `yaml:"feedback"`
+	Header     string           `yaml:"header,omitempty"`
 	Outcome    ActionOutcome    `yaml:"outcome,omitempty"`
 }
 type ResultsDocument struct {

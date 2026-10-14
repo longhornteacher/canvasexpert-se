@@ -182,7 +182,7 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 	if err != nil {
 		return err
 	}
-	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: true})
+	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: true, Header: c.Header})
 	if err != nil {
 		return err
 	}
@@ -504,7 +504,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		}
 	}
 	if !definite(g.Outcomes.Comment) {
-		text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student)})
+		text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student), Header: g.Header})
 		if e != nil {
 			return e
 		}
@@ -678,7 +678,7 @@ func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument,
 	text := workspace.ReplaceStudentName(r.Feedback, source.student)
 	if r.Assessment != nil {
 		var e error
-		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text})
+		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text, Header: r.Header})
 		if e != nil {
 			return e
 		}
