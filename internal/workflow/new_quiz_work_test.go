@@ -106,7 +106,7 @@ func TestNewQuizResponsesMapsLatestStudentAttemptAndWrittenItems(t *testing.T) {
 		t.Fatal(err)
 	}
 	row, ok := rows[5]
-	if !ok || row.Attempt != 2 || row.SubmittedAt != "2026-10-07T12:00:00Z" || len(row.Responses) != 1 || len(row.Files) != 1 || len(row.FileItemIDs) != 1 {
+	if !ok || row.Attempt != 2 || row.SubmittedAt != "2026-10-07T12:00:00Z" || len(row.Responses) != 1 || len(row.Files) != 1 || len(row.FileItemIDs) != 2 {
 		t.Fatalf("wrong New Quiz report projection: %#v", row)
 	}
 	if row.Responses[0].Prompt != "Explain your reasoning." || row.Responses[0].Text != "Current typed" || row.Files[0].Name != "answer.docx" || row.Files[0].Status != "not-retrieved" || row.FileItemIDs[0] != "22" {
