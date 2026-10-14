@@ -39,9 +39,6 @@ func validateAttempt(a AttemptRef) error {
 	if a.Attempt < 1 {
 		return fmt.Errorf("attempt must be positive")
 	}
-	if _, e := time.Parse(time.RFC3339Nano, a.SubmittedAt); e != nil {
-		return fmt.Errorf("submitted_at must be RFC3339: %w", e)
-	}
 	return nil
 }
 func ValidateRubric(r Rubric) error {
@@ -400,11 +397,6 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				}
 				if prior.Attempt.Attempt >= g.Attempt.Attempt || strings.TrimSpace(prior.Basis) == "" {
 					return fail(fmt.Errorf("strongest_prior must precede current attempt and give academic basis"))
-				}
-				pt, _ := time.Parse(time.RFC3339Nano, prior.Attempt.SubmittedAt)
-				ct, _ := time.Parse(time.RFC3339Nano, g.Attempt.SubmittedAt)
-				if !pt.Before(ct) {
-					return fail(fmt.Errorf("strongest_prior timestamp must precede current work"))
 				}
 			}
 			for _, o := range []ActionOutcome{g.Outcomes.Comment, g.Outcomes.Rubric, g.Outcomes.Grade, g.Outcomes.Late} {

@@ -236,7 +236,7 @@ func canonicalDate(v *string) *string {
 	if e != nil {
 		return v
 	}
-	s := t.UTC().Format(time.RFC3339Nano)
+	s := t.UTC().Truncate(time.Second).Format(time.RFC3339)
 	return &s
 }
 func sameRubric(a, b *domain.Rubric) bool {

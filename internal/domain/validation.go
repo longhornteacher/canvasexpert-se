@@ -225,7 +225,7 @@ func validateRubricAttachment(d AssignmentDocument, body string) error {
 		}
 		x, e1 := time.Parse(time.RFC3339Nano, *a)
 		y, e2 := time.Parse(time.RFC3339Nano, *b)
-		return e1 == nil && e2 == nil && x.Equal(y)
+		return e1 == nil && e2 == nil && x.Truncate(time.Second).Equal(y.Truncate(time.Second))
 	}
 	typesEqual := len(d.SubmissionTypes) == len(b.SubmissionTypes)
 	for i := range d.SubmissionTypes {
@@ -346,13 +346,11 @@ func (d *StudentWorkDocument) Validate() error {
 		return e
 	}
 	attempts := map[int]bool{d.Current.Ref.Attempt: true}
-	currentTime, _ := time.Parse(time.RFC3339Nano, d.Current.Ref.SubmittedAt)
 	for _, a := range d.Prior {
 		if e := validateAttempt(a.Ref); e != nil {
 			return e
 		}
-		priorTime, _ := time.Parse(time.RFC3339Nano, a.Ref.SubmittedAt)
-		if attempts[a.Ref.Attempt] || a.Ref.Attempt >= d.Current.Ref.Attempt || !priorTime.Before(currentTime) {
+		if attempts[a.Ref.Attempt] || a.Ref.Attempt >= d.Current.Ref.Attempt {
 			return fmt.Errorf("duplicate/nonpreceding prior attempt")
 		}
 		attempts[a.Ref.Attempt] = true

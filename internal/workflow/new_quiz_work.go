@@ -75,7 +75,7 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 		return nil, err
 	}
 	var progress quizReportProgress
-	deadline := time.Now().Add(45 * time.Second)
+	deadline := time.Now().Add(5 * time.Minute)
 	for {
 		if err = c.Get(ctx, progressURL, &progress); err != nil {
 			return nil, err

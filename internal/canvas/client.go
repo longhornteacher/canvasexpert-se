@@ -515,7 +515,7 @@ func (c *Client) DownloadUnauthenticated(ctx context.Context, rawURL string, dst
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" || dst == nil {
 		return &Error{Kind: "validation"}
 	}
-	hc := &http.Client{Transport: c.http.Transport, Timeout: 45 * time.Second}
+	hc := &http.Client{Transport: c.http.Transport, Timeout: 5 * time.Minute}
 	hc.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 || req.URL.Scheme != "https" || req.URL.User != nil {
 			return &Error{Kind: "validation"}

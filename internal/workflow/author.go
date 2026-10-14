@@ -454,7 +454,7 @@ func sameDate(a, b *string) bool {
 	}
 	ta, e1 := time.Parse(time.RFC3339Nano, *a)
 	tb, e2 := time.Parse(time.RFC3339Nano, *b)
-	return e1 == nil && e2 == nil && ta.Equal(tb)
+	return e1 == nil && e2 == nil && ta.Truncate(time.Second).Equal(tb.Truncate(time.Second))
 }
 func sameRubricDefinition(a, b domain.Rubric) bool {
 	a.ID = 0
@@ -535,7 +535,7 @@ func (s *Service) recoverCreate(ctx context.Context, courseID int64, d domain.As
 	matches := []Assignment{}
 	for _, a := range all {
 		created, e := time.Parse(time.RFC3339Nano, a.CreatedAt)
-		if e == nil && !created.Before(started.Add(-2*time.Second)) && !created.After(started.Add(2*time.Minute)) && sameCreateCore(a, d, html) && !a.Published {
+		if e == nil && !created.Before(started.Add(-time.Hour)) && !created.After(started.Add(time.Hour)) && sameCreateCore(a, d, html) && !a.Published {
 			matches = append(matches, a)
 		}
 	}
