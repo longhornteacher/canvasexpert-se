@@ -389,7 +389,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				return fail(fmt.Errorf("assessment must equal derived posted value %s", a.Posted.String()))
 			}
 			if !validHeader(g.Header) {
-				return fail(fmt.Errorf("header must be default, score or none"))
+				return fail(fmt.Errorf("header must be score, full or none"))
 			}
 			if strings.TrimSpace(g.Feedback) == "" {
 				return fail(fmt.Errorf("conversational feedback required"))
@@ -432,7 +432,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				return fail(e)
 			}
 			if !validHeader(c.Header) {
-				return fail(fmt.Errorf("header must be default, score or none"))
+				return fail(fmt.Errorf("header must be score, full or none"))
 			}
 			if strings.TrimSpace(c.Feedback) == "" {
 				return fail(fmt.Errorf("conversational feedback required"))
@@ -449,7 +449,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				return fail(e)
 			}
 			if !validHeader(r.Header) {
-				return fail(fmt.Errorf("header must be default, score or none"))
+				return fail(fmt.Errorf("header must be score, full or none"))
 			}
 			if r.CommentID <= 0 || strings.TrimSpace(r.Feedback) == "" {
 				return fail(fmt.Errorf("revision requires exact comment_id and feedback"))
@@ -485,7 +485,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 }
 // validHeader accepts the teacher's choices for what leads a comment.
 func validHeader(h string) bool {
-	return h == "" || h == "default" || h == "score" || h == "none"
+	return h == "" || h == "default" || h == "score" || h == "full" || h == "none"
 }
 func validateLateTiming(t *LateTiming) error {
 	if t == nil {

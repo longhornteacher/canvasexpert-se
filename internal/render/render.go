@@ -20,9 +20,10 @@ type FeedbackInput struct {
 	AssignmentPoints domain.Decimal
 	Feedback         string
 	OmitAssessment   bool
-	// Header is the teacher's choice of what leads the comment: "" or "default"
-	// (score and criterion lines), "score" (only the score line) or "none" (the
-	// feedback exactly as written, so the teacher controls any score text).
+	// Header is the teacher's choice of what leads the comment: "" or "score"
+	// (the default: just the score line), "full" (score and criterion lines) or
+	// "none" (the feedback exactly as written, so the teacher controls any
+	// score text).
 	Header string
 }
 
@@ -50,7 +51,7 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 	switch in.Header {
 	case "none":
 		return in.Feedback, nil
-	case "score":
+	case "", "score", "default":
 		return fmt.Sprintf("Assessment: %s / %s\n\n%s", in.Assessment.String(), in.AssignmentPoints.String(), in.Feedback), nil
 	}
 	var out strings.Builder

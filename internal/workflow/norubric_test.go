@@ -116,8 +116,8 @@ func TestNoRubricAssignmentScoresWithAgentBasisAndWritesGradeAndCommentOnly(t *t
 	if live.EnteredScore == nil || live.EnteredScore.String() != "12" {
 		t.Fatalf("expected entered grade 12, got %v", live.EnteredScore)
 	}
-	if len(live.Comments) != 1 || !strings.Contains(live.Comments[0].Comment, "12 / 20") || !strings.Contains(live.Comments[0].Comment, "Overall quality 6/10") {
-		t.Fatalf("feedback missing assessment or criterion line: %#v", live.Comments)
+	if len(live.Comments) != 1 || !strings.HasPrefix(live.Comments[0].Comment, "Assessment: 12 / 20\n\n") {
+		t.Fatalf("feedback should lead with the score line by default: %#v", live.Comments)
 	}
 	if report.Students[0].Outcomes.Rubric.Status != "not-requested" {
 		t.Fatalf("rubric outcome should be not-requested, got %q", report.Students[0].Outcomes.Rubric.Status)

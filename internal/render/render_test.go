@@ -24,7 +24,7 @@ func TestRenderFeedbackShowsAssessmentScoresThenConversation(t *testing.T) {
 		{Key: "two", Evidence: "missing", Criteria: []domain.CriterionScore{{CriterionID: "ev", Points: domain.MustDecimal("0")}, {CriterionID: "rs", Points: domain.MustDecimal("0")}}},
 	}
 	feedback := "Try **a specific** next step.\nQuoted text: `a < b`"
-	got, err := RenderFeedback(FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: components, Assessment: domain.MustDecimal("4.67"), AssignmentPoints: domain.MustDecimal("20"), Feedback: feedback})
+	got, err := RenderFeedback(FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: components, Header: "full", Assessment: domain.MustDecimal("4.67"), AssignmentPoints: domain.MustDecimal("20"), Feedback: feedback})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestRenderFeedbackDirectMappingAndXSS(t *testing.T) {
 		{Key: "first", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal("4")}}},
 		{Key: "second", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "b", Points: domain.MustDecimal("3")}}},
 	}
-	got, err := RenderFeedback(FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: scores, Assessment: domain.MustDecimal("7"), AssignmentPoints: domain.MustDecimal("10"), Feedback: "<script>alert(1)</script>"})
+	got, err := RenderFeedback(FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: scores, Header: "full", Assessment: domain.MustDecimal("7"), AssignmentPoints: domain.MustDecimal("10"), Feedback: "<script>alert(1)</script>"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestRenderFeedbackDirectMappingAndXSS(t *testing.T) {
 func TestRenderCommentOnlyOmitsAggregateAssessment(t *testing.T) {
 	rubric := domain.Rubric{Title: "R", Criteria: []domain.Criterion{{ID: "a", Description: "Evidence", Points: domain.MustDecimal("5")}}}
 	interpretation := domain.Interpretation{Mapping: "repeated", Rationale: "private", Components: []domain.Component{{Key: "one", Label: "Response", Weight: domain.MustDecimal("1")}}}
-	got, err := RenderFeedback(FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: []domain.ComponentScore{{Key: "one", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal("4")}}}}, Assessment: domain.MustDecimal("16"), AssignmentPoints: domain.MustDecimal("20"), Feedback: "Good evidence.", OmitAssessment: true})
+	got, err := RenderFeedback(FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: []domain.ComponentScore{{Key: "one", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal("4")}}}}, Assessment: domain.MustDecimal("16"), AssignmentPoints: domain.MustDecimal("20"), Feedback: "Good evidence.", OmitAssessment: true, Header: "full"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,8 +141,10 @@ func TestHeaderLetsTheTeacherControlWhatLeadsTheComment(t *testing.T) {
 	if got, err := RenderFeedback(in); err != nil || got != "32/40\nGreat work." {
 		t.Fatalf("header none must post the feedback exactly as written: %q %v", got, err)
 	}
-	in.Header = "score"
-	if got, err := RenderFeedback(in); err != nil || got != "Assessment: 3 / 4\n\n32/40\nGreat work." {
-		t.Fatalf("header score must lead with only the score line: %q %v", got, err)
+	for _, h := range []string{"", "score"} {
+		in.Header = h
+		if got, err := RenderFeedback(in); err != nil || got != "Assessment: 3 / 4\n\n32/40\nGreat work." {
+			t.Fatalf("header %q must lead with only the score line: %q %v", h, got, err)
+		}
 	}
 }
