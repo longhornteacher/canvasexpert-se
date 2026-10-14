@@ -192,3 +192,19 @@ func TestPostNewQuizCommentOnlyUsesNormalReviewResultsContract(t *testing.T) {
 		t.Fatalf("New Quiz comment post did not complete exactly once without readback: gets=%d writes=%d report=%#v", gets, writes, report.Students)
 	}
 }
+
+func TestSameAttemptIgnoresMillisecondPrecision(t *testing.T) {
+	a := domain.AttemptRef{Attempt: 1, SubmittedAt: "2026-10-13T20:31:55.560Z"}
+	b := domain.AttemptRef{Attempt: 1, SubmittedAt: "2026-10-13T20:31:55Z"}
+	if !sameAttempt(a, b) || !sameAttempt(b, a) {
+		t.Fatal("same attempt with and without milliseconds must match")
+	}
+	b.Attempt = 2
+	if sameAttempt(a, b) {
+		t.Fatal("different attempt numbers must not match")
+	}
+	b = domain.AttemptRef{Attempt: 1, SubmittedAt: "2026-10-13T21:45:00Z"}
+	if !sameAttempt(a, b) {
+		t.Fatal("the attempt number alone identifies the attempt")
+	}
+}

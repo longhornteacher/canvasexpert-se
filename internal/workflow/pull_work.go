@@ -327,7 +327,6 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 					}
 					doc.Current.WrittenResponses = row.Responses
 					doc.Current.WrittenFiles = s.downloadNewQuizFiles(ctx, relDir, st.Ref, sub.UserID, course.ID, a.ID, sub.Attempt, row, &newQuizDownloadBudget)
-					doc.Current.Ref.SubmittedAt = row.SubmittedAt
 				}
 				seen := map[int]bool{sub.Attempt: true}
 				for _, prior := range sub.History {

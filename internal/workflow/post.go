@@ -276,10 +276,12 @@ func holdOutcome(o *domain.ActionOutcome, message string) {
 	}
 	o.Message = message
 }
+// sameAttempt identifies an attempt by its number alone. Canvas gives every
+// resubmission a new attempt number, and the same moment is reported with or
+// without milliseconds, so comparing timestamps only creates false "new
+// attempt" holds.
 func sameAttempt(a, b domain.AttemptRef) bool {
-	ta, e1 := time.Parse(time.RFC3339Nano, a.SubmittedAt)
-	tb, e2 := time.Parse(time.RFC3339Nano, b.SubmittedAt)
-	return e1 == nil && e2 == nil && a.Attempt == b.Attempt && ta.Equal(tb)
+	return a.Attempt == b.Attempt
 }
 func (s *Service) postSources(doc domain.ResultsDocument) (map[string]postSource, error) {
 	packetPath, e := workspace.ConstrainPath(s.Root, doc.Packet)
