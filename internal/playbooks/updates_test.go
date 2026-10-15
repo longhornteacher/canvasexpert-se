@@ -99,10 +99,10 @@ func TestReplaceProtectsContextAndUnavailableSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := Replace(root, "playbooks/score.md", "missing", time.Now()); err == nil {
-		t.Fatal("replacement fell back from unavailable Sync")
+		t.Fatal("replacement fell back from unavailable UserSync")
 	}
 	if b, _ := os.ReadFile(p); string(b) != "local copy" {
-		t.Fatal("unavailable Sync changed inactive local copy")
+		t.Fatal("unavailable UserSync changed inactive local copy")
 	}
 	rows := Status(root)
 	if len(rows) == 0 || rows[0].State != "unavailable" {

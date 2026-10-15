@@ -14,13 +14,13 @@ This is an independent open-source project. The teacher-first installation mecha
 
 Published builds belong on [GitHub Releases](https://github.com/longhornteacher/canvasexpert-se/releases). Look for the versioned Windows ZIP rather than GitHub's source-code ZIP; if no beta asset is available yet, use the [build guide](docs/build.md).
 
-1. Unzip the CanvasExpert-SE ZIP into a folder on your computer's local drive.
-2. Open that folder in Code/Codex and say **“Install this.”** The installing assistant connects every supported app it finds (Claude, ChatGPT, Antigravity), checks the Engine and opens the local Canvas form.
+1. Unzip the CanvasExpert-SE ZIP into the local folder where you want to keep it. That folder is UserInstall; run directly there, with no second install folder.
+2. Open that folder in Code/Codex and say **“Set this all up.”** The setup assistant connects every supported app it finds (Claude, ChatGPT, Antigravity), checks the Engine, opens the private Canvas form, helps configure your classes and checks that your teaching assistant can read them.
 3. Enter your Canvas address and access token in the private form. Approve the install prompt in your app (restart it only if it asks and you are not mid-review), then use the included `TEACHING-ASSISTANT.md` starter to begin teaching there.
 
-Teachers do not need Source, Go, Node, a separate Codex CLI, terminal commands or client configuration edits. If the form does not open, the assistant shows its local address, or double-click the included `webui.cmd`. You need the Claude or ChatGPT app on this PC; a website alone cannot reach your Install, and app or organization controls can require additional actions. Saving connection settings or passing a local MCP check does not prove the destination app can use the tools.
+Teachers do not need Dev, Go, Node, a separate Codex CLI, terminal commands or client configuration edits. If the form does not open, the assistant shows its local address, or double-click the included `webui.cmd`. You need the Claude or ChatGPT app on this PC; a website alone cannot reach your UserInstall, and app or organization controls can require additional actions. Saving connection settings or passing a local MCP check does not prove the destination app can use the tools.
 
-Use the [Install guide](workspace-template/README.md) for the shipped folder and the [MCP adapter guide](docs/mcp-adapter.md) for connection details. See [build and package instructions](docs/build.md) to produce the release ZIP from Source.
+Use the [Setup guide](workspace-template/README.md) for the shipped folder and the [MCP adapter guide](docs/mcp-adapter.md) for connection details. See [build and package instructions](docs/build.md) to produce the release ZIP from Dev.
 
 ## What you can do
 
@@ -45,9 +45,9 @@ Ordinary assignment grading posts the honest computed assessment, including when
 ## Data and privacy
 
 - Your Canvas PAT is stored in Windows Credential Manager on your computer, not in teacher files or client configuration. Enter it only in the private local WebUI; never send it to an agent in chat.
-- Pulled student work, drafts and operational state stay in your local Install. The Engine maintains a private student identity map and uses pseudonyms in ordinary work pulls; agents are instructed not to read the private `.cse/` directory.
+- Pulled student work, drafts and operational state stay in your local UserInstall. The active setup location (UserInstall or UserSync) holds the private student identity map and uses pseudonyms in ordinary work pulls; agents are instructed not to read the private `.cse/` directory.
 - Evidence and teaching context the agent reads are sent into your selected AI provider's session. Submissions, attachments, teacher notes and read-only API responses can still contain names or other identifying information. CE-SE does **not** make all data anonymous.
-- Optional Sync shares selected teacher rules and preferences through a cloud provider you choose; course/student configuration and operational work remain local. CE-SE does not synchronize files itself.
+- Optional UserSync shares reusable teacher setup through a cloud provider you choose, including course selections, student aliases/settings/notes and private roster/contact records. Pulled work, drafts and grading/planning sessions remain local. CE-SE does not synchronize files itself.
 
 Use a school-approved AI client and follow your school's student-data and Canvas access policies. The project does not claim district approval or student-data compliance certification. It is not affiliated with or endorsed by Instructure, OpenAI or Anthropic.
 
@@ -63,7 +63,7 @@ Your chosen agent + current teaching playbooks/context
                      Canvas Live
 ```
 
-**Source** is this development checkout. **Install** is the extracted runnable folder containing the Engine and the teacher's actual files. **Sync** is an optional authoritative location for shared teaching rules and preferences. Teachers need only Install; development happens in Source. The [architecture](ARCHITECTURE.md) explains the boundaries.
+**Dev** is this development checkout. **UserInstall** is the extracted runnable folder containing the Engine and the teacher's actual files. **UserSync** is an optional authoritative location for shared teaching rules and preferences. Teachers need only UserInstall; development happens in Dev. The [architecture](ARCHITECTURE.md) explains the boundaries.
 
 ## Contribute
 

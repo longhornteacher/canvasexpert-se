@@ -19,14 +19,15 @@ type RulesLocation struct {
 }
 
 type rulesBinding struct {
-	SyncRoot string `json:"sync_root,omitempty"`
+	SyncRoot    string `json:"sync_root,omitempty"`
+	DataVersion int    `json:"data_version,omitempty"`
 }
 
 func rulesBindingPath(root string) string { return filepath.Join(root, ".cse", "rules-location.json") }
 
-// IsSharedRulePath reports whether a logical Install-relative path belongs to
-// the teacher rules authority. Product README.md and local course/student state
-// intentionally remain in Install.
+// IsSharedRulePath reports whether a logical UserInstall-relative path belongs to
+// the teacher setup authority. Product README.md and grading/planning session
+// files intentionally remain in UserInstall. Private setup uses explicit resolvers.
 func IsSharedRulePath(relative string) bool {
 	p := strings.ToLower(strings.Trim(strings.ReplaceAll(relative, "\\", "/"), "/"))
 	if p == "" || strings.HasPrefix(p, "../") {
@@ -44,10 +45,6 @@ func IsSharedRulePath(relative string) bool {
 		return true
 	}
 	if strings.HasPrefix(p, "context/") {
-		name := strings.TrimPrefix(p, "context/")
-		if name == "courses.md" || name == "students.md" {
-			return false
-		}
 		return true
 	}
 	if strings.Contains(p, "/") {
@@ -69,8 +66,8 @@ func isExecutableArtifact(path string) bool {
 	}
 }
 
-// GetRulesLocation reads the per-Install binding on every call. A configured
-// but unavailable Sync directory is an error; callers must not fall back.
+// GetRulesLocation reads the per-UserInstall binding on every call. A configured
+// but unavailable UserSync directory is an error; callers must not fall back.
 func GetRulesLocation(root string) (RulesLocation, error) {
 	install, err := filepath.Abs(root)
 	if err != nil {
@@ -91,19 +88,39 @@ func GetRulesLocation(root string) (RulesLocation, error) {
 		return RulesLocation{InstallRoot: install, RulesRoot: install, Mode: "local"}, nil
 	}
 	if !filepath.IsAbs(binding.SyncRoot) {
-		return RulesLocation{InstallRoot: install, RulesRoot: binding.SyncRoot, Mode: "sync"}, fmt.Errorf("configured Sync rules directory %q is not absolute", binding.SyncRoot)
+		return RulesLocation{InstallRoot: install, RulesRoot: binding.SyncRoot, Mode: "sync"}, fmt.Errorf("configured UserSync rules directory %q is not absolute", binding.SyncRoot)
 	}
 	syncRoot, err := filepath.Abs(binding.SyncRoot)
 	if err != nil {
-		return RulesLocation{}, fmt.Errorf("resolve Sync rules directory: %w", err)
+		return RulesLocation{}, fmt.Errorf("resolve UserSync rules directory: %w", err)
 	}
 	loc := RulesLocation{InstallRoot: install, RulesRoot: syncRoot, Mode: "sync"}
 	info, err := os.Stat(syncRoot)
 	if err != nil {
-		return loc, fmt.Errorf("configured Sync rules directory %s is unavailable: %w", syncRoot, err)
+		return loc, fmt.Errorf("configured UserSync rules directory %s is unavailable: %w", syncRoot, err)
 	}
 	if !info.IsDir() {
-		return loc, fmt.Errorf("configured Sync rules path %s is not a directory", syncRoot)
+		return loc, fmt.Errorf("configured UserSync rules path %s is not a directory", syncRoot)
+	}
+	if binding.DataVersion < 1 {
+		if err := initializeReusableData(install, syncRoot); err != nil {
+			return loc, err
+		}
+		for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
+			if b, err := os.ReadFile(filepath.Join(install, name)); err == nil {
+				if err := archiveOne(install, name, b); err != nil {
+					return loc, err
+				}
+			} else if !os.IsNotExist(err) {
+				return loc, err
+			}
+			if err := writeBootstrap(install, name, syncRoot); err != nil {
+				return loc, err
+			}
+		}
+		if err := writeRulesBinding(install, syncRoot); err != nil {
+			return loc, err
+		}
 	}
 	return loc, nil
 }
@@ -112,7 +129,7 @@ func GetRulesLocation(root string) (RulesLocation, error) {
 // while retaining the ordinary path confinement checks at that authority.
 func ResolveTeacherPath(root, relative string) (string, error) {
 	if strings.EqualFold(strings.Trim(strings.ReplaceAll(relative, "\\", "/"), "/"), "install-log.jsonl") {
-		return "", fmt.Errorf("install-log.jsonl is operational Install state, not teacher rules")
+		return "", fmt.Errorf("install-log.jsonl is operational UserInstall state, not teacher rules")
 	}
 	install, err := filepath.Abs(root)
 	if err != nil {
@@ -154,19 +171,19 @@ func ResolveRulesPath(root, relative string) (string, error) {
 	return p, nil
 }
 
-// SetRulesLocation explicitly binds an Install to Sync, or returns it to local
+// SetRulesLocation explicitly binds a UserInstall to UserSync, or returns it to local
 // rules. It copies only classified teacher files, archives replaced local
-// content, and writes a small local-agent bootstrap while Sync is active.
+// content, and writes a small local-agent bootstrap while UserSync is active.
 func SetRulesLocation(root, syncRoot string, template fs.FS, base string) (RulesLocation, error) {
 	install, err := filepath.Abs(root)
 	if err != nil {
 		return RulesLocation{}, err
 	}
 	if !isRoot(install) {
-		return RulesLocation{}, fmt.Errorf("Install root %s lacks context/courses.md", install)
+		return RulesLocation{}, fmt.Errorf("UserInstall root %s lacks context/courses.md", install)
 	}
 	if strings.TrimSpace(syncRoot) != "" && !filepath.IsAbs(strings.TrimSpace(syncRoot)) {
-		return RulesLocation{}, fmt.Errorf("Sync rules directory must be an absolute path")
+		return RulesLocation{}, fmt.Errorf("UserSync rules directory must be an absolute path")
 	}
 	current, err := GetRulesLocation(install)
 	currentErr := err
@@ -195,21 +212,21 @@ func SetRulesLocation(root, syncRoot string, template fs.FS, base string) (Rules
 	}
 	info, err := os.Stat(syncPath)
 	if err != nil {
-		return RulesLocation{}, fmt.Errorf("Sync rules directory %s must already exist: %w", syncPath, err)
+		return RulesLocation{}, fmt.Errorf("UserSync rules directory %s must already exist: %w", syncPath, err)
 	}
 	if !info.IsDir() {
-		return RulesLocation{}, fmt.Errorf("Sync rules path %s is not a directory", syncPath)
+		return RulesLocation{}, fmt.Errorf("UserSync rules path %s is not a directory", syncPath)
 	}
 	resolvedInstall, err := resolveExistingPath(install, 0)
 	if err != nil {
-		return RulesLocation{}, fmt.Errorf("resolve Install root: %w", err)
+		return RulesLocation{}, fmt.Errorf("resolve UserInstall root: %w", err)
 	}
 	resolvedSync, err := resolveExistingPath(syncPath, 0)
 	if err != nil {
-		return RulesLocation{}, fmt.Errorf("resolve Sync rules root: %w", err)
+		return RulesLocation{}, fmt.Errorf("resolve UserSync rules root: %w", err)
 	}
 	if pathOverlaps(resolvedSync, resolvedInstall) {
-		return RulesLocation{}, fmt.Errorf("Sync rules directory must be separate from Install")
+		return RulesLocation{}, fmt.Errorf("UserSync rules directory must be separate from UserInstall")
 	}
 	if current.Mode == "sync" && samePath(current.RulesRoot, syncPath) && currentErr == nil {
 		return current, nil
@@ -220,7 +237,7 @@ func SetRulesLocation(root, syncRoot string, template fs.FS, base string) (Rules
 		if empty, e := isEmptyDir(syncPath); e != nil {
 			return RulesLocation{}, e
 		} else if empty {
-			return current, fmt.Errorf("configured Sync rules directory is unavailable; refusing to initialize an empty Sync directory from inactive Install copies")
+			return current, fmt.Errorf("configured UserSync rules directory is unavailable; refusing to initialize an empty UserSync directory from inactive UserInstall copies")
 		}
 	}
 	empty, err := isEmptyDir(syncPath)
@@ -240,9 +257,20 @@ func SetRulesLocation(root, syncRoot string, template fs.FS, base string) (Rules
 				return RulesLocation{}, err
 			}
 		}
-	} else if template != nil {
-		if _, err := ScaffoldRules(syncPath, template, base); err != nil {
-			return RulesLocation{}, err
+	} else {
+		source := install
+		if current.Mode == "sync" && currentErr == nil {
+			source = current.RulesRoot
+		}
+		if currentErr == nil {
+			if err := initializeReusableData(source, syncPath); err != nil {
+				return RulesLocation{}, err
+			}
+		}
+		if template != nil {
+			if _, err := ScaffoldRules(syncPath, template, base); err != nil {
+				return RulesLocation{}, err
+			}
 		}
 	}
 	if err := archiveShared(install); err != nil {
@@ -277,6 +305,18 @@ func isEmptyDir(p string) (bool, error) {
 
 func sharedFiles(root string) ([]string, error) {
 	var files []string
+	// Private contact JSON follows the teacher between PCs but remains outside
+	// ordinary teacher-rule classification and MCP file access.
+	for _, private := range []string{contactsFile, ".cse/students.csv", ".cse/rosters.json"} {
+		if err := rejectLinkedPrefixes(root, private); err != nil {
+			return nil, err
+		}
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(private))); err == nil {
+			files = append(files, private)
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -401,7 +441,11 @@ func copyShared(source, dest string, archiveDiff bool) error {
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(dst, body, 0644); err != nil {
+		mode := os.FileMode(0644)
+		if strings.HasPrefix(rel, ".cse/") {
+			mode = 0600
+		}
+		if err := WriteFile(dst, body, mode); err != nil {
 			return err
 		}
 	}
@@ -438,7 +482,7 @@ func archiveOne(root, rel string, b []byte) error {
 }
 func writeBootstrap(root, name, syncRoot string) error {
 	authority := filepath.Join(syncRoot, name)
-	body := []byte("# CE-SE local agent bootstrap\n\nTeacher rules are configured in Sync at `" + syncRoot + "`. Read the authoritative instructions at `" + authority + "` and other teacher rules from that directory. This Install at `" + root + "` remains the command, course and student-work root; run the Engine here. `context/courses.md` and `context/students.md` remain local to Install. Do not use inactive local rule copies or run launchers from Sync. Never read, list or search `.cse/`; it contains private student mappings and machine state. For private setup or student pages, provide only the local URL and session status; never fetch their contents.\n")
+	body := []byte("# CE-SE local agent bootstrap\n\nTeacher rules are configured in UserSync at `" + syncRoot + "`. Read the authoritative instructions at `" + authority + "` and other teacher rules from that directory. This UserInstall at `" + root + "` remains the command, course and student-work root; run the Engine here. Saved course setup, student settings, notes and contact details use UserSync; grading and planning session files remain in UserInstall. Do not use inactive local rule copies or run launchers from UserSync. Never read, list or search `.cse/`; it contains private student mappings and machine state. For private setup or student pages, provide only the local URL and session status; never fetch their contents.\n")
 	p := filepath.Join(root, name)
 	return os.WriteFile(p, body, 0644)
 }
@@ -447,7 +491,7 @@ func writeRulesBinding(root, syncRoot string) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(rulesBinding{SyncRoot: syncRoot}, "", "  ")
+	b, err := json.MarshalIndent(rulesBinding{SyncRoot: syncRoot, DataVersion: 1}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -460,7 +504,7 @@ func writeRulesBinding(root, syncRoot string) error {
 }
 
 // ScaffoldRules applies only starter files that belong to the shared rules
-// authority; local context and product files are left in Install.
+// authority; local context and product files are left in UserInstall.
 func ScaffoldRules(root string, template fs.FS, base string) ([]string, error) {
 	sub, err := fs.Sub(template, base)
 	if err != nil {

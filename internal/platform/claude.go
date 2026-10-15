@@ -1,11 +1,9 @@
 package platform
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 )
 
 // ClaudeDesktopPath returns the per-user Claude Desktop launcher when it is
@@ -30,12 +28,4 @@ func LaunchApp(executable string, args ...string) error {
 		return err
 	}
 	return cmd.Process.Release()
-}
-
-// RevealFile shows a prepared file selected in the system file manager.
-func RevealFile(path string) error {
-	if runtime.GOOS != "windows" {
-		return errors.New("file reveal requires Windows; open the prepared file's folder manually")
-	}
-	return LaunchApp("explorer.exe", "/select,"+path)
 }

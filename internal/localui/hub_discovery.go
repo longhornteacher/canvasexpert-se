@@ -19,7 +19,7 @@ func reportExistingHub(loc hubcoord.Location, root string, output io.Writer, opt
 		}
 	}
 	pageURL := loc.URL + firstPage
-	_, _ = fmt.Fprintf(output, "Reusing the running CanvasExpert-SE hub for this Install: %s (this command does not own or stop it)\n", pageURL)
+	_, _ = fmt.Fprintf(output, "Reusing the running CanvasExpert-SE hub for this UserInstall: %s (this command does not own or stop it)\n", pageURL)
 	browserOutcome := "launch_requested"
 	if err := openBrowser(pageURL); err != nil {
 		browserOutcome = "launch_failed"

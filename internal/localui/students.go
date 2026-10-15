@@ -34,8 +34,9 @@ type studentTag struct {
 
 type studentRow struct {
 	workspace.Student
-	Tags []studentTag
-	Note string
+	Tags     []studentTag
+	Note     string
+	Contacts workspace.StudentContacts
 }
 
 type studentsData struct {
@@ -44,6 +45,7 @@ type studentsData struct {
 	ClearDraft                        bool
 	Rows                              []studentRow
 	Hub, NotesOn                      bool
+	ContactsOn                        bool
 	Tabs                              []courseTab
 	CourseID                          int64
 	CourseName, UpdatedAt, TagMessage string
@@ -61,7 +63,8 @@ type studentHandler struct {
 	// nil edits all rows in the standalone editor; the hub supplies the course roster.
 	members map[string][]string
 	// notesRoot, when set, enables the notes column backed by context/students.md.
-	notesRoot string
+	notesRoot    string
+	contactDraft map[string]workspace.StudentContacts
 }
 
 func (h *studentHandler) page(w http.ResponseWriter, status int, message string) {
@@ -77,6 +80,18 @@ func (h *studentHandler) pageNotice(w http.ResponseWriter, status int, message, 
 		data.DraftKey = "students:" + h.secret
 	}
 	data.Rows = nil
+	var contacts *workspace.ContactStore
+	if h.notesRoot != "" {
+		var err error
+		contacts, err = workspace.OpenContacts(h.notesRoot)
+		if err != nil {
+			if data.Message == "" {
+				data.Message = "Contact details unavailable; existing data has not been replaced. " + err.Error()
+			}
+		} else {
+			data.ContactsOn = true
+		}
+	}
 	var notes map[string]string
 	if h.notesRoot != "" {
 		if all, _, err := readNotes(h.notesRoot); err == nil {
@@ -91,6 +106,12 @@ func (h *studentHandler) pageNotice(w http.ResponseWriter, status int, message, 
 			continue
 		}
 		row := studentRow{Student: student, Note: notes[student.Ref]}
+		if contacts != nil {
+			row.Contacts = contacts.Students[workspace.ContactKey(student)]
+		}
+		if draft, ok := h.contactDraft[student.Ref]; ok {
+			row.Contacts = draft
+		}
 		for _, name := range tags {
 			class := ""
 			switch strings.ToLower(name) {
@@ -109,11 +130,16 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	csp := "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
-	if h.hub {
-		csp += "; script-src 'self'"
-	}
+	csp += "; script-src 'self'"
 	w.Header().Set("Content-Security-Policy", csp)
-	if "http://"+r.Host != h.origin || r.URL.Path != "/students" {
+	if "http://"+r.Host != h.origin {
+		http.NotFound(w, r)
+		return
+	}
+	if serveScript(w, r) {
+		return
+	}
+	if r.URL.Path != "/students" {
 		http.NotFound(w, r)
 		return
 	}
@@ -146,6 +172,69 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	before := append([]workspace.Student(nil), h.store.Rows...)
+	h.data.ClearDraft = false
+	var contacts *workspace.ContactStore
+	if h.notesRoot != "" {
+		var err error
+		contacts, err = workspace.OpenContacts(h.notesRoot)
+		if err != nil {
+			h.page(w, 400, "Contact details could not be opened; nothing was saved.")
+			return
+		}
+		// Keep raw entries on validation failure, including dynamically added rows.
+		h.contactDraft = map[string]workspace.StudentContacts{}
+		for _, student := range h.store.Rows {
+			if _, member := h.members[student.Ref]; h.hub && !member {
+				continue
+			}
+			if _, sent := r.PostForm["student_email_"+student.Ref]; !sent {
+				continue
+			}
+			entry := workspace.StudentContacts{StudentEmail: r.PostForm.Get("student_email_" + student.Ref)}
+			for i, phone := range r.PostForm["contact_phone_"+student.Ref] {
+				value := func(field string) string {
+					values := r.PostForm[field+student.Ref]
+					if i < len(values) {
+						return values[i]
+					}
+					return ""
+				}
+				entry.Parents = append(entry.Parents, workspace.ParentContact{Phone: phone, Email: value("contact_email_"), Text: r.PostForm.Get(fmt.Sprintf("contact_text_%s_%d", student.Ref, i)) == "yes", EmailEnabled: r.PostForm.Get(fmt.Sprintf("contact_send_email_%s_%d", student.Ref, i)) == "yes"})
+			}
+			h.contactDraft[student.Ref] = entry
+		}
+		for ref, entry := range h.contactDraft {
+			var err error
+			entry.StudentEmail, err = workspace.ContactEmail(entry.StudentEmail)
+			if err != nil {
+				h.page(w, 400, "Student email: "+err.Error())
+				return
+			}
+			parents := []workspace.ParentContact{}
+			for _, parent := range entry.Parents {
+				parent.Phone, err = workspace.ContactPhone(parent.Phone)
+				if err != nil {
+					h.page(w, 400, "Parent phone: "+err.Error())
+					return
+				}
+				parent.Email, err = workspace.ContactEmail(parent.Email)
+				if err != nil {
+					h.page(w, 400, "Parent email: "+err.Error())
+					return
+				}
+				if parent.Phone != "" || parent.Email != "" || parent.Text || parent.EmailEnabled {
+					parents = append(parents, parent)
+				}
+			}
+			entry.Parents = parents
+			for _, student := range h.store.Rows {
+				if student.Ref == ref {
+					contacts.Students[workspace.ContactKey(student)] = entry
+					break
+				}
+			}
+		}
+	}
 	edited := map[string]string{}
 	for i := range h.store.Rows {
 		v := &h.store.Rows[i]
@@ -182,6 +271,13 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if contacts != nil {
+		if err := contacts.Save(); err != nil {
+			h.page(w, 400, "Student settings saved, but contact details could not be saved. Your entries are still shown.")
+			return
+		}
+	}
+	h.contactDraft = nil
 	if h.persistent {
 		h.data.ClearDraft = true
 		h.pageNotice(w, 200, "", "Saved.")
@@ -236,7 +332,7 @@ func Students(ctx context.Context, root string, output io.Writer) error {
 
 func init() {
 	register(
-		page{Path: "/students", Methods: []string{http.MethodGet, http.MethodPost}, Template: "students", Scripts: []string{"drafts.js"},
+		page{Path: "/students", Methods: []string{http.MethodGet, http.MethodPost}, Template: "students", Scripts: []string{"drafts.js", "contacts.js"},
 			Nav:    []navSlot{{Primary: "Classroom", Label: "Students", Order: 22}},
 			Handle: (*Hub).studentsPage},
 		page{Path: "/students/refresh", Methods: []string{http.MethodPost}, Handle: (*Hub).refreshStudents},

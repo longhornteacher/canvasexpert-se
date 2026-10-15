@@ -155,7 +155,7 @@ func TestRulesTestChecksSavedAuthorityWithoutWritesOrDraftBinding(t *testing.T) 
 		t.Fatalf("Test changed saved authority: %v", err)
 	}
 	if got, err := os.ReadFile(sentinel); err != nil || string(got) != "keep this" {
-		t.Fatalf("Test changed Sync contents: %q %v", got, err)
+		t.Fatalf("Test changed UserSync contents: %q %v", got, err)
 	}
 }
 
@@ -169,6 +169,6 @@ func TestUseInstallKeepsExplicitReturnSemantics(t *testing.T) {
 	w := hubPost(h, "/rules-location", url.Values{"request_secret": {h.secret}, "action": {"local"}, "sync_root": {syncRoot}}, h.origin)
 	loc, err := workspace.GetRulesLocation(h.root)
 	if w.Code != http.StatusSeeOther || err != nil || loc.Mode != "local" {
-		t.Fatalf("Use Install failed to return to local rules: status=%d location=%+v err=%v", w.Code, loc, err)
+		t.Fatalf("Use UserInstall failed to return to local rules: status=%d location=%+v err=%v", w.Code, loc, err)
 	}
 }

@@ -3,7 +3,6 @@ package workspace
 import (
 	"fmt"
 	"net/url"
-	"path/filepath"
 	"strings"
 
 	"canvasexpertse/internal/domain"
@@ -14,7 +13,10 @@ import (
 // or the origin already matches. A populated different-origin configuration is
 // left alone and reports changed=false.
 func SyncInstance(root, origin string) (changed bool, err error) {
-	path := filepath.Join(root, "context", "courses.md")
+	path, err := ResolveTeacherPath(root, "context/courses.md")
+	if err != nil {
+		return false, err
+	}
 	var config domain.CourseConfig
 	body, err := ReadDocument(path, &config)
 	if err != nil {
@@ -54,7 +56,7 @@ func OriginMismatchMessage(configured, saved string) string {
 // when it cannot be read.
 func ConfiguredInstance(root string) string {
 	var config domain.CourseConfig
-	if _, err := ReadDocument(filepath.Join(root, "context", "courses.md"), &config); err != nil {
+	if _, err := ReadTeacherDocument(root, "context/courses.md", &config); err != nil {
 		return ""
 	}
 	return config.Instance

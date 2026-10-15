@@ -87,11 +87,11 @@ func TestUnavailableSyncShowsPathAndKeepsSettingsCorrectionForm(t *testing.T) {
 	}
 	page := hubGet(h, "/settings?section=connections").Body.String()
 	if !strings.Contains(page, "Unavailable") || !strings.Contains(page, syncRoot) || !strings.Contains(page, `name="sync_root" value="`+syncRoot+`"`) {
-		t.Fatal("unavailable Sync path or correction control is missing")
+		t.Fatal("unavailable UserSync path or correction control is missing")
 	}
 	home := hubGet(h, "/").Body.String()
 	if !strings.Contains(home, "Unavailable") || !strings.Contains(home, syncRoot) || !strings.Contains(home, "will not fall back") {
-		t.Fatal("home summary must show unavailable Sync and its configured path")
+		t.Fatal("home summary must show unavailable UserSync and its configured path")
 	}
 	if strings.Contains(home, "Local only") {
 		t.Fatal("home summary must not imply fallback to local rules")
@@ -99,10 +99,10 @@ func TestUnavailableSyncShowsPathAndKeepsSettingsCorrectionForm(t *testing.T) {
 	test := hubPost(h, "/rules/test", url.Values{"request_secret": {h.secret}, "sync_root": {t.TempDir()}}, h.origin)
 	result := hubGet(h, test.Header().Get("Location")).Body.String()
 	if !strings.Contains(result, "Saved teacher-rules folder test: Unavailable") || !strings.Contains(result, syncRoot) || !strings.Contains(result, "will not fall back") {
-		t.Fatal("testing an unavailable Sync folder must preserve its saved authority and explain the failure")
+		t.Fatal("testing an unavailable UserSync folder must preserve its saved authority and explain the failure")
 	}
 	if _, _, err := readGrading(h.root); err == nil || !strings.Contains(err.Error(), "unavailable") {
-		t.Fatalf("grading read fell back to stale Install copy: %v", err)
+		t.Fatalf("grading read fell back to stale UserInstall copy: %v", err)
 	}
 	if w := hubPost(h, "/rules-location", url.Values{"request_secret": {"wrong"}, "sync_root": {""}}, h.origin); w.Code != 403 {
 		t.Fatal("rules location accepted wrong secret")
@@ -116,7 +116,7 @@ func TestHomeShowsResolvedLocalLocations(t *testing.T) {
 	h := newTestHub()
 	h.root = makeWorkspace(t)
 	page := hubGet(h, "/").Body.String()
-	if !strings.Contains(page, "Local only") || !strings.Contains(page, "Your teaching rules are kept on this PC. Add a Sync folder only if you want to share them with another PC.") {
+	if !strings.Contains(page, "Local only") || !strings.Contains(page, "Your teacher setup is kept on this PC. Add a UserSync folder to preserve reusable setup for another PC.") {
 		t.Fatal("home summary missing local rules status")
 	}
 	if strings.Contains(page, `action="/rules-location"`) {
@@ -222,11 +222,11 @@ func TestPlaybookReplaceUsesActiveSyncAndArchivesThere(t *testing.T) {
 	h.root = makeWorkspace(t)
 	addMissingSeed(h.root)
 	syncRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(h.root, "playbooks", "score.md"), []byte("custom Install version"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(h.root, "playbooks", "score.md"), []byte("custom UserInstall version"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if w := hubPost(h, "/rules-location", url.Values{"request_secret": {"nonce"}, "sync_root": {syncRoot}}, h.origin); w.Code != 303 {
-		t.Fatalf("enable Sync: %d", w.Code)
+		t.Fatalf("enable UserSync: %d", w.Code)
 	}
 	active := filepath.Join(syncRoot, "playbooks", "score.md")
 	if err := os.WriteFile(active, []byte("custom shared version"), 0o644); err != nil {
@@ -243,7 +243,7 @@ func TestPlaybookReplaceUsesActiveSyncAndArchivesThere(t *testing.T) {
 	if b, _ := os.ReadFile(old[0]); string(b) != "custom shared version" {
 		t.Fatal("wrong authority was archived")
 	}
-	if b, _ := os.ReadFile(filepath.Join(h.root, "playbooks", "score.md")); string(b) != "custom Install version" {
+	if b, _ := os.ReadFile(filepath.Join(h.root, "playbooks", "score.md")); string(b) != "custom UserInstall version" {
 		t.Fatal("inactive local copy changed")
 	}
 }
@@ -262,13 +262,13 @@ func TestBindingCustomizedSyncOffersComparisonWithoutReplacing(t *testing.T) {
 	}
 	form := url.Values{"request_secret": {"nonce"}, "sync_root": {syncRoot}}
 	if w := hubPost(h, "/rules-location", form, h.origin); w.Code != 303 {
-		t.Fatalf("bind existing Sync: %d", w.Code)
+		t.Fatalf("bind existing UserSync: %d", w.Code)
 	}
-	if !strings.Contains(h.flash, "seed-managed instructions in Sync differ") || !strings.Contains(h.flash, "Settings → Files") {
+	if !strings.Contains(h.flash, "seed-managed instructions in UserSync differ") || !strings.Contains(h.flash, "Settings → Files") {
 		t.Fatalf("missing adoption notice: %q", h.flash)
 	}
 	if got := readString(t, custom); got != "teacher setup preferences" {
-		t.Fatalf("binding replaced customized Sync file: %q", got)
+		t.Fatalf("binding replaced customized UserSync file: %q", got)
 	}
 	if got := readString(t, filepath.Join(syncRoot, "AGENTS.md")); got != "teacher's existing instructions" {
 		t.Fatalf("binding replaced existing AGENTS: %q", got)
@@ -285,17 +285,17 @@ func TestBindingEmptySyncInitializesWithoutAdoptionNotice(t *testing.T) {
 	syncRoot := t.TempDir()
 	form := url.Values{"request_secret": {"nonce"}, "sync_root": {syncRoot}}
 	if w := hubPost(h, "/rules-location", form, h.origin); w.Code != 303 {
-		t.Fatalf("bind empty Sync: %d", w.Code)
+		t.Fatalf("bind empty UserSync: %d", w.Code)
 	}
 	if strings.Contains(h.flash, "seed-managed instructions") {
-		t.Fatalf("empty Sync should initialize cleanly: %q", h.flash)
+		t.Fatalf("empty UserSync should initialize cleanly: %q", h.flash)
 	}
 	if rows := playbookRows(h.root); len(rows) == 0 {
-		t.Fatal("comparison rows missing after empty Sync initialization")
+		t.Fatal("comparison rows missing after empty UserSync initialization")
 	} else {
 		for _, row := range rows {
 			if row.Replaceable && row.State != "same" {
-				t.Fatalf("empty Sync seed %s = %s, want same", row.Path, row.State)
+				t.Fatalf("empty UserSync seed %s = %s, want same", row.Path, row.State)
 			}
 		}
 	}
@@ -329,7 +329,7 @@ func TestGuideUsesSixNativeExpandableTopicsAndExplainsStorageScopes(t *testing.T
 	if strings.Contains(body, `popovertarget=`) || !strings.Contains(body, `<details class="card guide-topic"`) {
 		t.Fatal("guide topics should use native details disclosures")
 	}
-	for _, want := range []string{"Source", "Install", "Sync", "provider carries", "Student information and work stay in Install"} {
+	for _, want := range []string{"Dev", "UserInstall", "UserSync", "provider carries", "Grading and planning session files stay in UserInstall"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("guide missing storage distinction %q", want)
 		}
@@ -340,7 +340,7 @@ func TestHomeRoutesCanvasAndSyncActionsToExistingSettingsAndChecks(t *testing.T)
 	h := newTestHub()
 	h.root = makeWorkspace(t)
 	body := hubGet(h, "/").Body.String()
-	for _, want := range []string{`href="/settings?section=connections">Connection</a>`, `href="/settings?section=connections#rules">Choose Sync folder</a>`} {
+	for _, want := range []string{`href="/settings?section=connections">Connection</a>`, `href="/settings?section=connections#rules">Choose UserSync folder</a>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Home missing action %q", want)
 		}
@@ -349,13 +349,13 @@ func TestHomeRoutesCanvasAndSyncActionsToExistingSettingsAndChecks(t *testing.T)
 		t.Error("Home offers a saved-folder test while rules are on this PC")
 	}
 	if w := hubPost(h, "/rules-location", url.Values{"request_secret": {"nonce"}, "sync_root": {t.TempDir()}}, h.origin); w.Code != 303 {
-		t.Fatalf("bind Sync: %d", w.Code)
+		t.Fatalf("bind UserSync: %d", w.Code)
 	}
 	h.flash, h.flashErr = "", ""
 	body = hubGet(h, "/").Body.String()
 	for _, want := range []string{`action="/rules/test"`, `name="request_secret" value="nonce"`, `name="sync_root"`} {
 		if !strings.Contains(body, want) {
-			t.Errorf("Home with Sync missing %q", want)
+			t.Errorf("Home with UserSync missing %q", want)
 		}
 	}
 }

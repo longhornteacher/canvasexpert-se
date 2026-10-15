@@ -2,7 +2,7 @@
 
 The judgment calls are yours; the Engine pulls work, does the arithmetic and posts. What the teacher's words mean, the review page and how to report are in `AGENTS.md`.
 
-Read this playbook and grading/calendar references through their logical MCP paths or from the effective teacher-rules root (Install by default, configured Sync otherwise). Student notes, course configuration, packets, drafts and commands stay in Install. If a shared reference is unavailable, explain that file's problem without reading an inactive local copy; continue independent work that has its needed evidence.
+Read this playbook and grading/calendar references through their logical MCP paths or from the effective teacher-rules root (UserInstall by default, configured UserSync otherwise). Student notes and course configuration use that same authority. Packets, drafts and commands stay in UserInstall. Contact JSON is private and must not be read for scoring. If a shared reference is unavailable, explain that file's problem without reading an inactive local copy; continue independent work that has its needed evidence.
 
 ## Pull
 

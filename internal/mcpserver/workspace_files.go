@@ -36,7 +36,7 @@ type AssetWriteInput struct {
 }
 
 func (s *Server) registerWorkspaceTools(server *mcp.Server) {
-	addReadTool(server, "list_workspace_files", "Discover allowed workspace files and directories. Hidden, private and Engine paths are excluded; results use logical workspace-relative paths and include Install/rules authority metadata.", func(_ context.Context, _ *mcp.CallToolRequest, in ListFilesInput) (TextOutput, error) {
+	addReadTool(server, "list_workspace_files", "Discover allowed workspace files and directories. Hidden, private and Engine paths are excluded; results use logical workspace-relative paths and include UserInstall/rules authority metadata.", func(_ context.Context, _ *mcp.CallToolRequest, in ListFilesInput) (TextOutput, error) {
 		return s.listWorkspaceFiles(in)
 	})
 	addActionTool(server, "write_workspace_file", "Save teacher instructions, context or playbooks through the active authority with SHA-256 conflict protection. Returns authority metadata. Never writes to Canvas.", true, func(_ context.Context, _ *mcp.CallToolRequest, in WorkspaceWriteInput) (TextOutput, error) {
@@ -350,7 +350,7 @@ func (s *Server) listWorkspaceFiles(in ListFilesInput) (TextOutput, error) {
 					}
 				}
 			} else {
-				listingError = fmt.Sprintf("read Sync rules directory %s: %v", location.RulesRoot, readErr)
+				listingError = fmt.Sprintf("read UserSync rules directory %s: %v", location.RulesRoot, readErr)
 			}
 		}
 		for _, name := range []string{"context", "playbooks", "courses"} {
@@ -373,7 +373,7 @@ func (s *Server) listWorkspaceFiles(in ListFilesInput) (TextOutput, error) {
 			candidates = append(candidates, candidate{requestedRoot, p})
 		} else {
 			// Preserve the original caller path through confinement before using
-			// the normalized logical directory name for Sync routing.
+			// the normalized logical directory name for UserSync routing.
 			if _, err := s.safePath(in.Path); err != nil {
 				return TextOutput{}, err
 			}

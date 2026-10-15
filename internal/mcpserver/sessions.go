@@ -90,7 +90,7 @@ func (s *Server) trackReusedHub(pageURL string) (TextOutput, error) {
 	}
 	s.sessions[task.id] = task
 	s.mu.Unlock()
-	result := TextOutput{State: "pending", SessionID: task.id, URL: pageURL, Text: "Reusing the running private hub for this Install. It remains open independently of this agent session; ask the teacher to open " + pageURL + ". Never fetch the page contents through MCP."}
+	result := TextOutput{State: "pending", SessionID: task.id, URL: pageURL, Text: "Reusing the running private hub for this UserInstall. It remains open independently of this agent session; ask the teacher to open " + pageURL + ". Never fetch the page contents through MCP."}
 	return result, nil
 }
 
@@ -267,7 +267,7 @@ func (t *reviewTask) status() (TextOutput, error) {
 	case <-t.done:
 		if t.external && t.kind == "hub" {
 			result.State = "pending"
-			result.Text = "Reusing the running private hub for this Install. It remains open independently of this agent session. Ask the teacher to open " + t.url + ". Never fetch the page contents through MCP."
+			result.Text = "Reusing the running private hub for this UserInstall. It remains open independently of this agent session. Ask the teacher to open " + t.url + ". Never fetch the page contents through MCP."
 			result.URL = t.url
 			return result, nil
 		}

@@ -7,10 +7,11 @@ CanvasExpert-SE is an independent, locally installed tool. It uses a teacher's C
 | Information | Location and access |
 | --- | --- |
 | Canvas address and PAT | Windows Credential Manager on the local computer. Enter the PAT only in the private local setup form. It is not placed in client registration, workspace files or agent output. |
-| Student identity mapping and runtime state | Install's private `.cse/` directory, excluded from the ordinary MCP file tools. |
-| Pulled student work, attachments and drafts | Local Install. Task evidence read by an AI assistant enters that client's context and is handled under that provider's settings and policies. |
-| Teacher instructions and preferences | Install by default; optional configured Sync for shared teacher rules. The selected cloud storage provider synchronizes Sync. Student-specific configuration and work stay in Install. |
-| Client connection settings | The selected client configuration or locally prepared extension. These reference Install's Engine and contain no Canvas PAT. |
+| Student identity mapping, roster and private contacts | The active setup authority's `.cse/` directory: UserInstall by default, configured UserSync otherwise. Excluded from ordinary MCP file tools. |
+| Machine and session runtime state | Local UserInstall; credentials remain in Windows Credential Manager. |
+| Pulled student work, attachments and drafts | Local UserInstall. Task evidence read by an AI assistant enters that client's context and is handled under that provider's settings and policies. |
+| Reusable teacher setup | UserInstall by default; optional configured UserSync for instructions, preferences, course selections and student aliases/settings/notes. The selected cloud storage provider synchronizes UserSync; grading/planning work stays local. |
+| Client connection settings | The selected client configuration or locally prepared extension. These reference UserInstall's Engine and contain no Canvas PAT. |
 
 Pseudonymous student references reduce routine identity exposure. They do not make all material anonymous: student writing, attachments, teacher context and read-only Canvas API responses can include real names. Use an AI account and storage arrangements approved for the data you will handle. Private setup and student-editor pages are for the teacher, not the agent.
 
@@ -26,4 +27,4 @@ Include the Engine version and revision, affected workflow, a minimal synthetic 
 
 ## Supported versions
 
-The current 1.0 beta line is the active development target. Older experimental builds have no promised security maintenance. Report issues against the latest beta where practical, while preserving your existing Install and unsent work. See [the release policy](docs/releasing.md) for version identity and updates.
+The current 1.0 beta line is the active development target. Older experimental builds have no promised security maintenance. Report issues against the latest beta where practical, while preserving your existing UserInstall and unsent work. See [the release policy](docs/releasing.md) for version identity and updates.

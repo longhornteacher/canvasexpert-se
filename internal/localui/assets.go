@@ -1,6 +1,7 @@
 package localui
 
 import (
+	"canvasexpertse/internal/workspace"
 	"embed"
 	"html/template"
 	"net/http"
@@ -31,11 +32,27 @@ var (
 )
 
 var pageFuncs = template.FuncMap{
+	"contactRows": func(ref string, parents []workspace.ParentContact) []contactRow {
+		if len(parents) == 0 {
+			parents = []workspace.ParentContact{{}}
+		}
+		rows := []contactRow{}
+		for i, parent := range parents {
+			rows = append(rows, contactRow{Ref: ref, Index: i, ParentContact: parent})
+		}
+		return rows
+	},
 	"pageCSS":   func() template.CSS { return pageCSS },
 	"reviewCSS": func() template.CSS { return reviewCSS },
 	// nav arguments are internal route labels, never request data.
 	"nav": func(primary, secondary string) template.HTML { return template.HTML(hubNavFor(primary, secondary)) },
 	"inc": func(i int) int { return i + 1 },
+}
+
+type contactRow struct {
+	Ref   string
+	Index int
+	workspace.ParentContact
 }
 
 // pageTemplate parses templates/<name>.html once at init. Hub pages name their

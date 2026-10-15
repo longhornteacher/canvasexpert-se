@@ -1,4 +1,4 @@
-// Package doctor provides fixed, local-only Install diagnostics shared by the
+// Package doctor provides fixed, local-only UserInstall diagnostics shared by the
 // CLI and MCP adapter. It does not inspect student work or client settings.
 package doctor
 
@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -62,7 +61,7 @@ type hubCheckFunc func(string) bool
 func runMode(root, exe, build string, offline bool, loadCredential func() (platform.Credential, error), credentialSelfTest func() error, liveCheck liveCheckFunc, hubCheck hubCheckFunc) Report {
 	r := Report{InstallRoot: root, Checks: make([]Check, 0, 8)}
 	if st, err := os.Stat(exe); err != nil || st.IsDir() {
-		r.add("engine", "fail", "Running Engine identity is unavailable; executable: "+exe+"; build: "+build, "Run the Engine from the extracted Install and retry.")
+		r.add("engine", "fail", "Running Engine identity is unavailable; executable: "+exe+"; build: "+build, "Run the Engine from the extracted UserInstall and retry.")
 	} else {
 		r.add("engine", "pass", "Executable: "+exe+"; build: "+build, "")
 	}
@@ -94,17 +93,17 @@ func runMode(root, exe, build string, offline bool, loadCredential func() (platf
 	if offline {
 		r.add("hub", "not_verified", "Local hub discovery skipped by --offline.", "Run cse doctor without --offline to check for a running hub.")
 	} else if hubCheck(root) {
-		r.add("hub", "pass", "A healthy hub for this Install answered its non-secret identity check.", "")
+		r.add("hub", "pass", "A healthy hub for this UserInstall answered its non-secret identity check.", "")
 	} else {
-		r.add("hub", "not_verified", "No healthy same-Install hub was found; discovery may be absent or stale.", "Run cse ui to open the Install hub.")
+		r.add("hub", "not_verified", "No healthy same-UserInstall hub was found; discovery may be absent or stale.", "Run cse ui to open the UserInstall hub.")
 	}
 	if st, err := os.Stat(root); err != nil || !st.IsDir() {
-		r.add("install", "fail", "Install directory is not readable: "+root, "Choose the extracted Install directory and retry.")
+		r.add("install", "fail", "UserInstall directory is not readable: "+root, "Choose the extracted UserInstall directory and retry.")
 	} else if f, err := os.Open(root); err != nil {
-		r.add("install", "fail", "Install directory cannot be read: "+root, "Check local folder access.")
+		r.add("install", "fail", "UserInstall directory cannot be read: "+root, "Check local folder access.")
 	} else {
 		_ = f.Close()
-		r.add("install", "pass", "Install directory is readable: "+root, "")
+		r.add("install", "pass", "UserInstall directory is readable: "+root, "")
 	}
 
 	loc, locErr := workspace.GetRulesLocation(root)
@@ -134,7 +133,7 @@ func runMode(root, exe, build string, offline bool, loadCredential func() (platf
 	}
 
 	var config domain.CourseConfig
-	_, err := workspace.ReadDocument(filepath.Join(root, "context", "courses.md"), &config)
+	_, err := workspace.ReadTeacherDocument(root, "context/courses.md", &config)
 	if err != nil {
 		r.add("course_config", "fail", "context/courses.md could not be parsed: "+err.Error(), "Repair its schema and course entries, then retry.")
 	} else if len(config.Courses) == 0 {
@@ -151,7 +150,7 @@ func runMode(root, exe, build string, offline bool, loadCredential func() (platf
 		case errors.Is(credErr, platform.ErrNoCredential):
 			r.add("saved_origin", "not_configured", "No Canvas credential is saved on this machine; origin consistency is not applicable.", "Use cse setup when ready to connect.")
 		case credErr != nil && strings.Contains(credErr.Error(), "requires Windows"):
-			r.add("saved_origin", "not_verified", "Saved credential origin cannot be checked on this platform.", "Run this check on the Windows Install machine.")
+			r.add("saved_origin", "not_verified", "Saved credential origin cannot be checked on this platform.", "Run this check on the Windows UserInstall machine.")
 		case credErr != nil:
 			r.add("saved_origin", "fail", "Saved Canvas credential could not be read; no credential data was displayed.", "Check Windows Credential Manager access, then retry.")
 		case sameOrigin(credential.Origin, config.Instance):
@@ -163,7 +162,7 @@ func runMode(root, exe, build string, offline bool, loadCredential func() (platf
 
 	if err := credentialSelfTest(); err != nil {
 		if strings.Contains(err.Error(), "requires Windows") {
-			r.add("credential_round_trip", "not_verified", "Native dummy credential round trip is supported on Windows only.", "Run this check on the Windows Install machine.")
+			r.add("credential_round_trip", "not_verified", "Native dummy credential round trip is supported on Windows only.", "Run this check on the Windows UserInstall machine.")
 		} else {
 			r.add("credential_round_trip", "fail", "Native dummy credential round trip failed: "+err.Error(), "Check Windows Credential Manager access, then retry.")
 		}
@@ -203,7 +202,7 @@ func (r Report) JSON() ([]byte, error) { return json.MarshalIndent(r, "", "  ") 
 
 func (r Report) Human() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Install: %s\n", r.InstallRoot)
+	fmt.Fprintf(&b, "UserInstall: %s\n", r.InstallRoot)
 	for _, check := range r.Checks {
 		fmt.Fprintf(&b, "[%s] %s: %s\n", strings.ToUpper(check.Status), check.Name, check.Explanation)
 		if check.Action != "" {

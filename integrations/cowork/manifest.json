@@ -18,8 +18,8 @@
   "user_config": {
     "workspace": {
       "type": "directory",
-      "title": "CE-SE installation folder",
-      "description": "Select the local CE-SE installation containing context/courses.md and the teacher's playbooks. This is independent of the agent's synced workspace. The Canvas credential stays in Windows Credential Manager.",
+      "title": "CE-SE UserInstall folder",
+      "description": "Select the extracted CanvasExpert-SE folder (UserInstall) containing engine/cse.exe and context/courses.md. It runs in place; do not select Dev or UserSync. Optional UserSync holds reusable teacher setup. The Canvas credential stays in Windows Credential Manager.",
       "required": true
     }
   }

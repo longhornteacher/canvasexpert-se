@@ -76,11 +76,11 @@ func TestCourseSaveVisibleToConnectedMCPWithoutRestart(t *testing.T) {
 		t.Fatal("course save lost teacher notes")
 	}
 
-	// This MCP client remains connected as the hub enables Sync and saves the
+	// This MCP client remains connected as the hub enables UserSync and saves the
 	// grading voice. Its next logical read must use the active shared authority.
 	syncRoot := t.TempDir()
 	if w := hubPost(h, "/rules-location", url.Values{"request_secret": {"nonce"}, "sync_root": {syncRoot}}, h.origin); w.Code != http.StatusSeeOther {
-		t.Fatalf("select Sync rules: %d", w.Code)
+		t.Fatalf("select UserSync rules: %d", w.Code)
 	}
 	voiceForm := url.Values{"request_secret": {"nonce"}, "voice": {"Shared hub voice."}, "feedback_guidance": {"Shared grading preference."}}
 	if w := hubPost(h, "/grading", voiceForm, h.origin); w.Code != http.StatusSeeOther {
@@ -96,9 +96,9 @@ func TestCourseSaveVisibleToConnectedMCPWithoutRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(grading.Text, "mode: sync") || !strings.Contains(grading.Text, "authority_root: "+syncRoot) || !strings.Contains(grading.Text, "Shared hub voice.") || !strings.Contains(grading.Text, "Shared grading preference.") {
-		t.Fatalf("connected MCP did not read the hub's active Sync file: %s", grading.Text)
+		t.Fatalf("connected MCP did not read the hub's active UserSync file: %s", grading.Text)
 	}
 	if saved := read(); len(saved) != 2 || saved[0].Current || !saved[1].Current {
-		t.Fatalf("Sync changed local course configuration: %+v", saved)
+		t.Fatalf("UserSync changed local course configuration: %+v", saved)
 	}
 }

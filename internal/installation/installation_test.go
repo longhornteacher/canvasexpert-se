@@ -13,7 +13,8 @@ import (
 )
 
 func TestCoworkPackageTargetsSelectedInstallWithoutSecondEngine(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "Install with spaces")
+	t.Setenv("PATH", "")
+	root := filepath.Join(t.TempDir(), "UserInstall with spaces")
 	os.MkdirAll(filepath.Join(root, "engine"), 0700)
 	f, err := os.Create(filepath.Join(root, "engine", "CanvasExpert-SE-Cowork.mcpb"))
 	if err != nil {
@@ -53,7 +54,7 @@ func TestCoworkPackageTargetsSelectedInstallWithoutSecondEngine(t *testing.T) {
 			t.Fatal(err)
 		}
 		if cfg["user_config"] != nil {
-			t.Fatal("bound extension still asks for an Install")
+			t.Fatal("bound extension still asks for a UserInstall")
 		}
 		args := cfg["server"].(map[string]any)["mcp_config"].(map[string]any)["args"].([]any)
 		if len(args) != 2 || args[0] != "--install" || args[1] != root {
@@ -64,7 +65,7 @@ func TestCoworkPackageTargetsSelectedInstallWithoutSecondEngine(t *testing.T) {
 
 func TestWorkRegistrationPreservesAndRepeatsWithoutCLI(t *testing.T) {
 	t.Setenv("PATH", "")
-	root := filepath.Join(t.TempDir(), "Install with spaces")
+	root := filepath.Join(t.TempDir(), "UserInstall with spaces")
 	exe := filepath.Join(root, "engine", "cse.exe")
 	path := filepath.Join(t.TempDir(), "custom codex home", "config.toml")
 	os.MkdirAll(filepath.Dir(path), 0700)
@@ -101,7 +102,7 @@ func TestWorkRegistrationPreservesAndRepeatsWithoutCLI(t *testing.T) {
 }
 
 func TestRegisterReportsSelectedInstallRoot(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "Extracted Install")
+	root := filepath.Join(t.TempDir(), "Extracted UserInstall")
 	for path, contents := range map[string]string{
 		filepath.Join(root, "engine", "cse.exe"):     "engine",
 		filepath.Join(root, "AGENTS.md"):             "instructions",
@@ -120,13 +121,13 @@ func TestRegisterReportsSelectedInstallRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.InstallRoot != root {
-		t.Fatalf("helper returned Install root %q, want %q", result.InstallRoot, root)
+		t.Fatalf("helper returned UserInstall root %q, want %q", result.InstallRoot, root)
 	}
 }
 
 func TestWorkReplacementAndMalformedPreservation(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "New Install")
-	old := filepath.Join(t.TempDir(), "Old Install")
+	root := filepath.Join(t.TempDir(), "New UserInstall")
+	old := filepath.Join(t.TempDir(), "Old UserInstall")
 	path := filepath.Join(t.TempDir(), "config.toml")
 	_, err := registerWork(old, filepath.Join(old, "engine", "cse.exe"), path, false)
 	if err != nil {
@@ -136,7 +137,7 @@ func TestWorkReplacementAndMalformedPreservation(t *testing.T) {
 	_, err = registerWork(root, filepath.Join(root, "engine", "cse.exe"), path, false)
 	var required *ReplacementRequired
 	if !errors.As(err, &required) || required.ExistingInstall != old {
-		t.Fatalf("wrong Install not explained: %v", err)
+		t.Fatalf("wrong UserInstall not explained: %v", err)
 	}
 	after, _ := os.ReadFile(path)
 	if string(before) != string(after) {
@@ -164,7 +165,7 @@ func TestConfiguredCodexHome(t *testing.T) {
 }
 
 func TestCoworkLaunchOutcomesAreNarrowAndHonest(t *testing.T) {
-	prepared := Result{Client: "cowork", ExtensionPath: `C:\Install with spaces\engine\prepared.mcpb`, NextAction: "Manual extension path."}
+	prepared := Result{Client: "cowork", ExtensionPath: `C:\UserInstall with spaces\engine\prepared.mcpb`, NextAction: "Manual extension path."}
 	const exe = `C:\Users\T\AppData\Local\AnthropicClaude\claude.exe`
 	found := func() (string, bool) { return exe, true }
 	missing := func() (string, bool) { return "", false }
@@ -218,7 +219,8 @@ func TestCompactEngineVersionKeepsBuildIdentityOnly(t *testing.T) {
 }
 
 func TestAntigravityRegistrationPreservesReplacesAndRepeats(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "Install with spaces")
+	t.Setenv("PATH", "")
+	root := filepath.Join(t.TempDir(), "UserInstall with spaces")
 	exe := filepath.Join(root, "engine", "cse.exe")
 	path := filepath.Join(t.TempDir(), ".gemini", "config", "mcp_config.json")
 	os.MkdirAll(filepath.Dir(path), 0700)
@@ -247,12 +249,12 @@ func TestAntigravityRegistrationPreservesReplacesAndRepeats(t *testing.T) {
 	if err != nil || again.State != "settings-already-saved" || again.BackupPath != "" {
 		t.Fatalf("repeat install: %+v %v", again, err)
 	}
-	other := filepath.Join(t.TempDir(), "Other Install")
+	other := filepath.Join(t.TempDir(), "Other UserInstall")
 	before, _ := os.ReadFile(path)
 	_, err = registerAntigravity(other, filepath.Join(other, "engine", "cse.exe"), path, false)
 	var required *ReplacementRequired
 	if !errors.As(err, &required) || !samePath(required.ExistingInstall, root) {
-		t.Fatalf("different Install not explained: %v", err)
+		t.Fatalf("different UserInstall not explained: %v", err)
 	}
 	if after, _ := os.ReadFile(path); string(after) != string(before) {
 		t.Fatal("changed before explicit replacement")
@@ -283,7 +285,7 @@ func TestAntigravityRegistrationCreatesMissingConfig(t *testing.T) {
 }
 
 func TestRegisterAutoConnectsOnlyDetectedClients(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "Extracted Install")
+	root := filepath.Join(t.TempDir(), "Extracted UserInstall")
 	for path, contents := range map[string]string{
 		filepath.Join(root, "engine", "cse.exe"):     "engine",
 		filepath.Join(root, "AGENTS.md"):             "instructions",

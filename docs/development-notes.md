@@ -2,7 +2,7 @@
 
 Practical notes for working in this checkout. Authority stays with the root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`.
 
-This checkout is **Source**. **Install** is the local runnable CE-SE folder and the teacher's actual files. **Sync** is optional teacher/agent cloud storage, independent of Install; CE-SE does not automatically synchronize them. Development agents use Source for product work and Install for teacher tasks. MCP workspace paths refer to Install.
+This checkout is **Dev**. **UserInstall** is the local runnable CE-SE folder and the teacher's actual files. **UserSync** is optional teacher/agent cloud storage, independent of UserInstall; CE-SE does not automatically synchronize them. Development agents use Dev for product work and UserInstall for teacher tasks. MCP workspace paths refer to UserInstall.
 
 ## Checkout and shell
 

@@ -17,7 +17,7 @@ type CourseRoster struct {
 }
 
 func ReadRosters(root string) ([]CourseRoster, error) {
-	path, err := ConstrainPath(root, filepath.Join(".cse", "rosters.json"))
+	path, err := ResolveRulesPath(root, filepath.Join(".cse", "rosters.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ func ReadRosters(root string) ([]CourseRoster, error) {
 }
 
 func SaveRosters(root string, rosters []CourseRoster) error {
-	path, err := ConstrainPath(root, filepath.Join(".cse", "rosters.json"))
+	path, err := ResolveRulesPath(root, filepath.Join(".cse", "rosters.json"))
 	if err != nil {
 		return err
 	}

@@ -1,5 +1,5 @@
 // cse-mcp-launcher contains no Engine. It forwards stdio to the authoritative
-// executable in the selected Install, so Engine upgrades need no extension update.
+// executable in the selected UserInstall, so Engine upgrades need no extension update.
 package main
 
 import (
@@ -11,15 +11,15 @@ import (
 )
 
 func main() {
-	root := flag.String("install", "", "CE-SE Install directory")
+	root := flag.String("install", "", "CE-SE UserInstall directory")
 	flag.Parse()
 	if *root == "" || !filepath.IsAbs(*root) || flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "An absolute CE-SE Install is required")
+		fmt.Fprintln(os.Stderr, "An absolute CE-SE UserInstall is required")
 		os.Exit(2)
 	}
 	exe := filepath.Join(*root, "engine", "cse.exe")
 	if _, err := os.Stat(filepath.Join(*root, "context", "courses.md")); err != nil {
-		fmt.Fprintln(os.Stderr, "Selected Install is missing context/courses.md")
+		fmt.Fprintln(os.Stderr, "Selected UserInstall is missing context/courses.md")
 		os.Exit(2)
 	}
 	cmd := exec.Command(exe, "--workspace", *root, "mcp")

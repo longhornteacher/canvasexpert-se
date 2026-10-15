@@ -138,7 +138,10 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 		return report, err
 	}
 	var notes domain.StudentNotes
-	notePath := filepath.Join(s.Root, "context", "students.md")
+	notePath, err := workspace.ResolveTeacherPath(s.Root, "context/students.md")
+	if err != nil {
+		return report, err
+	}
 	if _, e := os.Stat(notePath); e == nil {
 		if _, err = workspace.ReadDocument(notePath, &notes); err != nil {
 			return report, err

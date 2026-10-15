@@ -22,4 +22,4 @@ Teacher-selected standards, curriculum references or existing teaching instructi
 
 Desired tone, length and emphasis (specific feedback voice also belongs in `grading.md`):
 
-Preserve existing teacher instructions when adding information. Record course-specific differences clearly. Do not import another teacher's course names, ELA7 policies or Silver/Red/Blue tags. Student-specific accommodations belong in local `students.md`; credentials and private identity mappings never belong here. This profile follows the active teacher-rules location, Install by default or configured Sync.
+Preserve existing teacher instructions when adding information. Record course-specific differences clearly. Do not import another teacher's course names, ELA7 policies or Silver/Red/Blue tags. Student-specific accommodations belong in the active `context/students.md`; credentials and private identity mappings never belong here. This profile follows the active teacher-rules location, UserInstall by default or configured UserSync.

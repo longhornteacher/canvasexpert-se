@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	embedded "canvasexpertse"
@@ -128,14 +127,14 @@ func (h *Hub) saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	config.Aliases = r.PostForm.Get("aliases") == "on"
-	if err = workspace.WriteDocument(filepath.Join(h.root, "context", "courses.md"), config, body); err != nil {
+	if err = workspace.WriteTeacherDocument(h.root, "context/courses.md", config, body); err != nil {
 		h.settingsSection(w, 400, "Could not save workspace settings.", "", "preferences")
 		return
 	}
 	h.redirect(w, r, "/settings?section=preferences&clear=prefs", "Settings saved.", "")
 }
 
-// saveRulesLocation explicitly binds this Install to a teacher-selected Sync
+// saveRulesLocation explicitly binds this UserInstall to a teacher-selected UserSync
 // directory. The shared rules helper validates and initializes the directory
 // before persisting the local binding.
 func (h *Hub) saveRulesLocation(w http.ResponseWriter, r *http.Request) {
@@ -149,15 +148,15 @@ func (h *Hub) saveRulesLocation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if loc.Mode != "local" {
-			h.redirect(w, r, settingsDraftURL("connections", r.PostForm.Get("sync_root")), "", "Teacher rules did not return to Install; check the saved rules location and try again.")
+			h.redirect(w, r, settingsDraftURL("connections", r.PostForm.Get("sync_root")), "", "Teacher rules did not return to UserInstall; check the saved rules location and try again.")
 			return
 		}
-		h.redirect(w, r, "/settings?section=connections&clear=sync", "Teacher rules now use Install.", "")
+		h.redirect(w, r, "/settings?section=connections&clear=sync", "Teacher rules now use UserInstall.", "")
 		return
 	}
 	syncRoot := strings.TrimSpace(r.PostForm.Get("sync_root"))
 	if r.PostForm.Get("action") == "save" && syncRoot == "" {
-		h.redirect(w, r, settingsDraftURL("connections", syncRoot), "", "Choose a Sync folder first, or select Use Install.")
+		h.redirect(w, r, settingsDraftURL("connections", syncRoot), "", "Choose a UserSync folder first, or select Use UserInstall.")
 		return
 	}
 	loc, err := workspace.SetRulesLocation(h.root, syncRoot, embedded.WorkspaceTemplate, "workspace-template")
@@ -166,14 +165,14 @@ func (h *Hub) saveRulesLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if loc.Mode == "sync" {
-		notice := "Teacher rules now use Sync at " + loc.RulesRoot + ". Courses, students and work remain in Install."
+		notice := "Teacher setup now uses UserSync at " + loc.RulesRoot + ". Saved course setup, student settings, notes and contact details follow you between PCs. Grading and planning session files remain in UserInstall."
 		if adoption := seedAdoptionNotice(h.root); adoption != "" {
 			notice += " " + adoption
 		}
 		h.redirect(w, r, "/settings?section=connections&clear=sync", notice, "")
 		return
 	}
-	h.redirect(w, r, "/settings?section=connections&clear=sync", "Teacher rules now use Install.", "")
+	h.redirect(w, r, "/settings?section=connections&clear=sync", "Teacher rules now use UserInstall.", "")
 }
 
 func settingsDraftURL(section, candidate string) string {
@@ -187,7 +186,7 @@ func inspectRulesLocation(root string) (workspace.RulesLocation, string, string,
 		return loc, "Unavailable", "The saved teacher-rules location is unavailable. CE-SE will not fall back to another copy.", err
 	}
 	if loc.Mode != "sync" {
-		return loc, "Local only", "Your teaching rules are kept on this PC. Add a Sync folder only if you want to share them with another PC.", nil
+		return loc, "Local only", "Your teacher setup is kept on this PC. Add a UserSync folder to preserve reusable setup for another PC.", nil
 	}
 	directory, err := os.Open(loc.RulesRoot)
 	if err == nil {
@@ -195,9 +194,9 @@ func inspectRulesLocation(root string) (workspace.RulesLocation, string, string,
 		_ = directory.Close()
 	}
 	if err != nil && !errors.Is(err, io.EOF) {
-		return loc, "Unavailable", "The saved Sync folder cannot be read. CE-SE will not fall back to another copy.", fmt.Errorf("configured Sync rules directory %s cannot be read: %w", loc.RulesRoot, err)
+		return loc, "Unavailable", "The saved UserSync folder cannot be read. CE-SE will not fall back to another copy.", fmt.Errorf("configured UserSync rules directory %s cannot be read: %w", loc.RulesRoot, err)
 	}
-	return loc, "Available", "Your teaching rules are shared through " + loc.RulesRoot + ". Your sync app (OneDrive or Google Drive) keeps other PCs up to date; CE-SE does not check that delivery.", nil
+	return loc, "Available", "Your teacher setup is shared through " + loc.RulesRoot + ". Your sync app (OneDrive or Google Drive) keeps other PCs up to date; CE-SE does not check that delivery.", nil
 }
 
 func (h *Hub) browseRules(w http.ResponseWriter, r *http.Request) {
@@ -205,7 +204,7 @@ func (h *Hub) browseRules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.root == "" {
-		http.Error(w, "Open the hub from an Install before selecting teacher rules.", http.StatusBadRequest)
+		http.Error(w, "Open the hub from a UserInstall before selecting teacher rules.", http.StatusBadRequest)
 		return
 	}
 	candidate := r.PostForm.Get("sync_root")
@@ -236,7 +235,7 @@ func (h *Hub) testRulesLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.root == "" {
-		http.Error(w, "Open the hub from an Install before testing teacher rules.", http.StatusBadRequest)
+		http.Error(w, "Open the hub from a UserInstall before testing teacher rules.", http.StatusBadRequest)
 		return
 	}
 	_, state, _, err := inspectRulesLocation(h.root)

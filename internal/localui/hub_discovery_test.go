@@ -20,16 +20,16 @@ func TestHubDiscoveryRequiresHealthyMatchingInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, ok := hubcoord.Find(root); !ok || got.URL != server.URL {
-		t.Fatalf("same Install did not reuse healthy hub: %+v %v", got, ok)
+		t.Fatalf("same UserInstall did not reuse healthy hub: %+v %v", got, ok)
 	}
 	if _, ok := hubcoord.Find(other); ok {
-		t.Fatal("different Install reused hub")
+		t.Fatal("different UserInstall reused hub")
 	}
 	if err := hubcoord.Write(other, server.URL); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := hubcoord.Find(other); ok {
-		t.Fatal("endpoint for another Install passed identity check")
+		t.Fatal("endpoint for another UserInstall passed identity check")
 	}
 	server.Close()
 	if _, ok := hubcoord.Find(root); ok {

@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"math/rand/v2"
 	"net/http"
-	"path/filepath"
 
 	"time"
 
@@ -59,7 +58,7 @@ func (h *Hub) fetchRoster(ctx context.Context, courseID int64) ([]workflow.Enrol
 
 func (h *Hub) readConfig() (domain.CourseConfig, string, error) {
 	var config domain.CourseConfig
-	body, err := workspace.ReadDocument(filepath.Join(h.root, "context", "courses.md"), &config)
+	body, err := workspace.ReadTeacherDocument(h.root, "context/courses.md", &config)
 	return config, body, err
 }
 

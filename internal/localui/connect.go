@@ -104,7 +104,7 @@ func connectionResultLabel(result installation.Result) string {
 	case "settings-saved":
 		return labelApp(result.Client) + " registration saved"
 	case "settings-already-saved":
-		return labelApp(result.Client) + " already points to this Install"
+		return labelApp(result.Client) + " already points to this UserInstall"
 	case "extension-ready":
 		switch result.CoworkLaunchOutcome {
 		case "launch_requested":

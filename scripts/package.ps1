@@ -3,7 +3,7 @@ param(
     [Parameter()]
     [string]$GoExecutable = 'go',
     [Parameter()][switch]$Release,
-    # Where the current output set is published. Defaults to Source's dist/; tests may point elsewhere.
+    # Where the current output set is published. Defaults to Dev's dist/; tests may point elsewhere.
     [Parameter()][string]$OutputDirectory
 )
 
@@ -13,8 +13,8 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $templateRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'workspace-template'))
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repoRoot 'dist' }
 $distRoot = [IO.Path]::GetFullPath($OutputDirectory)
-# Single-folder package: the starter workspace with the Engine in engine\. Extracting it
-# with Windows' Extract All gives a CanvasExpert-SE folder the teacher points the agent at.
+# User distribution: the starter workspace with the Engine in engine\. Extract into
+# the chosen local folder; that folder is UserInstall and runs in place, with no second copy.
 # The teacher download carries the product version so archived copies are self-describing.
 $zipName = "CanvasExpert-SE-$([IO.File]::ReadAllText((Join-Path $repoRoot 'VERSION')).Trim()).zip"
 $packagePath = [IO.Path]::GetFullPath((Join-Path $distRoot $zipName))

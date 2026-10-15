@@ -207,7 +207,7 @@ func (p *probe) serviceWorkflow(ctx context.Context, command string, args []stri
 		return e
 	}
 	var config domain.CourseConfig
-	if _, e = workspace.ReadDocument(filepath.Join(root, "context", "courses.md"), &config); e != nil {
+	if _, e = workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
 		return e
 	}
 	if config.Instance != allowedOrigin {

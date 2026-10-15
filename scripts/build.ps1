@@ -1,4 +1,4 @@
-# Ordinary Source build. There is one producer: package.ps1 compiles once, runs the checks and
+# Ordinary Dev build. There is one producer: package.ps1 compiles once, runs the checks and
 # assembles the current dist/ output (cse.exe, cse-mcp-launcher.exe, CanvasExpert-SE-<VERSION>.zip, SHA256SUMS.txt).
 [CmdletBinding()]
 param(

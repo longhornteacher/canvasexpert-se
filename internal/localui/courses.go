@@ -3,7 +3,6 @@ package localui
 import (
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -137,7 +136,7 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 		h.redirect(w, r, "/courses", "", "Not saved: nicknames must be unique and file-safe (no / \\ : * ? \" < > |). "+err.Error())
 		return
 	}
-	if err = workspace.WriteDocument(filepath.Join(h.root, "context", "courses.md"), config, body); err != nil {
+	if err = workspace.WriteTeacherDocument(h.root, "context/courses.md", config, body); err != nil {
 		h.redirect(w, r, "/courses", "", "Could not save context/courses.md.")
 		return
 	}

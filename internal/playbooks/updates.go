@@ -160,7 +160,7 @@ func Replace(root, rel, expectedSHA256 string, now time.Time) error {
 // created by Replace. It never scans or labels arbitrary teacher folders.
 func writeInactiveMarker(dir string) error {
 	const marker = "INACTIVE.txt"
-	content := "Preserved history: this folder contains a previous CE-SE instruction or playbook copy. It is inactive and is not a source of current rules. Read the active AGENTS.md from the effective teacher-rules location (Install by default, configured Sync otherwise). To compare and adopt a current seed, use Settings → Your playbooks and context or `cse playbooks status`, then explicitly replace only the selected file.\n"
+	content := "Preserved history: this folder contains a previous CE-SE instruction or playbook copy. It is inactive and is not a source of current rules. Read the active AGENTS.md from the effective teacher-rules location (UserInstall by default, configured UserSync otherwise). To compare and adopt a current seed, use Settings → Your playbooks and context or `cse playbooks status`, then explicitly replace only the selected file.\n"
 	p := filepath.Join(dir, marker)
 	if _, err := os.Lstat(p); err == nil {
 		return nil

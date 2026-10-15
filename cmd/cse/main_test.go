@@ -110,7 +110,7 @@ func TestRulesLocationCommandConfiguresAndReportsAuthority(t *testing.T) {
 	}
 	var out, progress bytes.Buffer
 	if code := run(context.Background(), []string{"--workspace", root, "rules-location", "--sync", syncRoot}, &out, &progress); code != 0 {
-		t.Fatalf("set Sync: %d %s", code, progress.String())
+		t.Fatalf("set UserSync: %d %s", code, progress.String())
 	}
 	for _, want := range []string{"mode: sync", "install_root: " + root, "rules_root: " + syncRoot} {
 		if !strings.Contains(out.String(), want) {
@@ -127,7 +127,7 @@ func TestRulesLocationCommandConfiguresAndReportsAuthority(t *testing.T) {
 	out.Reset()
 	progress.Reset()
 	if code := run(context.Background(), []string{"--workspace", root, "rules-location"}, &out, &progress); code != 0 || !strings.Contains(out.String(), "mode: sync") || !strings.Contains(progress.String(), "unavailable") {
-		t.Fatalf("missing Sync status: %d %s %s", code, out.String(), progress.String())
+		t.Fatalf("missing UserSync status: %d %s %s", code, out.String(), progress.String())
 	}
 	if err := os.Rename(syncRoot+".offline", syncRoot); err != nil {
 		t.Fatal(err)

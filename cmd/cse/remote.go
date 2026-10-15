@@ -86,7 +86,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 	}
 	var config domain.CourseConfig
-	if _, e := workspace.ReadDocument(filepath.Join(root, "context", "courses.md"), &config); e != nil {
+	if _, e := workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
 		return fail(inputError(e), progress)
 	}
 	credential, e := platform.LoadCredential()

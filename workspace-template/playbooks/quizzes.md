@@ -4,7 +4,7 @@ Use this for any Canvas New Quiz: auto-scored items, written items (`ESSAY`, `FI
 
 Before design, read `context/teaching-profile.md`, `context/grading.md` and relevant teacher references. Apply this teacher's grade/subject, instructional priorities, standards and feedback guidance; ask only for missing details that matter to this quiz. Never adopt developer examples as this teacher's policy.
 
-Read teacher rules and design references from the effective teacher-rules location (Install by default, configured Sync otherwise), using logical MCP paths where available. Run commands and save course drafts, assets and outcomes in Install. Sync holds rules; its provider carries their edits between PCs.
+Read teacher rules and design references from the effective teacher-rules location (UserInstall by default, configured UserSync otherwise), using logical MCP paths where available. Run commands and save course drafts, assets and outcomes in UserInstall. UserSync holds rules; its provider carries their edits between PCs.
 
 New Quizzes are supported for regular authoring and use, including written-response scoring with `score.md`. Work within the limits below; pending live or student-view verification is not a prohibition or a preliminary test required for each task.
 

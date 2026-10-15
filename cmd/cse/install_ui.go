@@ -35,7 +35,7 @@ func newInstallUIWarning(err error) installUIWarning {
 	var w installUIWarning
 	w.UIWarning.Code = "webui_not_started"
 	w.UIWarning.Message = err.Error() + ". Registration and local checks are reported separately."
-	w.UIWarning.Fallback = "Open webui.cmd in this Install folder to start the private WebUI, then retry the connection from the hub."
+	w.UIWarning.Fallback = "Open webui.cmd in this UserInstall folder to start the private WebUI, then retry the connection from the hub."
 	return w
 }
 
@@ -72,7 +72,7 @@ func launchInstallUI(ctx context.Context, root, client string) (installUIReady, 
 				continue
 			}
 			if json.Unmarshal(data, &ready) != nil || ready.URL == "" || hubcoord.CanonicalRoot(ready.InstallRoot) != hubcoord.CanonicalRoot(root) {
-				return ready, errors.New("private WebUI startup returned an unexpected Install")
+				return ready, errors.New("private WebUI startup returned an unexpected UserInstall")
 			}
 			return ready, nil
 		}
@@ -100,7 +100,7 @@ func reportInstallUI(ctx context.Context, root, client string, launch func(conte
 	data, _ := json.Marshal(ready)
 	fmt.Fprintln(out, string(data))
 	if ready.Reused {
-		fmt.Fprintln(progress, "Reused the running private WebUI for this Install; it remains open independently of this install call.")
+		fmt.Fprintln(progress, "Reused the running private WebUI for this UserInstall; it remains open independently of this install call.")
 	} else {
 		fmt.Fprintln(progress, "Private WebUI launched; enter Canvas credentials only there.")
 	}

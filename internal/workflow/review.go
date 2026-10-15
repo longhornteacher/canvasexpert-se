@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"canvasexpertse/internal/domain"
@@ -196,7 +195,7 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 		}
 		if courseID > 0 {
 			var config domain.CourseConfig
-			if _, e = workspace.ReadDocument(filepath.Join(root, "context", "courses.md"), &config); e != nil {
+			if _, e = workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
 				return "", e
 			}
 			configured, err := (&Service{Config: config}).Course(course)

@@ -157,9 +157,9 @@ func TestDoctorUnavailableConfiguredSyncReportsRulesFailure(t *testing.T) {
 	writeCourses(t, root, []domain.Course{{Nickname: "ELA", ID: 1}})
 	syncRoot := filepath.Join(t.TempDir(), "offline-sync")
 	if _, err := workspace.SetRulesLocation(root, syncRoot, nil, ""); err == nil {
-		t.Fatal("expected missing Sync directory to be rejected")
+		t.Fatal("expected missing UserSync directory to be rejected")
 	}
-	// Bind directly as an existing configured Install would be bound; doctor
+	// Bind directly as an existing configured UserInstall would be bound; doctor
 	// must report the unavailable authority rather than use local copies.
 	if err := os.MkdirAll(filepath.Join(root, ".cse"), 0700); err != nil {
 		t.Fatal(err)
@@ -169,8 +169,8 @@ func TestDoctorUnavailableConfiguredSyncReportsRulesFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := run(root, os.Args[0], "synthetic", passedLoad, passedSelfTest)
-	if find(r, "active_rules").Status != "fail" || find(r, "course_config").Status != "pass" || find(r, "saved_origin").Status != "pass" {
-		t.Fatalf("unavailable Sync did not remain an independent result: %+v", r)
+	if find(r, "active_rules").Status != "fail" || find(r, "course_config").Status != "fail" || find(r, "saved_origin").Status != "not_verified" {
+		t.Fatalf("unavailable UserSync did not remain an independent result: %+v", r)
 	}
 }
 

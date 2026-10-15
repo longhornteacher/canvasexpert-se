@@ -1,4 +1,4 @@
-// Package installlog stores a small, sanitized operational history in Install.
+// Package installlog stores a small, sanitized operational history in UserInstall.
 package installlog
 
 import (

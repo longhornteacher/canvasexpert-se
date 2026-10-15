@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -234,8 +233,6 @@ const notesBody = "Edited from the CE-SE hub Students page. Each note names a st
 
 func teacherFile(root, rel string) (string, error) { return workspace.ResolveTeacherPath(root, rel) }
 
-func notesPath(root string) string { return filepath.Join(root, "context", "students.md") }
-
 // readGrading tolerates a missing file so a fresh workspace still shows the form.
 func readGrading(root string) (domain.GradingConfig, string, error) {
 	config := domain.GradingConfig{Schema: 1}
@@ -252,7 +249,7 @@ func readGrading(root string) (domain.GradingConfig, string, error) {
 
 func readNotes(root string) (domain.StudentNotes, string, error) {
 	notes := domain.StudentNotes{Schema: 1}
-	body, err := workspace.ReadDocument(notesPath(root), &notes)
+	body, err := workspace.ReadTeacherDocument(root, "context/students.md", &notes)
 	if errors.Is(err, os.ErrNotExist) {
 		return domain.StudentNotes{Schema: 1}, notesBody, nil
 	}
@@ -306,7 +303,7 @@ func saveNotes(root string, edited map[string]string) error {
 		}
 	}
 	notes.Notes = kept
-	return workspace.WriteDocument(notesPath(root), &notes, body)
+	return workspace.WriteTeacherDocument(root, "context/students.md", &notes, body)
 }
 
 func (h *Hub) saveGrading(w http.ResponseWriter, r *http.Request) {

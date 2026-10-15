@@ -21,7 +21,7 @@ import (
 
 func TestWorkspaceBoundaries(t *testing.T) {
 	s := &Server{root: t.TempDir()}
-	for _, path := range []string{"courses/../context/outside.md", "courses/.private/file.md", "courses/engine/file.md", ".cse/students.csv", "engine/cse.exe"} {
+	for _, path := range []string{"courses/../context/outside.md", "courses/.private/file.md", "courses/engine/file.md", ".cse/students.csv", ".cse/student-contacts.json", "engine/cse.exe"} {
 		if _, err := s.readablePath(path); err == nil {
 			t.Errorf("readablePath accepted %q", path)
 		}
@@ -196,7 +196,7 @@ func TestSharedRulesRouteAcrossInstallRoots(t *testing.T) {
 	}
 	content, err = os.ReadFile(localCourses)
 	if err != nil || string(content) != "local course config" {
-		t.Fatalf("course config left Install: %q, %v", content, err)
+		t.Fatalf("course config left UserInstall: %q, %v", content, err)
 	}
 	if _, err := b.readablePath(".cse/rules-location.json"); err == nil {
 		t.Fatal("private binding became readable")
@@ -326,7 +326,7 @@ func TestMCPSharedRulesRefreshesAcrossConnectedClients(t *testing.T) {
 	call(b, "list_workspace_files", map[string]any{"path": "playbooks/"}, true)
 	fullListing := call(b, "list_workspace_files", map[string]any{}, false)
 	if !strings.Contains(fullListing, "availability_error") || strings.Contains(fullListing, "playbooks/setup.md") {
-		t.Fatalf("missing Sync listing fell back to inactive local rules: %s", fullListing)
+		t.Fatalf("missing UserSync listing fell back to inactive local rules: %s", fullListing)
 	}
 	if err := os.Rename(syncRoot+".offline", syncRoot); err != nil {
 		t.Fatal(err)

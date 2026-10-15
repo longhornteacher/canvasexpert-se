@@ -1,4 +1,4 @@
-// Package installation connects one extracted Install to a selected local client.
+// Package installation connects one extracted UserInstall to a selected local client.
 // It never reads credentials or calls Canvas.
 package installation
 
@@ -54,7 +54,7 @@ type Availability struct {
 type ReplacementRequired struct{ ExistingInstall, InstallRoot string }
 
 func (e *ReplacementRequired) Error() string {
-	return fmt.Sprintf("CE-SE is already registered against %s. Replacing that connection with %s needs an explicit replacement choice; neither Install's files will be changed", e.ExistingInstall, e.InstallRoot)
+	return fmt.Sprintf("CE-SE is already registered against %s. Replacing that connection with %s needs an explicit replacement choice; neither UserInstall's files will be changed", e.ExistingInstall, e.InstallRoot)
 }
 
 func workConfig() string {
@@ -88,7 +88,7 @@ func validate(root string) (string, string, error) {
 	for _, p := range []string{exe, filepath.Join(root, "AGENTS.md"), filepath.Join(root, "context", "courses.md")} {
 		st, err := os.Stat(p)
 		if err != nil || st.IsDir() {
-			return "", "", fmt.Errorf("selected Install is missing %s", p)
+			return "", "", fmt.Errorf("selected UserInstall is missing %s", p)
 		}
 	}
 	return root, exe, nil
@@ -214,7 +214,7 @@ func registerWork(root, exe, path string, replace bool) (Result, error) {
 			return result, &ReplacementRequired{ExistingInstall: oldRoot, InstallRoot: root}
 		}
 		if samePath(oldRoot, root) {
-			// Preserve teacher-selected tool/approval/env settings for this same Install.
+			// Preserve teacher-selected tool/approval/env settings for this same UserInstall.
 			unchanged := reflect.DeepEqual(oldMap["command"], wanted["command"]) && reflect.DeepEqual(oldMap["args"], wanted["args"])
 			if unchanged {
 				result.State = "settings-already-saved"
@@ -348,7 +348,7 @@ func writeFile(path string, data []byte) error {
 	return os.Rename(name, path)
 }
 
-// prepareCowork binds the packaged thin launcher to this Install. The client,
+// prepareCowork binds the packaged thin launcher to this UserInstall. The client,
 // not CE-SE, owns extension trust, installation and destination tool discovery.
 func prepareCowork(root string) (Result, error) {
 	source := filepath.Join(root, "engine", "CanvasExpert-SE-Cowork.mcpb")
@@ -463,7 +463,7 @@ func Check(ctx context.Context, root string) (CheckResult, error) {
 		}
 		if call.name == "read_workspace_file" {
 			if !strings.Contains(replyText(response), "install_root: "+root+"\n") {
-				return result, errors.New("local instructions check returned a different Install")
+				return result, errors.New("local instructions check returned a different UserInstall")
 			}
 			result.InstructionsRead = true
 		} else {
@@ -471,7 +471,7 @@ func Check(ctx context.Context, root string) (CheckResult, error) {
 				InstallRoot string `json:"install_root"`
 			}
 			if json.Unmarshal([]byte(replyText(response)), &metadata) != nil || !samePath(metadata.InstallRoot, root) {
-				return result, errors.New("configured courses check returned a different Install")
+				return result, errors.New("configured courses check returned a different UserInstall")
 			}
 			result.ConfiguredCoursesRead = true
 		}

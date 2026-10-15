@@ -60,7 +60,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   quiz-points COURSE QUIZ [N=PTS ...] List a New Quiz's questions, or set question N to PTS points
   api PATH                      Read-only Canvas API GET when no command fits; prints the JSON
   validate FILE                 Validate a workspace document locally
-  doctor [--json] [--offline]   Check this Install; authenticated Canvas and hub checks unless offline
+  doctor [--json] [--offline]   Check this UserInstall; authenticated Canvas and hub checks unless offline
   version [--json]              Print version and build information
   review FILE [COURSE]  Open a local page where the teacher reviews scores (results file), a new assignment (create document) or a quiz (QuizForge file plus COURSE), revises some, and posts or creates the approved ones; exits when finished and prints what was posted, revised and held
   help [formats|fields|examples] Print this help, the file-format reference, Canvas field limits, or the synthetic examples (no Canvas requests)
@@ -185,7 +185,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		locationFlags := flag.NewFlagSet("rules-location", flag.ContinueOnError)
 		locationFlags.SetOutput(progress)
 		syncRoot := locationFlags.String("sync", "", "explicit shared teacher-rules directory")
-		local := locationFlags.Bool("local", false, "use this Install as the teacher-rules authority")
+		local := locationFlags.Bool("local", false, "use this UserInstall as the teacher-rules authority")
 		if e := locationFlags.Parse(args); e != nil {
 			return 2
 		}
@@ -295,7 +295,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		installFlags := flag.NewFlagSet("install", flag.ContinueOnError)
 		installFlags.SetOutput(progress)
 		client := installFlags.String("client", "", "local destination: auto (default, every detected app), all, work, cowork or antigravity")
-		replace := installFlags.Bool("replace-existing", false, "explicitly replace a CE-SE connection targeting another Install")
+		replace := installFlags.Bool("replace-existing", false, "explicitly replace a CE-SE connection targeting another UserInstall")
 		checkOnly := installFlags.Bool("check-only", false, "check bundled local MCP without changing client settings")
 		noUI := installFlags.Bool("no-ui", false, "do not launch private setup (advanced/testing)")
 		inspect := installFlags.Bool("inspect", false, "inspect client configuration-directory hints without changes")
@@ -392,7 +392,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		setupRoot, rootErr := runtimeRoot(*rootOpt)
 		if rootErr == nil {
 			var config domain.CourseConfig
-			_, err := workspace.ReadDocument(filepath.Join(setupRoot, "context", "courses.md"), &config)
+			_, err := workspace.ReadTeacherDocument(setupRoot, "context/courses.md", &config)
 			if err != nil {
 				return fail(inputError(err), progress)
 			}

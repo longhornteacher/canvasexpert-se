@@ -27,17 +27,17 @@ func TestRulesLocationClassificationAndLocalDefault(t *testing.T) {
 	if err != nil || loc.Mode != "local" || loc.InstallRoot != loc.RulesRoot {
 		t.Fatalf("local location = %#v, %v", loc, err)
 	}
-	for _, p := range []string{"AGENTS.md", "CLAUDE.md", "README.txt", "guide.md", "playbooks/score.md", "context/grading.md"} {
+	for _, p := range []string{"AGENTS.md", "CLAUDE.md", "README.txt", "guide.md", "playbooks/score.md", "context/grading.md", "context/courses.md", "context/students.md", "Context/Courses.MD"} {
 		if !IsSharedRulePath(p) {
 			t.Errorf("%s should be shared", p)
 		}
 	}
-	for _, p := range []string{"README.md", "install-log.jsonl", "context/courses.md", "context/students.md", "courses/a.md", "engine/cse.exe", "playbooks/tool.exe", "context/helper.cmd", ".cse/rules-location.json", "drafts/a.md"} {
+	for _, p := range []string{"README.md", "install-log.jsonl", "courses/a.md", "engine/cse.exe", "playbooks/tool.exe", "context/helper.cmd", ".cse/rules-location.json", "drafts/a.md"} {
 		if IsSharedRulePath(p) {
 			t.Errorf("%s should remain local", p)
 		}
 	}
-	for _, p := range []string{"README.MD", "Context/Courses.MD", "context/Students.md", "CONTEXT/courses.md"} {
+	for _, p := range []string{"README.MD"} {
 		if IsSharedRulePath(p) {
 			t.Errorf("case variant %s must remain local", p)
 		}
@@ -60,7 +60,7 @@ func TestInstallLogStaysLocalWhenBindingSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(syncRoot, "install-log.jsonl")); !os.IsNotExist(err) {
-		t.Fatal("Install operational log copied to Sync")
+		t.Fatal("UserInstall operational log copied to UserSync")
 	}
 }
 
@@ -88,18 +88,18 @@ func TestSetRulesLocationInitializesCustomizedRulesAndRestoresLocal(t *testing.T
 	for p, want := range map[string]string{"AGENTS.md": "my instructions", "README.txt": "my guide", "playbooks/score.md": "custom score", "context/grading.md": "voice"} {
 		b, err := os.ReadFile(filepath.Join(syncRoot, filepath.FromSlash(p)))
 		if err != nil || string(b) != want {
-			t.Fatalf("Sync %s=%q, %v", p, b, err)
+			t.Fatalf("UserSync %s=%q, %v", p, b, err)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(syncRoot, "context", "students.md")); !os.IsNotExist(err) {
-		t.Fatalf("private students entered Sync: %v", err)
+	if _, err := os.Stat(filepath.Join(syncRoot, "context", "students.md")); err != nil {
+		t.Fatalf("student notes missing from UserSync: %v", err)
 	}
 	bootstrap, err := os.ReadFile(filepath.Join(root, "AGENTS.md"))
-	if err != nil || !strings.Contains(string(bootstrap), "Teacher rules are configured in Sync") || !strings.Contains(string(bootstrap), "Never read, list or search `.cse/`") || !strings.Contains(string(bootstrap), "context/students.md") {
+	if err != nil || !strings.Contains(string(bootstrap), "Teacher rules are configured in UserSync") || !strings.Contains(string(bootstrap), "Never read, list or search `.cse/`") || !strings.Contains(string(bootstrap), "student settings") {
 		t.Fatalf("bootstrap %q, %v", bootstrap, err)
 	}
-	// Edits through the active route resolve to Sync; switching back carries
-	// the latest shared version into Install and preserves Sync.
+	// Edits through the active route resolve to UserSync; switching back carries
+	// the latest shared version into UserInstall and preserves UserSync.
 	p, err := ResolveTeacherPath(root, "playbooks/score.md")
 	if err != nil {
 		t.Fatal(err)
@@ -119,7 +119,7 @@ func TestSetRulesLocationInitializesCustomizedRulesAndRestoresLocal(t *testing.T
 		t.Fatalf("restored score %q, %v", b, err)
 	}
 	if _, err := os.Stat(filepath.Join(syncRoot, "playbooks", "score.md")); err != nil {
-		t.Fatalf("Sync removed: %v", err)
+		t.Fatalf("UserSync removed: %v", err)
 	}
 }
 
@@ -170,12 +170,11 @@ func TestMissingConfiguredSyncErrorsWithoutFallback(t *testing.T) {
 	if err == nil || loc.Mode != "sync" || loc.RulesRoot != missing {
 		t.Fatalf("location %#v, error %v", loc, err)
 	}
-	local, err := ResolveTeacherPath(root, "context/courses.md")
-	if err != nil || local != filepath.Join(root, "context", "courses.md") {
-		t.Fatalf("local course path unavailable: %s %v", local, err)
+	if _, err := ResolveTeacherPath(root, "context/courses.md"); err == nil {
+		t.Fatal("unavailable UserSync fell back to inactive course setup")
 	}
 	if _, err := ResolveTeacherPath(root, "AGENTS.md"); err == nil || !strings.Contains(err.Error(), "unavailable") {
-		t.Fatalf("expected unavailable Sync error, got %v", err)
+		t.Fatalf("expected unavailable UserSync error, got %v", err)
 	}
 }
 
@@ -198,14 +197,14 @@ func TestSwitchingSyncRootsInitializesFromActiveSharedRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Initial binding to an existing authority archived and replaced local
-	// instructions; the next empty Sync must use the active shared authority.
+	// instructions; the next empty UserSync must use the active shared authority.
 	if _, err := SetRulesLocation(root, second, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	for p, want := range map[string]string{"AGENTS.md": "shared instructions", "playbooks/score.md": "shared score"} {
 		b, err := os.ReadFile(filepath.Join(second, filepath.FromSlash(p)))
 		if err != nil || string(b) != want {
-			t.Fatalf("new Sync %s = %q, %v", p, b, err)
+			t.Fatalf("new UserSync %s = %q, %v", p, b, err)
 		}
 	}
 }
@@ -289,14 +288,14 @@ func TestSetRulesLocationRejectsSyncJunctionIntoInstall(t *testing.T) {
 		}
 	}
 	if _, err := SetRulesLocation(root, link, nil, ""); err == nil {
-		t.Fatal("accepted Sync root that resolves to Install")
+		t.Fatal("accepted UserSync root that resolves to UserInstall")
 	}
 }
 
 func TestSetRulesLocationRequiresAbsoluteAndBindingRejectsRelative(t *testing.T) {
 	root := makeRulesInstall(t)
 	if _, err := SetRulesLocation(root, "relative-sync", nil, ""); err == nil {
-		t.Fatal("accepted relative Sync path")
+		t.Fatal("accepted relative UserSync path")
 	}
 	if err := writeRulesBinding(root, "relative-sync"); err != nil {
 		t.Fatal(err)
@@ -315,7 +314,7 @@ func TestUnavailableSyncCannotSeedEmptyReplacement(t *testing.T) {
 	}
 	newSync := t.TempDir()
 	if _, err := SetRulesLocation(root, newSync, nil, ""); err == nil {
-		t.Fatal("initialized empty Sync from inactive local rules")
+		t.Fatal("initialized empty UserSync from inactive local rules")
 	}
 	loc, err := GetRulesLocation(root)
 	if err == nil || loc.RulesRoot != missing {

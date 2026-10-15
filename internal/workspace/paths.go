@@ -8,7 +8,8 @@ import (
 	"strings"
 )
 
-// ResolveRuntimeRoot binds a bundled Engine to its own CE-SE installation.
+// ResolveRuntimeRoot binds a bundled Engine to its extracted UserInstall.
+// The ZIP runs in place: setup registers this root without copying it elsewhere.
 // Development and extension binaries have no adjacent teacher configuration and
 // retain the explicit root (or CLI working-directory discovery).
 func ResolveRuntimeRoot(explicit, start, executable string) (string, error) {

@@ -122,7 +122,7 @@ func TestConnectionPageExplainsDestinationVerificationAndMissingInstall(t *testi
 	h := newTestHub()
 	w := hubGet(h, "/connect")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "does not check the destination app") || !strings.Contains(w.Body.String(), "webui.cmd") || !strings.Contains(w.Body.String(), `aria-current="page">Agent</a>`) {
-		t.Fatal("missing honest destination or Install guidance")
+		t.Fatal("missing honest destination or UserInstall guidance")
 	}
 }
 
@@ -132,7 +132,7 @@ func TestConnectionOutcomeLabelsDescribeLocalEvidence(t *testing.T) {
 		want   string
 	}{
 		{installation.Result{State: "settings-saved"}, "Work registration saved"},
-		{installation.Result{State: "settings-already-saved"}, "Work already points to this Install"},
+		{installation.Result{State: "settings-already-saved"}, "Work already points to this UserInstall"},
 		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "launch_requested"}, "Cowork extension prepared; opening was requested"},
 		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "file_revealed"}, "Cowork extension prepared; file shown in File Explorer for manual install"},
 		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "launch_failed"}, "Cowork extension prepared; automatic opening did not work"},

@@ -27,20 +27,20 @@
 </section>
 {{if .Root}}
 <section class="settings-section" id="rules">
-<h2>Where your teaching rules live</h2>
-<p>Your teaching rules are the playbooks, grading habits and preferences the agent follows. Keep them on this PC, or in a Sync folder (OneDrive or Google Drive) to share them with another PC. Courses, students and student work always stay on this PC.</p>
-<p>Now: <b>{{if eq .RulesMode "sync"}}shared Sync folder{{else}}this PC{{end}}</b>{{if .RulesRoot}} · <code>{{.RulesRoot}}</code>{{end}}</p>
+<h2>Where your teacher setup lives</h2>
+<p>Keep reusable teacher setup on this PC, or in a UserSync folder (OneDrive or Google Drive) so you can use it on a replacement PC. This includes instructions, playbooks, preferences, course selections, student aliases/settings/notes and private contact details. Credentials and machine connections are set up separately. Grading and planning session files stay on this PC.</p>
+<p>Now: <b>{{if eq .RulesMode "sync"}}shared UserSync folder{{else}}this PC{{end}}</b>{{if .RulesRoot}} · <code>{{.RulesRoot}}</code>{{end}}</p>
 <p><span class="pill {{if eq .SyncHealth "Available"}}on{{else if eq .SyncHealth "Unavailable"}}off{{end}}">{{.SyncHealth}}</span> {{.SyncHealthNote}}</p>
 {{if .RulesError}}<p class="error" role="alert">{{.RulesError}}</p>{{end}}
-<details><summary>How Install and Sync work</summary>
-<p>Teacher instructions, playbooks, guides and preferences use Install by default or the saved Sync folder. Sync is a local folder; its provider carries changes between computers, and CE-SE does not verify delivery. Courses, students and work stay in Install.</p>
-<p>An empty Sync folder is initialized from current shareable rules. Existing Sync rules become authoritative; local originals are preserved. Use Install copies shared rules back and archives differing local versions.</p>
+<details><summary>How UserInstall and UserSync work</summary>
+<p>Reusable teacher setup uses UserInstall by default or the saved UserSync folder. UserSync is a local folder; its provider carries changes between computers, and CE-SE does not verify delivery. Grading and planning session files stay in UserInstall.</p>
+<p>An empty UserSync folder is initialized from current teacher setup. Existing UserSync data becomes authoritative; newly supported setup files are added only if missing. Local originals are preserved. Use UserInstall copies shared setup back and archives differing local versions.</p>
 </details>
 <form method="post" action="/rules-location?section=connections">
 <input type="hidden" name="request_secret" value="{{.Secret}}">
-<label for="sync_root">Sync folder path</label>
+<label for="sync_root">UserSync folder path</label>
 <div class="inline"><input id="sync_root" name="sync_root" value="{{.SyncRoot}}" maxlength="4000" autocomplete="off"><button type="submit" formaction="/rules/browse" formmethod="post" class="secondary">Browse</button></div>
-<div class="inline"><button type="submit" name="action" value="save">Use this Sync folder</button><button type="submit" name="action" value="local" class="secondary">Keep on this PC</button><button type="submit" formaction="/rules/test" formmethod="post" class="secondary">Test saved folder</button></div>
+<div class="inline"><button type="submit" name="action" value="save">Use this UserSync folder</button><button type="submit" name="action" value="local" class="secondary">Keep on this PC</button><button type="submit" formaction="/rules/test" formmethod="post" class="secondary">Test saved folder</button></div>
 </form>
 </section>
 {{end}}{{end}}
@@ -52,7 +52,7 @@
 {{if .Root}}
 <section class="settings-section voice">
 <h2>Feedback voice</h2>
-<p class="health-note">Teacher rules use {{.RulesMode}}{{if .RulesRoot}} at <code>{{.RulesRoot}}</code>{{end}}. <a href="/settings?section=connections">Manage Install / Sync</a>.</p>
+<p class="health-note">Teacher rules use {{.RulesMode}}{{if .RulesRoot}} at <code>{{.RulesRoot}}</code>{{end}}. <a href="/settings?section=connections">Manage UserInstall / UserSync</a>.</p>
 <p>The agent reads this when it writes feedback or scores work. Each field allows 8,000 characters.</p>
 <form method="post" action="/grading"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="section" value="preferences">
 <label for="voice">How feedback should sound</label>
@@ -75,7 +75,7 @@
 <section id="system" class="settings-section">
 <h2>Engine</h2>
 <p><span class="pill on">{{.Version}}</span> <code>{{.Program}}</code></p>
-<details><summary>CE-SE installation</summary>{{if .Root}}<p><span class="pill on">Found</span> <code>{{.Root}}</code></p><p>Courses, student information, work and the Engine stay here.</p>{{else}}<p><span class="pill off">Not configured</span> Launch with <code>cse --workspace &quot;PATH&quot; ui</code> from an Install.</p>{{end}}</details>
+<details><summary>CE-SE installation</summary>{{if .Root}}<p><span class="pill on">Found</span> <code>{{.Root}}</code></p><p>The Engine, pulled work, drafts and grading/planning sessions stay here. Reusable teacher setup uses this folder or your selected UserSync.</p>{{else}}<p><span class="pill off">Not configured</span> Launch with <code>cse --workspace &quot;PATH&quot; ui</code> from a UserInstall.</p>{{end}}</details>
 <form method="post" action="/quit"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" class="secondary">Quit hub</button></form>
 </section>
 {{end}}

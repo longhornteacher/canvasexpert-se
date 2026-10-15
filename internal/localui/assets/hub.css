@@ -19,3 +19,17 @@ details{margin:.55rem 0}details summary{cursor:pointer;text-underline-offset:.15
 @media(max-width:40rem){body{padding:.5rem}main,main.wide{padding:1rem .8rem;border-radius:.4rem}.hub-header{align-items:flex-start;flex-direction:column;gap:.45rem}.hub-nav{width:100%;gap:.1rem}.hub-nav a{padding:.35rem .5rem}.hub-subnav{gap:.1rem}.cards,.home-status-grid{grid-template-columns:1fr}table.courses{min-width:40rem}.table-scroll{overflow-x:auto}.home-course-list li{align-items:flex-start;flex-direction:column;gap:0}}
 .draft-restored{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:.35rem;padding:.45rem .7rem;background:var(--surface-soft)}.draft-restored button{margin:0}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* Contact editors expand within the roster without stacking every radio label. */
+.students td:has(.student-contacts[open]) { vertical-align: top; }
+.student-contacts { min-width: 27rem; max-width: 32rem; }
+.student-contacts > label { display: block; margin-top: .8rem; }
+.student-contacts > label > input { display: block; width: 100%; box-sizing: border-box; }
+.parent-contact { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin: .8rem 0; padding: .8rem; border: 1px solid var(--border, #ccc); border-radius: .5rem; }
+.parent-contact > label { display: block; margin: 0; }
+.parent-contact > label > input { display: block; width: 100%; min-width: 0; box-sizing: border-box; }
+.parent-contact .contact-preference { display: flex; align-items: center; gap: .6rem; }
+.parent-contact .contact-preference label { display: inline-flex; align-items: center; gap: .2rem; margin: 0; }
+.parent-contact [data-contact-hint], .parent-contact [data-remove-contact] { grid-column: 1 / -1; margin: 0; }
+.parent-contact [data-contact-hint]:empty { display: none; }
+.parent-contact [data-remove-contact] { justify-self: start; }

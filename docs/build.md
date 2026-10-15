@@ -1,10 +1,10 @@
 # Build and package CanvasExpert-SE
 
-**Source** is this development checkout (code, starter templates, generated `dist/`); **Install** is the extracted local CE-SE folder a teacher actually uses, and the internal `workspace` term refers to Install during teacher work. Develop in Source and do teacher work in Install; optional Sync is explained in [ARCHITECTURE.md](../ARCHITECTURE.md).
+**Dev** is this development checkout (code, starter templates, generated `dist/`); **UserInstall** is the extracted local CE-SE folder a teacher actually uses, and the internal `workspace` term refers to UserInstall during teacher work. Develop in Dev and do teacher work in UserInstall; optional UserSync is explained in [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Requirements
 
-The source build targets a portable Windows 11 executable. It needs the exact Go version declared in `go.mod` (currently Go 1.27.1) and PowerShell. The scripts do not install a toolchain, modify `PATH`, or change persistent environment settings. Teachers need neither: the packaged executable runs without Go or any other runtime.
+The source build targets a portable Windows 11 executable. It needs the exact Go version declared in `go.mod` (currently Go 1.27.1) and PowerShell. The scripts do not install a toolchain, modify `PATH`, or change persistent environment settings. Teachers need neither: the packaged executable and native UserSync folder chooser run without Go, PowerShell, a separately installed .NET runtime, PATH changes or admin access.
 
 ## The one producer
 
@@ -24,7 +24,7 @@ The Engine embeds the canonical version from root `VERSION` (currently `1.0.0-be
 
 `dist/` holds these current files (plus any earlier versions' ZIPs you chose to keep):
 
-- `dist/cse.exe`: the Engine used by Source tooling, copied byte-for-byte into the ZIP.
+- `dist/cse.exe`: the Engine used by Dev tooling, copied byte-for-byte into the ZIP.
 - `dist/cse-mcp-launcher.exe`: the thin MCP launcher.
 - `dist/CanvasExpert-SE-<VERSION>.zip` (for example `CanvasExpert-SE-1.0.0-beta.1.zip`): the one teacher download. Rebuilding the same version replaces it; a new version adds a new file and leaves earlier versions in `dist/` as an archive until you delete them.
 - `dist/SHA256SUMS.txt`: checksums.
@@ -35,14 +35,14 @@ No dated duplicates are written; the version in the ZIP name is the only variati
 
 ## Package contents
 
-The ZIP is the single-folder package colleagues get. It has no top-level folder, so Windows' Extract All produces a `CanvasExpert-SE` folder that is the Install. It holds:
+The ZIP is the user distribution produced in Dev. It has no top-level folder: extract it into the chosen local folder, and that folder becomes UserInstall, whatever its name. Windows' Extract All normally suggests the ZIP's base name. Run directly there; first setup connects apps and Canvas without copying the product into another folder. Teachers do not need Dev or anything else from `dist/`. It holds:
 
 - the allowlisted `workspace-template` files, including installation instructions, the teaching profile/starter, `cse.cmd` and the hidden `.claude/settings.json` rule;
 - the Engine at `engine/cse.exe` and the ready Cowork extension at `engine/CanvasExpert-SE-Cowork.mcpb`;
 - `webui.cmd` (from `scripts/package-webui.cmd`) at the root;
 - product `VERSION` and MIT `LICENSE` at the root, with third-party notices under `engine/` (distribution metadata outside the teacher seed).
 
-Privacy and allowlist rules: example files are accepted only when their content explicitly labels them synthetic; the starter settings files must retain their empty-template markers; private `.cse` state, pulled course data, scoring files, build caches and compiler files are never package inputs. Packages ship no Sync binding or teacher data. Course configuration lives at `context/courses.md`, the same path the Engine uses to recognize an Install.
+Privacy and allowlist rules: example files are accepted only when their content explicitly labels them synthetic; the starter settings files must retain their empty-template markers; private `.cse` state, pulled course data, scoring files, build caches and compiler files are never package inputs. Packages ship no UserSync binding or teacher data. Course configuration lives at `context/courses.md`, the same path the Engine uses to recognize a UserInstall.
 
 ZIP entries are written with forward slashes by the script itself, because Windows PowerShell 5.1's `CreateFromDirectory` writes backslashes.
 
@@ -59,4 +59,4 @@ A successful build or ZIP inspection verifies the local build and package, not e
 - [mcp-adapter.md](mcp-adapter.md): MCP adapter tools, client registration and the install journey.
 - [../internal/localui/README.md](../internal/localui/README.md): how WebUI pages are declared and secured.
 - `internal/localui/capabilities.go` and [engine-capabilities.md](engine-capabilities.md): the Capabilities page status data; keep them aligned.
-- [../ARCHITECTURE.md](../ARCHITECTURE.md): Sync and shared teacher rules.
+- [../ARCHITECTURE.md](../ARCHITECTURE.md): UserSync and shared teacher rules.

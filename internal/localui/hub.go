@@ -99,7 +99,7 @@ func seedAdoptionNotice(root string) string {
 	}
 	for _, row := range playbookRows(root) {
 		if row.Replaceable && row.State == "differs" {
-			return "Some seed-managed instructions in Sync differ from this version. Review them in Settings → Files and choose any files to adopt. Nothing was replaced."
+			return "Some seed-managed instructions in UserSync differ from this version. Review them in Settings → Files and choose any files to adopt. Nothing was replaced."
 		}
 	}
 	return ""
@@ -193,7 +193,7 @@ func (h *Hub) quitHub(w http.ResponseWriter, r *http.Request) {
 func (h *Hub) knownOrigin() string {
 	if h.root != "" {
 		var config domain.CourseConfig
-		if _, err := workspace.ReadDocument(filepath.Join(h.root, "context", "courses.md"), &config); err == nil && config.Instance != "" && !strings.Contains(config.Instance, "canvas.example.edu") {
+		if _, err := workspace.ReadTeacherDocument(h.root, "context/courses.md", &config); err == nil && config.Instance != "" && !strings.Contains(config.Instance, "canvas.example.edu") {
 			return config.Instance
 		}
 	}
@@ -339,7 +339,7 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 	}
 }
 
-// wireSetupCallbacks connects the setup form to this hub's state, the Install's
+// wireSetupCallbacks connects the setup form to this hub's state, the UserInstall's
 // course configuration and the install log. Split out so tests can drive the real
 // callbacks with mocked validation and credential storage.
 func wireSetupCallbacks(hub *Hub, version string, output io.Writer) {
