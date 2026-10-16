@@ -329,6 +329,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			}
 		}
 		if !*checkOnly {
+			reportDesktopShortcut(root, ensureDesktopShortcut, out, progress)
 			var results []installation.Result
 			var err error
 			if *client == "auto" {

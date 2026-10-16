@@ -50,6 +50,8 @@ A successful build or ZIP inspection verifies the local build and package, not e
 
 ## WebUI launcher
 
+Ordinary setup creates a **CanvasExpert WebUI** shortcut on the current user's Windows desktop, pointing to the extracted UserInstall's `webui.cmd`. Shortcut creation is independent of app registration and Canvas connection; a failure reports the launcher fallback and does not stop the rest of setup. Repeated setup reuses the shortcut for the same UserInstall and preserves any same-named shortcut targeting another folder.
+
 `webui.cmd` (also `.\scripts\webui.ps1` or `cse ui`) starts the local WebUI. The development launcher rebuilds through the same producer first when any Go source, `go.mod`/`go.sum`, `VERSION`, the workspace template, `engine-docs` or a WebUI template/asset (HTML, CSS, JS) is newer than `dist/cse.exe`, using `.tools/go1.27.1` if present. A source-development launch without a root explains `cse --workspace PATH ui`; the PowerShell launcher also accepts `-Workspace PATH` or `CSE_WORKSPACE`.
 
 ## Where else to look

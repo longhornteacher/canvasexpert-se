@@ -44,14 +44,15 @@ type Hub struct {
 	// loaded tracks the courses refreshed from Canvas during this hub session.
 	loaded map[int64]bool
 	// Test seams; nil means use the saved Canvas credential.
-	listCoursesFn    func(context.Context) ([]workflow.Course, string, error)
-	rosterFn         func(context.Context, int64) ([]workflow.Enrollment, string, error)
-	tagsFn           func(context.Context, int64) (map[int64][]string, string, error)
-	whoamiFn         func(context.Context) (string, error)
-	loadCredentialFn func() (platform.Credential, error)
-	savedOriginFn    func() string
-	forgetFn         func() error
-	pickFolderFn     func(context.Context) (string, error)
+	listCoursesFn     func(context.Context) ([]workflow.Course, string, error)
+	rosterFn          func(context.Context, int64) ([]workflow.Enrollment, string, error)
+	tagsFn            func(context.Context, int64) (map[int64][]string, string, error)
+	whoamiFn          func(context.Context) (string, error)
+	loadCredentialFn  func() (platform.Credential, error)
+	savedOriginFn     func() string
+	forgetFn          func() error
+	pickFolderFn      func(context.Context) (string, error)
+	desktopShortcutFn func(string) (string, error)
 	// canvasUser is the account name from the last successful connection test.
 	canvasUser                                              string
 	setupValidated                                          bool

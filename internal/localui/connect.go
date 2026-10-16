@@ -11,6 +11,7 @@ type connectionData struct {
 	Appearance                                             appearanceData
 	Secret, Root, Message, Notice, Client, ExistingInstall string
 	ResultLabel, CheckLabel                                string
+	ShortcutNotice, ShortcutWarning                        string
 	Result                                                 installation.Result
 	Results                                                []installation.Result
 	Found                                                  installation.Availability
@@ -50,6 +51,21 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 		h.connection.Message, h.connection.Notice = "", ""
 		switch r.PostForm.Get("action") {
 		case "register":
+			client := r.PostForm.Get("client")
+			if client != "" && client != "auto" && client != "work" && client != "cowork" && client != "antigravity" {
+				h.connection.Message = "Choose a supported app."
+				break
+			}
+			createShortcut := h.desktopShortcutFn
+			if createShortcut == nil {
+				createShortcut = installation.EnsureDesktopShortcut
+			}
+			h.connection.ShortcutNotice, h.connection.ShortcutWarning = "", ""
+			if path, err := createShortcut(h.root); err != nil {
+				h.connection.ShortcutWarning = installation.DesktopShortcutWarning(h.root, err)
+			} else {
+				h.connection.ShortcutNotice = "CanvasExpert WebUI desktop shortcut is ready: " + path
+			}
 			h.connection.Result = installation.Result{}
 			h.connection.Results = nil
 			h.connection.ExistingInstall = ""

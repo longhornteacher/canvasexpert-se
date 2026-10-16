@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -147,5 +149,42 @@ func TestConnectionOutcomeLabelsDescribeLocalEvidence(t *testing.T) {
 	}
 	if got := connectionCheckLabel(installation.CheckResult{State: "local-check-failed"}); got != "Local check did not pass" {
 		t.Fatalf("failed local check label = %q", got)
+	}
+}
+
+func TestConnectionShortcutWarningContinuesAndReadOnlyDoesNotCreate(t *testing.T) {
+	h := newTestHub()
+	h.root = makeWorkspace(t)
+	for _, name := range []string{"engine/cse.exe", "AGENTS.md"} {
+		path := filepath.Join(h.root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("CODEX_HOME", t.TempDir())
+	calls := 0
+	h.desktopShortcutFn = func(root string) (string, error) {
+		calls++
+		if root != h.root {
+			t.Fatal("shortcut used wrong UserInstall")
+		}
+		return "", errors.New("fixture Desktop unavailable")
+	}
+	hubGet(h, "/connect")
+	form := url.Values{"request_secret": {"nonce"}, "client": {"invalid"}, "action": {"register"}}
+	hubPost(h, "/connect", form, h.origin)
+	form.Set("action", "check")
+	hubPost(h, "/connect", form, h.origin)
+	if calls != 0 {
+		t.Fatal("read-only or invalid connection action created a shortcut")
+	}
+	form.Set("action", "register")
+	form.Set("client", "work")
+	w := hubPost(h, "/connect", form, h.origin)
+	if calls != 1 || h.connection.Result.State != "settings-saved" || !strings.Contains(w.Body.String(), "fixture Desktop unavailable") || !strings.Contains(w.Body.String(), "webui.cmd") {
+		t.Fatalf("shortcut failure stopped registration or hid warning: %d %+v %s", calls, h.connection.Result, w.Body.String())
 	}
 }

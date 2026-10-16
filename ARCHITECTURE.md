@@ -48,6 +48,8 @@ One UserInstall folder by default. A teacher unzips one **CanvasExpert-SE** fold
 
 UserSync must contain no CE-SE `.cmd` launchers. CE-SE's `cse.cmd` and `webui.cmd` belong in local UserInstall. MCP-connected agents access UserInstall's instructions, playbooks and context through tools; no CE-SE launcher or copy of UserInstall belongs in UserSync. MCP registrations target UserInstall. The optional extension launcher forwards stdio to UserInstall's `engine/cse.exe`; direct registration starts that Engine itself. Old extensions with a separately bundled Engine need explicit replacement through the client.
 
+Ordinary setup creates a per-user **CanvasExpert WebUI** desktop shortcut targeting UserInstall's `webui.cmd`, with UserInstall as its working directory. Windows resolves the actual Desktop location, including redirected desktops. Repeating setup reuses the same shortcut; an existing shortcut for another target is preserved and reported. Shortcut failure is nonfatal and leaves `webui.cmd` available. Read-only setup inspection and checks do not create a shortcut. The shortcut is machine integration, not reusable teacher setup, and moving UserInstall requires reconnecting its paths.
+
 ```text
 Agent (follows a playbook) -> Engine: typed MCP / cse CLI / hub -> feature operation -> shared spine -> Canvas Live
 The Engine and student/course work stay in UserInstall; teacher rules resolve to UserInstall or the explicitly configured UserSync authority.

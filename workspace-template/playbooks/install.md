@@ -30,7 +30,11 @@ Skip this opening if they have already told you what they want. If they only use
 
 > "Connecting now."
 
-Run the helper (see "Run the helper"); with no `--client` it connects every supported app it finds. Report what happened in the teacher's terms:
+Run the helper (see "Run the helper"); with no `--client` it connects every supported app it finds.
+
+The helper also creates the teacher's **CanvasExpert WebUI** desktop shortcut for this folder. When it reports success, tell the teacher they can use that shortcut to reopen CanvasExpert's settings and course/student pages. A shortcut warning does not block the rest of setup: explain it briefly and give `webui.cmd` in this folder as the fallback. Do not claim the shortcut exists when creation failed, and do not replace a shortcut pointing to another folder without the teacher choosing which folder to keep.
+
+Report app connection results in the teacher's terms:
 
 > "I found {Claude, ChatGPT, Antigravity} on your computer and prepared {it / them} to use CanvasExpert! CanvasExpert can also work in {the ones not found}, so if you ever install one, just come back here and I'll connect it too."
 
