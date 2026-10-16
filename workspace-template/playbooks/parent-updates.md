@@ -29,7 +29,7 @@ Reference assignments by `assignment_id` taken from the report. The Engine fills
 | `missing` | `missing` | List all of them, even if older than 14 days. A `not_submitted_canvas_not_marked_missing` item says honestly that Canvas has not marked it missing. Add a `note` only for existing submission instructions. |
 | `corrections` | `corrections` | Include an assignment only when its `teacher_comments` actually contain a **rationale or an exemplar** the student can learn from. A generic "good job", a bare score, or one keyword is not enough. For a New Quiz marked `per_item_feedback: unverified`, include it only if the teacher has said it has item feedback; otherwise leave it out and say nothing. Hidden answer keys are never correction guidance. The `note` says where to find the explanation ("see the comment on your submission"). |
 | `due_soon` | `due_soon` | Include the ones that matter to the family. A `note` may repeat existing preparation instructions from the assignment, nothing new. |
-| `history` | `history` | Include all of them. Where `first_unavailable` is true the Engine shows "not available"; do not guess. |
+| `history` | `history` | Include all of them. The email shows First Score and Current Score, so families can see where a curve or correction points raised a grade. Where `first_unavailable` is true the Engine shows "not available"; do not guess. |
 
 Order is fixed: Missing, Corrections, Due Soon, Grade history, footer (Skyward and Bobcat Hour). Empty sections are left out.
 

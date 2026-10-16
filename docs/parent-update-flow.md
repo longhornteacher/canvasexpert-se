@@ -27,14 +27,12 @@ Keep student/course identity and an “As of” timestamp compact. Put actions b
 | 1 | Missing / not turned in | Linked assignment · Due date · Existing submission instructions, if needed |
 | 2 | Corrections available | Linked assignment · Correction deadline · Where to find the rationale/exemplar |
 | 3 | Due Soon | Linked assignment · Due date · Existing preparation instructions, if any |
-| 4 | Grade history | Linked assignment · Original earned · Latest earned · Canvas |
+| 4 | Grade history | Linked assignment · First Score · Current Score |
 | Footer | Official grade and Bobcat Hour | Skyward link; Securly Flex link |
 
 Proposed details: sort corrections by closing deadline and Due Soon by due date; omit empty sections; keep outstanding missing work visible even when older than 14 days. A one-line “Submitted—awaiting review” status may reassure parents without adding a task. The Due Soon horizon, history range, and inclusion of that reassurance remain open.
 
-Suggested score explanation:
-
-> Earned scores reflect assessed work. Canvas shows the current assignment score. See Skyward for the official course grade.
+Grade history exists so families can see where a score was raised, by a curve or by points for corrections. Decided 2026-10-16: no explanatory sentence; the Skyward footer link covers the official grade.
 
 The class-wide Band post is brief and names no student. It may point families to the emailed update and carry class-wide Due Soon or teacher-provided opportunities. Exact wording remains undecided.
 
@@ -52,11 +50,10 @@ Eligibility and sending are separate decisions: a qualifying assignment does not
 
 | Field | Meaning |
 |---|---|
-| Original earned | First earned assessment, when identifiable in teacher feedback |
-| Latest earned | Most recent earned assessment, when identifiable in teacher feedback |
-| Canvas | Current recorded score for that assignment |
+| First Score | First score Canvas recorded for the assignment (gradebook history) |
+| Current Score | The assignment's current Canvas score |
 
-Preserve score denominators and the associated assignment/attempt. Show unavailable history honestly; the earliest surviving comment is not automatically proof of the original assessment. With one assessment confirmed as both first and latest, both columns may show it without implying corrections occurred.
+Preserve score denominators and the associated assignment/attempt. Show unavailable history honestly; the earliest surviving comment is not automatically proof of the original assessment. With one assessment confirmed as both first and latest, both columns show it without implying corrections occurred.
 
 Do not substitute Canvas's entered score for the original earned assessment or infer the cause of a score difference. Explain adjustments only when supported by evidence. New Quiz written-work comments may contain criterion scores without an aggregate quiz assessment; preserve that distinction.
 

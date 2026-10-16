@@ -290,7 +290,7 @@ func (r *ParentRun) Render(sd ParentStudentDraft, student workspace.Student) Ren
 			soon = append(soon, fmt.Sprintf(`<tr><td %s>%s</td><td %s>%s</td><td %s>%s</td></tr>`, cellStyle, title(it), cellStyle, esc(day(it.DueAt)), cellStyle, noteOf(sd.DueSoon, it.AssignmentID)))
 		}
 		for _, it := range sortedHist(c.History, sd.History, order) {
-			hist = append(hist, fmt.Sprintf(`<tr><td %s>%s</td><td %s>%s</td><td %s>%s</td><td %s>%s</td></tr>`, cellStyle, title(it.ParentReportItem), cellStyle, score(it.First, it.Possible), cellStyle, score(it.Latest, it.Possible), cellStyle, score(it.Current, it.Possible)))
+			hist = append(hist, fmt.Sprintf(`<tr><td %s>%s</td><td %s>%s</td><td %s>%s</td></tr>`, cellStyle, title(it.ParentReportItem), cellStyle, score(it.First, it.Possible), cellStyle, score(it.Current, it.Possible)))
 		}
 		if len(miss)+len(corr)+len(soon)+len(hist) == 0 {
 			continue
@@ -311,11 +311,10 @@ func (r *ParentRun) Render(sd ParentStudentDraft, student workspace.Student) Ren
 		section("Missing / not turned in", []string{"Assignment", "Due", ""}, miss)
 		section("Corrections available", []string{"Assignment", "Correct by", "Where to look"}, corr)
 		section("Due soon", []string{"Assignment", "Due", ""}, soon)
-		section("Grade history", []string{"Assignment", "First earned", "Latest earned", "Canvas"}, hist)
+		section("Grade history", []string{"Assignment", "First Score", "Current Score"}, hist)
 	}
-	fmt.Fprintf(&b, `<p style="margin:18px 0 6px;color:#52606d">Earned scores reflect assessed work. Canvas shows the current assignment score. See Skyward for the official course grade.</p>`)
 	if r.Config.SkywardURL != "" {
-		fmt.Fprintf(&b, `<p style="margin:4px 0"><a href="%s">Skyward Family Access</a> &mdash; official grades</p>`, esc(r.Config.SkywardURL))
+		fmt.Fprintf(&b, `<p style="margin:18px 0 4px"><a href="%s">Skyward Family Access</a> &mdash; official grades</p>`, esc(r.Config.SkywardURL))
 	}
 	fmt.Fprintf(&b, `<p style="margin:4px 0"><b>Bobcat Hour:</b> <a href="%s">%s</a>.</p>`, esc(r.Config.BobcatHourURL), esc(r.Config.BobcatHourTxt))
 	if r.Config.SignOff != "" {
