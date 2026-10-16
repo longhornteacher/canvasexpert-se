@@ -57,6 +57,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   pull-work [COURSE [ASSIGNMENT]] Pull work; no scope uses current courses
   parent-report COURSE [REF ...] Read parent-update facts (missing, corrections, due soon, history) into courses/COURSE/parent-updates/
   parent-review RUN_FOLDER      Open the private page to review and send a parent-update run (Outlook)
+  student-report RUN_FOLDER     Open a print page with one student report per student from a parent-update run
   push-quiz COURSE FILE         Create or resume a New Quiz from a QuizForge file
   post RESULTS_FILE             Post validated grades or selected revisions
   quiz-points COURSE QUIZ [N=PTS ...] List a New Quiz's questions, or set question N to PTS points
@@ -423,7 +424,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "push": true, "pull-page": true, "upload-file": true, "pull-item": true, "pull-work": true, "parent-report": true, "parent-review": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "push": true, "pull-page": true, "upload-file": true, "pull-item": true, "pull-work": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}

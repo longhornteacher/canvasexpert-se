@@ -157,6 +157,13 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.startSession(ctx, "review", []string{"parent-review", dir})
 	})
+	addActionTool(server, "start_student_report", "Open a private print page with one student report per student from a parent-update run folder (report.json and drafts.json). Every student gets a sheet; the teacher prints it from the browser. Returns only the loopback URL; nothing is sent or written to Canvas.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
+		dir, err := s.coursePath(in.Folder)
+		if err != nil {
+			return TextOutput{}, err
+		}
+		return s.startSession(ctx, "print", []string{"student-report", dir})
+	})
 	addReadTool(server, "list_modules", "List a configured course's Canvas modules through the CE-SE Engine.", func(ctx context.Context, _ *mcp.CallToolRequest, in CourseInput) (TextOutput, error) {
 		return s.command(ctx, "modules", in.Course)
 	})
@@ -216,7 +223,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "list_courses", "list_modules", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "start_review", "start_parent_review", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "list_courses", "list_modules", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "start_review", "start_parent_review", "start_student_report", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

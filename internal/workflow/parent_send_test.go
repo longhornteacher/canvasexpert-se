@@ -207,3 +207,40 @@ func parentFixtureRewrite(t *testing.T, svc *Service, dir string) {
 	raw, _ = json.Marshal(d)
 	os.WriteFile(filepath.Join(dir, "drafts.json"), raw, 0o644)
 }
+
+func TestStudentSheetsCoverEveryStudentWithoutLinksOrAddresses(t *testing.T) {
+	svc, dir, a, b := parentFixtureRun(t)
+	sheets, err := svc.BuildStudentSheets(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sheets) != 2 || sheets[0].Name != a.Name || sheets[1].Name != b.Name {
+		t.Fatalf("sheets = %+v (one per student, sorted by name)", sheets)
+	}
+	for _, s := range sheets {
+		if strings.Contains(s.HTML, "href") || strings.Contains(s.HTML, "@") {
+			t.Fatalf("paper sheet has links or addresses: %s", s.HTML)
+		}
+		if !strings.Contains(s.HTML, "Missing: turn these in") || !strings.Contains(s.HTML, "Lab &lt;1&gt;") {
+			t.Fatalf("sheet = %s", s.HTML)
+		}
+	}
+}
+
+func TestSkippedStudentGetsOnTrackSheetAndOnlyChosenCorrections(t *testing.T) {
+	s := "96"
+	rs := ParentReportStudent{Ref: "s-1", Courses: []ParentReportCourse{{Course: "cs8", Timezone: "America/Chicago", CourseScore: &s,
+		Corrections: []ParentCorrection{{ParentReportItem: ParentReportItem{AssignmentID: 5, Title: "Quiz needing judgment"}}},
+		History:     []ParentHistoryItem{{ParentReportItem: ParentReportItem{AssignmentID: 6, Title: "Lab 6", URL: "u6"}, Possible: "100.0", First: str("70.0"), Current: str("90.0")}},
+	}}}
+	run := &ParentRun{Report: ParentReportPacket{AsOf: "2026-10-16T15:00:00Z", Students: []ParentReportStudent{rs}}, students: map[string]ParentReportStudent{"s-1": rs}}
+	got := run.RenderStudent(ParentStudentDraft{Ref: "s-1", Decision: "skip", Reason: "on track"}, workspace.Student{Name: "Ada Lovelace"}).HTML
+	for _, want := range []string{"Ada Lovelace", "Nothing is missing. Keep it up.", "Your grade history", "70 / 100", "90 / 100"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in %s", want, got)
+		}
+	}
+	if strings.Contains(got, "Quiz needing judgment") {
+		t.Fatal("a correction the agent did not choose appeared")
+	}
+}

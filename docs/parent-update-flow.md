@@ -131,7 +131,7 @@ Dependencies and limits:
 ## Implementation notes (2026-10-16)
 
 - `internal/outlook` (go-ole, one locked COM thread); `cse-probe outlook-self-test` sent a message to the profile's own address from Go on NEWSPEEDY. District PC, inbox arrival and MCP clients are not yet verified.
-- `pull_parent_report` / `cse parent-report COURSE... [REF...]` writes `courses/<first course>/parent-updates/<run>/report.json`; the agent writes `drafts.json` beside it (contract in `playbooks/parent-updates.md`); `start_parent_review` / `cse parent-review RUN_FOLDER` opens the review page, which sends one fresh Outlook message per enabled parent address and records outcomes by student ref in `outcomes.json`.
+- `pull_parent_report` / `cse parent-report COURSE... [REF...]` writes `courses/<first course>/parent-updates/<run>/report.json`; the agent writes `drafts.json` beside it (contract in `playbooks/parent-updates.md`); `start_parent_review` / `cse parent-review RUN_FOLDER` opens the review page, which sends one fresh Outlook message per enabled parent address and records outcomes by student ref in `outcomes.json`. `start_student_report` / `cse student-report RUN_FOLDER` opens a print page from the same run with one student-voiced sheet per student.
 - Not built from the handoff: a local CE-SE posting record for correction candidates (teacher comments are returned instead).
 - **Band dropped (2026-10-16):** the teacher does not want Band in this flow. No Band post, card or `band_post` field exists; earlier Band notes above are historical.
 

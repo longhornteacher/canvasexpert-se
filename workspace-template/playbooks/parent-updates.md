@@ -66,6 +66,14 @@ Order is fixed: Missing, Corrections, Due Soon, Grade history, footer (Skyward a
 
 Every `send` student needs at least one item in a section. Every student in the report appears once, with a reason for `skip` and `flag`.
 
+## Printable student reports
+
+When the teacher wants reports to hand out in class, use the same run: pull the report, write `drafts.json` as above (decisions still apply to email), then `start_student_report` with the run folder (CLI: `.\cse.cmd student-report RUN_FOLDER`). Give the teacher the link; they print from the browser and click Done.
+
+- Every student in the run gets a sheet, including skipped students, so the handout singles no one out. A student with nothing missing gets "Nothing is missing. Keep it up."
+- The sheet lists every missing, due-soon and grade-history item from the report. Only your `corrections` choices carry over, because eligibility is your judgment.
+- Optional `student_intro` per student, written to the student ("you"), one short sentence. Same rules as `intro`: no scores, no invented work. `{{student_name}}` works here too.
+
 ## If something cannot proceed
 
 Continue with the other students. Explain the one that cannot: no enabled email address on file is shown on the review page as held, and that is for the teacher to resolve in the Students page.

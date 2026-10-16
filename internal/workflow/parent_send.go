@@ -302,3 +302,30 @@ func (s *Service) SendParentTest(dir string, sender MailSender) (string, error) 
 	}
 	return "", fmt.Errorf("no email to test: no student is marked send")
 }
+
+// StudentSheet is one printable student report. Name is shown only in the
+// teacher's browser.
+type StudentSheet struct{ Name, HTML string }
+
+// BuildStudentSheets renders one printable sheet per student in the run,
+// sorted by name for handing out.
+func (s *Service) BuildStudentSheets(dir string) ([]StudentSheet, error) {
+	run, e := LoadParentRun(s.Root, dir)
+	if e != nil {
+		return nil, e
+	}
+	store, e := workspace.OpenStudents(s.Root)
+	if e != nil {
+		return nil, e
+	}
+	var sheets []StudentSheet
+	for _, sd := range run.Drafts.Students {
+		st, e := s.parentStudent(store, sd.Ref)
+		if e != nil {
+			return nil, fmt.Errorf("%s: %w", sd.Ref, e)
+		}
+		sheets = append(sheets, StudentSheet{Name: st.Name, HTML: run.RenderStudent(sd, st).HTML})
+	}
+	sort.SliceStable(sheets, func(i, j int) bool { return strings.ToLower(sheets[i].Name) < strings.ToLower(sheets[j].Name) })
+	return sheets, nil
+}

@@ -36,14 +36,16 @@ type ParentDrafts struct {
 }
 
 type ParentStudentDraft struct {
-	Ref         string          `json:"student_ref"`
-	Decision    string          `json:"decision"` // send | skip | flag
-	Reason      string          `json:"reason,omitempty"`
-	Intro       string          `json:"intro,omitempty"`
-	Missing     []ParentItemRef `json:"missing,omitempty"`
-	Corrections []ParentItemRef `json:"corrections,omitempty"`
-	DueSoon     []ParentItemRef `json:"due_soon,omitempty"`
-	History     []ParentItemRef `json:"history,omitempty"`
+	Ref      string `json:"student_ref"`
+	Decision string `json:"decision"` // send | skip | flag
+	Reason   string `json:"reason,omitempty"`
+	Intro    string `json:"intro,omitempty"`
+	// StudentIntro opens the printable student sheet, written to the student.
+	StudentIntro string          `json:"student_intro,omitempty"`
+	Missing      []ParentItemRef `json:"missing,omitempty"`
+	Corrections  []ParentItemRef `json:"corrections,omitempty"`
+	DueSoon      []ParentItemRef `json:"due_soon,omitempty"`
+	History      []ParentItemRef `json:"history,omitempty"`
 }
 
 type ParentItemRef struct {
@@ -116,6 +118,9 @@ func (r *ParentRun) validate() error {
 			return fmt.Errorf("student %s appears twice", sd.Ref)
 		}
 		seen[sd.Ref] = true
+		if e := checkFreeText(sd.Ref, sd.StudentIntro); e != nil {
+			return e
+		}
 		switch sd.Decision {
 		case "send":
 		case "skip", "flag":
@@ -222,6 +227,45 @@ const (
 // Render builds one student's email from the report; the agent's draft supplies
 // only which assignments appear, their order and short notes.
 func (r *ParentRun) Render(sd ParentStudentDraft, student workspace.Student) Rendered {
+	return r.render(sd, student, false)
+}
+
+// RenderStudent builds the printable sheet handed to the student. Every
+// student gets one: all missing, due-soon and history items come from the
+// report, and only corrections follow the agent's draft (eligibility is
+// judgment). Titles are plain text because links do not work on paper.
+func (r *ParentRun) RenderStudent(sd ParentStudentDraft, student workspace.Student) Rendered {
+	rs := r.students[sd.Ref]
+	all := sd
+	all.Missing, all.DueSoon, all.History = nil, nil, nil
+	for _, c := range rs.Courses {
+		missing := append([]ParentReportItem(nil), c.Missing...)
+		sort.SliceStable(missing, func(i, j int) bool { return missing[i].DueAt < missing[j].DueAt })
+		for _, it := range missing {
+			all.Missing = append(all.Missing, ParentItemRef{AssignmentID: it.AssignmentID, Note: noteFor(sd.Missing, it.AssignmentID)})
+		}
+		for _, it := range c.DueSoon {
+			all.DueSoon = append(all.DueSoon, ParentItemRef{AssignmentID: it.AssignmentID, Note: noteFor(sd.DueSoon, it.AssignmentID)})
+		}
+		history := append([]ParentHistoryItem(nil), c.History...)
+		sort.SliceStable(history, func(i, j int) bool { return history[i].DueAt < history[j].DueAt })
+		for _, it := range history {
+			all.History = append(all.History, ParentItemRef{AssignmentID: it.AssignmentID})
+		}
+	}
+	return r.render(all, student, true)
+}
+
+func noteFor(items []ParentItemRef, id int64) string {
+	for _, it := range items {
+		if it.AssignmentID == id {
+			return it.Note
+		}
+	}
+	return ""
+}
+
+func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, forStudent bool) Rendered {
 	rs := r.students[sd.Ref]
 	esc := html.EscapeString
 	name := func(s string) string { return esc(workspace.ReplaceStudentName(s, student)) }
@@ -240,7 +284,7 @@ func (r *ParentRun) Render(sd ParentStudentDraft, student workspace.Student) Ren
 		return t.In(loc).Format("Mon Jan 2")
 	}
 	title := func(i ParentReportItem) string {
-		if i.URL == "" {
+		if i.URL == "" || forStudent {
 			return esc(i.Title)
 		}
 		return fmt.Sprintf(linkFormat, esc(i.URL), esc(i.Title))
@@ -273,9 +317,29 @@ func (r *ParentRun) Render(sd ParentStudentDraft, student workspace.Student) Ren
 
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.4;color:#1f2933;max-width:640px">`)
-	fmt.Fprintf(&b, `<p style="margin:0 0 4px"><b>%s</b> &middot; As of %s</p>`, esc(student.FirstName), esc(asOf.In(loc).Format("Mon Jan 2, 3:04 pm")))
-	if sd.Intro != "" {
-		fmt.Fprintf(&b, `<p style="margin:6px 0">%s</p>`, name(sd.Intro))
+	intro := sd.Intro
+	if forStudent {
+		var courses []string
+		for _, c := range rs.Courses {
+			courses = append(courses, c.Course)
+		}
+		fmt.Fprintf(&b, `<p style="margin:0 0 4px;font-size:17px"><b>%s</b> &middot; %s &middot; As of %s</p>`, esc(student.Name), esc(strings.Join(courses, ", ")), esc(asOf.In(loc).Format("Mon Jan 2")))
+		intro = sd.StudentIntro
+		missing := 0
+		for _, c := range rs.Courses {
+			missing += len(c.Missing)
+		}
+		if missing == 0 {
+			intro = strings.TrimSpace(intro + " Nothing is missing. Keep it up.")
+		}
+	} else {
+		fmt.Fprintf(&b, `<p style="margin:0 0 4px"><b>%s</b> &middot; As of %s</p>`, esc(student.FirstName), esc(asOf.In(loc).Format("Mon Jan 2, 3:04 pm")))
+	}
+	if intro != "" {
+		fmt.Fprintf(&b, `<p style="margin:6px 0">%s</p>`, name(intro))
+	}
+	if forStudent {
+		fmt.Fprintf(&b, `<p style="margin:6px 0;color:#52606d">Find each assignment in Canvas by its title.</p>`)
 	}
 	multi := len(rs.Courses) > 1
 	for _, c := range rs.Courses {
@@ -308,10 +372,25 @@ func (r *ParentRun) Render(sd ParentStudentDraft, student workspace.Student) Ren
 			}
 			b.WriteString(`</tr>` + strings.Join(rows, "") + `</table>`)
 		}
+		if forStudent {
+			section("Missing: turn these in", []string{"Assignment", "Was due", ""}, miss)
+			section("Corrections you can still make", []string{"Assignment", "Correct by", "Where to look"}, corr)
+			section("Due soon", []string{"Assignment", "Due", ""}, soon)
+			section("Your grade history", []string{"Assignment", "First Score", "Current Score"}, hist)
+			continue
+		}
 		section("Missing / not turned in", []string{"Assignment", "Due", ""}, miss)
 		section("Corrections available", []string{"Assignment", "Correct by", "Where to look"}, corr)
 		section("Due soon", []string{"Assignment", "Due", ""}, soon)
 		section("Grade history", []string{"Assignment", "First Score", "Current Score"}, hist)
+	}
+	if forStudent {
+		fmt.Fprintf(&b, `<p style="margin:18px 0 4px">Official grades: Skyward Family Access.</p><p style="margin:4px 0"><b>Bobcat Hour:</b> %s.</p>`, esc(r.Config.BobcatHourTxt))
+		if r.Config.SignOff != "" {
+			fmt.Fprintf(&b, `<p style="margin:14px 0 0">%s</p>`, esc(r.Config.SignOff))
+		}
+		b.WriteString(`</div>`)
+		return Rendered{Subject: student.Name, HTML: b.String()}
 	}
 	if r.Config.SkywardURL != "" {
 		fmt.Fprintf(&b, `<p style="margin:18px 0 4px"><a href="%s">Skyward Family Access</a> &mdash; official grades</p>`, esc(r.Config.SkywardURL))

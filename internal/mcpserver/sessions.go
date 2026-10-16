@@ -227,7 +227,7 @@ func (s *Server) startSession(ctx context.Context, kind string, args []string) (
 }
 
 func sessionURL(kind, line string) string {
-	prefixes := map[string]string{"review": "Open the local review page: ", "setup": "Open the local setup page: ", "students": "Open the local student editor: ", "hub": "CanvasExpert-SE hub is running: "}
+	prefixes := map[string]string{"review": "Open the local review page: ", "print": "Open the local print page: ", "setup": "Open the local setup page: ", "students": "Open the local student editor: ", "hub": "CanvasExpert-SE hub is running: "}
 	prefix := prefixes[kind]
 	if prefix == "" || !strings.HasPrefix(line, prefix) {
 		return ""
