@@ -210,9 +210,12 @@ func parentFixtureRewrite(t *testing.T, svc *Service, dir string) {
 
 func TestStudentSheetsCoverEveryStudentWithoutLinksOrAddresses(t *testing.T) {
 	svc, dir, a, b := parentFixtureRun(t)
-	sheets, err := svc.BuildStudentSheets(dir)
+	sheets, label, err := svc.BuildStudentSheets(dir)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if label != "cs8 2026-10-16" {
+		t.Fatalf("label = %q", label)
 	}
 	if len(sheets) != 2 || sheets[0].Name != a.Name || sheets[1].Name != b.Name {
 		t.Fatalf("sheets = %+v (one per student, sorted by name)", sheets)

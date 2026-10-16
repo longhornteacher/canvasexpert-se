@@ -1,17 +1,15 @@
 package localui
 
 import (
+	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/subtle"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
-	"io"
-	"net"
-	"net/http"
-	"sync"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"canvasexpertse/internal/platform"
@@ -19,102 +17,118 @@ import (
 )
 
 var printTemplate = template.Must(template.New("print").Parse(`<!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Student reports</title>
+<html lang="en"><meta charset="utf-8"><title>Student reports</title>
 <style>
-body{margin:0;background:#f5f7fa;color:#1f2933;font-family:Segoe UI,Arial,sans-serif}
-.bar{position:sticky;top:0;display:flex;gap:12px;align-items:center;padding:12px 16px;background:#fff;border-bottom:1px solid #d9e2ec}
-.bar p{margin:0;flex:1}
-button{font:inherit;padding:6px 14px;border:1px solid #9aa5b1;border-radius:6px;background:#fff;cursor:pointer}
-button.primary{background:#1f5fbf;border-color:#1f5fbf;color:#fff}
-.sheet{background:#fff;max-width:7.5in;margin:16px auto;padding:0.5in;box-shadow:0 1px 3px rgba(0,0,0,.15)}
-@media print{body{background:#fff}.bar{display:none}.sheet{box-shadow:none;margin:0;padding:0;max-width:none;break-after:page;page-break-after:always}.sheet:last-child{break-after:auto;page-break-after:auto}}
+@page{size:letter;margin:0.5in}
+body{margin:0;color:#1f2933;font-family:Segoe UI,Arial,sans-serif}
+.sheet{break-after:page;page-break-after:always}
+.sheet:last-child{break-after:auto;page-break-after:auto}
 </style>
-<div class="bar"><p>{{len .Sheets}} student reports, one per page. Nothing here is sent anywhere.</p>
-<button class="primary" type="button" onclick="window.print()">Print</button>
-<form method="post" action="/done"><input type="hidden" name="request_secret" value="{{.Secret}}"><button>Done</button></form></div>
-{{range .Sheets}}<section class="sheet">{{.}}</section>
+{{range .}}<section class="sheet">{{.}}</section>
 {{end}}</html>`))
 
-type printHandler struct {
-	origin, secret string
-	sheets         []template.HTML
-	done           chan struct{}
-	once           sync.Once
-}
-
-func (h *printHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Referrer-Policy", "same-origin")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
-	if "http://"+r.Host != h.origin {
-		reviewError(w, http.StatusNotFound, "Page not found", "This temporary print link is not available.")
-		return
-	}
-	switch {
-	case r.Method == http.MethodGet && (r.URL.Path == "/" || r.URL.Path == "/print"):
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = printTemplate.Execute(w, struct {
-			Sheets []template.HTML
-			Secret string
-		}{h.sheets, h.secret})
-	case r.Method == http.MethodPost && r.URL.Path == "/done" && r.Header.Get("Origin") == h.origin:
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<16)
-		if r.ParseForm() != nil || subtle.ConstantTimeCompare([]byte(r.PostForm.Get("request_secret")), []byte(h.secret)) != 1 {
-			reviewError(w, http.StatusForbidden, "Form request rejected", "Return to the print page and try again.")
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, `<!doctype html><html lang="en"><meta charset="utf-8"><title>Done</title><style>`+string(reviewCSS)+`</style><main class="end-page"><h1>Done</h1><p class="muted">You can close this tab.</p></main></html>`)
-		h.once.Do(func() { close(h.done) })
-	default:
-		reviewError(w, http.StatusNotFound, "Page not found", "This temporary print link is not available.")
-	}
-}
-
-// PrintStudentReports serves a temporary loopback page with one printable
-// sheet per student and returns when the teacher clicks Done.
-func PrintStudentReports(ctx context.Context, sheets []workflow.StudentSheet, output io.Writer) error {
-	if output == nil {
-		output = io.Discard
-	}
-	if len(sheets) == 0 {
-		return errors.New("this run has no students to print")
-	}
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		return errors.New("could not start the local print page")
-	}
-	defer listener.Close()
-	var nonce [32]byte
-	if _, err = rand.Read(nonce[:]); err != nil {
-		return errors.New("could not create the local print page")
-	}
-	h := &printHandler{origin: "http://" + listener.Addr().String(), secret: hex.EncodeToString(nonce[:]), done: make(chan struct{})}
+// studentReportHTML is one document with each student's sheet on its own page.
+func studentReportHTML(sheets []workflow.StudentSheet) ([]byte, error) {
+	var parts []template.HTML
 	for _, s := range sheets {
 		// Sheet HTML is built by the Engine with every value escaped.
-		h.sheets = append(h.sheets, template.HTML(s.HTML))
+		parts = append(parts, template.HTML(s.HTML))
 	}
-	server := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: time.Minute, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- server.Serve(listener) }()
-	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = server.Shutdown(shutdownCtx)
-	}()
-	_, _ = fmt.Fprintf(output, "Open the local print page: %s/print\n", h.origin)
-	_ = platform.OpenBrowser(h.origin + "/print")
-	select {
-	case <-h.done:
-		return nil
-	case <-ctx.Done():
-		return nil
-	case err = <-serveErr:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return errors.New("local print server stopped")
+	var b bytes.Buffer
+	err := printTemplate.Execute(&b, parts)
+	return b.Bytes(), err
+}
+
+// edgePath finds Microsoft Edge, which ships with Windows 11.
+func edgePath() (string, error) {
+	for _, env := range []string{"ProgramFiles(x86)", "ProgramFiles", "LocalAppData"} {
+		base := os.Getenv(env)
+		if base == "" {
+			continue
 		}
-		return nil
+		p := filepath.Join(base, "Microsoft", "Edge", "Application", "msedge.exe")
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
 	}
+	return "", errors.New("Microsoft Edge was not found")
+}
+
+// SaveStudentReports writes every sheet into one PDF in the teacher's Downloads
+// folder (one student per page) and opens it. When Edge cannot make the PDF it
+// saves a printable HTML file instead. The path holds student names, so it is
+// outside the workspace the agent can read.
+func SaveStudentReports(ctx context.Context, sheets []workflow.StudentSheet, label string) (string, error) {
+	if len(sheets) == 0 {
+		return "", errors.New("this run has no students to print")
+	}
+	doc, err := studentReportHTML(sheets)
+	if err != nil {
+		return "", err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, "Downloads")
+	if info, e := os.Stat(dir); e != nil || !info.IsDir() {
+		dir = home
+	}
+	base := "Student reports " + strings.Map(func(r rune) rune {
+		if strings.ContainsRune(`<>:"/\|?*`, r) {
+			return '-'
+		}
+		return r
+	}, label)
+	pdf := uniquePath(dir, base, ".pdf")
+	pdfErr := printPDF(ctx, doc, pdf)
+	if pdfErr == nil {
+		_ = platform.OpenDefaultFile(pdf)
+		return pdf, nil
+	}
+	page := uniquePath(dir, base, ".html")
+	if err := os.WriteFile(page, doc, 0600); err != nil {
+		return "", fmt.Errorf("could not make the PDF (%v) or save a printable page: %w", pdfErr, err)
+	}
+	_ = platform.OpenDefaultFile(page)
+	return page, fmt.Errorf("could not make the PDF (%v); saved a printable page instead: open it and print with Ctrl+P", pdfErr)
+}
+
+func uniquePath(dir, base, ext string) string {
+	p := filepath.Join(dir, base+ext)
+	for i := 2; ; i++ {
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			return p
+		}
+		p = filepath.Join(dir, fmt.Sprintf("%s (%d)%s", base, i, ext))
+	}
+}
+
+// printPDF renders the document with headless Edge in a throwaway profile, so
+// the teacher's own Edge windows and settings are untouched.
+func printPDF(ctx context.Context, doc []byte, out string) error {
+	edge, err := edgePath()
+	if err != nil {
+		return err
+	}
+	tmp, err := os.MkdirTemp("", "cse-student-reports-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	page := filepath.Join(tmp, "reports.html")
+	if err = os.WriteFile(page, doc, 0600); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, edge, "--headless=new", "--disable-gpu", "--no-first-run", "--no-pdf-header-footer",
+		"--user-data-dir="+filepath.Join(tmp, "profile"), "--print-to-pdf="+out, "file:///"+filepath.ToSlash(page))
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("Edge could not print: %v %s", err, strings.TrimSpace(string(b)))
+	}
+	if info, err := os.Stat(out); err != nil || info.Size() == 0 {
+		return errors.New("Edge did not write the PDF")
+	}
+	return nil
 }

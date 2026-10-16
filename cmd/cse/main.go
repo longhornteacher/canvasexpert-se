@@ -57,7 +57,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   pull-work [COURSE [ASSIGNMENT]] Pull work; no scope uses current courses
   parent-report COURSE [REF ...] Read parent-update facts (missing, corrections, due soon, history) into courses/COURSE/parent-updates/
   parent-review RUN_FOLDER      Open the private page to review and send a parent-update run (Outlook)
-  student-report RUN_FOLDER     Open a print page with one student report per student from a parent-update run
+  student-report RUN_FOLDER     Save one PDF of student reports (one per page) from a parent-update run and open it
   push-quiz COURSE FILE         Create or resume a New Quiz from a QuizForge file
   post RESULTS_FILE             Post validated grades or selected revisions
   quiz-points COURSE QUIZ [N=PTS ...] List a New Quiz's questions, or set question N to PTS points
