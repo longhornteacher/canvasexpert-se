@@ -180,13 +180,27 @@ func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []s
 		for _, sub := range subs {
 			perStudent[sub.UserID] = append(perStudent[sub.UserID], sub)
 		}
+		// submission_history keeps one version per attempt, so a regrade of
+		// the same attempt hides the first score. The gradebook history feed
+		// keeps every grading version.
+		versions := map[int64]map[int64][]Submission{}
+		feed, e := gradeVersions(ctx, s.Client, course.ID)
+		if e != nil {
+			packet.Notes = append(packet.Notes, course.Nickname+": gradebook history unavailable; first scores come from submission history and may miss same-attempt regrades")
+		}
+		for _, v := range feed {
+			if versions[v.UserID] == nil {
+				versions[v.UserID] = map[int64][]Submission{}
+			}
+			versions[v.UserID][v.AssignmentID] = append(versions[v.UserID][v.AssignmentID], v)
+		}
 		for _, id := range order {
 			en := byUser[id]
 			rc := ParentReportCourse{Course: course.Nickname, Timezone: zone, CourseScore: en.score, CourseScoreSource: "canvas_enrollment_current_score"}
 			if en.score == nil {
 				rc.Flags = append(rc.Flags, "course score unavailable from Canvas")
 			}
-			buildStudentReport(&rc, perStudent[id], byAssignment, now, loc)
+			buildStudentReport(&rc, perStudent[id], versions[id], byAssignment, now, loc)
 			rs := byRef[en.st.Ref]
 			if rs == nil {
 				rs = &ParentReportStudent{Ref: en.st.Ref, Alias: en.st.Alias}
@@ -235,6 +249,43 @@ func courseSubmissions(ctx context.Context, c *canvas.Client, courseID int64) ([
 	return result, err
 }
 
+// gradeVersions reads every grading version in the course from the gradebook
+// history feed, oldest first per student and assignment.
+func gradeVersions(ctx context.Context, c *canvas.Client, courseID int64) ([]Submission, error) {
+	var result []Submission
+	if err := c.List(ctx, fmt.Sprintf("/api/v1/courses/%d/gradebook_history/feed?per_page=100", courseID), &result); err != nil {
+		return nil, err
+	}
+	sort.SliceStable(result, func(i, j int) bool { return gradedAt(result[i]) < gradedAt(result[j]) })
+	return result, nil
+}
+
+func gradedAt(s Submission) string {
+	if s.GradedAt == nil {
+		return ""
+	}
+	return *s.GradedAt
+}
+
+// scoreChangedSince reports whether a grading version at or after since set a
+// score different from the version before it (a first score counts).
+func scoreChangedSince(versions []Submission, since, now time.Time) bool {
+	var prev *json.Number
+	for _, v := range versions {
+		if v.Score == nil {
+			continue
+		}
+		if v.GradedAt != nil {
+			t, err := time.Parse(time.RFC3339, *v.GradedAt)
+			if err == nil && t.After(since) && !t.After(now) && (prev == nil || prev.String() != v.Score.String()) {
+				return true
+			}
+		}
+		prev = v.Score
+	}
+	return false
+}
+
 // effectiveDue is the student's own due date (overrides and extensions
 // included) when Canvas reports one, else the assignment's.
 func effectiveDue(sub Submission, a Assignment) *time.Time {
@@ -265,7 +316,7 @@ func isOnline(a Assignment) bool {
 	return false
 }
 
-func buildStudentReport(rs *ParentReportCourse, subs []Submission, assignments map[int64]Assignment, now time.Time, loc *time.Location) {
+func buildStudentReport(rs *ParentReportCourse, subs []Submission, versions map[int64][]Submission, assignments map[int64]Assignment, now time.Time, loc *time.Location) {
 	sort.Slice(subs, func(i, j int) bool { return subs[i].AssignmentID < subs[j].AssignmentID })
 	for _, sub := range subs {
 		a, ok := assignments[sub.AssignmentID]
@@ -292,7 +343,13 @@ func buildStudentReport(rs *ParentReportCourse, subs []Submission, assignments m
 		}
 
 		inWindow := pastDue && !correctionDeadline(*due, loc).Before(now)
-		changedRecently := sub.GradedAt != nil && recentTime(*sub.GradedAt, now)
+		vs := versions[sub.AssignmentID]
+		var changedRecently bool
+		if len(vs) > 0 {
+			changedRecently = scoreChangedSince(vs, now.AddDate(0, 0, -correctionWindowDays), now)
+		} else {
+			changedRecently = sub.GradedAt != nil && recentTime(*sub.GradedAt, now)
+		}
 		if inWindow {
 			c := ParentCorrection{ParentReportItem: item, CorrectionDeadline: correctionDeadline(*due, loc).Format(time.RFC3339)}
 			for _, cm := range sub.Comments {
@@ -313,7 +370,7 @@ func buildStudentReport(rs *ParentReportCourse, subs []Submission, assignments m
 			}
 		}
 		if sub.Score != nil && (inWindow || changedRecently) {
-			rs.History = append(rs.History, historyItem(item, sub, a))
+			rs.History = append(rs.History, historyItem(item, sub, vs, a))
 		}
 	}
 	sort.Slice(rs.Corrections, func(i, j int) bool {
@@ -327,15 +384,19 @@ func recentTime(v string, now time.Time) bool {
 	return err == nil && t.After(now.AddDate(0, 0, -correctionWindowDays)) && !t.After(now)
 }
 
-// historyItem takes first and latest earned scores only from scored entries of
-// submission_history. entered_score is never used as the original assessment.
-func historyItem(item ParentReportItem, sub Submission, a Assignment) ParentHistoryItem {
+// historyItem takes first and latest earned scores only from scored grading
+// versions (the gradebook history feed when present, else submission_history).
+// entered_score is never used as the original assessment.
+func historyItem(item ParentReportItem, sub Submission, versions []Submission, a Assignment) ParentHistoryItem {
 	h := ParentHistoryItem{ParentReportItem: item, Possible: a.Points.String()}
 	cur := sub.Score.String()
 	h.Current = &cur
 	var scored []string
-	hist := append([]Submission(nil), sub.History...)
-	sort.SliceStable(hist, func(i, j int) bool { return hist[i].Attempt < hist[j].Attempt })
+	hist := versions
+	if len(hist) == 0 {
+		hist = append([]Submission(nil), sub.History...)
+		sort.SliceStable(hist, func(i, j int) bool { return hist[i].Attempt < hist[j].Attempt })
+	}
 	for _, e := range hist {
 		if e.Score != nil {
 			scored = append(scored, e.Score.String())

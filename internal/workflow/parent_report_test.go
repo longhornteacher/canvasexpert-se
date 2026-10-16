@@ -55,7 +55,7 @@ func TestBuildStudentReportSections(t *testing.T) {
 	now := time.Date(2026, 10, 16, 12, 0, 0, 0, loc)
 	as, subs := parentFixture(now)
 	rs := ParentReportCourse{}
-	buildStudentReport(&rs, subs, as, now, loc)
+	buildStudentReport(&rs, subs, nil, as, now, loc)
 
 	missing := map[int64]string{}
 	for _, m := range rs.Missing {
@@ -81,11 +81,11 @@ func TestBuildStudentReportSections(t *testing.T) {
 
 func TestHistoryProvenance(t *testing.T) {
 	a := Assignment{ID: 1, Points: "10"}
-	none := historyItem(ParentReportItem{}, Submission{Score: num("7"), EnteredScore: num("7")}, a)
+	none := historyItem(ParentReportItem{}, Submission{Score: num("7"), EnteredScore: num("7")}, nil, a)
 	if !none.FirstUnavailable || none.First != nil {
 		t.Fatalf("no history must be unavailable, not entered_score: %+v", none)
 	}
-	one := historyItem(ParentReportItem{}, Submission{Score: num("7"), History: []Submission{{Attempt: 1, Score: num("7")}}}, a)
+	one := historyItem(ParentReportItem{}, Submission{Score: num("7"), History: []Submission{{Attempt: 1, Score: num("7")}}}, nil, a)
 	if one.First == nil || *one.First != "7" || *one.Latest != "7" {
 		t.Fatalf("single entry = %+v", one)
 	}
@@ -95,5 +95,32 @@ func TestMissingCourseScoreIsFlaggedByEnrollmentRead(t *testing.T) {
 	var e Enrollment
 	if err := json.Unmarshal([]byte(`{"user_id":1,"grades":{"current_score":null}}`), &e); err != nil || e.Grades == nil || e.Grades.CurrentScore != nil {
 		t.Fatalf("null current_score must decode as unavailable: %+v %v", e, err)
+	}
+}
+
+// 2026-10-16 Canvas Live: a same-attempt regrade (0 on 9/16, 80 on 10/08) left
+// one submission_history entry; only the gradebook feed shows the first score.
+func TestGradebookVersionsGiveFirstScoreAndRealChanges(t *testing.T) {
+	loc, _ := time.LoadLocation("America/Chicago")
+	now := time.Date(2026, 10, 16, 12, 0, 0, 0, loc)
+	as := map[int64]Assignment{
+		1: {ID: 1, Name: "Regraded", Published: true, SubmissionTypes: []string{"on_paper"}, DueAt: str("2026-09-11T21:00:00Z"), Points: "100"},
+		2: {ID: 2, Name: "Same score resaved", Published: true, SubmissionTypes: []string{"on_paper"}, DueAt: str("2026-09-11T21:00:00Z"), Points: "100"},
+	}
+	subs := []Submission{
+		{UserID: 9, AssignmentID: 1, Score: num("80"), GradedAt: str("2026-10-08T15:00:44Z"), History: []Submission{{Score: num("80")}}},
+		{UserID: 9, AssignmentID: 2, Score: num("80"), GradedAt: str("2026-10-08T15:00:44Z"), History: []Submission{{Score: num("80")}}},
+	}
+	versions := map[int64][]Submission{
+		1: {{Score: num("0"), GradedAt: str("2026-09-16T17:40:37Z")}, {Score: num("80"), GradedAt: str("2026-10-08T15:00:44Z")}},
+		2: {{Score: num("80"), GradedAt: str("2026-09-18T21:21:41Z")}, {Score: num("80"), GradedAt: str("2026-10-08T15:00:44Z")}},
+	}
+	rs := ParentReportCourse{}
+	buildStudentReport(&rs, subs, versions, as, now, loc)
+	if len(rs.History) != 1 || rs.History[0].AssignmentID != 1 {
+		t.Fatalf("history = %+v (an unchanged resave is not a change)", rs.History)
+	}
+	if h := rs.History[0]; h.First == nil || *h.First != "0" || *h.Latest != "80" {
+		t.Fatalf("history = %+v", h)
 	}
 }

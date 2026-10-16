@@ -13,6 +13,9 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
+// trimPoint shows Canvas's "80.0" as "80"; other decimals are kept.
+func trimPoint(v string) string { return strings.TrimSuffix(v, ".0") }
+
 // ParentConfig is context/parent-updates.md front matter.
 type ParentConfig struct {
 	Schema        int    `yaml:"schema"`
@@ -260,9 +263,9 @@ func (r *ParentRun) Render(sd ParentStudentDraft, student workspace.Student) Ren
 			return "not available"
 		}
 		if possible != "" {
-			return esc(*v + " / " + possible)
+			return esc(trimPoint(*v) + " / " + trimPoint(possible))
 		}
-		return esc(*v)
+		return esc(trimPoint(*v))
 	}
 
 	var b strings.Builder

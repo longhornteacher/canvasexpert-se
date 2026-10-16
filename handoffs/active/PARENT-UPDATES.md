@@ -2,6 +2,19 @@
 
 Created 2026-10-16. **Slice 4 (Band) was dropped by the teacher; ignore every Band reference below.** Direction and evidence: [docs/parent-update-flow.md](../../docs/parent-update-flow.md). Read it first, along with root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`.
 
+## Status (2026-10-16)
+
+Slices 0, 1, 2, 3 and 5 are implemented (commit c9eab22). A read-only Canvas Live dry run on CS8 the same day confirmed `grades.current_score` for all 28 students. It also showed that `submission_history` hides same-attempt regrades, so grade history now reads first scores and "changed in window" from the gradebook history feed. A one-student review page rendered from the report and held the student, who has no enabled parent email.
+
+What remains is the done criterion for slice 3, which needs the teacher at the page:
+
+1. Enable a parent email for one test student on the Students page. The teacher's own address works as a stand-in.
+2. Click **Send a test to me** and confirm the email arrives in the inbox and reads well in Outlook.
+3. Run the same flow from an MCP client (Cowork or Work): `pull_parent_report` → drafts → `start_parent_review` → `review_status`. Record which client was used.
+4. Confirm the defaults in the decisions table, then add `skyward_url` and `sign_off` to `context/parent-updates.md`.
+
+Not built, by choice: a local posting record for correction candidates. The report returns the teacher's comments instead.
+
 ## Goal
 
 From Cowork, Work or Claude Code, the teacher says "send parent updates for CS8." The agent pulls current Canvas data and drafts compact, action-first emails. The teacher reviews them on a private WebUI page with the real recipients shown and clicks Send. The Engine then sends each email through the teacher's classic Outlook. A class-wide Band post, containing no student data, goes out from the same page. The teacher does no copy-paste, and the agent never sees parent addresses or performs the send itself.

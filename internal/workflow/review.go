@@ -27,7 +27,9 @@ type ReviewModel struct {
 	PostLabel string
 	Actions   []ReviewAction
 	Test      bool
-	Cards     []ReviewCard
+	// Email switches the page wording from writing to Canvas to sending email.
+	Email bool
+	Cards []ReviewCard
 }
 
 // ReviewAction is one extra page button that approves-and-runs with its Value.

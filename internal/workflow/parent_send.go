@@ -104,7 +104,7 @@ func (s *Service) BuildParentReview(dir string) (ReviewModel, error) {
 	if e != nil {
 		return ReviewModel{}, e
 	}
-	m := ReviewModel{Kind: "Parent updates", Title: strings.Join(run.Report.Courses, ", ") + " · run " + run.Report.RunID, PostLabel: "Send approved emails", Actions: []ReviewAction{{Value: "drafts", Label: "Fill Outlook Drafts only"}}, Test: true}
+	m := ReviewModel{Kind: "Parent updates", Title: strings.Join(run.Report.Courses, ", ") + " · run " + run.Report.RunID, PostLabel: "Send approved emails", Actions: []ReviewAction{{Value: "drafts", Label: "Fill Outlook Drafts only"}}, Test: true, Email: true}
 	if run.Config.SkywardURL == "" {
 		m.Notice = "The Skyward address is not set in context/parent-updates.md, so emails omit that link."
 	}

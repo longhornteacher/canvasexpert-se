@@ -57,7 +57,7 @@ type reviewView struct {
 	Cards                 []reviewCardView
 	Title, Kind, Secret   string
 	Notice                string
-	AllOrNothing          bool
+	AllOrNothing, Email   bool
 	Action                string
 	Token, Message, Notes string
 	Approved, Held, Done  int
@@ -100,7 +100,7 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 	if err != nil {
 		return reviewView{}, err
 	}
-	v := reviewView{Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, PostLabel: model.PostLabel, Actions: model.Actions, Test: model.Test && h.test != nil, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
+	v := reviewView{Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, PostLabel: model.PostLabel, Actions: model.Actions, Test: model.Test && h.test != nil, Email: model.Email, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
 	for i, c := range model.Cards {
 		cv := reviewCardView{ReviewCard: c, Index: i, Status: "approved"}
 		for _, l := range c.Lines {
@@ -224,7 +224,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if model.AllOrNothing && r.PostForm.Get("action") == "post" {
 		for i, c := range model.Cards {
 			if c.Hold != "" {
-				h.page(w, 409, "Held, nothing was written: "+c.Hold, form)
+				h.page(w, 409, "Held, nothing was written or sent: "+c.Hold, form)
 				return
 			}
 			if r.PostForm.Get("status_"+strconv.Itoa(i)) == "revise" {
