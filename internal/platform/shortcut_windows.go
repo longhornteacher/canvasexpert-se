@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"syscall"
 	"unsafe"
 
@@ -64,7 +63,15 @@ func createDesktopShortcutAt(root, desktop string) (string, error) {
 			if err != nil {
 				return fmt.Errorf("read shortcut target: %w", err)
 			}
-			if !strings.EqualFold(filepath.Clean(previous), target) {
+			previousInfo, err := os.Stat(previous)
+			if err != nil {
+				return fmt.Errorf("inspect existing shortcut target %s: %w; %s was left unchanged", previous, err, path)
+			}
+			targetInfo, err := os.Stat(target)
+			if err != nil {
+				return fmt.Errorf("inspect intended shortcut target %s: %w; %s was left unchanged", target, err, path)
+			}
+			if !os.SameFile(previousInfo, targetInfo) {
 				return fmt.Errorf("%s already points elsewhere (%s); it was left unchanged", path, previous)
 			}
 		}
