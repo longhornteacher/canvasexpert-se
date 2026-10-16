@@ -35,6 +35,14 @@ func TestReusableTeacherSetupAcrossInstalls(t *testing.T) {
 	if err := SaveRosters(a, []CourseRoster{{Instance: config.Instance, CourseID: 12, Members: map[string][]string{student.Ref: {"Blue"}}}}); err != nil {
 		t.Fatal(err)
 	}
+	contacts, err := OpenContacts(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contacts.Students[ContactKey(student)] = StudentContacts{Parents: []ParentContact{{Email: "parent@example.test", EmailEnabled: true}}}
+	if err := contacts.Save(); err != nil {
+		t.Fatal(err)
+	}
 	for _, relative := range []string{"courses/TEST/draft.md", ".cse/hub.json", ".cse/installation.json"} {
 		p, _ := ConstrainPath(a, relative)
 		if err := WriteFile(p, []byte("local only"), 0600); err != nil {
@@ -61,6 +69,10 @@ func TestReusableTeacherSetupAcrossInstalls(t *testing.T) {
 	var gotNotes domain.StudentNotes
 	if _, err := ReadTeacherDocument(b, "context/students.md", &gotNotes); err != nil || gotNotes.Notes[0].StudentRef != restored.Rows[0].Ref {
 		t.Fatal("notes lost", err)
+	}
+	gotContacts, err := OpenContacts(b)
+	if err != nil || len(gotContacts.Students[ContactKey(restored.Rows[0])].Parents) != 1 || !gotContacts.Students[ContactKey(restored.Rows[0])].Parents[0].EmailEnabled {
+		t.Fatal("parent contacts lost", err)
 	}
 	rosters, err := ReadRosters(b)
 	if err != nil || rosters[0].Members[student.Ref][0] != "Blue" {
