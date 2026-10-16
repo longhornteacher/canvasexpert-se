@@ -566,6 +566,9 @@ func (it qfItem) buildChoice() map[string]any {
 		}
 	}
 	entry := map[string]any{"title": it.title(it.Type), "item_body": it.Prompt, "interaction_data": map[string]any{"choices": choices}, "answer_feedback": feedback}
+	if general := it.neutralFeedback(); len(general) > 0 {
+		entry["feedback"] = general
+	}
 	if it.Type == "MC" {
 		entry["interaction_type_slug"], entry["scoring_data"], entry["scoring_algorithm"] = "choice", map[string]any{"value": correct[0]}, "Equivalence"
 	} else {

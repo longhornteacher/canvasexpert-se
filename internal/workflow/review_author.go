@@ -179,6 +179,9 @@ func rationaleReview(it qfItem) string {
 				}
 			}
 		}
+		if it.rationale.Rationale != "" {
+			feedback.WriteString("<p><strong>General feedback</strong></p>" + para(it.rationale.Rationale))
+		}
 	} else if it.rationale.Rationale != "" {
 		feedback.WriteString(para(it.rationale.Rationale))
 	}

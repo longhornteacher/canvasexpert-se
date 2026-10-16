@@ -26,7 +26,7 @@ The root needs `title` and `items`; optional `version` or `quizforge_version`, `
 ]
 ```
 
-MC/MA feedback matches choice IDs; omitted choice IDs use uppercase `A`, `B`, etc. Other auto-scored items use the entry's `rationale` as neutral feedback. Review shows recognized student feedback separately from questions and the teacher answer key. Push does not read item feedback back, so a successful write is not proof of stored feedback or student rendering.
+MC/MA feedback matches choice IDs; omitted choice IDs use uppercase `A`, `B`, etc. An MC/MA entry may also carry a `rationale` beside `choices`, sent as the item's general (neutral) feedback; the general-feedback path for choice items has not been checked against Canvas Live. Other auto-scored items use the entry's `rationale` as neutral feedback. Review shows recognized student feedback separately from questions and the teacher answer key. Push does not read item feedback back, so a successful write is not proof of stored feedback or student rendering.
 
 Differences from the QuizForge contract: every scored item needs an explicit `points` value (the Engine never invents points), and the quiz ID is kept in a sidecar `FILE.cse.json` so an interrupted push resumes the same quiz and adds only the missing items. A New Quiz with the same title that has no sidecar blocks creation (it may be an unfinished push): rename the new quiz or point the sidecar at the existing one. Em dashes in student-visible text become " - ".
 
