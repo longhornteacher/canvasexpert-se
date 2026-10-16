@@ -11,7 +11,7 @@ What remains is the done criterion for slice 3, which needs the teacher at the p
 1. Enable a parent email for one test student on the Students page. The teacher's own address works as a stand-in.
 2. Click **Send a test to me** and confirm the email arrives in the inbox and reads well in Outlook.
 3. Run the same flow from an MCP client (Cowork or Work): `pull_parent_report` → drafts → `start_parent_review` → `review_status`. Record which client was used.
-4. Confirm the defaults in the decisions table, then add `skyward_url` and `sign_off` to `context/parent-updates.md`.
+4. Confirm the defaults in the decisions table, then add `sign_off` to `context/parent-updates.md`. `skyward_url` defaults to the Pearland ISD sign-in.
 
 Not built, by choice: a local posting record for correction candidates. The report returns the teacher's comments instead.
 
@@ -41,7 +41,7 @@ Build with these defaults, keep the values in playbook/context where they are po
 | Send mode | The teacher approves the batch on the page, and the Engine sends. "Fill Drafts only" is an alternative on the same page. |
 | Body format | HTML (titles as links, compact table), with a plain-text alternative |
 | Initiation | Manual: the teacher asks. No scheduling in this handoff. |
-| Skyward URL | Teacher supplies it; stored in `context/parent-updates.md` |
+| Skyward URL | Pearland ISD Family Access sign-in by default; the teacher can change it in `context/parent-updates.md` |
 
 ## Slices
 

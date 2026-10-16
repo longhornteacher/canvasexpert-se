@@ -2,7 +2,7 @@
 
 The judgment calls are yours: who needs an email, what counts as a correction, and the wording. The Engine reads Canvas, computes dates and scores, renders the email, looks up parent addresses and sends. You never see an address and never send anything: the teacher reviews every email on a private page and clicks Send there. Background and the proposed rules live in `docs/parent-update-flow.md` in Dev; the teacher does not need that.
 
-Read `AGENTS.md` and `context/parent-updates.md` first. If `skyward_url` is empty, ask the teacher once for their Skyward Family Access address, save it in that file's front matter, and continue.
+Read `AGENTS.md` and `context/parent-updates.md` first. `skyward_url` defaults to Pearland ISD's Skyward Family Access sign-in; change it only if the teacher gives a different address.
 
 ## Steps
 

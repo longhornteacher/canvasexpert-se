@@ -1,7 +1,7 @@
 ---
 schema: 1
-# The teacher's Skyward Family Access address. Parent emails link to it for the official course grade.
-skyward_url: ""
+# Skyward Family Access sign-in. Parent emails link to it for the official course grade. The default is Pearland ISD's.
+skyward_url: "https://skyward-pearland.iscorp.com/scripts/wsisa.dll/WService=wsedupearlandtx/seplog01.w"
 # Shown in every email footer. The default is the district Bobcat Hour sign-up.
 bobcat_hour_url: "https://flex.securly.com/login"
 bobcat_hour_text: "Sign up for tutorials and clubs"

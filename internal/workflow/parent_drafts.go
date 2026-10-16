@@ -77,6 +77,9 @@ func LoadParentRun(root, dir string) (*ParentRun, error) {
 	if _, e := workspace.ReadTeacherDocument(root, "context/parent-updates.md", &run.Config); e != nil && !os.IsNotExist(e) {
 		return nil, fmt.Errorf("context/parent-updates.md: %w", e)
 	}
+	if run.Config.SkywardURL == "" {
+		run.Config.SkywardURL = "https://skyward-pearland.iscorp.com/scripts/wsisa.dll/WService=wsedupearlandtx/seplog01.w"
+	}
 	if run.Config.BobcatHourURL == "" {
 		run.Config.BobcatHourURL = "https://flex.securly.com/login"
 	}
