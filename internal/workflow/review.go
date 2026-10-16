@@ -22,8 +22,16 @@ type ReviewModel struct {
 	// needs every card approved, and any revise sends the whole thing back.
 	AllOrNothing bool
 	Action       string // label of the all-or-nothing button; default "Create in Canvas"
-	Cards        []ReviewCard
+	// PostLabel replaces "Post approved"; Actions add buttons that run the same
+	// poster with their Value; Test adds a "Send a test to me" button.
+	PostLabel string
+	Actions   []ReviewAction
+	Test      bool
+	Cards     []ReviewCard
 }
+
+// ReviewAction is one extra page button that approves-and-runs with its Value.
+type ReviewAction struct{ Value, Label string }
 
 // ReviewFact is one labelled setting shown on a card.
 type ReviewFact struct{ Label, Value string }

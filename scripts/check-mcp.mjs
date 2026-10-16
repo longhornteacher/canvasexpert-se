@@ -56,7 +56,7 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 26);
+  assert.equal(names.length, 28);
   const configured = JSON.parse(await call('list_courses'));
   assert.equal(configured.source, 'configured');
   assert.equal(configured.root, root);
@@ -143,7 +143,7 @@ try {
   assert.equal(unavailable.mode, 'sync');
   assert.match(unavailable.availability_error, /unavailable/);
   await call('read_workspace_file', { path: 'context/grading.md' }, true);
-  console.log(`PASS: 26 tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, references, discovery, path exclusions, guarded context, binary asset and QuizForge/document validation${review ? ', real local review and revision status' : ''}. No Canvas writes.`);
+  console.log(`PASS: 28 tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, references, discovery, path exclusions, guarded context, binary asset and QuizForge/document validation${review ? ', real local review and revision status' : ''}. No Canvas writes.`);
   console.log(`Synthetic fixture: ${root}`);
 } finally {
   child.stdin.end();

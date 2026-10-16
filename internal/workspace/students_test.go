@@ -19,10 +19,11 @@ func TestStudentRenameAndInstanceIdentity(t *testing.T) {
 		t.Fatal(e)
 	}
 	s.Rows[0].Alias = "Custom Alias"
+	s.Rows[0].FirstName = "Annie"
 	s.Rows[0].Monitored = true
 	s.Rows[0].ExtraTime = true
 	b, e := s.Upsert(a.Instance, 7, "Ana Jones", "Ana", "", "")
-	if e != nil || b.Ref != a.Ref || b.Alias != "Custom Alias" || !b.Monitored || !b.ExtraTime {
+	if e != nil || b.Ref != a.Ref || b.Alias != "Custom Alias" || b.FirstName != "Annie" || !b.Monitored || !b.ExtraTime {
 		t.Fatalf("identity changed: %#v %v", b, e)
 	}
 	other, e := s.Upsert("https://other.example", 7, "Other Person", "Other", "", "")
@@ -37,7 +38,7 @@ func TestStudentRenameAndInstanceIdentity(t *testing.T) {
 		t.Fatal(e)
 	}
 	v, e := s.Resolve(a.Instance, a.Ref)
-	if e != nil || v.Name != "Ana Jones" || !v.ExtraTime {
+	if e != nil || v.Name != "Ana Jones" || v.FirstName != "Annie" || !v.ExtraTime {
 		t.Fatal("save/resolve failed")
 	}
 	if _, e = s.Resolve(other.Instance, a.Ref); e == nil {
@@ -78,8 +79,9 @@ func TestNotesAmbiguityAndPlaceholder(t *testing.T) {
 	if len(got) != 1 || got[0] != "private accommodation" || len(w) != 1 {
 		t.Fatal("ambiguous notes attached")
 	}
+	a.FirstName = "Sammy"
 	text := ReplaceStudentName("{{student_name}}, your quotation says Pikachu.", a)
-	if text != "Sam, your quotation says Pikachu." || strings.Contains(text, "private") {
+	if text != "Sammy, your quotation says Pikachu." || strings.Contains(text, "private") {
 		t.Fatal("broad replacement")
 	}
 }

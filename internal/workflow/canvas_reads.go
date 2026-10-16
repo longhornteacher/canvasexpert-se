@@ -86,6 +86,9 @@ type Enrollment struct {
 	Type   string     `json:"type"`
 	State  string     `json:"enrollment_state"`
 	User   CanvasUser `json:"user"`
+	Grades *struct {
+		CurrentScore *json.Number `json:"current_score"`
+	} `json:"grades"`
 }
 
 func StudentEnrollments(ctx context.Context, c *canvas.Client, courseID int64) ([]Enrollment, error) {

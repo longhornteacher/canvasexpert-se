@@ -182,3 +182,37 @@ func TestReviewReportsActualPostOutcomeAndSavedPath(t *testing.T) {
 		})
 	}
 }
+
+func TestReviewExtraActionAndTestButton(t *testing.T) {
+	model := reviewModelFixture()
+	model.PostLabel, model.Test = "Send approved emails", true
+	model.Actions = []workflow.ReviewAction{{Value: "drafts", Label: "Fill Outlook Drafts only"}}
+	var got string
+	tested := 0
+	h := &reviewHandler{origin: "http://127.0.0.1:1234", secret: "secret", path: filepath.Join(t.TempDir(), "results.md"), ctx: context.Background(), done: make(chan struct{}),
+		build: func() (workflow.ReviewModel, error) { return model, nil },
+		post: func(ctx context.Context, _ map[string]bool) (ReviewPostResult, error) {
+			got = ReviewActionFrom(ctx)
+			return ReviewPostResult{Status: "completed"}, nil
+		},
+		test: func(context.Context) (string, error) { tested++; return "Sent a test copy.", nil }}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/review", nil))
+	for _, want := range []string{"Send approved emails", "Fill Outlook Drafts only", "Send a test to me"} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Fatalf("page missing %q", want)
+		}
+	}
+	r := reviewForm(h, model.ReviewDigest(), "post", nil)
+	r.URL.Path = "/test"
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if tested != 1 || h.outcome != nil || !strings.Contains(w.Body.String(), "Sent a test copy.") {
+		t.Fatalf("test button must not finish the review: tested=%d outcome=%v", tested, h.outcome)
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, reviewForm(h, model.ReviewDigest(), "drafts", nil))
+	if got != "drafts" || h.outcome == nil {
+		t.Fatalf("extra action not passed to the poster: %q", got)
+	}
+}

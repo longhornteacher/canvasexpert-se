@@ -1,6 +1,6 @@
 # Parent Update Flow
 
-Preliminary planning · Updated 2026-10-16 · No implementation started
+Updated 2026-10-16 · Implemented locally (slices 0-3, 5); Outlook route verified on NEWSPEEDY only; Band is dropped
 
 Purpose: preserve the agreed direction and unresolved choices for later architecture sessions and an eventual coding handoff. Read alongside [ARCHITECTURE.md](../ARCHITECTURE.md) and [SCORING-RULES.md](../SCORING-RULES.md). Proposals below are not settled requirements.
 
@@ -130,6 +130,13 @@ Dependencies and limits:
 - This rides on the general Cowork/Work MCP adoption still pending in [capability evidence](engine-capabilities.md). Outlook adds no new client requirement.
 - Sending needs the PC on, the teacher signed in, and classic Outlook configured. A hosted tunnel route still sends from that PC. Scheduled or unattended sending inherits the same limits.
 - Not yet verified: Go COM send, the district PC, and any MCP client calling this flow.
+
+## Implementation notes (2026-10-16)
+
+- `internal/outlook` (go-ole, one locked COM thread); `cse-probe outlook-self-test` sent a message to the profile's own address from Go on NEWSPEEDY. District PC, inbox arrival and MCP clients are not yet verified.
+- `pull_parent_report` / `cse parent-report COURSE... [REF...]` writes `courses/<first course>/parent-updates/<run>/report.json`; the agent writes `drafts.json` beside it (contract in `playbooks/parent-updates.md`); `start_parent_review` / `cse parent-review RUN_FOLDER` opens the review page, which sends one fresh Outlook message per enabled parent address and records outcomes by student ref in `outcomes.json`.
+- Not built from the handoff: a local CE-SE posting record for correction candidates (teacher comments are returned instead).
+- **Band dropped (2026-10-16):** the teacher does not want Band in this flow. No Band post, card or `band_post` field exists; earlier Band notes above are historical.
 
 ## Architecture and current evidence
 

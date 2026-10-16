@@ -122,7 +122,7 @@ func (s *StudentStore) Upsert(instance string, userID int64, name, shortName, si
 			v.Name = name
 			v.SISID = sisID
 			v.Login = login
-			if first := firstName(name, shortName); first != "" {
+			if first := firstName(name, shortName); v.FirstName == "" && first != "" {
 				v.FirstName = first
 			}
 			return *v, nil

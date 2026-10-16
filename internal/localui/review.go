@@ -41,6 +41,18 @@ type ReviewPostResult struct{ Status, Summary, Path string }
 
 type ReviewPoster func(ctx context.Context, skip map[string]bool) (ReviewPostResult, error)
 
+// ReviewTester runs the page's "Send a test to me" button; it changes nothing the review tracks.
+type ReviewTester func(ctx context.Context) (string, error)
+
+type reviewActionKey struct{}
+
+// ReviewActionFrom reports which extra page button (workflow.ReviewAction.Value)
+// started a post; it is empty for the ordinary post button.
+func ReviewActionFrom(ctx context.Context) string {
+	v, _ := ctx.Value(reviewActionKey{}).(string)
+	return v
+}
+
 type reviewView struct {
 	Cards                 []reviewCardView
 	Title, Kind, Secret   string
@@ -49,6 +61,9 @@ type reviewView struct {
 	Action                string
 	Token, Message, Notes string
 	Approved, Held, Done  int
+	PostLabel             string
+	Actions               []workflow.ReviewAction
+	Test                  bool
 }
 type reviewCardView struct {
 	workflow.ReviewCard
@@ -67,6 +82,7 @@ type reviewHandler struct {
 	origin, secret, path string
 	build                func() (workflow.ReviewModel, error)
 	post                 ReviewPoster
+	test                 ReviewTester
 	ctx                  context.Context
 	mu                   sync.Mutex
 	outcome              *ReviewOutcome
@@ -84,7 +100,7 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 	if err != nil {
 		return reviewView{}, err
 	}
-	v := reviewView{Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
+	v := reviewView{Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, PostLabel: model.PostLabel, Actions: model.Actions, Test: model.Test && h.test != nil, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
 	for i, c := range model.Cards {
 		cv := reviewCardView{ReviewCard: c, Index: i, Status: "approved"}
 		for _, l := range c.Lines {
@@ -148,7 +164,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.page(w, 200, "", nil)
 		return
 	}
-	if r.Method != http.MethodPost || r.URL.Path != "/submit" {
+	if r.Method != http.MethodPost || (r.URL.Path != "/submit" && r.URL.Path != "/test") {
 		reviewError(w, http.StatusNotFound, "Review page not found", "This temporary review link is not available.")
 		return
 	}
@@ -167,6 +183,20 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if r.URL.Path == "/test" {
+		if h.test == nil || h.outcome != nil {
+			reviewError(w, http.StatusNotFound, "Review page not found", "This temporary review link is not available.")
+			return
+		}
+		ctx, cancel := context.WithTimeout(h.ctx, 2*time.Minute)
+		defer cancel()
+		msg, err := h.test(ctx)
+		if err != nil {
+			msg = "Test email not sent: " + err.Error()
+		}
+		h.page(w, 200, msg, nil)
+		return
+	}
 	if h.outcome != nil {
 		reviewError(w, http.StatusGone, "Review is already finished", "This temporary review is complete. You can close this tab.")
 		return
@@ -229,9 +259,17 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reviewError(w, http.StatusInternalServerError, "Could not save review notes", err.Error())
 		return
 	}
-	if r.PostForm.Get("action") == "post" && len(out.Approved) > 0 {
+	action := r.PostForm.Get("action")
+	extra := false
+	for _, a := range model.Actions {
+		extra = extra || a.Value == action
+	}
+	if (action == "post" || extra) && len(out.Approved) > 0 {
 		ctx, cancel := context.WithTimeout(h.ctx, 10*time.Minute)
 		defer cancel()
+		if extra {
+			ctx = context.WithValue(ctx, reviewActionKey{}, action)
+		}
 		result, perr := h.post(ctx, skip)
 		out.Status, out.PostSummary = result.Status, result.Summary
 		if result.Path != "" {
@@ -265,6 +303,11 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Review serves a temporary loopback review page for a results file and returns
 // when the teacher clicks Post approved or Send revisions only.
 func Review(ctx context.Context, path string, build func() (workflow.ReviewModel, error), post ReviewPoster, output io.Writer) (ReviewOutcome, error) {
+	return ReviewWithTest(ctx, path, build, post, nil, output)
+}
+
+// ReviewWithTest is Review plus an optional test action for the page.
+func ReviewWithTest(ctx context.Context, path string, build func() (workflow.ReviewModel, error), post ReviewPoster, test ReviewTester, output io.Writer) (ReviewOutcome, error) {
 	if output == nil {
 		output = io.Discard
 	}
@@ -285,7 +328,7 @@ func Review(ctx context.Context, path string, build func() (workflow.ReviewModel
 		return ReviewOutcome{}, errors.New("could not create the local review form")
 	}
 	origin := "http://" + listener.Addr().String()
-	h := &reviewHandler{origin: origin, secret: hex.EncodeToString(nonce[:]), path: path, build: build, post: post, ctx: ctx, done: make(chan struct{})}
+	h := &reviewHandler{origin: origin, secret: hex.EncodeToString(nonce[:]), path: path, build: build, post: post, test: test, ctx: ctx, done: make(chan struct{})}
 	server := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 11 * time.Minute, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()

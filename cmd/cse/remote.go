@@ -23,7 +23,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-page": {2, 2}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-page": {2, 2}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -49,6 +49,13 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		file = p
 	}
 	quizReview := false
+	if cmd == "parent-review" {
+		p, e := documentPath(root, args[0])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		file = p
+	}
 	if cmd == "review" {
 		p, e := documentPath(root, args[0])
 		if e != nil {
@@ -274,6 +281,14 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}
+	case "parent-report":
+		courseList, refList := splitParentArgs(args)
+		path, packet, e := service.ParentReport(ctx, courseList, refList, time.Now())
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, path)
+		fmt.Fprintf(out, "%d students\n", len(packet.Students))
 	case "pull-work":
 		nickname, query := "", ""
 		if len(args) > 0 {
@@ -316,6 +331,29 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if e != nil {
 			return fail(e, progress)
 		}
+	case "parent-review":
+		sender := workflow.OutlookSender{}
+		outcome, e := localui.ReviewWithTest(ctx, filepath.Join(file, "drafts.json"), func() (workflow.ReviewModel, error) {
+			return service.BuildParentReview(file)
+		}, func(ctx context.Context, skip map[string]bool) (localui.ReviewPostResult, error) {
+			status, summary, e := service.SendParentUpdates(ctx, file, skip, localui.ReviewActionFrom(ctx) == "drafts", sender)
+			return localui.ReviewPostResult{Status: status, Summary: summary, Path: filepath.Join(file, "outcomes.json")}, e
+		}, func(ctx context.Context) (string, error) {
+			return service.SendParentTest(file, sender)
+		}, progress)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		fmt.Fprintf(out, "Review finished. Outcome: %s\n", outcome.Status)
+		if outcome.PostSummary != "" {
+			fmt.Fprintln(out, "Delivery:", outcome.PostSummary)
+		}
+		encoded, _ := json.Marshal(struct {
+			Status string                  `json:"outcome"`
+			Path   string                  `json:"result_path,omitempty"`
+			Revise []localui.ReviewRevision `json:"revision_notes,omitempty"`
+		}{outcome.Status, outcome.Path, outcome.Revise})
+		fmt.Fprintf(out, "Review result: %s\n", encoded)
 	case "review":
 		outcome, e := localui.Review(ctx, file, func() (workflow.ReviewModel, error) {
 			if b, _ := os.ReadFile(file); documentKind(b) == "assignment" {
@@ -474,4 +512,15 @@ func statusWriter(progress io.Writer) io.Writer {
 		}
 	}
 	return progress
+}
+
+// splitParentArgs separates course nicknames from student refs: refs are the
+// Engine's s-prefixed identifiers; everything before the first one is a course.
+func splitParentArgs(args []string) (courses, refs []string) {
+	for i, a := range args {
+		if strings.HasPrefix(a, "s-") && i > 0 {
+			return args[:i], args[i:]
+		}
+	}
+	return args, nil
 }

@@ -247,6 +247,15 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.page(w, 400, "Aliases need 1–80 characters, without line breaks.")
 			return
 		}
+		if raw, sent := r.PostForm["goes_by_"+v.Ref]; sent {
+			name := strings.TrimSpace(raw[0])
+			if name == "" || len([]rune(name)) > 80 || strings.ContainsAny(raw[0], "\r\n\x00") {
+				h.store.Rows = before
+				h.page(w, 400, "Goes By names need 1-80 characters, without line breaks.")
+				return
+			}
+			v.FirstName = name
+		}
 		v.Alias = a
 		v.Monitored = r.PostForm.Get("monitored_"+v.Ref) == "on"
 		v.ExtraTime = r.PostForm.Get("extra_time_"+v.Ref) == "on"

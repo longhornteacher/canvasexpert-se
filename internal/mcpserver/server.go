@@ -72,6 +72,15 @@ type PullWorkInput struct {
 	Assignment string `json:"assignment,omitempty" jsonschema:"Optional assignment title or ID"`
 }
 
+type ParentReportInput struct {
+	Courses  []string `json:"courses" jsonschema:"Configured course nicknames; one email can cover several courses"`
+	Students []string `json:"students,omitempty" jsonschema:"Optional student refs; omit for every active student"`
+}
+
+type ParentReviewInput struct {
+	Folder string `json:"folder" jsonschema:"Workspace-relative parent-update run folder under courses/ holding report.json and drafts.json"`
+}
+
 type CourseQueryInput struct {
 	Course string `json:"course" jsonschema:"Configured course nickname"`
 	Query  string `json:"query" jsonschema:"Assignment title or ID, or Page ID or Canvas link"`
@@ -138,6 +147,16 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, args...)
 	})
+	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates (course score, missing work, correction candidates, due soon, grade history) into courses/<course>/parent-updates/<run>/report.json. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
+		return s.command(ctx, append(append([]string{"parent-report"}, in.Courses...), in.Students...)...)
+	})
+	addActionTool(server, "start_parent_review", "Open the private page where the teacher reviews parent emails with their real recipients and sends them through Outlook. Returns only the loopback URL; call review_status afterward for counts and outcomes by student reference. This tool never sends and never exposes addresses.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
+		dir, err := s.coursePath(in.Folder)
+		if err != nil {
+			return TextOutput{}, err
+		}
+		return s.startSession(ctx, "review", []string{"parent-review", dir})
+	})
 	addReadTool(server, "list_modules", "List a configured course's Canvas modules through the CE-SE Engine.", func(ctx context.Context, _ *mcp.CallToolRequest, in CourseInput) (TextOutput, error) {
 		return s.command(ctx, "modules", in.Course)
 	})
@@ -197,7 +216,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "list_courses", "list_modules", "pull_work", "pull_assignment", "pull_page", "start_review", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "list_courses", "list_modules", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "start_review", "start_parent_review", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

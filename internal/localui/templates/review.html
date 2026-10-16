@@ -27,7 +27,7 @@
 <textarea name="note_{{.Index}}" placeholder="What should the agent change?">{{.Note}}</textarea>{{end}}
 </section>{{end}}</main>
 <footer><div><span id="summary">{{if .AllOrNothing}}Everything approved: go ahead{{else}}Post {{.Approved}} approved, {{.Held}} held{{end}}</span>
-<button class="primary" id="postbtn" name="action" value="post">{{if .AllOrNothing}}{{if .Action}}{{.Action}}{{else}}Create in Canvas{{end}}{{else}}Post approved{{end}}</button><button name="action" value="revise">Send revisions only (post nothing)</button>
+<button class="primary" id="postbtn" name="action" value="post">{{if .AllOrNothing}}{{if .Action}}{{.Action}}{{else}}Create in Canvas{{end}}{{else if .PostLabel}}{{.PostLabel}}{{else}}Post approved{{end}}</button>{{range .Actions}}<button name="action" value="{{.Value}}">{{.Label}}</button>{{end}}{{if .Test}}<button formaction="/test" formnovalidate>Send a test to me</button>{{end}}<button name="action" value="revise">Send revisions only (post nothing)</button>
 <span class="scope">{{if .AllOrNothing}}One-piece creation: all items must be approved; revision or hold means nothing can be written.{{else}}Only approved items can be posted. Held, already-posted and revised items are skipped.{{end}}</span></div></footer>
 </form><script>
 (function(){function upd(){var a=0,r=0,h=0;document.querySelectorAll('.review-card').forEach(function(c){

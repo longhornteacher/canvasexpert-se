@@ -12,6 +12,7 @@ import (
 
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/doctor"
+	"canvasexpertse/internal/outlook"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/playbooks"
 	"canvasexpertse/internal/workflow"
@@ -54,7 +55,7 @@ type CanvasGetInput struct {
 }
 
 type EngineInfoInput struct {
-	Operation      string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, rules-location, set-rules-location, playbooks-status, or replace-playbook"`
+	Operation      string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, or replace-playbook"`
 	SyncRoot       string `json:"sync_root,omitempty" jsonschema:"Explicit teacher-rules directory for set-rules-location; empty selects local UserInstall mode"`
 	Path           string `json:"path,omitempty" jsonschema:"Seed-managed workspace-relative file for replace-playbook"`
 	ExpectedSHA256 string `json:"expected_sha256,omitempty" jsonschema:"Current hash from playbooks-status, or missing when explicitly adding an absent file"`
@@ -119,10 +120,18 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		return s.command(ctx, "api", in.Path)
 	})
-	addActionTool(server, "engine_info", "Read Engine build/version; run doctor with bounded authenticated read-only Canvas and same-UserInstall hub checks (or offline:true to skip network checks); inspect/set teacher-rules authority; or compare and explicitly replace one seed-managed playbook. Doctor reports categorized results and never returns Canvas identity, credentials, or raw responses, and does not inspect client settings. playbooks-status returns active-rule paths and hashes; replace-playbook requires path plus expected_sha256 (current hash or missing). Replacement archives the prior file and never replaces context preferences.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
+	addActionTool(server, "engine_info", "Read Engine build/version; run doctor with bounded authenticated read-only Canvas and same-UserInstall hub checks (or offline:true to skip network checks); inspect/set teacher-rules authority; outlook-status reports whether classic Outlook can send parent updates (a boolean and reason, never an address); or compare and explicitly replace one seed-managed playbook. Doctor reports categorized results and never returns Canvas identity, credentials, or raw responses, and does not inspect client settings. playbooks-status returns active-rule paths and hashes; replace-playbook requires path plus expected_sha256 (current hash or missing). Replacement archives the prior file and never replaces context preferences.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
 		op := in.Operation
 		if op == "" {
 			op = "version"
+		}
+		if op == "outlook-status" {
+			available, reason := outlook.Status()
+			b, err := json.Marshal(struct {
+				Available bool   `json:"outlook_available"`
+				Reason    string `json:"reason,omitempty"`
+			}{available, reason})
+			return TextOutput{Text: string(b)}, err
 		}
 		if op == "rules-location" {
 			location, err := workspace.GetRulesLocation(s.root)
@@ -180,7 +189,7 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 			return TextOutput{Text: in.Path + " replaced with this Engine's seed; previous copy archived under playbook-old."}, nil
 		}
 		if op != "version" && op != "doctor" && op != "link" {
-			return TextOutput{}, errors.New("operation must be version, doctor, link, rules-location, set-rules-location, playbooks-status, or replace-playbook")
+			return TextOutput{}, errors.New("operation must be version, doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, or replace-playbook")
 		}
 		result, err := s.command(ctx, op)
 		if op == "version" {
