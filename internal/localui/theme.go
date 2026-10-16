@@ -8,7 +8,11 @@ func SEExpansion() string { return "Special Edition" }
 // hubNavFor returns the shared primary and secondary navigation for a hub page,
 // built from the registered pages' nav slots. Its arguments are internal route
 // labels, never request data.
-func hubNavFor(primary, secondary string) string {
+func hubNavFor(primary, secondary string, appearance ...appearanceData) string {
+	var control string
+	if len(appearance) > 0 {
+		control = string(appearance[0].Control())
+	}
 	link := func(label, href string, current bool) string {
 		if current {
 			return fmt.Sprintf(`<a href="%s" aria-current="page">%s</a>`, href, label)
@@ -28,5 +32,5 @@ func hubNavFor(primary, secondary string) string {
 		secondaryNav = `<nav class="hub-subnav" aria-label="` + primary + `">` + secondaryNav + `</nav>`
 	}
 	return `<header class="hub-header"><a class="hub-brand" href="/">CanvasExpert <span>SE</span></a><nav class="hub-nav" aria-label="Main navigation">` +
-		tabs + `</nav></header>` + secondaryNav
+		tabs + `</nav>` + control + `</header>` + secondaryNav
 }

@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CanvasExpert: Special Edition</title>
 <style>{{pageCSS}}</style>
 <main class="wide">
-{{nav "Home" ""}}
+{{nav "Home" "" .Appearance}}
 <section class="home-status-grid" aria-label="Connection status">
 <section class="card home-status" id="home-canvas" data-canvas-health data-state="{{.CanvasHealth}}">
 <h2><span class="status-mark" data-health-mark aria-hidden="true"></span>Canvas</h2>
@@ -35,4 +35,5 @@
 <p class="home-agent"><span>Teaching app</span><a href="/connect">Connect CE-SE to the app where you teach</a></p>
 <script src="/_cse/canvas-health.js" defer></script>
 </main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
 </html>

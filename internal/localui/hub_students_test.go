@@ -241,8 +241,8 @@ func TestClassroomKeepsUnsavedEditsInCurrentTab(t *testing.T) {
 	}
 	coursesResponse := hubGet(h, "/courses")
 	courses := coursesResponse.Body.String()
-	if csp := coursesResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "connect-src") {
-		t.Fatalf("course draft CSP grants unnecessary access: %s", csp)
+	if csp := coursesResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || !strings.Contains(csp, "connect-src 'self'") || pages["/courses"].Connect {
+		t.Fatalf("course appearance needs local requests without Canvas health polling: %s", csp)
 	}
 	if !strings.Contains(courses, `data-draft-key="courses:nonce"`) || !strings.Contains(courses, `name="active_11"`) || !strings.Contains(courses, `name="nick_11"`) {
 		t.Fatal("course page does not expose draft-restorable controls")

@@ -56,6 +56,7 @@ var capabilityGroups = []capabilityGroup{
 		Title: "Partial or awaiting meaningful validation", Status: capabilityYellow,
 		Summary: "Some pieces work, but the limits and remaining checks matter before relying on the whole workflow.",
 		Items: []capability{
+			{"Light/Dark WebUI appearance", "Implemented and reviewed 2026-10-16: Studio light styling, the existing dark palette, and an accessible switch that remembers an explicit choice in the active teacher-setup authority. Unset follows the OS. Local Go fixtures cover shared UserSync routing, isolated authenticated saves and standalone/terminal pages. Synthetic Edge browser checks cover OS changes and explicit overrides, new ports, unsaved settings/contact/review state, save failure, keyboard switching, and desktop/375px/320px layouts without JS or CSP errors. Teacher acceptance and actual provider delivery remain pending; this is local evidence, not Canvas Live proof."},
 			{"Native Windows UserSync folder chooser", "Updated 2026-10-15: Browse calls the Windows Shell directly, removing its PowerShell/PATH and .NET dependency. An opt-in native test with PATH empty selected a temporary Unicode folder with spaces, canceled a selection, and closed on request cancellation. No admin access or extra runtime is required. Teacher confirmation from the installed Hub remains pending; paste-path fallback is retained."},
 			{"Portable startup without PATH changes", "Reviewed 2026-10-15: packaged launchers and MCP connections use explicit Engine paths; no CE-SE PATH entry or developer runtime is required. Dev registration helper now invokes the selected Engine directly, and the Claude Explorer fallback uses the Windows directory API. Local empty-PATH fixtures check these mechanics; real client adoption remains pending. Moving UserInstall requires reconnecting the apps to its new path."},
 			{"Restrictive district Windows 11", "Forecast reviewed 2026-10-15, not district validation: current Engine and MCP launcher are unsigned. Application/script allowlists, protected-folder writes and local agent/extension permissions can prevent setup despite no-admin and empty-PATH operation. Canvas transport uses platform TLS trust and environment proxies, with no Windows automatic-proxy/PAC integration. Loopback browser access, credential storage and Canvas token permissions await observation on the actual district PC. See docs/engine-capabilities.md."},
@@ -100,14 +101,15 @@ var capabilityGroups = []capabilityGroup{
 }
 
 func init() {
-	register(page{Path: "/capabilities", Template: "capabilities",
+	register(page{Path: "/capabilities", Template: "capabilities", Scripts: []string{"appearance.js"},
 		Nav:    []navSlot{{Primary: "Guide", Label: "Capabilities", Order: 42}},
 		Handle: (*Hub).capabilitiesPage})
 }
 
 func (h *Hub) capabilitiesPage(w http.ResponseWriter, r *http.Request) {
 	h.render(w, http.StatusOK, tmpl("capabilities"), struct {
-		Reviewed string
-		Groups   []capabilityGroup
-	}{capabilitiesReviewed, capabilityGroups})
+		Appearance appearanceData
+		Reviewed   string
+		Groups     []capabilityGroup
+	}{appearanceFor(h.root, h.secret), capabilitiesReviewed, capabilityGroups})
 }

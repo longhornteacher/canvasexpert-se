@@ -89,6 +89,15 @@ func tmpl(name string) *template.Template {
 	return t
 }
 
+func hasAppearance(p *page) bool {
+	for _, s := range p.Scripts {
+		if s == "appearance.js" {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *page) allows(method string) bool {
 	if len(p.Methods) == 0 {
 		return method == http.MethodGet

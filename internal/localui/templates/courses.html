@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CanvasExpert-SE courses</title>
 <style>{{pageCSS}}</style>
 <main class="wide">
-{{nav "Classroom" "Courses"}}
+{{nav "Classroom" "Courses" .Appearance}}
 <h1>Select active courses</h1>
 <p>Choose current courses and set a short nickname for each.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
@@ -18,4 +18,5 @@
 </form>
 <script src="/_cse/drafts.js" defer></script>
 </main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
 </html>

@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CanvasExpert-SE students</title>
 <style>{{pageCSS}}</style>
 <main class="wide">
-{{if .Hub}}{{nav "Classroom" "Students"}}{{end}}
+{{if .Hub}}{{nav "Classroom" "Students" .Appearance}}{{else}}{{.Appearance.Control}}{{end}}
 <h1>Students</h1>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 {{if .Hub}}{{if .Tabs}}<nav class="course-tabs" aria-label="Active courses">{{range .Tabs}}<a href="/students?course={{.ID}}" {{if .Selected}}aria-current="page"{{end}}>{{.Name}}</a>{{end}}</nav>
@@ -23,6 +23,7 @@
 </form>{{end}}
 <script src="/_cse/contacts.js" defer></script>{{if .Hub}}<script src="/_cse/drafts.js" defer></script>{{end}}
 </main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
 </html>
 
 {{define "parent-contact"}}

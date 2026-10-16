@@ -8,6 +8,7 @@ import (
 )
 
 type connectionData struct {
+	Appearance                                             appearanceData
 	Secret, Root, Message, Notice, Client, ExistingInstall string
 	ResultLabel, CheckLabel                                string
 	Result                                                 installation.Result
@@ -18,7 +19,7 @@ type connectionData struct {
 
 func init() {
 	register(
-		page{Path: "/connect", Methods: []string{http.MethodGet, http.MethodPost}, Template: "connect",
+		page{Path: "/connect", Methods: []string{http.MethodGet, http.MethodPost}, Template: "connect", Scripts: []string{"appearance.js"},
 			Nav:    []navSlot{{Primary: "Settings", Label: "Agent", Order: 35}},
 			Handle: (*Hub).connectionPage},
 		page{Path: "/connect/extension", Handle: (*Hub).connectionExtension},
@@ -92,6 +93,7 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 			h.connection.Message = "Choose a connection action."
 		}
 	}
+	h.connection.Appearance = appearanceFor(h.root, h.secret)
 	h.connection.Secret, h.connection.Root = h.secret, h.root
 	h.connection.Found = installation.Inspect(h.root)
 	h.connection.ResultLabel = connectionResultLabel(h.connection.Result)

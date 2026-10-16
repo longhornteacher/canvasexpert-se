@@ -405,7 +405,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		} else if *rootOpt != "" {
 			return fail(inputError(rootErr), progress)
 		}
-		if e := localui.SetupForOrigin(ctx, progress, origin); e != nil {
+		if e := localui.SetupForRoot(ctx, progress, origin, setupRoot); e != nil {
 			return fail(e, progress)
 		}
 		if setupRoot != "" {

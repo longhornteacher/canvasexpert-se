@@ -352,7 +352,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return localui.ReviewPostResult{Status: status, Summary: summary, Path: filepath.Join(file, "outcomes.json")}, e
 		}, func(ctx context.Context) (string, error) {
 			return service.SendParentTest(file, sender)
-		}, progress)
+		}, progress, root)
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
@@ -361,8 +361,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			fmt.Fprintln(out, "Delivery:", outcome.PostSummary)
 		}
 		encoded, _ := json.Marshal(struct {
-			Status string                  `json:"outcome"`
-			Path   string                  `json:"result_path,omitempty"`
+			Status string                   `json:"outcome"`
+			Path   string                   `json:"result_path,omitempty"`
 			Revise []localui.ReviewRevision `json:"revision_notes,omitempty"`
 		}{outcome.Status, outcome.Path, outcome.Revise})
 		fmt.Fprintf(out, "Review result: %s\n", encoded)
@@ -404,7 +404,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				status = "partial"
 			}
 			return localui.ReviewPostResult{Status: status, Summary: summary, Path: report.Path}, e
-		}, progress)
+		}, progress, root)
 		if e != nil {
 			return fail(inputError(e), progress)
 		}

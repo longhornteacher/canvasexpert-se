@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Connect your teaching assistant</title>
 <style>{{pageCSS}}</style>
 <main class="wide">
-{{nav "Settings" "Agent"}}
+{{nav "Settings" "Agent" .Appearance}}
 <h1>Connect your teaching assistant</h1>
 <p>CE-SE connects to every teaching app it finds on this PC and works with the files in <code>{{.Root}}</code>. Installed one later? Come back and connect again.</p>
 <p>Found on this PC: {{if .Found.CoworkConfigFound}}<b>Claude</b> {{end}}{{if .Found.WorkConfigFound}}<b>ChatGPT</b> {{end}}{{if .Found.AntigravityConfigFound}}<b>Antigravity</b>{{end}}{{if not (or .Found.CoworkConfigFound .Found.WorkConfigFound .Found.AntigravityConfigFound)}}no supported app yet{{end}}</p>
@@ -27,4 +27,5 @@
 <p>Your teaching preferences stay in UserInstall or your configured UserSync folder. You can add them progressively while working.</p>
 <a class="go" href="/settings?section=connections">Canvas, teacher rules and UserSync</a></details>
 </main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
 </html>

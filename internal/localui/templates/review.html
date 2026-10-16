@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en" data-appearance="{{.Appearance.Mode}}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{if .Email}}Review before sending{{else}}Review before writing to Canvas{{end}}</title><style>{{reviewCSS}}</style>
 <form method="post" action="/submit">
-<header><h1>{{if .Email}}Review before sending{{else}}Review before posting{{end}}</h1><div class="sub">{{.Kind}} &middot; {{.Title}}</div>
+<header>{{.Appearance.Control}}<h1>{{if .Email}}Review before sending{{else}}Review before posting{{end}}</h1><div class="sub">{{.Kind}} &middot; {{.Title}}</div>
 {{if .Notice}}<p class="sub"><b>Preview limits:</b> {{.Notice}}</p>{{end}}
 <p class="intro">Everything below is approved by default. Revise an item to send it back to the agent with a note. {{if .Email}}Nothing has been sent yet. Each email goes only to the parent addresses shown on its card.{{else}}Nothing has been written to Canvas yet. Teacher-only information is marked and is never posted.{{end}} {{if .Email}}{{else if not .AllOrNothing}}Text is shown as plain text, the way it will be written.{{else}}This is created as one piece: every item must be approved, and any revision sends the whole piece back.{{end}}</p>
 {{if .Message}}<div class="review-error" role="alert">{{.Message}}</div>{{end}}</header>
@@ -35,4 +35,5 @@ if(c.dataset.held){h++;return}var s=c.querySelector('input[type=radio]:checked')
 if(s&&s.value==='revise'){r++;c.classList.add('revise')}else{a++;c.classList.remove('revise')}});
 document.getElementById('postbtn').disabled=((r>0||h>0)&&{{if .AllOrNothing}}true{{else}}false{{end}});document.getElementById('summary').textContent=({{if .AllOrNothing}}h>0?'held: see the red item; nothing can be written':r>0?r+' item(s) need revision; writing is off':'Everything approved: go ahead'{{else}}'{{if .Email}}Send{{else}}Post{{end}} '+a+' approved, '+h+' held, '+r+' revised'{{end}})}
 document.addEventListener('change',upd);upd()})();
-</script></html>
+</script>{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
+</html>

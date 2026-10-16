@@ -54,6 +54,7 @@ func ReviewActionFrom(ctx context.Context) string {
 }
 
 type reviewView struct {
+	Appearance            appearanceData
 	Cards                 []reviewCardView
 	Title, Kind, Secret   string
 	Notice                string
@@ -80,6 +81,7 @@ type reviewLineView struct {
 
 type reviewHandler struct {
 	origin, secret, path string
+	root                 string
 	build                func() (workflow.ReviewModel, error)
 	post                 ReviewPoster
 	test                 ReviewTester
@@ -100,7 +102,7 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 	if err != nil {
 		return reviewView{}, err
 	}
-	v := reviewView{Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, PostLabel: model.PostLabel, Actions: model.Actions, Test: model.Test && h.test != nil, Email: model.Email, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
+	v := reviewView{Appearance: appearanceFor(h.root, h.secret), Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, PostLabel: model.PostLabel, Actions: model.Actions, Test: model.Test && h.test != nil, Email: model.Email, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
 	for i, c := range model.Cards {
 		cv := reviewCardView{ReviewCard: c, Index: i, Status: "approved"}
 		for _, l := range c.Lines {
@@ -137,7 +139,7 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 func (h *reviewHandler) page(w http.ResponseWriter, code int, message string, form map[string]string) {
 	v, err := h.view(message, form)
 	if err != nil {
-		reviewError(w, http.StatusInternalServerError, "Could not show this review", err.Error())
+		h.reviewError(w, http.StatusInternalServerError, "Could not show this review", err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -145,19 +147,25 @@ func (h *reviewHandler) page(w http.ResponseWriter, code int, message string, fo
 	_ = reviewTemplate.Execute(w, v)
 }
 
-func reviewError(w http.ResponseWriter, status int, title, message string) {
+func (h *reviewHandler) reviewError(w http.ResponseWriter, status int, title, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = io.WriteString(w, `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>`+template.HTMLEscapeString(title)+`</title><style>`+string(reviewCSS)+`</style><main class="end-page error"><h1>`+template.HTMLEscapeString(title)+`</h1><p class="message">`+template.HTMLEscapeString(message)+`</p><p class="muted">No additional review action was taken.</p></main></html>`)
+	_, _ = io.WriteString(w, `<!doctype html>`+appearanceHTML(h.root)+`<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>`+template.HTMLEscapeString(title)+`</title><style>`+string(reviewCSS)+`</style><main class="end-page error"><h1>`+template.HTMLEscapeString(title)+`</h1><p class="message">`+template.HTMLEscapeString(message)+`</p><p class="muted">No additional review action was taken.</p></main></html>`)
 }
 
 func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; frame-src about:")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; frame-src about:")
 	if "http://"+r.Host != h.origin {
-		reviewError(w, http.StatusNotFound, "Review page not found", "This temporary review link is not available.")
+		h.reviewError(w, http.StatusNotFound, "Review page not found", "This temporary review link is not available.")
+		return
+	}
+	if serveAppearance(w, r, h.root, h.origin, h.secret) {
+		return
+	}
+	if serveScript(w, r) {
 		return
 	}
 	if r.Method == http.MethodGet && (r.URL.Path == "/" || r.URL.Path == "/review") {
@@ -165,27 +173,27 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost || (r.URL.Path != "/submit" && r.URL.Path != "/test") {
-		reviewError(w, http.StatusNotFound, "Review page not found", "This temporary review link is not available.")
+		h.reviewError(w, http.StatusNotFound, "Review page not found", "This temporary review link is not available.")
 		return
 	}
 	if r.Header.Get("Origin") != h.origin {
-		reviewError(w, http.StatusForbidden, "Form origin rejected", "Open the local review page in the same browser tab and try again.")
+		h.reviewError(w, http.StatusForbidden, "Form origin rejected", "Open the local review page in the same browser tab and try again.")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := r.ParseForm(); err != nil {
-		reviewError(w, http.StatusBadRequest, "Form is too large or invalid", "Nothing was posted. Return to the review page and try again.")
+		h.reviewError(w, http.StatusBadRequest, "Form is too large or invalid", "Nothing was posted. Return to the review page and try again.")
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(r.PostForm.Get("request_secret")), []byte(h.secret)) != 1 {
-		reviewError(w, http.StatusForbidden, "Form request rejected", "This form could not be verified. Return to the review page and try again.")
+		h.reviewError(w, http.StatusForbidden, "Form request rejected", "This form could not be verified. Return to the review page and try again.")
 		return
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if r.URL.Path == "/test" {
 		if h.test == nil || h.outcome != nil {
-			reviewError(w, http.StatusNotFound, "Review page not found", "This temporary review link is not available.")
+			h.reviewError(w, http.StatusNotFound, "Review page not found", "This temporary review link is not available.")
 			return
 		}
 		ctx, cancel := context.WithTimeout(h.ctx, 2*time.Minute)
@@ -198,7 +206,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.outcome != nil {
-		reviewError(w, http.StatusGone, "Review is already finished", "This temporary review is complete. You can close this tab.")
+		h.reviewError(w, http.StatusGone, "Review is already finished", "This temporary review is complete. You can close this tab.")
 		return
 	}
 	form := map[string]string{}
@@ -207,7 +215,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	model, err := h.build()
 	if err != nil {
-		reviewError(w, http.StatusInternalServerError, "Could not show this review", err.Error())
+		h.reviewError(w, http.StatusInternalServerError, "Could not show this review", err.Error())
 		return
 	}
 	if r.PostForm.Get("token") != model.ReviewDigest() {
@@ -216,7 +224,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	state, err := workflow.LoadReviewState(h.path)
 	if err != nil {
-		reviewError(w, http.StatusInternalServerError, "Could not read saved review decisions", err.Error())
+		h.reviewError(w, http.StatusInternalServerError, "Could not read saved review decisions", err.Error())
 		return
 	}
 	out := ReviewOutcome{Status: "held", Path: h.path}
@@ -235,7 +243,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	for i, c := range model.Cards {
 		if r.PostForm.Get("ref_"+strconv.Itoa(i)) != c.Ref {
-			reviewError(w, http.StatusBadRequest, "Review form no longer matches", "Nothing was posted. Reload the review page and check the cards again.")
+			h.reviewError(w, http.StatusBadRequest, "Review form no longer matches", "Nothing was posted. Reload the review page and check the cards again.")
 			return
 		}
 		switch {
@@ -256,7 +264,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// Revise notes are saved before anything is written, so closing loses nothing.
 	if err = workflow.SaveReviewState(h.path, state); err != nil {
-		reviewError(w, http.StatusInternalServerError, "Could not save review notes", err.Error())
+		h.reviewError(w, http.StatusInternalServerError, "Could not save review notes", err.Error())
 		return
 	}
 	action := r.PostForm.Get("action")
@@ -292,7 +300,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	msg := fmt.Sprintf("%d approved, %d sent back for revision, %d held.", len(out.Approved), len(out.Revise), len(out.Held))
 	msg = "Your review is saved: " + msg + " The agent has the results, so you can go back to your chat."
-	_, _ = io.WriteString(w, `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Review finished</title><style>`+string(reviewCSS)+`</style><main class="end-page"><h1>Review outcome: `+template.HTMLEscapeString(out.Status)+`</h1><p>`+template.HTMLEscapeString(msg)+`</p>`)
+	_, _ = io.WriteString(w, `<!doctype html>`+appearanceHTML(h.root)+`<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Review finished</title><style>`+string(reviewCSS)+`</style><main class="end-page"><h1>Review outcome: `+template.HTMLEscapeString(out.Status)+`</h1><p>`+template.HTMLEscapeString(msg)+`</p>`)
 	if out.PostSummary != "" {
 		_, _ = io.WriteString(w, `<p>`+template.HTMLEscapeString(out.PostSummary)+`</p>`)
 	}
@@ -302,12 +310,14 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Review serves a temporary loopback review page for a results file and returns
 // when the teacher clicks Post approved or Send revisions only.
-func Review(ctx context.Context, path string, build func() (workflow.ReviewModel, error), post ReviewPoster, output io.Writer) (ReviewOutcome, error) {
-	return ReviewWithTest(ctx, path, build, post, nil, output)
+// The optional root is the caller's resolved UserInstall. Omitting it uses
+// system appearance without offering a persistent appearance control.
+func Review(ctx context.Context, path string, build func() (workflow.ReviewModel, error), post ReviewPoster, output io.Writer, roots ...string) (ReviewOutcome, error) {
+	return ReviewWithTest(ctx, path, build, post, nil, output, roots...)
 }
 
 // ReviewWithTest is Review plus an optional test action for the page.
-func ReviewWithTest(ctx context.Context, path string, build func() (workflow.ReviewModel, error), post ReviewPoster, test ReviewTester, output io.Writer) (ReviewOutcome, error) {
+func ReviewWithTest(ctx context.Context, path string, build func() (workflow.ReviewModel, error), post ReviewPoster, test ReviewTester, output io.Writer, roots ...string) (ReviewOutcome, error) {
 	if output == nil {
 		output = io.Discard
 	}
@@ -328,7 +338,11 @@ func ReviewWithTest(ctx context.Context, path string, build func() (workflow.Rev
 		return ReviewOutcome{}, errors.New("could not create the local review form")
 	}
 	origin := "http://" + listener.Addr().String()
-	h := &reviewHandler{origin: origin, secret: hex.EncodeToString(nonce[:]), path: path, build: build, post: post, test: test, ctx: ctx, done: make(chan struct{})}
+	root := ""
+	if len(roots) > 0 {
+		root = roots[0]
+	}
+	h := &reviewHandler{root: root, origin: origin, secret: hex.EncodeToString(nonce[:]), path: path, build: build, post: post, test: test, ctx: ctx, done: make(chan struct{})}
 	server := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 11 * time.Minute, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()

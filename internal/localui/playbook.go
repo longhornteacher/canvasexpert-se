@@ -29,7 +29,7 @@ func ReplacePlaybook(root, rel, expectedSHA256 string, now time.Time) error {
 }
 func init() {
 	register(
-		page{Path: "/how", Template: "how",
+		page{Path: "/how", Template: "how", Scripts: []string{"appearance.js"},
 			Nav:    []navSlot{{Primary: "Guide", Order: 40}, {Primary: "Guide", Label: "How it works", Order: 41}},
 			Handle: (*Hub).howPage},
 		page{Path: "/playbook/replace", Methods: []string{http.MethodPost}, Handle: (*Hub).replacePlaybook},

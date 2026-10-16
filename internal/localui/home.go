@@ -9,6 +9,7 @@ import (
 )
 
 type homeData struct {
+	Appearance                                        appearanceData
 	Secret, Message, Notice, CanvasOrigin, Root       string
 	Program, Version                                  string
 	CanvasHealth, CanvasHealthLabel, CanvasHealthNote string
@@ -31,7 +32,7 @@ type homeCourse struct {
 
 func init() {
 	register(
-		page{Path: "/", Template: "home", Scripts: []string{"canvas-health.js"}, Connect: true,
+		page{Path: "/", Template: "home", Scripts: []string{"canvas-health.js", "appearance.js"}, Connect: true,
 			Nav:    []navSlot{{Primary: "Home", Order: 10}},
 			Handle: func(h *Hub, w http.ResponseWriter, r *http.Request) { h.home(w, 200, "", "") }},
 	)
@@ -47,7 +48,7 @@ func (h *Hub) home(w http.ResponseWriter, status int, message, notice string) {
 }
 
 func (h *Hub) pageData() homeData {
-	data := homeData{Secret: h.secret, Root: h.root, Program: h.programDir, Version: h.version, SyncHealth: "Local only", SyncHealthNote: "Your teaching rules are kept on this PC."}
+	data := homeData{Appearance: appearanceFor(h.root, h.secret), Secret: h.secret, Root: h.root, Program: h.programDir, Version: h.version, SyncHealth: "Local only", SyncHealthNote: "Your teaching rules are kept on this PC."}
 	data.ConnectionTested = h.connectionTested
 	data.CanvasHealth, data.CanvasHealthNote = h.canvasHealth, h.canvasHealthNote
 	if data.CanvasHealth == "" {

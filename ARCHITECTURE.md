@@ -1,6 +1,6 @@
 # CanvasExpert-SE architecture
 
-Updated 2026-10-15 (UserSync preserves reusable teacher setup; grading/planning session files stay local). Current development direction is here and in [SCORING-RULES.md](SCORING-RULES.md). Earlier briefs and evidence live only in Git history and are not implementation prerequisites.
+Updated 2026-10-16 (remembered WebUI appearance follows active teacher setup; grading/planning session files stay local). Current development direction is here and in [SCORING-RULES.md](SCORING-RULES.md). Earlier briefs and evidence live only in Git history and are not implementation prerequisites.
 
 ## Intent and engineering default
 
@@ -25,6 +25,8 @@ Keep existing command and storage contracts: `cse install` means connect/setup t
 | **Dev** | Development checkout: code, starter templates, Engine contracts, build tools; `dist/` holds generated release artifacts | An agent developing CE-SE, typically Claude Code/Codex |
 | **UserInstall** | One local runnable CE-SE folder: `engine/`, the teacher's actual instructions, playbooks, context, drafts, pulled work and private runtime data | An agent doing teacher work, typically Cowork/GPT Work; Claude Code/Codex also use UserInstall for teacher work |
 | **UserSync** | Optional dedicated locally accessible OneDrive/Google Drive directory | Authoritative reusable teacher setup, including course selections, student settings/notes and private contacts; provider synchronization handles delivery |
+
+The WebUI uses Studio light styling and the existing dark palette. Until explicitly changed, appearance follows the OS. Its Light/Dark switch creates an optional `context/appearance.md` (`schema: 1`, `mode: light` or `dark`) in the active teacher-setup authority, so configured UserSync shares the choice across UserInstall folders. No file is created for system appearance; annotated document body text is preserved. Preference read failures use the system palette with a separate notice and never block ordinary work or fall back to inactive local settings. The dedicated local save changes no teaching data and preserves unsaved page state.
 
 Develop in Dev, teach from UserInstall, optionally share teacher rules through UserSync. The extracted release folder is UserInstall; a colleague does not need Dev. CE-SE directly accesses selected shared files rather than replicating them; the cloud provider synchronizes UserSync. Existing internal names such as `internal/workspace`, `--workspace`, and MCP workspace tools remain unchanged; their teacher-task root is UserInstall. Client configuration and Windows Credential Manager are machine integration, not additional teacher folders.
 
