@@ -28,22 +28,24 @@ func (OutlookSender) Send(m outlook.Message) (outlook.Outcome, error) { return o
 func (OutlookSender) SaveDraft(m outlook.Message) error               { return outlook.SaveDraft(m) }
 func (OutlookSender) SelfAddress() (string, error)                    { return outlook.SelfAddress() }
 
-// ParentDelivery is the local record for one destination. It never holds an address.
+// ParentDelivery is the local record for one student's email. It never holds an address.
 type ParentDelivery struct {
 	State  string `json:"state"` // sent | drafted | failed | uncertain
 	Reason string `json:"reason,omitempty"`
 	At     string `json:"at"`
 }
 
+// ParentOutcomes is schema 2: one email per student. An older or unreadable
+// file stops sending instead of risking a repeat.
 type ParentOutcomes struct {
-	Schema   int                         `json:"schema"`
-	Students map[string][]ParentDelivery `json:"students"`
+	Schema   int                       `json:"schema"`
+	Students map[string]ParentDelivery `json:"students"`
 }
 
 func outcomesPath(dir string) string { return filepath.Join(dir, "outcomes.json") }
 
 func LoadParentOutcomes(dir string) (ParentOutcomes, error) {
-	o := ParentOutcomes{Schema: 1, Students: map[string][]ParentDelivery{}}
+	o := ParentOutcomes{Schema: 2, Students: map[string]ParentDelivery{}}
 	b, e := os.ReadFile(outcomesPath(dir))
 	if os.IsNotExist(e) {
 		return o, nil
@@ -51,11 +53,11 @@ func LoadParentOutcomes(dir string) (ParentOutcomes, error) {
 	if e != nil {
 		return o, e
 	}
-	if e = json.Unmarshal(b, &o); e != nil {
-		return ParentOutcomes{Schema: 1, Students: map[string][]ParentDelivery{}}, fmt.Errorf("outcomes.json is unreadable; keep it and ask for help rather than resending")
+	if e = json.Unmarshal(b, &o); e != nil || o.Schema != 2 {
+		return ParentOutcomes{Schema: 2, Students: map[string]ParentDelivery{}}, fmt.Errorf("outcomes.json is unreadable; keep it and ask for help rather than resending")
 	}
 	if o.Students == nil {
-		o.Students = map[string][]ParentDelivery{}
+		o.Students = map[string]ParentDelivery{}
 	}
 	return o, nil
 }
@@ -68,21 +70,33 @@ func saveParentOutcomes(dir string, o ParentOutcomes) error {
 	return workspace.WriteFile(outcomesPath(dir), append(b, '\n'), 0600)
 }
 
-// destinations returns only enabled parent email addresses, matched on Canvas
-// instance and user ID. They never leave this process except through Outlook
-// and the teacher's own review page.
-func parentDestinations(root string, st workspace.Student) ([]string, error) {
-	contacts, e := workspace.OpenContacts(root)
-	if e != nil {
-		return nil, e
+// parentRecipients addresses one email per student: the student's email in To
+// and every enabled parent email in Cc, matched on Canvas instance and user ID.
+// With no student email on file the parents are the To line. parents counts the
+// enabled parent addresses; an update with none is held. Addresses never leave
+// this process except through Outlook and the teacher's own review page.
+func parentRecipients(root string, st workspace.Student) (to, cc []string, parents int, err error) {
+	contacts, err := workspace.OpenContacts(root)
+	if err != nil {
+		return nil, nil, 0, err
 	}
-	var out []string
-	for _, p := range contacts.Students[workspace.ContactKey(st)].Parents {
-		if p.EmailEnabled && strings.TrimSpace(p.Email) != "" {
-			out = append(out, p.Email)
+	c := contacts.Students[workspace.ContactKey(st)]
+	student := strings.TrimSpace(c.StudentEmail)
+	for _, p := range c.Parents {
+		addr := strings.TrimSpace(p.Email)
+		if !p.EmailEnabled || addr == "" {
+			continue
 		}
+		parents++
+		if strings.EqualFold(addr, student) {
+			continue
+		}
+		cc = append(cc, addr)
 	}
-	return out, nil
+	if student == "" {
+		return cc, nil, parents, nil
+	}
+	return []string{student}, cc, parents, nil
 }
 
 func (s *Service) parentStudent(store *workspace.StudentStore, ref string) (workspace.Student, error) {
@@ -120,32 +134,27 @@ func (s *Service) BuildParentReview(dir string) (ReviewModel, error) {
 			m.Cards = append(m.Cards, withDigest(card))
 			continue
 		}
-		to, e := parentDestinations(s.Root, st)
+		to, cc, parents, e := parentRecipients(s.Root, st)
 		if e != nil {
 			return ReviewModel{}, e
 		}
 		r := run.Render(sd, st)
 		card.Frames = []ReviewFrame{{Label: "Email · " + r.Subject, HTML: r.HTML}}
-		if len(to) > 0 {
+		if parents > 0 {
 			card.Facts = append(card.Facts, ReviewFact{Label: "To", Value: strings.Join(to, ", ")})
+			if len(cc) > 0 {
+				card.Facts = append(card.Facts, ReviewFact{Label: "Cc", Value: strings.Join(cc, ", ")})
+			}
 		}
 		if sd.Reason != "" {
 			card.Facts = append(card.Facts, ReviewFact{Label: "Why send", Value: sd.Reason})
 		}
-		delivered := out.Students[sd.Ref]
-		sent, uncertain := 0, false
-		for _, d := range delivered {
-			if d.State == "sent" {
-				sent++
-			}
-			uncertain = uncertain || d.State == "uncertain"
-		}
-		switch {
-		case len(to) == 0:
+		switch state := out.Students[sd.Ref].State; {
+		case parents == 0:
 			card.Hold = "No enabled parent email address on file. Add one on the Students page, then ask the agent to review again."
-		case uncertain:
+		case state == "uncertain":
 			card.Hold = "Outlook may already have sent this. Check Sent Items; nothing was resent."
-		case sent == len(to):
+		case state == "sent":
 			card.Done = true
 		}
 		m.Cards = append(m.Cards, withDigest(card))
@@ -157,8 +166,9 @@ func (s *Service) BuildParentReview(dir string) (ReviewModel, error) {
 func withDigest(c ReviewCard) ReviewCard { c.Digest = digestOf(c); return c }
 
 // SendParentUpdates sends (or, with draftsOnly, saves as Outlook drafts) each
-// approved student's email, one message per enabled destination. skip lists refs
-// the teacher did not approve. Destinations already sent are never repeated.
+// approved student's email: one message per student, the student in To and the
+// enabled parents in Cc. skip lists refs the teacher did not approve. A student
+// already sent (or possibly sent) is never repeated.
 func (s *Service) SendParentUpdates(ctx context.Context, dir string, skip map[string]bool, draftsOnly bool, sender MailSender) (string, string, error) {
 	run, e := LoadParentRun(s.Root, dir)
 	if e != nil {
@@ -187,60 +197,56 @@ func (s *Service) SendParentUpdates(ctx context.Context, dir string, skip map[st
 			reasons = append(reasons, sd.Ref+": "+e.Error())
 			continue
 		}
-		to, e := parentDestinations(s.Root, st)
+		to, cc, parents, e := parentRecipients(s.Root, st)
 		if e != nil {
 			return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), e
 		}
-		r := run.Render(sd, st)
-		records := out.Students[sd.Ref]
-		for len(records) < len(to) {
-			records = append(records, ParentDelivery{})
+		if parents == 0 {
+			continue
 		}
-		for i, addr := range to {
-			switch records[i].State {
-			case "sent", "uncertain":
-				continue
-			case "drafted":
-				if draftsOnly {
-					continue
-				}
-			}
-			msg := outlook.Message{To: []string{addr}, Subject: r.Subject, HTMLBody: r.HTML}
-			var outcome outlook.Outcome
-			var err error
+		switch out.Students[sd.Ref].State {
+		case "sent", "uncertain":
+			continue
+		case "drafted":
 			if draftsOnly {
-				if err = sender.SaveDraft(msg); err == nil {
-					outcome = outlook.Drafted
-				} else {
-					outcome = outlook.Failed
-				}
+				continue
+			}
+		}
+		r := run.Render(sd, st)
+		msg := outlook.Message{To: to, Cc: cc, Subject: r.Subject, HTMLBody: r.HTML}
+		var outcome outlook.Outcome
+		var err error
+		if draftsOnly {
+			if err = sender.SaveDraft(msg); err == nil {
+				outcome = outlook.Drafted
 			} else {
-				outcome, err = sender.Send(msg)
+				outcome = outlook.Failed
 			}
-			d := ParentDelivery{State: string(outcome), At: time.Now().UTC().Format(time.RFC3339)}
-			if err != nil {
-				d.Reason = err.Error()
-				reasons = append(reasons, sd.Ref+": "+err.Error())
-			}
-			records[i] = d
-			out.Students[sd.Ref] = records
-			if e := saveParentOutcomes(dir, out); e != nil {
-				return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), e
-			}
-			switch outcome {
-			case outlook.Sent:
-				sent++
-			case outlook.Drafted:
-				drafted++
-			case outlook.Uncertain:
-				uncertain++
-			default:
-				failed++
-			}
-			if err != nil && strings.Contains(err.Error(), outlook.ErrUnavailable.Error()) {
-				// Outlook itself is unreachable; stop rather than fail every family.
-				return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), nil
-			}
+		} else {
+			outcome, err = sender.Send(msg)
+		}
+		d := ParentDelivery{State: string(outcome), At: time.Now().UTC().Format(time.RFC3339)}
+		if err != nil {
+			d.Reason = err.Error()
+			reasons = append(reasons, sd.Ref+": "+err.Error())
+		}
+		out.Students[sd.Ref] = d
+		if e := saveParentOutcomes(dir, out); e != nil {
+			return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), e
+		}
+		switch outcome {
+		case outlook.Sent:
+			sent++
+		case outlook.Drafted:
+			drafted++
+		case outlook.Uncertain:
+			uncertain++
+		default:
+			failed++
+		}
+		if err != nil && strings.Contains(err.Error(), outlook.ErrUnavailable.Error()) {
+			// Outlook itself is unreachable; stop rather than fail every family.
+			return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), nil
 		}
 	}
 	status := "completed"

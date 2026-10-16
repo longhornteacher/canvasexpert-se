@@ -114,6 +114,11 @@ func compose(app *ole.IDispatch, m Message) (*ole.IDispatch, error) {
 	if _, err := oleutil.PutProperty(item, "To", strings.Join(m.To, ";")); err != nil {
 		return fail(err)
 	}
+	if len(m.Cc) > 0 {
+		if _, err := oleutil.PutProperty(item, "CC", strings.Join(m.Cc, ";")); err != nil {
+			return fail(err)
+		}
+	}
 	if _, err := oleutil.PutProperty(item, "Subject", m.Subject); err != nil {
 		return fail(err)
 	}

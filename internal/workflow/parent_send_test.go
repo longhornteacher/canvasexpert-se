@@ -52,7 +52,7 @@ func parentFixtureRun(t *testing.T) (*Service, string, workspace.Student, worksp
 		t.Fatal(err)
 	}
 	contacts, _ := workspace.OpenContacts(root)
-	contacts.Students[workspace.ContactKey(a)] = workspace.StudentContacts{Parents: []workspace.ParentContact{
+	contacts.Students[workspace.ContactKey(a)] = workspace.StudentContacts{StudentEmail: "ada@student.example", Parents: []workspace.ParentContact{
 		{Email: "p1@example.org", EmailEnabled: true}, {Email: "p2@example.org", EmailEnabled: false}, {Email: "p3@example.org", EmailEnabled: true}}}
 	if err = contacts.Save(); err != nil {
 		t.Fatal(err)
@@ -94,14 +94,12 @@ func TestParentReviewShowsRealRecipientsAndHoldsMissingAddress(t *testing.T) {
 		cards[c.Ref] = c
 	}
 	ca := cards[a.Ref]
-	var to string
+	facts := map[string]string{}
 	for _, f := range ca.Facts {
-		if f.Label == "To" {
-			to = f.Value
-		}
+		facts[f.Label] = f.Value
 	}
-	if to != "p1@example.org, p3@example.org" || ca.Hold != "" {
-		t.Fatalf("To = %q hold = %q (disabled destination must be excluded)", to, ca.Hold)
+	if facts["To"] != "ada@student.example" || facts["Cc"] != "p1@example.org, p3@example.org" || ca.Hold != "" {
+		t.Fatalf("facts = %v hold = %q (student in To, enabled parents in Cc, disabled excluded)", facts, ca.Hold)
 	}
 	if !strings.Contains(ca.Frames[0].HTML, "Lab &lt;1&gt;") || !strings.Contains(ca.Frames[0].HTML, "Hello about Ada") {
 		t.Fatalf("render must escape titles and expand the student name: %s", ca.Frames[0].HTML)
@@ -118,13 +116,16 @@ func TestSendParentUpdatesRecordsOutcomesAndNeverResends(t *testing.T) {
 	svc, dir, a, _ := parentFixtureRun(t)
 	f := &fakeSender{}
 	status, summary, err := svc.SendParentUpdates(context.Background(), dir, map[string]bool{}, false, f)
-	if err != nil || status != "completed" || len(f.sent) != 2 {
-		t.Fatalf("status=%s sent=%d err=%v (one message per enabled destination)", status, len(f.sent), err)
+	if err != nil || status != "completed" || len(f.sent) != 1 {
+		t.Fatalf("status=%s sent=%d err=%v (one message per student with a parent address)", status, len(f.sent), err)
+	}
+	if m := f.sent[0]; strings.Join(m.To, ",") != "ada@student.example" || strings.Join(m.Cc, ",") != "p1@example.org,p3@example.org" {
+		t.Fatalf("to=%v cc=%v", m.To, m.Cc)
 	}
 	if strings.Contains(summary, "@") {
 		t.Fatalf("summary leaks an address: %s", summary)
 	}
-	if _, _, err = svc.SendParentUpdates(context.Background(), dir, map[string]bool{}, false, f); err != nil || len(f.sent) != 2 {
+	if _, _, err = svc.SendParentUpdates(context.Background(), dir, map[string]bool{}, false, f); err != nil || len(f.sent) != 1 {
 		t.Fatalf("retry resent mail: %d", len(f.sent))
 	}
 	raw, _ := os.ReadFile(filepath.Join(dir, "outcomes.json"))
@@ -167,7 +168,7 @@ func TestSkippedStudentsAndDraftsOnly(t *testing.T) {
 		t.Fatalf("unapproved student must not be touched; the other has no address: sent=%d drafts=%d", len(f.sent), len(f.drafts))
 	}
 	svc.SendParentUpdates(context.Background(), dir, map[string]bool{}, true, f)
-	if len(f.sent) != 0 || len(f.drafts) != 2 {
+	if len(f.sent) != 0 || len(f.drafts) != 1 {
 		t.Fatalf("drafts-only must not send: sent=%d drafts=%d", len(f.sent), len(f.drafts))
 	}
 }
@@ -251,5 +252,20 @@ func TestSkippedStudentGetsOnTrackSheetAndOnlyChosenCorrections(t *testing.T) {
 	}
 	if strings.Contains(got, "Quiz needing judgment") {
 		t.Fatal("a correction the agent did not choose appeared")
+	}
+}
+
+func TestParentsAreToWhenNoStudentEmail(t *testing.T) {
+	svc, _, a, _ := parentFixtureRun(t)
+	contacts, _ := workspace.OpenContacts(svc.Root)
+	c := contacts.Students[workspace.ContactKey(a)]
+	c.StudentEmail = ""
+	contacts.Students[workspace.ContactKey(a)] = c
+	if err := contacts.Save(); err != nil {
+		t.Fatal(err)
+	}
+	to, cc, parents, err := parentRecipients(svc.Root, a)
+	if err != nil || strings.Join(to, ",") != "p1@example.org,p3@example.org" || len(cc) != 0 || parents != 2 {
+		t.Fatalf("to=%v cc=%v parents=%d err=%v", to, cc, parents, err)
 	}
 }

@@ -102,7 +102,7 @@ Each slice is independently mergeable. Slices 0, 1 and 5 can run in parallel; 2 
 ### Slice 3: Outlook delivery and outcomes (Engine)
 
 - The page's Send button calls slice 0 for each approved recipient. The agent has no send tool.
-- Outcomes are stored locally in `courses/<nickname>/parent-updates/<run-id>/outcomes.json` by ref and destination index (no address), with states `sent | failed(reason) | uncertain`.
+- Outcomes are stored locally in `courses/<nickname>/parent-updates/<run-id>/outcomes.json` by ref, one email per student (no address). Decided 2026-10-16: the student is in To and enabled parents are CC'd, with states `sent | failed(reason) | uncertain`.
 - A retry skips `sent` items. `uncertain` (the call errored after Outlook may have accepted it) is shown with "check Sent Items" and requires explicit re-send.
 - A "Fill Drafts only" button uses `SaveDraft` and records `drafted`.
 - A "Send a test to me" button sends the first selected email to the profile's own address. This also provides the Cowork/Work end-to-end check.

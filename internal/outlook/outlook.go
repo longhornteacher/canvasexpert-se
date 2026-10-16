@@ -4,9 +4,11 @@ package outlook
 
 import "errors"
 
-// Message is one outgoing email. To holds one or more recipient addresses.
+// Message is one outgoing email. To holds one or more recipient addresses; Cc
+// is optional.
 type Message struct {
 	To       []string
+	Cc       []string
 	Subject  string
 	HTMLBody string
 	TextBody string
