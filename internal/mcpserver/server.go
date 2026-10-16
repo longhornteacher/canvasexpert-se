@@ -34,6 +34,8 @@ type Server struct {
 	sessions          map[string]*reviewTask
 	newSessionCommand func([]string) *exec.Cmd
 	sessionReadyWait  time.Duration
+	pulls             map[string]*pullJob
+	run               func(context.Context, ...string) (TextOutput, error) // nil uses command; tests replace it
 }
 
 type TextOutput struct {
@@ -134,7 +136,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "help", in.Topic)
 	})
-	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Student identity is pseudonymized by the Engine; never access .cse.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
+	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Student identity is pseudonymized by the Engine; never access .cse. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
 		args := []string{"pull-work"}
 		if in.Course != "" {
 			args = append(args, in.Course)
@@ -145,10 +147,10 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 			}
 			args = append(args, in.Assignment)
 		}
-		return s.command(ctx, args...)
+		return s.longCommand(ctx, args...)
 	})
 	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates (course score, missing work, correction candidates, due soon, grade history) into courses/<course>/parent-updates/<run>/report.json. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
-		return s.command(ctx, append(append([]string{"parent-report"}, in.Courses...), in.Students...)...)
+		return s.longCommand(ctx, append(append([]string{"parent-report"}, in.Courses...), in.Students...)...)
 	})
 	addActionTool(server, "start_parent_review", "Open the private page where the teacher reviews parent emails with their real recipients and sends them through Outlook. Returns only the loopback URL; call review_status afterward for counts and outcomes by student reference. This tool never sends and never exposes addresses.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
 		dir, err := s.coursePath(in.Folder)
