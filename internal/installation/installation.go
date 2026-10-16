@@ -203,7 +203,9 @@ func registerWork(root, exe, path string, replace bool) (Result, error) {
 		servers = map[string]any{}
 		config["mcp_servers"] = servers
 	}
-	wanted := map[string]any{"command": exe, "args": []any{"--workspace", root, "mcp"}}
+	// Codex stops waiting on a tool after 60 seconds by default; a whole-course
+	// pull can take longer, so match the Engine's 15-minute command limit.
+	wanted := map[string]any{"command": exe, "args": []any{"--workspace", root, "mcp"}, "tool_timeout_sec": int64(900)}
 	if old, exists := servers["canvasexpert-se"]; exists {
 		oldMap, ok := old.(map[string]any)
 		if !ok {
@@ -214,8 +216,9 @@ func registerWork(root, exe, path string, replace bool) (Result, error) {
 			return result, &ReplacementRequired{ExistingInstall: oldRoot, InstallRoot: root}
 		}
 		if samePath(oldRoot, root) {
-			// Preserve teacher-selected tool/approval/env settings for this same UserInstall.
-			unchanged := reflect.DeepEqual(oldMap["command"], wanted["command"]) && reflect.DeepEqual(oldMap["args"], wanted["args"])
+			// Preserve teacher-selected tool/approval/env/timeout settings for this same UserInstall.
+			_, hasTimeout := oldMap["tool_timeout_sec"]
+			unchanged := hasTimeout && reflect.DeepEqual(oldMap["command"], wanted["command"]) && reflect.DeepEqual(oldMap["args"], wanted["args"])
 			if unchanged {
 				result.State = "settings-already-saved"
 				return result, nil
