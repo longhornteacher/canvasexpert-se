@@ -106,6 +106,9 @@ func TestParentReviewShowsRealRecipientsAndHoldsMissingAddress(t *testing.T) {
 	if !strings.Contains(ca.Frames[0].HTML, "Lab &lt;1&gt;") || !strings.Contains(ca.Frames[0].HTML, "Hello about Ada") {
 		t.Fatalf("render must escape titles and expand the student name: %s", ca.Frames[0].HTML)
 	}
+	if !strings.Contains(ca.Frames[0].HTML, "only the nickname “"+a.Alias+".”") {
+		t.Fatalf("email must end with the AI notice naming the alias: %s", ca.Frames[0].HTML)
+	}
 	if cards[b.Ref].Hold == "" {
 		t.Fatal("student with no enabled email must be held")
 	}
@@ -223,6 +226,9 @@ func TestStudentSheetsCoverEveryStudentWithoutLinksOrAddresses(t *testing.T) {
 	for _, s := range sheets {
 		if strings.Contains(s.HTML, "href") || strings.Contains(s.HTML, "@") {
 			t.Fatalf("paper sheet has links or addresses: %s", s.HTML)
+		}
+		if !strings.Contains(s.HTML, "prepared with AI tools") || !strings.Contains(s.HTML, "only your nickname, “") {
+			t.Fatalf("AI notice missing: %s", s.HTML)
 		}
 		if !strings.Contains(s.HTML, "Missing: turn these in") || !strings.Contains(s.HTML, "Lab &lt;1&gt;") {
 			t.Fatalf("sheet = %s", s.HTML)

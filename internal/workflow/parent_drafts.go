@@ -389,6 +389,7 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 		if r.Config.SignOff != "" {
 			fmt.Fprintf(&b, `<p style="margin:14px 0 0">%s</p>`, esc(r.Config.SignOff))
 		}
+		b.WriteString(aiNotice("This report was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check Skyward for official grades. For privacy, the AI never saw your real name, only your nickname, “" + rs.Alias + ".”"))
 		b.WriteString(`</div>`)
 		return Rendered{Subject: student.Name, HTML: b.String()}
 	}
@@ -399,8 +400,15 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 	if r.Config.SignOff != "" {
 		fmt.Fprintf(&b, `<p style="margin:14px 0 0">%s</p>`, esc(r.Config.SignOff))
 	}
+	b.WriteString(aiNotice("This update was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check Skyward for official grades. For privacy, the AI never saw your child’s real name or your contact information, only the nickname “" + rs.Alias + ".”"))
 	b.WriteString(`</div>`)
 	return Rendered{Subject: fmt.Sprintf("Class update for %s (%s)", student.FirstName, asOf.In(loc).Format("Jan 2")), HTML: b.String()}
+}
+
+// aiNotice closes every email and printed report: the AI's part, where the
+// facts come from, and that it worked only with the student's alias.
+func aiNotice(text string) string {
+	return `<p style="margin:18px 0 0;padding-top:8px;border-top:1px solid #e4e7eb;font-size:12px;color:#52606d">` + html.EscapeString(text) + `</p>`
 }
 
 func sortedBy(items []ParentReportItem, picked []ParentItemRef, order func([]ParentItemRef, int64) int) []ParentReportItem {
