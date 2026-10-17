@@ -251,14 +251,15 @@ alone. A three-way merge (previous shipped, teacher, new shipped) applied the
 four new shipped lines and kept the teacher line with no conflict. The test
 lines were then removed and update reported every file current.
 
+On request, the bell schedule was added to the teacher's own
+`context/school-calendar.md`; context files are never replaced by updates.
+
 ## Remaining work
 
 - Push `dev` and publish a release when the teacher decides (deferred
   2026-10-17).
 - A colleague's real update, and an agent (not the developer) doing the
   reconciliation in the background, remain unobserved.
-- The teacher's own `context/school-calendar.md` predates the bell schedule;
-  context files are never replaced, so it is added only on request.
 
 ## Done looks like
 
