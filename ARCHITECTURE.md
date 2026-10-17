@@ -1,6 +1,6 @@
 # CanvasExpert-SE architecture
 
-Updated 2026-10-16 (remembered WebUI appearance follows active teacher setup; grading/planning session files stay local). Current development direction is here and in [SCORING-RULES.md](SCORING-RULES.md). Earlier briefs and evidence live only in Git history and are not implementation prerequisites.
+Updated 2026-10-17 (group-work development slices; remembered WebUI appearance follows active teacher setup, while grading/planning session files stay local). Current development direction is here and in [SCORING-RULES.md](SCORING-RULES.md). Earlier briefs and evidence live only in Git history and are not implementation prerequisites.
 
 ## Intent and engineering default
 
@@ -99,6 +99,8 @@ PAT and Canvas origin live in per-machine Windows Credential Manager. Never expo
 Workspace context maps course nicknames (CS8, ELA7PAP, ELA7), grading preferences and student notes. Plain files support authoring/resumption; pulled data is disposable, while unsent work and ordinary returned IDs/outcomes are preserved. One teacher uses one machine at a time; no locks, sync merge system, backup ledger or permanent gradebook.
 
 ## Current scope and future capabilities
+
+**Group work development plan (2026-10-17):** the [17 implementation slices](docs/group-work/README.md) specify collaborative groups/memberships, group Pages/files, discussions and individual discussion assessment, shared products with shared or individual grading, peer critique, group calendars/conference slots, explicitly scoped Inbox messages, unit navigation and a book-club playbook. These are development contracts, not implemented capabilities. The [shared contracts](docs/group-work/contracts.md) preserve the Engine/playbook boundary, student-work ownership, exact group/recipient identity and existing review/accepted-write semantics. Current group-assignment guards remain until their typed replacement paths are implemented. External document/video provisioning remains outside the Canvas REST implementation; discovery and links are included.
 
 Current operations cover course/module reads, assignment create/edit and rubric attachment, text submission/history pulls with attachments, component scoring, no-rubric scoring, assessment posting, feedback posting/revision, discovery, and local setup/student/settings pages. Attachments may be unreadable; report that honestly. Normal calls use current API responses and narrow action checks, not disposable-course proof in each workspace.
 

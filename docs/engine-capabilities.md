@@ -39,6 +39,8 @@ Configured UserSync is the shared authority for reusable teacher setup, includin
 | Capability | Canvas Live | Local tests / other | Still pending |
 |---|---|---|---|
 | Course and module reads, `cse api` (read-only GET) | Yes: CS8 and two curriculum courses; modules, assignments, file metadata, exports, Classic and New Quiz items | Error handling | Complete archival, binary downloads, vendor content access |
+| Collaborative group work / book clubs (reviewed 2026-10-17) | No group-work trial performed for this review | Source inspection: no collaborative group-set/membership or discussion authoring workflow; Page/upload operations target courses; group-assignment pulls and scoring explicitly reject groups. Existing Hub tags are non-collaborative. A conditional own-discussion-entry parser is not a full thread pull | Proposed, not implemented: group setup/spaces, full discussion pulls, shared submissions and explicit grade/comment audience. See [book-club research](book-club-group-work-discovery.md) |
+| Peer reviews, group calendars and conference sign-up (reviewed 2026-10-17) | No trial performed | Official Canvas API documentation establishes available REST surfaces, not CE-SE implementation or district availability. Generic GET can inspect permitted resources; no typed management workflow exists. Public Collaborations REST documents reads, not external-document creation | Implementation and intended-Canvas permissions/availability; any external provider provisioning remains separate |
 | Assignment create/edit/publish, module placement, resume | Yes (2026-10-09, CS8 Test Student and new objects): unpublished create, edits, publication, safety settings, repeat made 0 requests | Conflict and uncertain-write holds | Ordinary student submission/resubmission, student-facing view |
 | Rubric create/attach (assignments) | Yes: numeric anchors, independent grading, coupled rubric+grade posting, repeat made 0 requests | Full-definition coupling update | None specific |
 | Honest grade/feedback posting | Yes (Oct 9 probes: computed grade replaced planted grade, revised feedback with no duplicates, private sentinel absent; Oct 11 real use: SCR 4/5/6 posted via review, SCR 4 confirmed present, SCR 5/6 not re-read) | Accepted-write rule (an accepted Canvas write counts as done) | Student-facing presentation; current MCP scoring/post workflow with real students |
@@ -73,6 +75,7 @@ Not established: why the pilot laptop kept the starter origin (hub setup callbac
 
 ## Classification notes
 
+- Group work development is specified in [17 slices](group-work/README.md), reviewed 2026-10-17. This is a plan only: collaborative group setup, discussions, shared-product assessment, peer reviews, calendars, group bookings and Inbox sending remain unimplemented. Source/API research is not Canvas Live evidence.
 - Classic Quizzes: retired; not supported.
 - New Quiz written-work scoring writes no rubric assessment or item grade; the teacher enters item points in SpeedGrader. Rubric attachment to a New Quiz is green on the 2026-10-10 live runs.
 - The Oct 9 unattended evidence for plain, rubric and file scoring is Canvas Live on that build; the current accepted-write semantics are covered by local tests only.
