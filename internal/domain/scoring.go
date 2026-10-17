@@ -306,17 +306,10 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 	}
 	basis := doc.Basis()
 	hasGrade := false
-	hasCommentOnly := false
 	for _, s := range doc.Students {
 		if s.Operation == "grade" {
 			hasGrade = true
 		}
-		if s.Operation == "comment-only" {
-			hasCommentOnly = true
-		}
-	}
-	if hasCommentOnly && !doc.Assignment.NewQuiz {
-		return nil, fmt.Errorf("comment-only results require a New Quiz assignment")
 	}
 	if doc.Assignment.NewQuiz && hasGrade {
 		return nil, fmt.Errorf("New Quiz results are comment-only; grade writes are not supported")
@@ -412,8 +405,8 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			if s.Grade != nil || s.ReviseFeedback != nil || s.CommentOnly == nil {
 				return fail(fmt.Errorf("comment-only operation requires comment_only only; grade, rubric, and late writes forbidden"))
 			}
-			if !doc.Assignment.NewQuiz || !numericGradeType(doc.Assignment.GradingType) || doc.Assignment.AnonymousGrading || doc.Assignment.ModeratedGrading || doc.Assignment.GroupCategoryID != 0 {
-				return fail(fmt.Errorf("comment-only requires a supported individual New Quiz assignment"))
+			if !numericGradeType(doc.Assignment.GradingType) || doc.Assignment.AnonymousGrading || doc.Assignment.ModeratedGrading || doc.Assignment.GroupCategoryID != 0 {
+				return fail(fmt.Errorf("comment-only requires a supported individual assignment or New Quiz"))
 			}
 			c := s.CommentOnly
 			if e := validateAttempt(c.Attempt); e != nil {

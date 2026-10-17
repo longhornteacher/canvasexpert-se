@@ -26,7 +26,7 @@ Weekends are always excluded. The agent uses this calendar to work out school-da
 
 ## Bell schedule (2026-2027)
 
-Monday-Thursday use the Bobcat Hour schedule unless the calendar says otherwise; Friday uses the Homeroom schedule. House Days are pep rally days. Update for your school.
+Monday-Thursday use the Bobcat Hour schedule and Friday the Homeroom schedule. Homeroom First and House Days (pep rallies) are called ad hoc; none are scheduled yet. Update for your school.
 
 | Period | Bobcat Hour (Mon-Thu) | Homeroom (Fri) | Homeroom First | House Days / pep rally |
 |---|---|---|---|---|

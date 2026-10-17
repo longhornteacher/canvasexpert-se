@@ -61,9 +61,9 @@ The Engine starts the comment with the computed score lines. You write the rest 
 
 For each written prompt, pick the two strongest student responses across the teacher's saved current courses that assigned the same prompt; the source course need not be the receiving course. Use short anonymous excerpts: no names, aliases or identifying details. Every student in a receiving class gets the same pair. If fewer than two usable responses exist, use what there is or skip exemplars for that prompt, and say so; never write a model answer and present it as student work.
 
-Exemplars never hold up individual feedback. Post each student's feedback as usual. Once the matching set is scored, send the exemplars as a follow-up: a second results file with each student's same scores, `header: none` and the exemplar text as `feedback` (for New Quizzes, a second `comment-only` file). The grade is rewritten unchanged; review follows the teacher's usual review choice.
+Exemplars never hold up individual feedback. Post each student's feedback as usual. When the last student whose work answers that prompt is scored, across the courses that assigned it, send the exemplars as a follow-up: a second results file with `operation: comment-only` for each student, their same scores, `header: none` and the exemplar text as `feedback`. It adds only the comment and never touches the grade, so a grade the teacher changed in SpeedGrader stays as they left it. Review follows the teacher's usual review choice.
 
-A New Quiz comment leads with the per-item criterion lines and no overall line, because the written items are only part of the quiz. When the pulled packet carries Canvas's complete result for the same attempt, including auto-scored items, you may add it in your text, labeled as the Canvas quiz result and kept apart from your written-item scores. Never build a whole-quiz score from the written portion.
+A New Quiz comment leads with the per-item criterion lines and never an overall line. It is posted before the teacher enters the written-item points, so Canvas has no complete quiz result yet. Never build a whole-quiz score from the written portion.
 
 ## Save, review, post
 

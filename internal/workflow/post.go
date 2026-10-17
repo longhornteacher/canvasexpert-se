@@ -154,8 +154,8 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		if r.Operation == "revise-feedback" {
 			err = s.postRevision(ctx, &doc, r, v, source, live, save)
 		} else if r.Operation == "comment-only" {
-			if !liveAssignment.NewQuiz {
-				return report, fmt.Errorf("live assignment is no longer a New Quiz")
+			if liveAssignment.NewQuiz != doc.Assignment.NewQuiz {
+				return report, fmt.Errorf("live assignment type changed between New Quiz and ordinary assignment")
 			}
 			err = s.postCommentOnly(ctx, &doc, r, v, source, live, save)
 		} else {
@@ -182,7 +182,7 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 	if err != nil {
 		return err
 	}
-	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: true, Header: c.Header})
+	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: doc.Assignment.NewQuiz, Header: c.Header})
 	if err != nil {
 		return err
 	}

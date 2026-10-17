@@ -296,7 +296,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			if e != nil {
 				c.Hold = e.Error()
 			} else {
-				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: true, Header: r.CommentOnly.Header})
+				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, Header: r.CommentOnly.Header})
 				if e != nil {
 					c.Hold = e.Error()
 				} else {

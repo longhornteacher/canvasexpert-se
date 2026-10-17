@@ -75,8 +75,8 @@ func TestNewQuizResultsAreCommentOnly(t *testing.T) {
 	}
 	d.Assignment.NewQuiz = false
 	d.Students[0].Grade = nil
-	if _, err := ValidateResults(&d); err == nil || !strings.Contains(err.Error(), "New Quiz") {
-		t.Fatalf("ordinary assignment accepted comment-only mode: %v", err)
+	if _, err := ValidateResults(&d); err != nil {
+		t.Fatalf("ordinary assignment rejected a comment-only follow-up: %v", err)
 	}
 }
 func TestCreateOutcomesRemainConsistent(t *testing.T) {

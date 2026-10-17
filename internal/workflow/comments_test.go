@@ -179,3 +179,39 @@ func TestNewQuizCommentOnlyDuplicateCheckIsAttemptScoped(t *testing.T) {
 		t.Fatalf("different-attempt duplicate incorrectly suppressed current write: writes=%d outcome=%#v", writes, row.CommentOnly.Outcome)
 	}
 }
+
+func TestOrdinaryCommentOnlyAddsFollowUpWithoutTouchingTheGrade(t *testing.T) {
+	var posted string
+	writes := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		writes++
+		var body map[string]map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		if _, graded := body["submission"]; graded || len(body) != 1 {
+			t.Errorf("follow-up wrote more than a comment: %#v", body)
+		}
+		posted, _ = body["comment"]["text_comment"].(string)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	live := fixtureSubmission(5)
+	basis := domain.Rubric{Title: "Basis", Criteria: []domain.Criterion{{ID: "c1", Description: "Evidence", Points: domain.MustDecimal("10")}}}
+	doc := &domain.ResultsDocument{Assignment: domain.AssignmentSnapshot{CourseID: 1, AssignmentID: 10, Points: domain.MustDecimal("20"), Rubric: &basis}, Interpretation: domain.Interpretation{Mapping: "repeated", Rationale: "One response.", Components: []domain.Component{{Key: "answer", Label: "Answer", Weight: domain.MustDecimal("1")}}}}
+	row := &domain.StudentResult{Operation: "comment-only", CommentOnly: &domain.CommentOnlyOperation{Attempt: attemptRef(live), Header: "none", Components: []domain.ComponentScore{{Key: "answer", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "c1", Points: domain.MustDecimal("8")}}}}, Feedback: "Class exemplars: ..."}}
+	if err := s.postCommentOnly(context.Background(), doc, row, domain.ValidatedStudent{Interpretation: doc.Interpretation}, postSource{student: workspace.Student{UserID: 5}}, live, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 1 || posted != "Class exemplars: ..." || row.CommentOnly.Outcome.Status != "succeeded" {
+		t.Fatalf("follow-up comment not posted exactly: writes=%d text=%q outcome=%#v", writes, posted, row.CommentOnly.Outcome)
+	}
+	row.CommentOnly.Outcome = domain.ActionOutcome{}
+	row.CommentOnly.Header = ""
+	if err := s.postCommentOnly(context.Background(), doc, row, domain.ValidatedStudent{Interpretation: doc.Interpretation}, postSource{student: workspace.Student{UserID: 5}}, live, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(posted, "Overall: 16/20\n") {
+		t.Fatalf("ordinary comment-only should keep the honest overall line: %q", posted)
+	}
+}

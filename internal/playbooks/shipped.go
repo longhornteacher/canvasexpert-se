@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	_ "embed"
+
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/workspace"
 )
@@ -92,7 +94,7 @@ func Update(root string, now time.Time) (UpdateReport, error) {
 			row.State = "teacher-owned"
 		case bytes.Equal(have, seed):
 			row.State = "current"
-		case report.Previous != "" && matchesShipped(root, report.Previous, rel, have):
+		case report.Previous != "" && matchesShipped(root, report.Previous, rel, have), pastSeed(rel, have):
 			if err = Replace(root, rel, fmt.Sprintf("%x", sha256.Sum256(have)), now); err != nil {
 				return report, err
 			}
@@ -143,4 +145,23 @@ func writeShipped(root, label string) error {
 	}
 	const note = "Reference copies of CE-SE's shipped playbooks, one folder per version. They are inactive: never follow them as current rules. During an update the agent compares the previous shipped copy, the teacher's active file and the new shipped copy; adopted.txt names the version last adopted.\n"
 	return os.WriteFile(readme, []byte(note), 0644)
+}
+
+// pastSeeds fingerprints every committed version of each Engine-managed rules
+// file up to the release that introduced shipped/ (generated once by
+// `go run internal/playbooks/pastseeds_gen.go`). It lets installs that predate
+// shipped/ recognize unedited older copies; later versions are covered by the
+// shipped/ baseline, so the list needs no regular regeneration.
+//
+//go:embed past_seeds.txt
+var pastSeeds string
+
+func pastSeed(rel string, have []byte) bool {
+	line := fmt.Sprintf("%s %x", rel, sha256.Sum256(bytes.ReplaceAll(have, []byte("\r\n"), []byte("\n"))))
+	for _, known := range strings.Split(strings.ReplaceAll(pastSeeds, "\r\n", "\n"), "\n") {
+		if known == line {
+			return true
+		}
+	}
+	return false
 }
