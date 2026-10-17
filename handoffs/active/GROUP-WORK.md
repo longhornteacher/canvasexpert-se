@@ -2,7 +2,15 @@
 
 Self-contained brief for an agent session with no prior context. Target release: **1.1.0-beta.1** ("1.1b1"), developed on the `dev` branch. Phase 1 slices 01–03, 05a–06, 16–17 and Phase 2 slices 08–09 are implemented in Dev. Continue from the assigned slice in [the status table](../../docs/group-work/README.md#implementation-status); no CE-SE Canvas Live group-work writes or group-submission pulls have been run.
 
-## Paste-in kickoff
+## Review checkpoint — 2026-10-17
+
+The user paused at a usage-limit stopping point after review corrections. **Slice 10 has not started.** Read [the review and restart notes](../../docs/group-work/REVIEW-2026-10-17.md) before continuing. Reviewed scope includes slices 01, 02, 03, 05a, 06, 16, playbook v1, 08 and 09. The initial review found blocking issues; Luna corrected membership requests/recovery (`4ed7eac`), assignment-date resume state (`5245043`), and group/discussion REST payloads plus discussion scope/announcement baselines (`603fb80`). Second code reviews found no remaining actionable issue in those corrective diffs. This clears the reviewed scope for the next development slice on a local/source-evidence basis; it is not Canvas Live validation.
+
+Membership and date commits passed focused tests, full build/package and the 37-tool compiled MCP smoke. The final correction also passed the orchestrator's required full build/package and the 37-tool MCP smoke against dist/cse.exe. All three corrective batches are validated locally. The final development ZIP identifies revision 603fb80b713b+dirty because these restart documentation edits were present during packaging; this is not a release artifact. No Canvas Live calls/writes, UserInstall/UserSync changes, release, tag or push occurred. VERSION stays 1.0.0.
+
+When the user resumes: orchestrate with Luna subagents and one serial implementation writer. Next is **10 → 11 → 05b → 07**; Tier C stays on request only. Do not repeat completed slices or reuse spent Gate P authorization.
+
+## Continuation prompt
 
 > You are continuing CE-SE group-work support in this repository. Read `handoffs/active/GROUP-WORK.md`, then `AGENTS.md`, `ARCHITECTURE.md`, `SCORING-RULES.md`, `docs/group-work/README.md` and `docs/group-work/contracts.md`. Check the README status table and work only on the assigned slice; do not repeat an implemented slice. A specification file is not proof a dependency exists: verify against the code. Complete the slice's CLI, MCP, review, document and playbook integration where applicable, commit it to `dev`, and report. Do not run Canvas Live writes, touch `main`, tag, or release unless the teacher says so in this session.
 
