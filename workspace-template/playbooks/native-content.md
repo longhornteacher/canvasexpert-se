@@ -1,5 +1,7 @@
 # Canvas-native curriculum authoring
 
+For a book-club or collaborative group unit, read `group-work.md` first for the workflow, supported scope and access limits. This playbook supplies the native Page, asset and module authoring details it references.
+
 Use this playbook to turn selected archived teaching material into Canvas Pages, activity Assignments, New Quizzes, Files and Modules. Read `context/courses.md`, the archive's provenance and conversion notes, and `cse help formats` first. The archive and its capture tools stay outside the Engine.
 
 ## Teaching preferences

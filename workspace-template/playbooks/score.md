@@ -1,5 +1,7 @@
 # Score student work
 
+For a book-club unit, read `group-work.md` first. The current group workflow supports ungraded discussion evidence and ordinary individual assignment/New Quiz scoring; it does not support graded discussions, group assignments, shared grades, or individual grades on a shared group product. Do not turn discussion participation counts or a discussion packet into a score. Use this playbook only for a supported individual assessment.
+
 The judgment calls are yours; the Engine pulls work, does the arithmetic and posts. What the teacher's words mean, the review page and how to report are in `AGENTS.md`.
 
 Read this playbook and grading/calendar references through their logical MCP paths or from the effective teacher-rules root (UserInstall by default, configured UserSync otherwise). Student notes and course configuration use that same authority. Packets, drafts and commands stay in UserInstall. Contact JSON is private and must not be read for scoring. If a shared reference is unavailable, explain that file's problem without reading an inactive local copy; continue independent work that has its needed evidence.
