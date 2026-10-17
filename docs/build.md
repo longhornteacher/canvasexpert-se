@@ -18,7 +18,7 @@ The source build targets a portable Windows 11 executable. It needs the exact Go
 
 Packaging always rebuilds first. Internal `compile.ps1` sets Windows/amd64 and `CGO_ENABLED=0` only for its child Go processes, checks the Go executable's exact version, runs `go test ./...` and `go vet ./...`, then builds the Engine and the thin launcher with `-trimpath` (no local source paths in the binary). Everything is assembled in a temporary staging folder and the current output is replaced only after every step succeeded, so a failed run leaves the previous `dist/` set intact. The scripts do not format source files. Agents that need a scratch binary compile into a task-owned temporary folder and delete it; only this path produces the download.
 
-The Engine embeds the canonical version from root `VERSION` (currently `1.0.0-beta.1`, displayed as 1.0 beta), the short Git revision (`+dirty` when the working tree has changes), a UTC build timestamp, and a development/release build kind. These are diagnostic provenance (`cse version --json`), not a family of builds to choose from.
+The Engine embeds the canonical version from root `VERSION` (currently `1.0.0`, displayed as 1.0), the short Git revision (`+dirty` when the working tree has changes), a UTC build timestamp, and a development/release build kind. These are diagnostic provenance (`cse version --json`), not a family of builds to choose from.
 
 ## Output contract
 
@@ -26,7 +26,7 @@ The Engine embeds the canonical version from root `VERSION` (currently `1.0.0-be
 
 - `dist/cse.exe`: the Engine used by Dev tooling, copied byte-for-byte into the ZIP.
 - `dist/cse-mcp-launcher.exe`: the thin MCP launcher.
-- `dist/CanvasExpert-SE-<VERSION>.zip` (for example `CanvasExpert-SE-1.0.0-beta.1.zip`): the one teacher download. Rebuilding the same version replaces it; a new version adds a new file and leaves earlier versions in `dist/` as an archive until you delete them.
+- `dist/CanvasExpert-SE-<VERSION>.zip` (for example `CanvasExpert-SE-1.0.0.zip`): the one teacher download. Rebuilding the same version replaces it; a new version adds a new file and leaves earlier versions in `dist/` as an archive until you delete them.
 - `dist/SHA256SUMS.txt`: checksums.
 
 No dated duplicates are written; the version in the ZIP name is the only variation. The Cowork extension (MCPB) is generated in staging and exists only inside the ZIP at `engine/CanvasExpert-SE-Cowork.mcpb`; it is not a separate download.

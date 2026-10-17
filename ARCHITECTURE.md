@@ -4,7 +4,7 @@ Updated 2026-10-16 (remembered WebUI appearance follows active teacher setup; gr
 
 ## Intent and engineering default
 
-CE-SE is an independent teacher tool distributed under the MIT license. The agent supplies intent, educational judgment, and content; the Engine (a portable Go CLI) and plain workspace files execute tasks against Canvas Live. Optimize for successful work with little friction, speed, and practical accuracy. Ordinary repairable imperfections are acceptable. The current product line is 1.0 beta; `VERSION` is the release-version authority, and [the release policy](docs/releasing.md) distinguishes published releases from development builds.
+CE-SE is an independent teacher tool distributed under the MIT license. The agent supplies intent, educational judgment, and content; the Engine (a portable Go CLI) and plain workspace files execute tasks against Canvas Live. Optimize for successful work with little friction, speed, and practical accuracy. Ordinary repairable imperfections are acceptable. The current product line is 1.0; `VERSION` is the release-version authority, and [the release policy](docs/releasing.md) distinguishes published releases from development builds.
 
 Prefer direct implementations using existing packages. Add a defensive branch or abstraction when a supported workflow needs it, a real failure demonstrates its value, or a cheap check prevents a consequential mistake. Hypothetical edge cases alone do not justify expansion. Validate at useful boundaries, continue independent items when one fails, and explain uncertainty honestly without turning unverified assumptions into prohibitions.
 
