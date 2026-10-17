@@ -63,6 +63,8 @@ try {
   const discussionTool = discovered.result.tools.find(t => t.name === 'pull_discussion');
   assert.ok(discussionTool.inputSchema.properties.topic_id, 'pull_discussion must expose topic_id');
   assert.ok(discussionTool.inputSchema.properties.group_id, 'pull_discussion must expose optional group_id');
+  assert.match(discussionTool.description, /discussion-packet/);
+  assert.match(discussionTool.description, /pending/);
   const pageTool = discovered.result.tools.find(t => t.name === 'pull_page');
   assert.ok(pageTool.inputSchema.properties.query, 'pull_page must preserve the query input');
   assert.ok(pageTool.inputSchema.properties.group_id, 'pull_page must expose optional group_id');
@@ -121,6 +123,12 @@ try {
   const assignment = (await readFile('engine-docs/examples/synthetic-assignment-create.md', 'utf8')).replace('course: DEMO', 'course: CS8');
   await call('write_draft', { path: 'courses/assignment.md', content: assignment });
   await call('validate_document', { path: 'courses/assignment.md' });
+  const discussionPacket = await readFile('engine-docs/examples/synthetic-discussion-packet.yaml', 'utf8');
+  await call('write_draft', { path: 'courses/discussion-packet.yaml', content: discussionPacket });
+  await call('validate_document', { path: 'courses/discussion-packet.yaml' });
+  const discussionReply = await readFile('engine-docs/examples/synthetic-discussion-reply.md', 'utf8');
+  await call('write_draft', { path: 'courses/discussion-reply.md', content: discussionReply });
+  await call('validate_document', { path: 'courses/discussion-reply.md' });
   if (review) {
     const started = await call('start_review', { path: 'courses/assignment.md', course: 'CS8' }, false, true);
     assert.equal(started.state, 'pending', JSON.stringify(started));

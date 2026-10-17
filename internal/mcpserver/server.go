@@ -243,7 +243,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, args...)
 	})
-	addActionTool(server, "pull_discussion", "Pull an exact course or direct group discussion topic with editable baseline. Distributed club topics retain their group set identity from Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in DiscussionQueryInput) (TextOutput, error) {
+	addActionTool(server, "pull_discussion", "Pull an exact course, distributed club, or direct group discussion. Saves topic.md plus an as-of discussion-packet with complete/partial entry coverage, stable-ref attribution, and attachment status. A long pull returns pending; call again with the same inputs to wait on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in DiscussionQueryInput) (TextOutput, error) {
 		args := []string{"pull-discussion", in.Course, strconv.FormatInt(in.TopicID, 10)}
 		if in.GroupID != 0 {
 			if in.GroupID < 0 {
@@ -251,7 +251,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 			}
 			args = append(args, "--group", strconv.FormatInt(in.GroupID, 10))
 		}
-		return s.command(ctx, args...)
+		return s.longCommand(ctx, args...)
 	})
 	addReadTool(server, "list_page_revisions", "Read revision metadata for an exact course or group Page. Set revision_id to also read that revision's historical body; this does not identify every contributor or simultaneous edits.", func(ctx context.Context, _ *mcp.CallToolRequest, in PageRevisionsInput) (TextOutput, error) {
 		args := []string{"page-history", in.Course, strconv.FormatInt(in.PageID, 10)}

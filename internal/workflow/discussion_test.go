@@ -38,9 +38,17 @@ func TestDistributedDiscussionCreateScopesGroupSetOnTopicAndPullsBaseline(t *tes
 			if req.Topic["published"] != true {
 				t.Errorf("publication payload=%#v", req.Topic)
 			}
-			json.NewEncoder(w).Encode(map[string]any{"id": 77, "published": true})
+			_, _ = w.Write([]byte("not-json"))
 		case "GET /api/v1/courses/1/discussion_topics/77":
 			json.NewEncoder(w).Encode(map[string]any{"id": 77, "title": "Common prompt", "message": "<p>Read and respond</p>", "group_category_id": 50, "discussion_type": "threaded", "published": false})
+		case "GET /api/v1/group_categories/50/groups":
+			json.NewEncoder(w).Encode([]any{map[string]any{"id": 60, "course_id": 1, "group_category_id": 50, "context_type": "Course", "non_collaborative": false}})
+		case "GET /api/v1/courses/1/enrollments":
+			json.NewEncoder(w).Encode([]any{})
+		case "GET /api/v1/groups/60/discussion_topics/78":
+			json.NewEncoder(w).Encode(map[string]any{"id": 78, "title": "Club prompt", "message": "Club thread"})
+		case "GET /api/v1/groups/60/discussion_topics/78/view":
+			json.NewEncoder(w).Encode(map[string]any{"view": []any{}, "new_entries": []any{}})
 		default:
 			t.Errorf("unexpected Canvas request %s %s", r.Method, r.URL.Path)
 			http.NotFound(w, r)
@@ -114,7 +122,7 @@ func TestAcceptedDiscussionCreateWithoutIDIsHeldAndNeverReplayed(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == "POST" {
 			posts++
-			json.NewEncoder(w).Encode(map[string]any{})
+			_, _ = w.Write([]byte("not-json"))
 			return
 		}
 		if r.Method == "GET" && r.URL.Path == "/api/v1/courses/1/discussion_topics" {
@@ -157,7 +165,7 @@ func TestDiscussionSettingsOnlyUpdateIgnoresChangedBodyAndPreservesIt(t *testing
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		patch = req.Topic
-		json.NewEncoder(w).Encode(map[string]any{"id": 5, "title": "Prompt"})
+		_, _ = w.Write([]byte("not-json"))
 	})
 	base.Instance = s.Client.Origin()
 	d.Instance = base.Instance

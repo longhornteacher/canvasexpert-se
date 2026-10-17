@@ -85,6 +85,138 @@ type DiscussionChild struct {
 	TopicID int64 `yaml:"topic_id"`
 }
 
+// DiscussionPacket is an as-of observation of Canvas conversation content.
+// It intentionally contains only stable student refs and aliases, never Canvas
+// user records or names.
+type DiscussionPacket struct {
+	Schema        int                `yaml:"schema" json:"schema"`
+	Kind          string             `yaml:"kind" json:"kind"`
+	Course        string             `yaml:"course" json:"course"`
+	Instance      string             `yaml:"instance" json:"instance"`
+	CourseID      int64              `yaml:"course_id" json:"course_id"`
+	ParentTopicID int64              `yaml:"parent_topic_id" json:"parent_topic_id"`
+	AssignmentID  int64              `yaml:"assignment_id,omitempty" json:"assignment_id,omitempty"`
+	PulledAt      string             `yaml:"pulled_at" json:"pulled_at"`
+	Status        string             `yaml:"status" json:"status"`
+	TeacherNotes  []string           `yaml:"teacher_notes,omitempty" json:"teacher_notes,omitempty"`
+	Sources       []DiscussionSource `yaml:"sources" json:"sources"`
+	Entries       []DiscussionEntry  `yaml:"entries" json:"entries"`
+}
+
+type DiscussionSource struct {
+	ContextType string `yaml:"context_type" json:"context_type"`
+	ContextID   int64  `yaml:"context_id" json:"context_id"`
+	TopicID     int64  `yaml:"topic_id" json:"topic_id"`
+	GroupID     int64  `yaml:"group_id,omitempty" json:"group_id,omitempty"`
+	Method      string `yaml:"method,omitempty" json:"method,omitempty"`
+	Status      string `yaml:"status" json:"status"`
+	Reason      string `yaml:"reason,omitempty" json:"reason,omitempty"`
+	EntryCount  int    `yaml:"entry_count" json:"entry_count"`
+}
+
+type DiscussionEntry struct {
+	EntryID       int64        `yaml:"entry_id" json:"entry_id"`
+	ContextType   string       `yaml:"context_type" json:"context_type"`
+	ContextID     int64        `yaml:"context_id" json:"context_id"`
+	TopicID       int64        `yaml:"topic_id" json:"topic_id"`
+	ParentEntryID int64        `yaml:"parent_entry_id,omitempty" json:"parent_entry_id,omitempty"`
+	AuthorKind    string       `yaml:"author_kind" json:"author_kind"`
+	StudentRef    string       `yaml:"student_ref,omitempty" json:"student_ref,omitempty"`
+	Alias         string       `yaml:"alias,omitempty" json:"alias,omitempty"`
+	CreatedAt     string       `yaml:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     string       `yaml:"updated_at,omitempty" json:"updated_at,omitempty"`
+	HTML          string       `yaml:"html,omitempty" json:"html,omitempty"`
+	ReadableText  string       `yaml:"readable_text,omitempty" json:"readable_text,omitempty"`
+	Deleted       bool         `yaml:"deleted,omitempty" json:"deleted,omitempty"`
+	Attachments   []Attachment `yaml:"attachments,omitempty" json:"attachments,omitempty"`
+}
+
+func (p *DiscussionPacket) Validate() error {
+	if p.Schema != 1 || p.Kind != "discussion-packet" || !validNickname(p.Course) || !validInstance(p.Instance) || p.CourseID <= 0 || p.ParentTopicID <= 0 {
+		return fmt.Errorf("discussion packet requires schema 1, configured course, Canvas identity and parent topic")
+	}
+	if p.Status != "complete" && p.Status != "partial" {
+		return fmt.Errorf("discussion packet status must be complete or partial")
+	}
+	sources := map[string]bool{}
+	for _, source := range p.Sources {
+		if (source.ContextType != "Course" && source.ContextType != "Group") || source.ContextID <= 0 || source.TopicID <= 0 || (source.Status != "complete" && source.Status != "partial") {
+			return fmt.Errorf("discussion packet has an invalid source scope or coverage status")
+		}
+		if source.Method != "" && source.Method != "threaded_view" && source.Method != "paginated_entries" {
+			return fmt.Errorf("discussion packet source method is invalid")
+		}
+		if source.ContextType == "Course" && source.ContextID != p.CourseID {
+			return fmt.Errorf("discussion packet course source differs from its course identity")
+		}
+		if source.ContextType == "Group" && source.GroupID != 0 && source.GroupID != source.ContextID {
+			return fmt.Errorf("discussion packet group source identity disagrees")
+		}
+		if source.Status == "partial" && p.Status == "complete" {
+			return fmt.Errorf("complete discussion packet cannot contain a partial source")
+		}
+		sources[fmt.Sprintf("%s:%d:%d", source.ContextType, source.ContextID, source.TopicID)] = true
+	}
+	for _, entry := range p.Entries {
+		key := fmt.Sprintf("%s:%d:%d", entry.ContextType, entry.ContextID, entry.TopicID)
+		if entry.EntryID <= 0 || !sources[key] || (entry.ContextType != "Course" && entry.ContextType != "Group") || entry.ParentEntryID < 0 {
+			return fmt.Errorf("discussion packet has an entry outside its recorded source identity")
+		}
+		if entry.AuthorKind != "student" && entry.AuthorKind != "instructor" && entry.AuthorKind != "unknown" {
+			return fmt.Errorf("discussion packet author kind is invalid")
+		}
+		if entry.AuthorKind == "student" && entry.StudentRef == "" {
+			return fmt.Errorf("mapped student entry requires a stable student_ref")
+		}
+		if entry.Deleted && (entry.HTML != "" || entry.ReadableText != "") {
+			return fmt.Errorf("deleted discussion entries must not reconstruct erased text")
+		}
+	}
+	return nil
+}
+
+type DiscussionReplyDocument struct {
+	Schema        int           `yaml:"schema"`
+	Kind          string        `yaml:"kind"`
+	Operation     string        `yaml:"operation"`
+	Course        string        `yaml:"course"`
+	Instance      string        `yaml:"instance,omitempty"`
+	CourseID      int64         `yaml:"course_id,omitempty"`
+	ContextType   string        `yaml:"context_type"`
+	ContextID     int64         `yaml:"context_id"`
+	GroupID       int64         `yaml:"group_id,omitempty"`
+	TopicID       int64         `yaml:"topic_id"`
+	ParentEntryID int64         `yaml:"parent_entry_id,omitempty"`
+	BodyFormat    string        `yaml:"body_format"`
+	TeacherNote   string        `yaml:"teacher_note,omitempty"`
+	Outcome       ActionOutcome `yaml:"outcome,omitempty"`
+}
+
+func (d *DiscussionReplyDocument) ValidateBody(body string) error {
+	if d.Schema != 1 || d.Kind != "discussion-reply" || d.Operation != "create" {
+		return fmt.Errorf("expected schema: 1, kind: discussion-reply and operation: create")
+	}
+	if !validNickname(d.Course) || d.TopicID <= 0 || d.ContextID <= 0 || (d.ContextType != "Course" && d.ContextType != "Group") {
+		return fmt.Errorf("configured course, exact topic and course/group context identity required")
+	}
+	if (d.ContextType == "Group" && d.GroupID != d.ContextID) || (d.ContextType == "Course" && d.GroupID != 0) {
+		return fmt.Errorf("reply context and group identity disagree")
+	}
+	if d.Instance != "" && !validInstance(d.Instance) {
+		return fmt.Errorf("instance must be an HTTPS Canvas origin")
+	}
+	if d.CourseID < 0 || d.ParentEntryID < 0 || d.GroupID < 0 {
+		return fmt.Errorf("invalid discussion reply identity")
+	}
+	if d.BodyFormat != "markdown" && d.BodyFormat != "html" {
+		return fmt.Errorf("body_format is required: markdown or html")
+	}
+	if strings.TrimSpace(body) == "" {
+		return fmt.Errorf("teacher reply body cannot be empty")
+	}
+	return validateOutcome(d.Outcome)
+}
+
 func (d *DiscussionDocument) ValidateBody(body string) error {
 	if d.Schema != 1 || d.Kind != "discussion" || (d.Operation != "create" && d.Operation != "update") {
 		return fmt.Errorf("expected schema: 1, kind: discussion and operation: create|update")

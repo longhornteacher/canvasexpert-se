@@ -489,6 +489,36 @@ func (c *Client) Write(ctx context.Context, method, path string, body any, out a
 	return c.request(ctx, method, u, data, false, func(resp *http.Response) error { return readJSON(resp, out) })
 }
 
+// WriteAccepted preserves an accepted HTTP write even if Canvas omits or
+// changes its response JSON. When a valid response body matches out it is
+// decoded best-effort so callers can save returned IDs; response shape is not
+// a condition of success and this method never performs a confirmation read.
+func (c *Client) WriteAccepted(ctx context.Context, method, path string, body, out any) error {
+	method = strings.ToUpper(method)
+	if method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+		return &Error{Kind: "validation"}
+	}
+	u, err := c.apiURL(path)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(body)
+	if err != nil {
+		return &Error{Kind: "validation"}
+	}
+	return c.request(ctx, method, u, data, false, func(resp *http.Response) error {
+		if out == nil {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			return nil
+		}
+		response, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if readErr == nil && len(bytes.TrimSpace(response)) > 0 {
+			_ = json.Unmarshal(response, out)
+		}
+		return nil
+	})
+}
+
 // Download preserves bytes and does not replay a partially delivered download.
 // The caller should remove an incomplete destination file on failure.
 func (c *Client) Download(ctx context.Context, rawURL string, dst io.Writer) error {

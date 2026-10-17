@@ -53,9 +53,9 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
                                 List collaborative group sets/clubs; memberships require an exact group
   pull-group-set COURSE ID      Pull a collaborative group set and its editable baseline
   pull-group-memberships COURSE ID  Pull an exact group set's membership baseline
-  push FILE                     Create/resume assignments, Pages, modules, group sets or membership plans
+  push FILE                     Create/resume assignments, Pages, discussions/replies, modules, group sets or membership plans
   pull-page COURSE ID|LINK       Pull exact Page HTML and baseline for editing
-  pull-discussion COURSE TOPIC_ID Pull exact discussion body and edit baseline (optional --group ID)
+  pull-discussion COURSE TOPIC_ID Pull topic.md plus full/partial discussion packet (optional --group ID)
   page-history COURSE PAGE_ID   Read Page revisions (optional --group ID --revision ID)
   upload-file COURSE FILE --access course|hidden|locked [--folder ID] [--receipt PATH] [--new-upload]
                                 Upload a course asset and save a reusable receipt
@@ -556,6 +556,10 @@ func validateDocument(path string, roots ...string) error {
 		target = &domain.PageDocument{}
 	case "discussion":
 		target = &domain.DiscussionDocument{}
+	case "discussion-packet":
+		target = &domain.DiscussionPacket{}
+	case "discussion-reply":
+		target = &domain.DiscussionReplyDocument{}
 	case "module":
 		target = &domain.ModuleDocument{}
 	case "results":
@@ -573,7 +577,7 @@ func validateDocument(path string, roots ...string) error {
 		case "students.md":
 			target = &domain.StudentNotes{}
 		default:
-			return fmt.Errorf("unsupported document kind; expected assignment, group-set, page, discussion, module, results, packet, or student-work")
+			return fmt.Errorf("unsupported document kind %q; expected assignment, group-set, page, discussion, discussion-packet, discussion-reply, module, results, packet, or student-work", kind)
 		}
 	}
 	if kindErr != nil && kind != "" {
@@ -587,8 +591,19 @@ func validateDocument(path string, roots ...string) error {
 		if d, ok := target.(*domain.GroupMembershipDocument); ok {
 			e = d.Validate()
 		}
+		if d, ok := target.(*domain.DiscussionPacket); ok {
+			e = d.Validate()
+		}
 		if _, ok := target.(*domain.DiscussionDocument); ok && e == nil {
 			var doc domain.DiscussionDocument
+			body, readErr := workspace.ReadDocument(path, &doc)
+			if readErr != nil {
+				return readErr
+			}
+			e = doc.ValidateBody(body)
+		}
+		if _, ok := target.(*domain.DiscussionReplyDocument); ok && e == nil {
+			var doc domain.DiscussionReplyDocument
 			body, readErr := workspace.ReadDocument(path, &doc)
 			if readErr != nil {
 				return readErr

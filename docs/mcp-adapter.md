@@ -17,7 +17,7 @@ New Quizzes, including written-response items, are open for regular authoring, u
 | `list_courses`, `list_modules` | Read saved course selections by default (`source: configured`); explicit `source: canvas` discovers the live Canvas catalog. Read configured-course modules. |
 | `list_group_sets`, `list_groups`, `pull_group_set`, `pull_group_memberships` | Read collaborative sets/clubs and exact-set membership rosters, save editable set or membership baselines. Membership output uses stable student refs and aliases; differentiation tags and private identity fields are excluded. |
 | `pull_assignment`, `pull_page` | Pull exact content and its edit baseline. `pull_page` keeps the `query` argument and accepts optional `group_id` for group Pages. |
-| `pull_discussion` | Pull an exact course/direct-group discussion and edit baseline; distributed discussion set identity is retained from Canvas. |
+| `pull_discussion` | Long-pull an exact course/direct-group topic or distributed parent. Saves `topic.md` plus an as-of `discussion-packet` with complete/partial threaded entry coverage and stable-ref author mapping. Repeat a pending call with identical inputs to wait on the same run. |
 | `list_page_revisions` | Read course or group Page revision metadata; optional `revision_id` returns that revision's historical body. |
 | `pull_work` | Pull pseudonymized student work/history/attachments, optionally scoped to a course and assignment. |
 | `list_workspace_files` | Discover allowed workspace files/directories, optionally recursively. |
@@ -27,7 +27,7 @@ New Quizzes, including written-response items, are open for regular authoring, u
 | `read_workspace_asset`, `write_asset` | Read/save base64 course attachments and assets with hashes. |
 | `validate_document`, `validate_quiz` | Local Engine document or QuizForge validation. |
 | `start_review`, `review_status` | Teacher review, revision notes, and actual posting/creation outcomes. |
-| `push_document` | Assignment/Page/ungraded discussion or announcement/module/group-set create, resume, update, explicit group-membership changes or even allocation, or assignment/New Quiz rubric attachment as specified by the document. Slice 05a rejects linked graded discussions. |
+| `push_document` | Assignment/Page/ungraded discussion or announcement, explicitly requested teacher discussion reply, module/group-set create, resume, update, explicit group-membership changes or even allocation, or assignment/New Quiz rubric attachment as specified by the document. Discussion replies check exact topic/parent scope and persist accepted or uncertain outcomes without replay. Slice 05a rejects linked graded discussions. |
 | `post_results` | Scoped computed assessment, rubric, feedback, late timing, or selected feedback revision. |
 | `push_quiz` | Supported QuizForge New Quiz authoring/resumption, including written items and hub differentiation. |
 | `upload_file` | Explicit course/access/folder asset upload with a reusable course receipt and deliberate new-upload option. |

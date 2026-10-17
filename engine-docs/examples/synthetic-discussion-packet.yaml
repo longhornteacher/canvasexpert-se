@@ -1,0 +1,59 @@
+---
+schema: 1
+kind: discussion-packet
+course: DEMO
+instance: https://canvas.example.edu
+course_id: 101
+parent_topic_id: 501
+assignment_id: 9001
+pulled_at: 2026-10-17T15:30:00Z
+status: partial
+teacher_notes:
+  - Written exchange is visible; oral participation was not observed.
+sources:
+  - context_type: Group
+    context_id: 601
+    topic_id: 701
+    group_id: 601
+    method: threaded_view
+    status: complete
+    entry_count: 3
+  - context_type: Group
+    context_id: 602
+    topic_id: 702
+    group_id: 602
+    status: partial
+    reason: Club topic could not be read.
+    entry_count: 0
+entries:
+  - entry_id: 81
+    context_type: Group
+    context_id: 601
+    topic_id: 701
+    author_kind: student
+    student_ref: student_7f31
+    alias: Bulbasaur
+    created_at: 2026-10-16T18:00:00Z
+    html: <p>I noticed the character changes the plan after the evidence.</p>
+    readable_text: I noticed the character changes the plan after the evidence.
+    attachments: []
+  - entry_id: 82
+    context_type: Group
+    context_id: 601
+    topic_id: 701
+    parent_entry_id: 81
+    author_kind: instructor
+    created_at: 2026-10-16T18:15:00Z
+    html: <p>Which detail led you to that conclusion?</p>
+    readable_text: Which detail led you to that conclusion?
+    attachments: []
+  - entry_id: 83
+    context_type: Group
+    context_id: 601
+    topic_id: 701
+    parent_entry_id: 81
+    author_kind: unknown
+    deleted: true
+    created_at: 2026-10-16T18:20:00Z
+    attachments: []
+---

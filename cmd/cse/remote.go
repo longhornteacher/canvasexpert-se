@@ -85,8 +85,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 		kind := documentKind(b)
-		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "discussion" && kind != "module" && kind != "group-set" && kind != "group-memberships" {
-			return fail(inputError(fmt.Errorf("push supports assignment, page, discussion, module, group-set, or group-memberships documents")), progress)
+		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "discussion" && kind != "discussion-reply" && kind != "module" && kind != "group-set" && kind != "group-memberships" {
+			return fail(inputError(fmt.Errorf("push supports assignment, page, discussion/reply, module, group-set, or group-memberships documents")), progress)
 		}
 		if cmd == "post" && kind != "results" {
 			return fail(inputError(fmt.Errorf("post requires a results document")), progress)
@@ -346,6 +346,19 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			if report.URL != "" {
 				fmt.Fprintln(out, report.URL)
 			}
+			if report.Message != "" {
+				fmt.Fprintln(out, report.Message)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
+				return 3
+			}
+			return 0
+		} else if kind == "discussion-reply" {
+			report, e := service.PushDiscussionReply(ctx, file)
+			fmt.Fprintf(out, "%s: teacher reply on discussion %d %s\n", report.Status, report.TopicID, report.Path)
 			if report.Message != "" {
 				fmt.Fprintln(out, report.Message)
 			}
