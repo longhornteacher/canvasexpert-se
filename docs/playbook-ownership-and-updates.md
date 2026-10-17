@@ -160,7 +160,9 @@ downloads the release ZIP itself.
   no longer carries playbooks, `TEACHER.md`, `Teacher_Override.md` or
   `context/`, so extracting it over an existing UserInstall cannot overwrite
   the teacher's setup or edited playbooks. On first run in a freshly extracted
-  folder, the bundled Engine lays down the starter files.
+  folder, the bundled Engine lays down the starter files. With UserSync, the
+  ZIP's `AGENTS.md` and `CLAUDE.md` would replace UserInstall's local pointer
+  files; `playbooks update` archives those copies and restores the pointers.
 - `cse playbooks update` (MCP `engine_info` operation `update-playbooks`)
   adds missing files, replaces a playbook only when it still matches the
   previous shipped copy, and reports any other difference as `kept`. With no
@@ -218,17 +220,31 @@ agent's late timing says late, then one line per item, then tips and
 exemplars. X is the earned score before Canvas's deduction. Verified in Canvas
 Live (CS8, 2026-10-17, Test Student).
 
+## First real update (2026-10-17)
+
+The teacher's own UserInstall (UserSync mode, rules in OneDrive) was updated
+to the new Engine (revision 41dface) by swapping in `engine/cse.exe` beside the
+running copy; Claude loaded it after a restart. `playbooks update` added
+`Teacher_Override.md` and `context/commands.md`, found two playbooks current,
+left seven `context/` files alone and reported nine files `kept` because the
+install had no `shipped/adopted.txt`. Each of the nine exactly matched a past
+template version in Dev's git history, so none held teacher edits; they were
+replaced with the new seed and archived under `playbook-old/`. A second update
+reported every file current or teacher-owned. `grade_portal_name: "Skyward
+Family Access"` and `bobcat_hour_label: "Bobcat Hour"` were added to the saved
+parent-update settings, and offline doctor passed.
+
+Matching against git history is a Dev-side shortcut, not something a teacher's
+agent can do. A colleague's first update without `adopted.txt` still treats
+every difference as the teacher's choice and relies on agent reconciliation;
+after that, `adopted.txt` makes later updates automatic for unedited files.
+
 ## Remaining work
 
-- Agent reconciliation of `kept` files has guidance but no real
-  version-to-version run yet. Existing installs have no `shipped/adopted.txt`,
-  so their first update reports every changed playbook as `kept`.
+- Agent reconciliation of genuinely teacher-edited playbooks has guidance but
+  no real run yet.
 - Determine where the existing New Quiz pull can supply the complete Canvas
   result for the matching attempt. Per-item-only feedback continues meanwhile.
-- Teacher's own install: after updating, add `grade_portal_name: "Skyward
-  Family Access"` and `bobcat_hour_label: "Bobcat Hour"` to
-  `context/parent-updates.md` (the agent can do it when asked) so emails keep
-  those names; the saved URLs already carry over.
 - Parent per-item history (conflict 8) remains undesigned.
 
 ## Done looks like
