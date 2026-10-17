@@ -27,6 +27,7 @@ type GroupRowReport struct {
 	Operation, Status, Message string
 	Outcomes                 domain.ActionOutcomes
 	Private                  map[string]domain.ActionOutcome
+	Students                 []StudentPostReport
 }
 type GroupPostReport struct {
 	Path     string
@@ -50,7 +51,16 @@ type groupLive struct {
 	rep  workspace.Student
 }
 
+// GroupStudentRef is the review/skip key of one student's indivisible
+// grade-and-comment card in an individual-mode group row.
+func GroupStudentRef(groupID int64, studentRef string) string {
+	return fmt.Sprintf("group:%d:student:%s", groupID, studentRef)
+}
+
 func groupSharedComplete(r domain.GroupResult) bool {
+	if r.Operation == "individual" {
+		return r.SharedFeedback == nil || definite(r.SharedFeedback.Outcome)
+	}
 	if r.Operation == "grade" {
 		g := r.Grade
 		return g != nil && definite(g.Outcomes.Comment) && definite(g.Outcomes.Rubric) && definite(g.Outcomes.Grade) && definite(g.Outcomes.Late)
@@ -64,6 +74,11 @@ func groupComplete(r domain.GroupResult) bool {
 	}
 	for _, f := range r.IndividualFeedback {
 		if !definite(f.Outcome) {
+			return false
+		}
+	}
+	for _, st := range r.Students {
+		if !resultComplete(st) {
 			return false
 		}
 	}
@@ -89,6 +104,13 @@ func holdGroupShared(r *domain.GroupResult, message string) {
 // GroupSharedText renders the whole-group comment exactly as review shows and post sends.
 func GroupSharedText(doc domain.GroupResultsDocument, row domain.GroupResult, v domain.ValidatedGroup) (string, error) {
 	basis := doc.Basis()
+	if row.Operation == "individual" {
+		sf := row.SharedFeedback
+		if basis == nil || sf == nil || v.SharedFeedback == nil {
+			return "", fmt.Errorf("shared feedback is not available for this row")
+		}
+		return render.RenderFeedback(render.FeedbackInput{Rubric: *basis, Interpretation: doc.Interpretation, Components: sf.Components, Assessment: v.SharedFeedback.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: sf.Feedback, Header: sf.Header})
+	}
 	if basis == nil || v.Assessment == nil {
 		return "", fmt.Errorf("scoring basis is absent")
 	}
@@ -111,6 +133,25 @@ func groupReport(r domain.GroupResult) GroupRowReport {
 	} else if r.CommentOnly != nil {
 		p.Outcomes.Comment = r.CommentOnly.Outcome
 		outcomes = append(outcomes, r.CommentOnly.Outcome)
+	}
+	if r.SharedFeedback != nil {
+		p.Outcomes.Comment = r.SharedFeedback.Outcome
+		outcomes = append(outcomes, r.SharedFeedback.Outcome)
+	}
+	for _, st := range r.Students {
+		sr := postReport(st)
+		p.Students = append(p.Students, sr)
+		if sr.Status != "completed" {
+			if sr.Message != "" {
+				if p.Message != "" {
+					p.Message += "; "
+				}
+				p.Message += sr.StudentRef + ": " + sr.Message
+			}
+			if sr.Status == "uncertain" || (sr.Status == "held" && p.Status != "uncertain") {
+				p.Status = sr.Status
+			}
+		}
 	}
 	for _, f := range r.IndividualFeedback {
 		p.Private[f.StudentRef] = f.Outcome
@@ -201,6 +242,12 @@ func (s *Service) PostGroupResults(ctx context.Context, path string) (report Gro
 		row := &doc.Groups[i]
 		v := validated[i]
 		src := sources[row.GroupID]
+		if row.Operation == "individual" {
+			if err = s.postGroupIndividual(ctx, &doc, row, v, src, save); err != nil {
+				return report, err
+			}
+			continue
+		}
 		if !groupSharedComplete(*row) && !s.Skip[GroupCardRef(row.GroupID)] {
 			hold := v.Hold
 			if hold == "" {
@@ -303,7 +350,9 @@ func (s *Service) groupPostSources(doc domain.GroupResultsDocument) (map[int64]g
 			}
 			src.students[ref] = st
 		}
-		src.hold = groupStaticHold(row, work, src.members)
+		if row.Operation != "individual" {
+			src.hold = groupStaticHold(row, work, src.members)
+		}
 		out[row.GroupID] = src
 	}
 	return out, nil
@@ -448,7 +497,13 @@ func (s *Service) checkGroupMember(ctx context.Context, a domain.AssignmentSnaps
 	if sub.ID != m.SubmissionID || !sameAttempt(domain.AttemptRef{Attempt: m.Attempt}, attemptRef(sub)) {
 		return "new submission attempt for " + ref + " since pull; pull-work for this group"
 	}
-	if submissionFingerprint(sub) != src.artifact.Fingerprint {
+	expected := src.artifact
+	for _, art := range src.work.Artifacts {
+		if art.Key == m.CurrentArtifactKey {
+			expected = art
+		}
+	}
+	if submissionFingerprint(sub) != expected.Fingerprint {
 		return "submitted work for " + ref + " changed since pull"
 	}
 	if sub.Excused {
@@ -763,6 +818,10 @@ func buildGroupResultsReview(root, path string) (ReviewModel, error) {
 	m := ReviewModel{Kind: "Shared group assessment", Title: doc.Assignment.Title, Notice: "A shared grade and rubric reach every member of the group together, so each group card is approved or revised as a whole. Private comments are separate cards."}
 	for i, row := range doc.Groups {
 		v := validated[i]
+		if row.Operation == "individual" {
+			m.Cards = append(m.Cards, individualReviewCards(root, doc, row, v, paths[row.GroupID], names[row.GroupID], store)...)
+			continue
+		}
 		rel, ok := paths[row.GroupID]
 		var work domain.GroupWorkDocument
 		hold := v.Hold
@@ -853,4 +912,261 @@ func buildGroupResultsReview(root, path string) (ReviewModel, error) {
 		}
 	}
 	return m, nil
+}
+
+func holdStudentResult(r *domain.StudentResult, message string) {
+	if r.Grade != nil {
+		holdGrade(r.Grade, message)
+	} else if r.CommentOnly != nil {
+		holdOutcome(&r.CommentOnly.Outcome, message)
+	}
+}
+
+// postGroupIndividual posts per-student grades/comments on a shared product
+// (live grade_group_students_individually: true). Each student's write targets
+// only that student's route with group_comment=false; the live mode and that
+// student's attempt/evidence are re-checked before each student.
+func (s *Service) postGroupIndividual(ctx context.Context, doc *domain.GroupResultsDocument, row *domain.GroupResult, v domain.ValidatedGroup, src groupSource, save func() error) error {
+	a := doc.Assignment
+	tmp := &domain.ResultsDocument{Schema: 1, Kind: "results", Packet: doc.Packet, Assignment: a, Interpretation: doc.Interpretation, ScoringBasis: doc.ScoringBasis, Variants: doc.Variants, Students: row.Students}
+	s.privateGroupComments = true
+	defer func() { s.privateGroupComments = false }()
+	for i := range row.Students {
+		r := &row.Students[i]
+		vs := v.Students[i]
+		if resultComplete(*r) || s.Skip[GroupStudentRef(row.GroupID, r.StudentRef)] {
+			continue
+		}
+		hold := vs.Hold
+		coupled := false
+		if hold == "" {
+			live, err := GetAssignment(ctx, s.Client, a.CourseID, a.AssignmentID)
+			if err != nil {
+				hold = "assignment could not be re-read: " + err.Error()
+			} else {
+				if live.CourseID == 0 {
+					live.CourseID = a.CourseID
+				}
+				basis, err := Snapshot(live, s.Client.Origin())
+				if err != nil {
+					return err
+				}
+				if !SameGradingBasis(a, basis) {
+					hold = "assignment, rubric or group grading mode changed; pull-work for reassessment"
+				}
+				coupled = basis.Rubric != nil && basis.Rubric.UseForGradingKnown && basis.Rubric.UseForGrading
+			}
+		}
+		student, known := src.students[r.StudentRef]
+		m, member := src.members[r.StudentRef]
+		attempt := 0
+		if r.Grade != nil {
+			attempt = r.Grade.Attempt.Attempt
+		} else if r.CommentOnly != nil {
+			attempt = r.CommentOnly.Attempt.Attempt
+		}
+		if hold == "" && (!known || !member || !m.CurrentMember || m.SubmissionGroupID != row.GroupID || m.Attempt <= 0 || m.Excused) {
+			hold = "member is not a current, non-excused submitter in this group"
+		}
+		if hold == "" && attempt != m.Attempt {
+			hold = "target attempt differs from the pulled work; pull-work for this group"
+		}
+		var probe groupLive
+		if hold == "" {
+			probe = groupLive{subs: map[string]Submission{}}
+			hold = s.checkGroupMember(ctx, a, *row, src, r.StudentRef, &probe)
+		}
+		if hold != "" {
+			holdStudentResult(r, hold)
+			if err := save(); err != nil {
+				return err
+			}
+			continue
+		}
+		source := postSource{student: student}
+		var err error
+		if r.CommentOnly != nil {
+			err = s.postCommentOnly(ctx, tmp, r, vs, source, probe.subs[r.StudentRef], save)
+		} else {
+			err = s.postGrade(ctx, tmp, r, vs, source, probe.subs[r.StudentRef], coupled, save)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	sf := row.SharedFeedback
+	if sf == nil || definite(sf.Outcome) || s.Skip[GroupCardRef(row.GroupID)] {
+		return nil
+	}
+	if row.Representative == "" {
+		row.Representative = chooseRepresentative(*row)
+		if err := save(); err != nil {
+			return err
+		}
+	}
+	hold := v.SharedHold
+	if hold == "" {
+		hold = individualSharedHold(*row, src)
+	}
+	var live groupLive
+	if hold == "" {
+		var err error
+		live, hold, err = s.groupPreflight(ctx, *doc, *row, src)
+		if err != nil {
+			return err
+		}
+	}
+	if hold != "" {
+		holdOutcome(&sf.Outcome, hold)
+		return save()
+	}
+	s.privateGroupComments = false
+	return s.postGroupComment(ctx, doc, row, v, &sf.Outcome, live, src.members[row.Representative].Attempt, save)
+}
+
+// individualSharedHold covers the audience conditions of a whole-group comment
+// that is posted beside individual grades.
+func individualSharedHold(row domain.GroupResult, src groupSource) string {
+	if !src.work.PropagationAudienceComplete {
+		return "the assignment-specific group audience was not fully read; a group comment cannot be assumed to reach the reviewed members"
+	}
+	requested := append([]string(nil), row.MemberRefs...)
+	audience := append([]string(nil), src.work.PropagationAudience...)
+	sort.Strings(requested)
+	sort.Strings(audience)
+	if fmt.Sprint(requested) != fmt.Sprint(audience) {
+		return "requested members differ from the group's reviewed audience; a subset cannot become a group comment"
+	}
+	attempt := 0
+	for _, ref := range row.MemberRefs {
+		m, ok := src.members[ref]
+		if !ok || m.Attempt <= 0 || m.Excused {
+			return "member " + ref + " has no usable current attempt for a group comment"
+		}
+		if attempt != 0 && m.Attempt != attempt {
+			return "members have different current attempts; a group comment needs one attempt"
+		}
+		attempt = m.Attempt
+	}
+	return ""
+}
+
+// individualReviewCards renders an individual-mode row: one card per student
+// (grade and comment move together) and, when requested, one separate card for
+// the whole-group comment.
+func individualReviewCards(root string, doc domain.GroupResultsDocument, row domain.GroupResult, v domain.ValidatedGroup, rel, groupName string, store *workspace.StudentStore) []ReviewCard {
+	var work domain.GroupWorkDocument
+	loadHold := ""
+	if rel == "" {
+		loadHold = fmt.Sprintf("group %d is absent from the source packet", row.GroupID)
+	} else if p, err := workspace.ConstrainPath(root, rel); err != nil {
+		loadHold = err.Error()
+	} else if _, err = workspace.ReadDocument(p, &work); err != nil {
+		loadHold = err.Error()
+	}
+	members := map[string]domain.GroupWorkMember{}
+	aliases := map[string]string{}
+	for _, mem := range work.Members {
+		members[mem.StudentRef] = mem
+		aliases[mem.StudentRef] = mem.Alias
+	}
+	artifacts := map[string]domain.GroupArtifact{}
+	for _, a := range work.Artifacts {
+		artifacts[a.Key] = a
+	}
+	basis := doc.Basis()
+	var cards []ReviewCard
+	for i, r := range row.Students {
+		vs := v.Students[i]
+		label := aliases[r.StudentRef]
+		if label == "" {
+			label = r.StudentRef
+		}
+		c := ReviewCard{Ref: GroupStudentRef(row.GroupID, r.StudentRef), Alias: label, Operation: r.Operation, Hold: vs.Hold, Done: resultComplete(r)}
+		c.Facts = []ReviewFact{{"Group", fmt.Sprintf("%s (group %d)", groupName, row.GroupID)}, {"Grading", "individual grade on a shared product; only " + label + " is affected"}}
+		var feedback string
+		attempt := 0
+		switch {
+		case r.Grade != nil:
+			g := r.Grade
+			attempt, feedback, c.TeacherNote = g.Attempt.Attempt, g.Feedback, g.TeacherNote
+			if g.LateTiming != nil {
+				c.Late, c.LateBasis = lateSummary(*g.LateTiming), g.LateTiming.Basis
+			}
+			if vs.Assessment != nil {
+				c.Total = vs.Assessment.Posted.String() + " / " + doc.Assignment.Points.String()
+			}
+		case r.CommentOnly != nil:
+			attempt, feedback = r.CommentOnly.Attempt.Attempt, r.CommentOnly.Feedback
+		}
+		c.Attempt = attempt
+		if c.Hold == "" {
+			mem, ok := members[r.StudentRef]
+			switch {
+			case loadHold != "":
+				c.Hold = loadHold
+			case !ok || !mem.CurrentMember || mem.Attempt <= 0 || mem.Excused:
+				c.Hold = "member is not a current, non-excused submitter in this group"
+			case mem.Attempt != attempt:
+				c.Hold = "target attempt differs from the pulled work"
+			}
+		}
+		if mem, ok := members[r.StudentRef]; ok {
+			art := artifacts[mem.CurrentArtifactKey]
+			c.Submission = strings.TrimSpace(art.ReadableText)
+			for _, att := range art.Attachments {
+				c.Submission += "\n[attachment: " + att.Name + "]"
+			}
+		}
+		if store != nil {
+			if st, err := store.Resolve(doc.Assignment.Instance, r.StudentRef); err == nil {
+				feedback = workspace.ReplaceStudentName(feedback, st)
+			}
+		}
+		if c.Hold == "" && basis != nil {
+			if r.Grade != nil {
+				text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *basis, Interpretation: vs.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Late: isLate(r.Grade.LateTiming), Header: r.Grade.Header})
+				if err != nil {
+					c.Hold = err.Error()
+				}
+				c.Comment = text
+			} else if r.CommentOnly != nil {
+				computed, err := domain.ComputeAssessment(*basis, vs.Interpretation, r.CommentOnly.Components, doc.Assignment.Points)
+				if err == nil {
+					c.Comment, err = render.RenderFeedback(render.FeedbackInput{Rubric: *basis, Interpretation: vs.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Header: r.CommentOnly.Header})
+				}
+				if err != nil {
+					c.Hold = err.Error()
+				}
+			}
+		}
+		cards = append(cards, c)
+	}
+	if sf := row.SharedFeedback; sf != nil {
+		c := ReviewCard{Ref: GroupCardRef(row.GroupID), Alias: groupName, Operation: "shared comment", Hold: v.SharedHold, Done: definite(sf.Outcome)}
+		names := []string{}
+		for _, ref := range row.MemberRefs {
+			if aliases[ref] != "" {
+				names = append(names, aliases[ref])
+			} else {
+				names = append(names, ref)
+			}
+		}
+		c.Facts = []ReviewFact{{"Group", fmt.Sprintf("%s (group %d)", groupName, row.GroupID)}, {"Visible to", "every member: " + strings.Join(names, ", ")}}
+		if c.Hold == "" {
+			c.Hold = loadHold
+		}
+		if c.Hold == "" {
+			c.Hold = individualSharedHold(row, groupSource{work: work, members: members})
+		}
+		if c.Hold == "" {
+			text, err := GroupSharedText(doc, row, v)
+			if err != nil {
+				c.Hold = err.Error()
+			}
+			c.Comment = text
+		}
+		cards = append(cards, c)
+	}
+	return cards
 }

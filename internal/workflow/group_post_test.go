@@ -24,6 +24,7 @@ type groupPostEnv struct {
 	audience []string // live group_members ids
 	failText string   // comment text whose write should fail with 400
 	attempt  map[int64]int
+	shared   *bool // live grade_group_students_individually, as Canvas currently reports it
 }
 
 type groupPut struct {
@@ -44,10 +45,15 @@ func (e *groupPostEnv) putsTo(user int64) []groupPut {
 // newGroupPostEnv pulls a shared three-member group through the real pull code
 // and returns a group-results document for it.
 func newGroupPostEnv(t *testing.T, coupled bool) *groupPostEnv {
+	return newGroupEnv(t, coupled, false)
+}
+
+func newGroupEnv(t *testing.T, coupled, individual bool) *groupPostEnv {
 	t.Helper()
 	env := &groupPostEnv{audience: []string{"10", "11", "12"}, attempt: map[int64]int{10: 1, 11: 1, 12: 1}}
 	setID := int64(50)
-	mode := false
+	mode := individual
+	env.shared = &mode
 	a := fixtureAssignment()
 	a.GroupCategoryID = &setID
 	a.GradeGroupStudentsIndividually = &mode
@@ -65,7 +71,9 @@ func newGroupPostEnv(t *testing.T, coupled bool) *groupPostEnv {
 		path := r.URL.Path
 		switch {
 		case path == "/api/v1/courses/1/assignments/10":
-			write(a)
+			live := a
+			live.GradeGroupStudentsIndividually = env.shared
+			write(live)
 		case path == "/api/v1/group_categories/50":
 			write(map[string]any{"id": 50, "course_id": 1, "context_type": "Course", "name": "Clubs", "non_collaborative": false})
 		case path == "/api/v1/groups/60":
@@ -126,10 +134,13 @@ func newGroupPostEnv(t *testing.T, coupled bool) *groupPostEnv {
 	if _, err = workspace.ReadDocument(filepath.Join(s.Root, filepath.FromSlash(packet.Groups[0].Path)), &work); err != nil {
 		t.Fatal(err)
 	}
-	if work.SharedAssessmentStatus != "ready" || len(work.Artifacts) != 1 {
+	if (work.SharedAssessmentStatus != "ready" && !individual) || len(work.Artifacts) != 1 {
 		t.Fatalf("pulled group is not ready: %+v", work)
 	}
 	refs := append([]string(nil), work.PropagationAudience...)
+	if individual && work.SharedAssessmentStatus != "not-applicable" {
+		t.Fatalf("individual pull status %s", work.SharedAssessmentStatus)
+	}
 	rel, _ := filepath.Rel(s.Root, report.Packets[0])
 	snapshot, err := Snapshot(a, s.Client.Origin())
 	if err != nil {
@@ -141,6 +152,17 @@ func newGroupPostEnv(t *testing.T, coupled bool) *groupPostEnv {
 		Groups: []domain.GroupResult{{GroupID: 60, ArtifactKey: work.Artifacts[0].Key, MemberRefs: refs, Operation: "grade",
 			Grade:              &domain.GroupGradeOperation{Components: []domain.ComponentScore{{Key: "answer", Evidence: "present", Criteria: []domain.CriterionScore{score}}}, FeedbackAudience: "group", Feedback: "Your interpretation connects a claim to evidence."},
 			IndividualFeedback: []domain.IndividualFeedback{{StudentRef: refs[0], Text: "PRIVATE-SENTINEL your next question is strong."}}}}}
+	if individual {
+		row := &env.doc.Groups[0]
+		row.Operation, row.Grade, row.IndividualFeedback = "individual", nil, nil
+		for i, ref := range refs {
+			pts := []string{"100", "60", "80"}[i]
+			row.Students = append(row.Students, domain.StudentResult{StudentRef: ref, Operation: "grade", Grade: &domain.GradeOperation{
+				Attempt:    domain.AttemptRef{Attempt: 1, SubmittedAt: "2026-10-16T18:00:00Z"},
+				Components: []domain.ComponentScore{{Key: "answer", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "c1", Points: domain.MustDecimal(pts)}}}},
+				Feedback:   "PRIVATE-" + ref + " your own reasoning."}})
+		}
+	}
 	env.results = filepath.Join(s.Root, "courses", "TEST", "group-results.md")
 	env.save(t)
 	return env
@@ -371,5 +393,101 @@ func TestGroupResultsReviewCardsKeepPrivateTextSeparate(t *testing.T) {
 	}
 	if !strings.HasPrefix(private.Ref, "group:60:private:") || !strings.Contains(private.Comment, "PRIVATE-SENTINEL") {
 		t.Fatalf("private card: %+v", private)
+	}
+}
+
+func TestPostGroupResultsIndividualModeGradesEachMemberPrivately(t *testing.T) {
+	env := newGroupEnv(t, false, true)
+	if _, err := env.s.PostGroupResults(context.Background(), env.results); err != nil {
+		t.Fatal(err)
+	}
+	if !groupComplete(env.reload(t)) {
+		t.Fatalf("not complete: %+v", env.reload(t))
+	}
+	grades := map[string]bool{}
+	routes := map[int64]bool{}
+	for _, p := range env.puts {
+		if c, ok := commentOf(p); ok {
+			if c["group_comment"] != false {
+				t.Fatalf("individual comment lacked explicit group_comment=false: %+v", c)
+			}
+			continue
+		}
+		routes[p.user] = true
+		if sub, ok := p.body["submission"].(map[string]any); ok {
+			grades[fmt.Sprint(sub["posted_grade"])] = true
+		}
+	}
+	if len(routes) != 3 || len(grades) != 3 {
+		t.Fatalf("expected three distinct grades on three routes: %v %v", routes, grades)
+	}
+}
+
+func TestPostGroupResultsIndividualAttemptHoldsOnlyThatStudent(t *testing.T) {
+	env := newGroupEnv(t, false, true)
+	env.attempt[11] = 2
+	if _, err := env.s.PostGroupResults(context.Background(), env.results); err != nil {
+		t.Fatal(err)
+	}
+	if len(env.putsTo(11)) != 0 || len(env.putsTo(10)) == 0 || len(env.putsTo(12)) == 0 {
+		t.Fatalf("a new attempt did not hold only that student: %+v", env.puts)
+	}
+}
+
+func TestPostGroupResultsIndividualHoldsEveryoneWhenModeSwitchesToShared(t *testing.T) {
+	env := newGroupEnv(t, false, true)
+	shared := false
+	env.shared = &shared
+	if _, err := env.s.PostGroupResults(context.Background(), env.results); err != nil {
+		t.Fatal(err)
+	}
+	if len(env.puts) != 0 {
+		t.Fatalf("writes were sent after the live mode switched: %+v", env.puts)
+	}
+}
+
+func TestPostGroupResultsIndividualSkipAndSharedFeedbackAndCompletion(t *testing.T) {
+	env := newGroupEnv(t, false, true)
+	row := &env.doc.Groups[0]
+	row.SharedFeedback = &domain.GroupCommentOnly{Components: row.Students[0].Grade.Components, Feedback: "The club's discussion was thoughtful."}
+	env.save(t)
+	first, second := row.Students[0].StudentRef, row.Students[1].StudentRef
+	env.s.Skip = map[string]bool{GroupStudentRef(60, second): true, GroupStudentRef(60, row.Students[2].StudentRef): true, GroupCardRef(60): true}
+	if _, err := env.s.PostGroupResults(context.Background(), env.results); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, _ := Snapshot(fixtureAssignment(), env.s.Client.Origin())
+	snapshot.GroupCategoryID = 50
+	sub := Submission{Attempt: 1}
+	at := "2026-10-16T18:00:00Z"
+	sub.SubmittedAt = &at
+	if !env.s.completedHint(10, first, sub, env.doc.Assignment) || env.s.completedHint(10, second, sub, env.doc.Assignment) {
+		t.Fatalf("completion must follow the student: first hidden=%v second hidden=%v", env.s.completedHint(10, first, sub, env.doc.Assignment), env.s.completedHint(10, second, sub, env.doc.Assignment))
+	}
+	for _, p := range env.puts {
+		if c, ok := commentOf(p); ok && c["group_comment"] == true {
+			t.Fatalf("shared feedback posted although its card was deselected")
+		}
+	}
+	env.s.Skip = map[string]bool{}
+	if _, err := env.s.PostGroupResults(context.Background(), env.results); err != nil {
+		t.Fatal(err)
+	}
+	shared := 0
+	for _, p := range env.puts {
+		if c, ok := commentOf(p); ok && c["group_comment"] == true {
+			shared++
+		}
+	}
+	if shared != 1 || !groupComplete(env.reload(t)) {
+		t.Fatalf("shared feedback count=%d complete=%v", shared, groupComplete(env.reload(t)))
+	}
+}
+
+func TestGroupResultsRejectsSharedRowsInIndividualMode(t *testing.T) {
+	env := newGroupEnv(t, false, true)
+	env.doc.Groups[0].Operation = "grade"
+	if _, err := domain.ValidateGroupResults(&env.doc); err == nil {
+		t.Fatal("a shared grade row validated against an individual-mode assignment")
 	}
 }

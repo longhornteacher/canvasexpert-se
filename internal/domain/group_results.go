@@ -16,7 +16,9 @@ type GroupResultsDocument struct {
 	Assignment     AssignmentSnapshot `yaml:"assignment"`
 	Interpretation Interpretation     `yaml:"interpretation"`
 	ScoringBasis   *Rubric            `yaml:"scoring_basis,omitempty"`
-	Groups         []GroupResult      `yaml:"groups"`
+	// Variants are established accommodation interpretations for individual rows.
+	Variants []InterpretationVariant `yaml:"variants,omitempty"`
+	Groups   []GroupResult           `yaml:"groups"`
 }
 
 // Basis returns the live Canvas rubric when present, else the agent's scoring basis.
@@ -33,11 +35,16 @@ type GroupResult struct {
 	GroupID            int64                `yaml:"group_id"`
 	ArtifactKey        string               `yaml:"artifact_key"`
 	MemberRefs         []string             `yaml:"member_refs"`
-	Operation          string               `yaml:"operation"` // grade or comment-only
+	Operation          string               `yaml:"operation"` // grade, comment-only, or individual
 	Representative     string               `yaml:"representative,omitempty"`
 	Grade              *GroupGradeOperation `yaml:"grade,omitempty"`
 	CommentOnly        *GroupCommentOnly    `yaml:"comment_only,omitempty"`
 	IndividualFeedback []IndividualFeedback `yaml:"individual_feedback,omitempty"`
+	// Students and SharedFeedback belong to operation: individual (live
+	// grade_group_students_individually: true). Each student keeps an ordinary
+	// grade/comment-only operation; SharedFeedback is a separate whole-group comment.
+	Students       []StudentResult   `yaml:"students,omitempty"`
+	SharedFeedback *GroupCommentOnly `yaml:"shared_feedback,omitempty"`
 }
 
 // GroupGradeOperation has no single member attempt; attempts come from the packet.
@@ -73,6 +80,12 @@ type IndividualFeedback struct {
 type ValidatedGroup struct {
 	Hold       string
 	Assessment *Assessment
+	// Students are the validated individual rows (operation: individual).
+	Students []ValidatedStudent
+	// SharedFeedback is the arithmetic behind an individual row's optional group
+	// comment; SharedHold says why that comment alone cannot be posted.
+	SharedFeedback *Assessment
+	SharedHold     string
 }
 
 const studentNamePlaceholder = "{{student_name}}"
@@ -111,9 +124,10 @@ func ValidateGroupResults(doc *GroupResultsDocument) ([]ValidatedGroup, error) {
 	if a.GroupCategoryID <= 0 || a.NewQuiz || a.AnonymousGrading || a.ModeratedGrading || !numericGradeType(a.GradingType) {
 		return nil, fmt.Errorf("group-results requires a supported (non-anonymous, non-moderated, points-grade) group assignment")
 	}
-	if a.GradeGroupStudentsIndividually == nil || *a.GradeGroupStudentsIndividually {
-		return nil, fmt.Errorf("shared group assessment requires grade_group_students_individually to be known false; individual group grading is not supported yet")
+	if a.GradeGroupStudentsIndividually == nil {
+		return nil, fmt.Errorf("group grading mode (grade_group_students_individually) is unknown; pull the assignment again")
 	}
+	individualMode := *a.GradeGroupStudentsIndividually
 	if len(doc.Groups) == 0 {
 		return nil, fmt.Errorf("group-results requires groups")
 	}
@@ -165,7 +179,53 @@ func ValidateGroupResults(doc *GroupResultsDocument) ([]ValidatedGroup, error) {
 			}
 		}
 		v := ValidatedGroup{}
+		if (g.Operation == "individual") != individualMode {
+			return fail(fmt.Errorf("operation %q does not match the assignment's group grading mode: use individual only when grade_group_students_individually is true, grade or comment-only when it is false", g.Operation))
+		}
+		if g.Operation != "individual" && (len(g.Students) > 0 || g.SharedFeedback != nil) {
+			return fail(fmt.Errorf("students and shared_feedback belong only to operation: individual"))
+		}
 		switch g.Operation {
+		case "individual":
+			if g.Grade != nil || g.CommentOnly != nil || len(g.IndividualFeedback) > 0 || len(g.Students) == 0 {
+				return fail(fmt.Errorf("individual operation requires students only; each student's comment is their own feedback"))
+			}
+			tmp := &ResultsDocument{Schema: 1, Kind: "results", Packet: doc.Packet, Assignment: a, Interpretation: doc.Interpretation, ScoringBasis: doc.ScoringBasis, Variants: doc.Variants, Students: g.Students}
+			// Ordinary per-student validation applies to the student's own operation.
+			tmp.Assignment.GroupCategoryID, tmp.Assignment.GradeGroupStudentsIndividually = 0, nil
+			rows, e := ValidateResults(tmp)
+			if e != nil {
+				return fail(e)
+			}
+			for _, r := range g.Students {
+				if !members[r.StudentRef] || r.Operation == "revise-feedback" {
+					return fail(fmt.Errorf("student %s must be one of member_refs and use grade or comment-only", r.StudentRef))
+				}
+			}
+			v.Students = rows
+			if sf := g.SharedFeedback; sf != nil {
+				if !validHeader(sf.Header) || strings.TrimSpace(sf.Feedback) == "" {
+					return fail(fmt.Errorf("shared_feedback needs feedback and a valid header"))
+				}
+				if e := sharedText(sf.Feedback); e != nil {
+					return fail(e)
+				}
+				if e := sharedComponentText(sf.Components); e != nil {
+					return fail(e)
+				}
+				if e := validateOutcome(sf.Outcome); e != nil {
+					return fail(e)
+				}
+				a2, e := ComputeAssessment(*basis, doc.Interpretation, sf.Components, a.Points)
+				var unknown *UnknownEvidenceError
+				if errors.As(e, &unknown) {
+					v.SharedHold = "unreadable work for component " + unknown.Component + "; shared feedback not scored"
+				} else if e != nil {
+					return fail(e)
+				} else {
+					v.SharedFeedback = &a2
+				}
+			}
 		case "grade":
 			if g.Grade == nil || g.CommentOnly != nil {
 				return fail(fmt.Errorf("grade operation requires grade only"))

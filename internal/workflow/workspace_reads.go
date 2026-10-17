@@ -19,6 +19,8 @@ type Service struct {
 	Config domain.CourseConfig
 	// Skip lists student refs post must leave untouched (review: not approved).
 	Skip map[string]bool
+	// privateGroupComments marks comments written for individual group results.
+	privateGroupComments bool
 }
 
 func (s *Service) Course(nickname string) (domain.Course, error) {

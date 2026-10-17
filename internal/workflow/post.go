@@ -200,7 +200,7 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 	if err = save(); err != nil {
 		return err
 	}
-	err = s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"comment": map[string]any{"text_comment": text, "attempt": c.Attempt.Attempt}}, nil)
+	err = s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"comment": s.commentFields(text, c.Attempt.Attempt)}, nil)
 	if err != nil {
 		c.Outcome = failedOutcome(err)
 		c.Outcome.PostedText = text
@@ -633,7 +633,7 @@ func (s *Service) addFeedback(ctx context.Context, doc domain.ResultsDocument, u
 		return err
 	}
 	var response Submission
-	err := s.Client.Write(ctx, "PUT", submissionPath(doc, userID), map[string]any{"comment": map[string]any{"text_comment": text, "attempt": attempt.Attempt}}, &response)
+	err := s.Client.Write(ctx, "PUT", submissionPath(doc, userID), map[string]any{"comment": s.commentFields(text, attempt.Attempt)}, &response)
 	if err != nil {
 		*out = failedOutcome(err)
 		out.PostedText = text
@@ -734,3 +734,14 @@ func ResultPaths(root string, packet domain.PacketDocument) ([]string, error) {
 
 // isLate reports whether the agent's late timing marks the attempt late.
 func isLate(t *domain.LateTiming) bool { return t != nil && t.Status == "late" }
+
+// commentFields is an ordinary submission comment. While individual group
+// results are posting, group_comment is explicitly false so Canvas never copies
+// the private text to clubmates.
+func (s *Service) commentFields(text string, attempt int) map[string]any {
+	fields := map[string]any{"text_comment": text, "attempt": attempt}
+	if s.privateGroupComments {
+		fields["group_comment"] = false
+	}
+	return fields
+}

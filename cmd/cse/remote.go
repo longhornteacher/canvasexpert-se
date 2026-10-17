@@ -600,6 +600,11 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 					if !r.SharedDone && !skip[workflow.GroupCardRef(r.GroupID)] {
 						failed++
 					}
+					for _, st := range r.Students {
+						if st.Status != "completed" && !skip[workflow.GroupStudentRef(r.GroupID, st.StudentRef)] {
+							failed++
+						}
+					}
 					for ref, outcome := range r.Private {
 						if outcome.Status != "succeeded" && outcome.Status != "preserved" && outcome.Status != "not-requested" && !skip[workflow.GroupPrivateRef(r.GroupID, ref)] {
 							failed++
@@ -669,6 +674,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				}
 				sort.Strings(private)
 				fmt.Fprintf(table, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GroupID, r.Operation, r.Status, r.Outcomes.Rubric.Status, r.Outcomes.Grade.Status, r.Outcomes.Comment.Status, r.Outcomes.Late.Status, strings.Join(private, " "), compact(r.Message))
+				for _, st := range r.Students {
+					fmt.Fprintf(table, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t\t%s\n", r.GroupID, st.StudentRef, st.Status, st.Outcomes.Rubric.Status, st.Outcomes.Grade.Status, st.Outcomes.Comment.Status, st.Outcomes.Late.Status, compact(st.Message))
+				}
 				if r.Status != "completed" {
 					partial = true
 				}
