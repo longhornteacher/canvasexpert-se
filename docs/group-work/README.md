@@ -9,6 +9,7 @@ Read [shared contracts](contracts.md), then the assigned slice. Follow [AGENTS.m
 | Slice | Status | Local evidence | Canvas Live / student evidence |
 |---|---|---|---|
 | 01 — collaborative group sets and clubs | Implemented in Dev | Focused domain/workflow checks cover exact IDs, collaborative-only listing, pagination, baseline protection, and persisted IDs on resumed set/club creation. Compiled MCP smoke discovers all three group tools. | No CE-SE Canvas writes or student club access were tested. |
+| 02 — memberships, self sign-up, and allocation | Implemented in Dev | Focused tests cover stable-ref/alias-only roster reads, unassigned students, submitted-work holds on moves/removals, per-row outcomes, synchronous allocation response mapping without a success read-back, privacy of the returned response, and reconciliation of uncertain allocation. Compiled MCP smoke discovers the membership baseline tool. | No CE-SE Canvas membership changes or allocations were run; student-facing sign-up and membership access remain unobserved. |
 
 ## Product result
 

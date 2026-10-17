@@ -100,11 +100,15 @@ type GroupsInput struct {
 	Course         string `json:"course" jsonschema:"Configured course nickname"`
 	GroupSetID     int64  `json:"group_set_id,omitempty" jsonschema:"Optional exact collaborative group-set ID"`
 	GroupID        int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID"`
-	IncludeMembers bool   `json:"include_members,omitempty" jsonschema:"Return names and Canvas user IDs for this exact group only"`
+	IncludeMembers bool   `json:"include_members,omitempty" jsonschema:"Return stable student refs and aliases for this exact group only"`
 }
 type PullGroupSetInput struct {
 	Course     string `json:"course" jsonschema:"Configured course nickname"`
 	GroupSetID int64  `json:"group_set_id" jsonschema:"Exact collaborative group-set ID"`
+}
+type PullGroupMembershipsInput struct {
+	Course          string `json:"course" jsonschema:"Configured course nickname"`
+	GroupCategoryID int64  `json:"group_category_id" jsonschema:"Exact collaborative group-set ID"`
 }
 
 type PathInput struct {
@@ -187,7 +191,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addReadTool(server, "list_group_sets", "List collaborative group sets in a configured course. Differentiation tags are excluded.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupSetsInput) (TextOutput, error) {
 		return s.command(ctx, "groups", in.Course)
 	})
-	addReadTool(server, "list_groups", "List clubs within a course or exact group set. Memberships are returned only when include_members is requested for an exact group.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupsInput) (TextOutput, error) {
+	addReadTool(server, "list_groups", "List collaborative clubs. An exact group-set read includes stable-ref memberships and unassigned students; an exact group read includes memberships only when requested. Private names, logins and contact data are never returned.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupsInput) (TextOutput, error) {
 		args := []string{"groups", in.Course, "--groups"}
 		if in.GroupSetID > 0 {
 			args = append(args, "--set", strconv.FormatInt(in.GroupSetID, 10))
@@ -203,6 +207,9 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	})
 	addActionTool(server, "pull_group_set", "Save an editable baseline for an exact collaborative group set under courses/.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullGroupSetInput) (TextOutput, error) {
 		return s.longCommand(ctx, "pull-group-set", in.Course, strconv.FormatInt(in.GroupSetID, 10))
+	})
+	addActionTool(server, "pull_group_memberships", "Save an exact group-set membership baseline with stable student refs, aliases, membership states and the unassigned roster. The returned path can be edited with explicit changes or allocate-unassigned and pushed through push_document.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullGroupMembershipsInput) (TextOutput, error) {
+		return s.longCommand(ctx, "pull-group-memberships", in.Course, strconv.FormatInt(in.GroupCategoryID, 10))
 	})
 	addActionTool(server, "pull_assignment", "Pull an exact Canvas assignment and its edit baseline through the CE-SE Engine.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
 		return s.command(ctx, "pull-item", in.Course, in.Query)
@@ -260,7 +267,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

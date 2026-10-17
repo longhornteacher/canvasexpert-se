@@ -24,16 +24,15 @@ type canvasGroupCategory struct {
 	CreatedAt        string  `json:"created_at"`
 }
 type canvasGroup struct {
-	ID               int64                `json:"id"`
-	CourseID         int64                `json:"course_id"`
-	GroupCategoryID  int64                `json:"group_category_id"`
-	Name             string               `json:"name"`
-	Description      string               `json:"description"`
-	URL              string               `json:"html_url"`
-	MembersCount     int                  `json:"members_count"`
-	ContextType      string               `json:"context_type"`
-	NonCollaborative *bool                `json:"non_collaborative"`
-	Users            []domain.GroupMember `json:"users,omitempty"`
+	ID               int64  `json:"id"`
+	CourseID         int64  `json:"course_id"`
+	GroupCategoryID  int64  `json:"group_category_id"`
+	Name             string `json:"name"`
+	Description      string `json:"description"`
+	URL              string `json:"html_url"`
+	MembersCount     int    `json:"members_count"`
+	ContextType      string `json:"context_type"`
+	NonCollaborative *bool  `json:"non_collaborative"`
 }
 
 func (s *Service) groupCategory(ctx context.Context, courseID, setID int64) (canvasGroupCategory, error) {
@@ -127,16 +126,17 @@ func (s *Service) ListGroups(ctx context.Context, nickname string, setID, groupI
 			}
 			summary := domain.GroupSummary{ID: g.ID, CourseID: course.ID, GroupCategoryID: cat.ID, Name: g.Name, Description: g.Description, Collaborative: true, MembersCount: g.MembersCount}
 			if includeMembers {
-				var full canvasGroup
-				if err = s.Client.Get(ctx, fmt.Sprintf("/api/v1/groups/%d?include[]=users", g.ID), &full); err != nil {
-					return nil, err
+				roster, e := s.ReadGroupRoster(ctx, nickname, cat.ID)
+				if e != nil {
+					return nil, e
 				}
-				if full.ID != g.ID || full.ContextType != "Course" || full.CourseID != course.ID || full.GroupCategoryID != cat.ID || nonCollaborative(full.NonCollaborative) {
-					return nil, fmt.Errorf("group %d changed identity during member read", g.ID)
-				}
-				summary.Members = full.Users
-				if summary.MembersCount == 0 {
-					summary.MembersCount = len(full.Users)
+				for _, full := range roster.Groups {
+					if full.ID == g.ID {
+						summary.Members = full.Members
+						summary.MembersCount = len(full.Members)
+						summary.RosterComplete = roster.RosterComplete
+						break
+					}
 				}
 			}
 			out = append(out, summary)

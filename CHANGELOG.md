@@ -7,6 +7,7 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 ### Collaborative group sets
 
 - Dev can list collaborative group sets and clubs, pull an exact-ID baseline, and create or edit group-set settings and club names/descriptions. Canvas differentiation tags remain excluded. Local implementation checks do not establish live or student access behavior.
+- Dev can read stable-ref membership rosters and unassigned students, save explicit add/move/remove plans, and request synchronous even allocation. Membership changes are per-student and conflict-checked; submitted-work moves/removals require specific authorization. Successful allocation reports map refs from Canvas's response without a membership read-back; uncertain requests reconcile from a fresh roster and are not replayed. No CE-SE Canvas membership writes or allocations have been run.
 
 ## 1.0.0 (2026-10-17)
 

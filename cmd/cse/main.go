@@ -52,7 +52,8 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   groups COURSE [--set ID] [--members GROUP_ID] [--groups] [--group ID]
                                 List collaborative group sets/clubs; memberships require an exact group
   pull-group-set COURSE ID      Pull a collaborative group set and its editable baseline
-  push FILE                     Create/resume assignments, Pages, modules or group sets; update pulled content
+  pull-group-memberships COURSE ID  Pull an exact group set's membership baseline
+  push FILE                     Create/resume assignments, Pages, modules, group sets or membership plans
   pull-page COURSE ID|LINK       Pull exact Page HTML and baseline for editing
   upload-file COURSE FILE --access course|hidden|locked [--folder ID] [--receipt PATH] [--new-upload]
                                 Upload a course asset and save a reusable receipt
@@ -440,7 +441,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "groups": true, "pull-group-set": true, "push": true, "pull-page": true, "upload-file": true, "pull-item": true, "pull-work": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "upload-file": true, "pull-item": true, "pull-work": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -547,6 +548,8 @@ func validateDocument(path string, roots ...string) error {
 		target = &domain.AssignmentDocument{}
 	case "group-set":
 		target = &domain.GroupSetDocument{}
+	case "group-memberships":
+		target = &domain.GroupMembershipDocument{}
 	case "page":
 		target = &domain.PageDocument{}
 	case "module":
@@ -575,6 +578,9 @@ func validateDocument(path string, roots ...string) error {
 	_, e = workspace.ReadDocument(path, target)
 	if e == nil {
 		if d, ok := target.(*domain.GroupSetDocument); ok {
+			e = d.Validate()
+		}
+		if d, ok := target.(*domain.GroupMembershipDocument); ok {
 			e = d.Validate()
 		}
 	}

@@ -1,6 +1,6 @@
 # CE-SE MCP adapter
 
-`cse mcp` runs a local stdio server on the Windows computer that holds the CE-SE **UserInstall** and the saved Canvas credential. Its 32 typed tools cover every currently supported Engine command and the workspace files needed to use those commands. They reuse existing Engine operations; the adapter accepts neither arbitrary shell commands nor arbitrary HTTP writes. Future capabilities are not included in this parity claim.
+`cse mcp` runs a local stdio server on the Windows computer that holds the CE-SE **UserInstall** and the saved Canvas credential. Its 33 typed tools cover every currently supported Engine command and the workspace files needed to use those commands. They reuse existing Engine operations; the adapter accepts neither arbitrary shell commands nor arbitrary HTTP writes. Future capabilities are not included in this parity claim.
 
 Terms: **Dev** is the development checkout (code, starter templates, build/release artifacts). **UserInstall** is the local runnable CE-SE folder with course/student configuration and work. Optional **UserSync** is a dedicated, locally accessible OneDrive/Google Drive directory holding authoritative teacher rules. Developing CE-SE uses Dev; teacher work uses UserInstall, regardless of the agent app. MCP workspace tools use logical paths, and root metadata refers to UserInstall.
 
@@ -15,7 +15,7 @@ New Quizzes, including written-response items, are open for regular authoring, u
 | `engine_reference` | Command help, file formats, field limits, synthetic examples. |
 | `engine_info` | Version/build information, local UserInstall diagnostics (`doctor`), executable launcher registration (`link`), teacher rules location status/setup, or explicit seed-managed playbook status/replacement. |
 | `list_courses`, `list_modules` | Read saved course selections by default (`source: configured`); explicit `source: canvas` discovers the live Canvas catalog. Read configured-course modules. |
-| `list_group_sets`, `list_groups`, `pull_group_set` | Read exact collaborative sets/clubs, optionally with one exact club's memberships, and save an editable group-set baseline. Differentiation tags are excluded. |
+| `list_group_sets`, `list_groups`, `pull_group_set`, `pull_group_memberships` | Read collaborative sets/clubs and exact-set membership rosters, save editable set or membership baselines. Membership output uses stable student refs and aliases; differentiation tags and private identity fields are excluded. |
 | `pull_assignment`, `pull_page` | Pull exact content and its edit baseline. |
 | `pull_work` | Pull pseudonymized student work/history/attachments, optionally scoped to a course and assignment. |
 | `list_workspace_files` | Discover allowed workspace files/directories, optionally recursively. |
@@ -25,7 +25,7 @@ New Quizzes, including written-response items, are open for regular authoring, u
 | `read_workspace_asset`, `write_asset` | Read/save base64 course attachments and assets with hashes. |
 | `validate_document`, `validate_quiz` | Local Engine document or QuizForge validation. |
 | `start_review`, `review_status` | Teacher review, revision notes, and actual posting/creation outcomes. |
-| `push_document` | Assignment/Page/module/group-set create, resume, update, or assignment/New Quiz rubric attachment as specified by the document. |
+| `push_document` | Assignment/Page/module/group-set create, resume, update, explicit group-membership changes or even allocation, or assignment/New Quiz rubric attachment as specified by the document. |
 | `post_results` | Scoped computed assessment, rubric, feedback, late timing, or selected feedback revision. |
 | `push_quiz` | Supported QuizForge New Quiz authoring/resumption, including written items and hub differentiation. |
 | `upload_file` | Explicit course/access/folder asset upload with a reusable course receipt and deliberate new-upload option. |

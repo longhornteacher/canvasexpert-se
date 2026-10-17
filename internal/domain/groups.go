@@ -132,10 +132,12 @@ type GroupSummary struct {
 	Collaborative   bool          `json:"collaborative"`
 	MembersCount    int           `json:"members_count"`
 	Members         []GroupMember `json:"members,omitempty"`
+	RosterComplete  bool          `json:"roster_complete,omitempty"`
 }
 type GroupMember struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	StudentRef string `json:"student_ref"`
+	Alias      string `json:"alias"`
+	State      string `json:"state"`
 }
 
 func (d GroupSetDocument) Validate() error {

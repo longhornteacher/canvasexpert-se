@@ -56,8 +56,8 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 32);
-  for (const name of ['list_group_sets', 'list_groups', 'pull_group_set']) assert.ok(names.includes(name), `missing ${name}`);
+  assert.equal(names.length, 33);
+  for (const name of ['list_group_sets', 'list_groups', 'pull_group_set', 'pull_group_memberships']) assert.ok(names.includes(name), `missing ${name}`);
   const configured = JSON.parse(await call('list_courses'));
   assert.equal(configured.source, 'configured');
   assert.equal(configured.root, root);
@@ -144,7 +144,7 @@ try {
   assert.equal(unavailable.mode, 'sync');
   assert.match(unavailable.availability_error, /unavailable/);
   await call('read_workspace_file', { path: 'context/grading.md' }, true);
-  console.log(`PASS: 32 tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, group-tool discovery, references, path exclusions, guarded context, binary asset and QuizForge/document validation${review ? ', real local review and revision status' : ''}. No Canvas writes.`);
+  console.log(`PASS: 33 tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, group-tool discovery, references, path exclusions, guarded context, binary asset and QuizForge/document validation${review ? ', real local review and revision status' : ''}. No Canvas writes.`);
   console.log(`Synthetic fixture: ${root}`);
 } finally {
   child.stdin.end();

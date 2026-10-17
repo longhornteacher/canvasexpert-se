@@ -23,7 +23,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "groups": {1, 6}, "pull-group-set": {2, 2}, "push": {1, 1}, "pull-page": {2, 2}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 2}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -85,8 +85,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 		kind := documentKind(b)
-		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "module" && kind != "group-set" {
-			return fail(inputError(fmt.Errorf("push supports assignment, page, module, or group-set documents")), progress)
+		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "module" && kind != "group-set" && kind != "group-memberships" {
+			return fail(inputError(fmt.Errorf("push supports assignment, page, module, group-set, or group-memberships documents")), progress)
 		}
 		if cmd == "post" && kind != "results" {
 			return fail(inputError(fmt.Errorf("post requires a results document")), progress)
@@ -135,6 +135,15 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if memberID > 0 {
 			groupID = memberID
 		}
+		if setID > 0 && memberID == 0 && groupID == 0 {
+			roster, e := service.ReadGroupRoster(ctx, args[0], setID)
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			b, _ := json.MarshalIndent(roster, "", "  ")
+			fmt.Fprintln(out, string(b))
+			return 0
+		}
 		groups, e := service.ListGroups(ctx, args[0], setID, groupID, memberID > 0)
 		if e != nil {
 			return fail(workflowError(e), progress)
@@ -148,6 +157,16 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(fmt.Errorf("group-set ID must be a positive integer")), progress)
 		}
 		p, e := service.PullGroupSet(ctx, args[0], id)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, p)
+	case "pull-group-memberships":
+		id, e := strconv.ParseInt(args[1], 10, 64)
+		if e != nil || id <= 0 {
+			return fail(inputError(fmt.Errorf("group-set ID must be a positive integer")), progress)
+		}
+		p, e := service.PullGroupMemberships(ctx, args[0], id)
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}
@@ -249,8 +268,21 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			for _, g := range report.Groups {
 				fmt.Fprintf(out, "%s: %s group %d %s\n", g.Key, g.Outcome.Status, g.GroupID, g.URL)
 			}
-			if report.Message != "" {
-				fmt.Fprintln(out, report.Message)
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
+				return 3
+			}
+			return 0
+		} else if kind := documentKind(b); kind == "group-memberships" {
+			report, e := service.PushGroupMemberships(ctx, file)
+			fmt.Fprintf(out, "%s: %s\n", report.Status, report.Message)
+			for _, outcome := range report.Outcomes {
+				fmt.Fprintf(out, "%s: %s %s\n", outcome.StudentRef, outcome.Outcome.Status, outcome.Outcome.Message)
+			}
+			if report.Assigned != nil {
+				fmt.Fprintf(out, "assigned student refs: %s\n", strings.Join(report.Assigned, ", "))
 			}
 			if e != nil {
 				return fail(workflowError(e), progress)
