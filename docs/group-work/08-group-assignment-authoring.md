@@ -35,6 +35,8 @@ Land this first inside slice 08, before authoring changes depend on it:
 
 Add `kind: assignment-dates`, `operation: update`, exact assignment identity, optional explicit `only_visible_to_overrides`, and keyed `overrides` rows. Each row chooses exactly one target: `group_id`, `student_refs`, or `course_section_id`; it carries nullable `due_at`/`unlock_at`/`lock_at`, optional exact `override_id`, and an observed target/date baseline. Omission preserves a date; null clears it. A student target requires a title. Existing overrides not listed are preserved; `operation: remove` on an exact row is the only removal instruction.
 
+Engine-managed `outcome` fields record accepted or unresolved writes. Keep an accepted create's returned `override_id` paired with its succeeded outcome when resuming other rows. Pending or uncertain rows remain unresolved and are not replayed; visibility outcomes are likewise retained so later Canvas changes are not overwritten by resuming the document.
+
 Group overrides must target that assignment's selected set. For ordinary individual assignments, a teacher can request an explicit ref-based audience derived from club membership; record the selected refs and explain that future membership changes do not automatically retarget the individual assignment. Do not substitute a collaborative group override for that individual assignment. [Assignment/override API](https://developerdocs.instructure.com/services/canvas/resources/assignments).
 
 ## Implementation

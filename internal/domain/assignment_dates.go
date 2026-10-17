@@ -48,6 +48,8 @@ type AssignmentDatesDocument struct {
 	AssignmentID                   int64                     `yaml:"assignment_id"`
 	OnlyVisibleToOverrides         *bool                     `yaml:"only_visible_to_overrides,omitempty"`
 	ObservedOnlyVisibleToOverrides *bool                     `yaml:"observed_only_visible_to_overrides,omitempty"`
+	VisibilityTarget               *bool                     `yaml:"visibility_target,omitempty"`
+	VisibilityOutcome              ActionOutcome             `yaml:"visibility_outcome,omitempty"`
 	EffectiveDates                 []AssignmentEffectiveDate `yaml:"effective_dates,omitempty"`
 	Rows                           []AssignmentOverrideRow   `yaml:"overrides"`
 }
@@ -72,6 +74,15 @@ func ValidateAssignmentDates(d AssignmentDatesDocument) error {
 	}
 	if d.OnlyVisibleToOverrides != nil && d.ObservedOnlyVisibleToOverrides == nil {
 		return fmt.Errorf("changing only_visible_to_overrides requires its observed baseline")
+	}
+	if d.VisibilityTarget != nil && d.OnlyVisibleToOverrides == nil {
+		return fmt.Errorf("visibility_target requires only_visible_to_overrides")
+	}
+	if err := validateOutcome(d.VisibilityOutcome); err != nil {
+		return fmt.Errorf("visibility_outcome: %w", err)
+	}
+	if d.OnlyVisibleToOverrides != nil && d.VisibilityOutcome.Status == "not-requested" {
+		return fmt.Errorf("requested visibility cannot have a not-requested outcome")
 	}
 	for i, row := range d.EffectiveDates {
 		if row.OverrideID < 0 || row.GroupID < 0 || row.CourseSectionID < 0 {
@@ -117,8 +128,14 @@ func ValidateAssignmentDates(d AssignmentDatesDocument) error {
 			return fmt.Errorf("overrides[%d] operation must be create, update, or remove", i)
 		}
 		if r.Operation == "create" {
-			if r.OverrideID != 0 || r.Observed != nil {
-				return fmt.Errorf("overrides[%d] create cannot carry override_id or observed baseline", i)
+			if r.Observed != nil {
+				return fmt.Errorf("overrides[%d] create cannot carry an observed baseline", i)
+			}
+			if r.OverrideID != 0 && (r.Outcome.Status != "succeeded" || r.Outcome.ID <= 0 || r.Outcome.ID != r.OverrideID) {
+				return fmt.Errorf("overrides[%d] create override_id is allowed only as a matching accepted outcome", i)
+			}
+			if r.OverrideID == 0 && r.Outcome.ID > 0 {
+				return fmt.Errorf("overrides[%d] create outcome ID requires the matching saved override_id", i)
 			}
 			if !r.DueAt.Set && !r.UnlockAt.Set && !r.LockAt.Set {
 				return fmt.Errorf("overrides[%d] create requires at least one date", i)

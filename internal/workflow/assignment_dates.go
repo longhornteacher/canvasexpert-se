@@ -169,9 +169,10 @@ func (s *Service) PushAssignmentDates(ctx context.Context, path string) (report 
 			}
 			continue
 		}
-		if row.Outcome.Status == "pending" || row.Outcome.Status == "uncertain" {
-			row.Outcome = domain.ActionOutcome{Status: "held", Message: "previous write outcome is uncertain; do not replay this override row; inspect the exact override in Canvas and pull a fresh assignment-dates baseline"}
-			_ = save()
+		if uncertainForResume(row.Outcome) {
+			// Keep pending/uncertain durable. Turning it into a retryable held state
+			// would let the next invocation repeat a write that may have landed.
+			report.Message = appendMessage(report.Message, "one or more override writes may have reached Canvas and were not replayed")
 			continue
 		}
 		userIDs, err := resolveOverrideTarget(ctx, s, course.ID, assignment, students, *row)
@@ -198,11 +199,6 @@ func (s *Service) PushAssignmentDates(ctx context.Context, path string) (report 
 				_ = save()
 				continue
 			}
-		}
-		if row.Outcome.Status == "pending" {
-			row.Outcome = domain.ActionOutcome{Status: "held", Message: "previous override write is uncertain; inspect Canvas before retrying"}
-			_ = save()
-			continue
 		}
 		row.Outcome = domain.ActionOutcome{Status: "pending", Message: "override write may begin after intent is saved"}
 		if err = save(); err != nil {
@@ -271,24 +267,55 @@ func (s *Service) PushAssignmentDates(ctx context.Context, path string) (report 
 		}
 	}
 	if doc.OnlyVisibleToOverrides != nil {
-		if assignment.OnlyVisibleToOverrides == nil || *assignment.OnlyVisibleToOverrides != *doc.ObservedOnlyVisibleToOverrides {
-			report.Message = appendMessage(report.Message, "only_visible_to_overrides changed since the baseline; visibility update held")
-		} else {
+		target := *doc.OnlyVisibleToOverrides
+		outcome := &doc.VisibilityOutcome
+		switch {
+		case doc.VisibilityTarget != nil && *doc.VisibilityTarget != target:
+			report.Message = appendMessage(report.Message, "visibility request changed after its action began; pull a fresh assignment-dates baseline before changing it")
+		case uncertainForResume(*outcome):
+			report.Message = appendMessage(report.Message, "visibility update may have reached Canvas and was not replayed")
+		case definite(*outcome):
+			// The accepted action is complete. If Canvas has since changed the
+			// setting, preserve that later state instead of restoring this target.
+		case assignment.OnlyVisibleToOverrides == nil || *assignment.OnlyVisibleToOverrides != *doc.ObservedOnlyVisibleToOverrides:
+			*outcome = domain.ActionOutcome{Status: "held", Message: "only_visible_to_overrides changed since the baseline; visibility update held"}
+			report.Message = appendMessage(report.Message, outcome.Message)
+			if err = save(); err != nil {
+				return report, err
+			}
+		default:
 			allRowsComplete := true
 			for _, row := range doc.Rows {
 				if row.Outcome.Status != "succeeded" && row.Outcome.Status != "preserved" {
 					allRowsComplete = false
 				}
 			}
-			if *doc.OnlyVisibleToOverrides && !allRowsComplete {
+			if target && !allRowsComplete {
 				report.Message = appendMessage(report.Message, "visibility restriction was not enabled because one or more requested override rows did not complete")
-			} else if *doc.OnlyVisibleToOverrides != *assignment.OnlyVisibleToOverrides {
+			} else if assignment.OnlyVisibleToOverrides != nil && *assignment.OnlyVisibleToOverrides == target {
+				// Record that the request was already satisfied. Later external
+				// changes must not cause this saved request to be replayed.
+				doc.VisibilityTarget = &target
+				*outcome = domain.ActionOutcome{Status: "preserved", Message: "requested visibility already matched the live setting"}
+				if err = save(); err != nil {
+					return report, err
+				}
+			} else {
+				doc.VisibilityTarget = &target
+				*outcome = domain.ActionOutcome{Status: "pending", Message: "visibility update may begin after intent is saved"}
+				if err = save(); err != nil {
+					return report, err
+				}
 				var response Assignment
-				err = s.Client.WriteAccepted(ctx, http.MethodPut, fmt.Sprintf("/api/v1/courses/%d/assignments/%d", course.ID, assignment.ID), map[string]any{"assignment": map[string]any{"only_visible_to_overrides": *doc.OnlyVisibleToOverrides}}, &response)
+				err = s.Client.WriteAccepted(ctx, http.MethodPut, fmt.Sprintf("/api/v1/courses/%d/assignments/%d", course.ID, assignment.ID), map[string]any{"assignment": map[string]any{"only_visible_to_overrides": target}}, &response)
 				if err != nil {
+					*outcome = failedOutcome(err)
 					report.Message = appendMessage(report.Message, "visibility update failed: "+err.Error())
 				} else {
-					assignment.OnlyVisibleToOverrides = doc.OnlyVisibleToOverrides
+					*outcome = domain.ActionOutcome{Status: "succeeded"}
+				}
+				if err = save(); err != nil {
+					return report, fmt.Errorf("visibility outcome could not be saved: %w", err)
 				}
 			}
 		}
@@ -300,7 +327,10 @@ func (s *Service) PushAssignmentDates(ctx context.Context, path string) (report 
 			complete = false
 		}
 	}
-	if doc.OnlyVisibleToOverrides != nil && assignment.OnlyVisibleToOverrides != nil && *assignment.OnlyVisibleToOverrides != *doc.OnlyVisibleToOverrides {
+	if doc.OnlyVisibleToOverrides != nil && !definite(doc.VisibilityOutcome) {
+		complete = false
+	}
+	if doc.VisibilityTarget != nil && *doc.VisibilityTarget != *doc.OnlyVisibleToOverrides {
 		complete = false
 	}
 	report.Status = "completed"
@@ -345,9 +375,9 @@ func (s *Service) deliverCreateOverrides(ctx context.Context, courseID int64, as
 		if definite(outcome.Outcome) {
 			continue
 		}
-		if outcome.Outcome.Status == "pending" || outcome.Outcome.Status == "uncertain" {
-			outcome.Outcome = domain.ActionOutcome{Status: "held", Message: "previous override create may have succeeded; inspect Canvas and do not replay"}
-			_ = save()
+		if uncertainForResume(outcome.Outcome) {
+			// Leave the unresolved status intact so every later resume continues
+			// to stop here instead of treating the row as a fresh create.
 			return false, nil
 		}
 		userIDs, resolveErr := resolveOverrideTarget(ctx, s, courseID, assignment, store, row)
@@ -399,9 +429,7 @@ func (s *Service) deliverCreateOverrides(ctx context.Context, courseID int64, as
 	}
 	if doc.OnlyVisibleToOverrides != nil {
 		if !definite(c.Visibility) {
-			if c.Visibility.Status == "pending" || c.Visibility.Status == "uncertain" {
-				c.Visibility = domain.ActionOutcome{Status: "held", Message: "previous visibility write is uncertain; inspect Canvas and do not replay"}
-				_ = save()
+			if uncertainForResume(c.Visibility) {
 				return false, nil
 			}
 			c.Visibility = domain.ActionOutcome{Status: "pending"}
@@ -526,4 +554,8 @@ func appendMessage(a, b string) string {
 		return b
 	}
 	return a + "; " + b
+}
+
+func uncertainForResume(o domain.ActionOutcome) bool {
+	return ambiguous(o)
 }

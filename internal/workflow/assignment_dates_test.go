@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -139,6 +140,176 @@ func TestCreateOverrideAcceptedWithoutIDIsNotReplayedAndVisibilityWaits(t *testi
 	complete, err = s.deliverCreateOverrides(context.Background(), 1, assignment, &doc, save)
 	if err != nil || !complete || posts != 1 || visibilityWrites != 1 {
 		t.Fatalf("resume replayed accepted writes: complete=%v posts=%d visibility=%d err=%v", complete, posts, visibilityWrites, err)
+	}
+}
+
+func TestAssignmentDatesCreateResumeWithAcceptedOverrideID(t *testing.T) {
+	secondPosts := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/courses/1/assignments/10":
+			_, _ = w.Write([]byte(`{"id":10,"course_id":1,"group_category_id":50,"overrides":[]}`))
+		case r.Method == http.MethodGet && (r.URL.Path == "/api/v1/groups/60" || r.URL.Path == "/api/v1/groups/61"):
+			id := int64(60)
+			if r.URL.Path == "/api/v1/groups/61" {
+				id = 61
+			}
+			_, _ = fmt.Fprintf(w, `{"id":%d,"course_id":1,"group_category_id":50,"context_type":"Course","non_collaborative":false}`, id)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/courses/1/assignments/10/overrides":
+			var body struct {
+				Override map[string]any `json:"assignment_override"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			groupID := int(body.Override["group_id"].(float64))
+			if groupID == 60 {
+				_, _ = w.Write([]byte(`{"id":800}`))
+				return
+			}
+			secondPosts++
+			if secondPosts == 1 {
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":801}`))
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	date := func(value string) domain.OptionalDate { return domain.OptionalDate{Set: true, Value: value} }
+	doc := domain.AssignmentDatesDocument{Schema: 1, Kind: "assignment-dates", Operation: "update", Course: "TEST", Instance: s.Client.Origin(), CourseID: 1, AssignmentID: 10, Rows: []domain.AssignmentOverrideRow{
+		{Key: "first", Operation: "create", GroupID: 60, DueAt: date("2026-10-20T12:00:00Z")},
+		{Key: "second", Operation: "create", GroupID: 61, DueAt: date("2026-10-21T12:00:00Z")},
+	}}
+	path := filepath.Join(s.Root, "courses", "TEST", "dates-resume.md")
+	if err := workspace.WriteDocument(path, &doc, ""); err != nil {
+		t.Fatal(err)
+	}
+	first, err := s.PushAssignmentDates(context.Background(), path)
+	if err != nil || first.Status != "partial" {
+		t.Fatalf("first report=%+v err=%v", first, err)
+	}
+	var saved domain.AssignmentDatesDocument
+	if _, err = workspace.ReadDocument(path, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if err = domain.ValidateAssignmentDates(saved); err != nil {
+		t.Fatalf("saved accepted create is not resumable: %v", err)
+	}
+	if saved.Rows[0].OverrideID != 800 || saved.Rows[0].Outcome.ID != 800 || saved.Rows[0].Outcome.Status != "succeeded" {
+		t.Fatalf("first row outcome=%+v", saved.Rows[0])
+	}
+	fabricated := saved
+	fabricated.Rows = append([]domain.AssignmentOverrideRow(nil), saved.Rows...)
+	fabricated.Rows[0].Outcome = domain.ActionOutcome{}
+	if err = domain.ValidateAssignmentDates(fabricated); err == nil {
+		t.Fatal("create with a fabricated override_id was accepted")
+	}
+	second, err := s.PushAssignmentDates(context.Background(), path)
+	if err != nil || second.Status != "completed" || second.Rows[0].Outcome.Status != "succeeded" || second.Rows[1].OverrideID != 801 || secondPosts != 2 {
+		t.Fatalf("resume report=%+v posts-for-second=%d err=%v", second, secondPosts, err)
+	}
+}
+
+func TestAssignmentDatesUncertainOverrideRemainsUnresolvedAcrossResumes(t *testing.T) {
+	writes := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/courses/1/assignments/10":
+			_, _ = w.Write([]byte(`{"id":10,"course_id":1,"group_category_id":50,"overrides":[]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/groups/60":
+			_, _ = w.Write([]byte(`{"id":60,"course_id":1,"group_category_id":50,"context_type":"Course","non_collaborative":false}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/courses/1/assignments/10/overrides":
+			writes++
+			w.WriteHeader(http.StatusRequestTimeout)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	doc := domain.AssignmentDatesDocument{Schema: 1, Kind: "assignment-dates", Operation: "update", Course: "TEST", Instance: s.Client.Origin(), CourseID: 1, AssignmentID: 10, Rows: []domain.AssignmentOverrideRow{{Key: "club", Operation: "create", GroupID: 60, DueAt: domain.OptionalDate{Set: true, Value: "2026-10-20T12:00:00Z"}}}}
+	path := filepath.Join(s.Root, "courses", "TEST", "uncertain.md")
+	if err := workspace.WriteDocument(path, &doc, ""); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		report, err := s.PushAssignmentDates(context.Background(), path)
+		if err != nil || report.Status != "partial" {
+			t.Fatalf("run %d report=%+v err=%v", i+1, report, err)
+		}
+	}
+	var saved domain.AssignmentDatesDocument
+	if _, err := workspace.ReadDocument(path, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 1 || saved.Rows[0].Outcome.Status != "uncertain" {
+		t.Fatalf("writes=%d outcome=%+v", writes, saved.Rows[0].Outcome)
+	}
+}
+
+func TestAssignmentDatesAcceptedVisibilityDoesNotReplayAfterExternalRestore(t *testing.T) {
+	writes := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/courses/1/assignments/10":
+			_, _ = w.Write([]byte(`{"id":10,"course_id":1,"only_visible_to_overrides":false,"overrides":[]}`))
+		case r.Method == http.MethodPut && r.URL.Path == "/api/v1/courses/1/assignments/10":
+			writes++
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	requested, baseline := true, false
+	doc := domain.AssignmentDatesDocument{Schema: 1, Kind: "assignment-dates", Operation: "update", Course: "TEST", Instance: s.Client.Origin(), CourseID: 1, AssignmentID: 10, OnlyVisibleToOverrides: &requested, ObservedOnlyVisibleToOverrides: &baseline, Rows: []domain.AssignmentOverrideRow{}}
+	path := filepath.Join(s.Root, "courses", "TEST", "visibility.md")
+	if err := workspace.WriteDocument(path, &doc, ""); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		report, err := s.PushAssignmentDates(context.Background(), path)
+		if err != nil || report.Status != "completed" {
+			t.Fatalf("run %d report=%+v err=%v", i+1, report, err)
+		}
+	}
+	var saved domain.AssignmentDatesDocument
+	if _, err := workspace.ReadDocument(path, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 1 || saved.VisibilityOutcome.Status != "succeeded" || saved.VisibilityTarget == nil || !*saved.VisibilityTarget {
+		t.Fatalf("writes=%d visibility=%+v target=%v", writes, saved.VisibilityOutcome, saved.VisibilityTarget)
+	}
+}
+
+func TestCreateVisibilityUncertainStaysUnresolvedAcrossResumes(t *testing.T) {
+	writes := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/courses/1/assignments/10" {
+			writes++
+			w.WriteHeader(http.StatusRequestTimeout)
+			return
+		}
+		t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+		w.WriteHeader(http.StatusNotFound)
+	})
+	created := &domain.CreatedResources{AssignmentID: 10}
+	requested, mode := true, false
+	doc := domain.AssignmentDocument{OnlyVisibleToOverrides: &requested, GradeGroupStudentsIndividually: &mode, Created: created}
+	assignment := Assignment{ID: 10, CourseID: 1}
+	for i := 0; i < 3; i++ {
+		complete, err := s.deliverCreateOverrides(context.Background(), 1, assignment, &doc, func() error { return nil })
+		if err != nil || complete {
+			t.Fatalf("run %d complete=%v err=%v", i+1, complete, err)
+		}
+	}
+	if writes != 1 || created.Visibility.Status != "uncertain" {
+		t.Fatalf("writes=%d visibility=%+v", writes, created.Visibility)
 	}
 }
 
