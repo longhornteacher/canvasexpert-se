@@ -23,7 +23,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 2}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -193,11 +193,30 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return 3
 		}
 	case "pull-page":
-		p, e := service.PullPage(ctx, args[0], args[1])
+		groupID, err := parseOptionalPageGroup(args[2:])
+		if err != nil {
+			return fail(inputError(err), progress)
+		}
+		p, e := service.PullPageScoped(ctx, args[0], args[1], groupID)
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}
 		fmt.Fprintln(out, p)
+	case "page-history":
+		pageID, err := strconv.ParseInt(args[1], 10, 64)
+		if err != nil || pageID <= 0 {
+			return fail(inputError(fmt.Errorf("page ID must be a positive integer")), progress)
+		}
+		groupID, revisionID, err := parsePageHistoryFlags(args[2:])
+		if err != nil {
+			return fail(inputError(err), progress)
+		}
+		revisions, e := service.PageHistory(ctx, args[0], pageID, groupID, revisionID)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, _ := json.MarshalIndent(revisions, "", "  ")
+		fmt.Fprintln(out, string(b))
 	case "quiz-points":
 		changes := map[int]domain.Decimal{}
 		for _, arg := range args[2:] {
@@ -569,6 +588,48 @@ func parseGroupsArgs(args []string) (int64, int64, int64, bool, error) {
 	}
 	return setID, memberID, groupID, allGroups, nil
 }
+
+func parseOptionalPageGroup(args []string) (int64, error) {
+	if len(args) == 0 {
+		return 0, nil
+	}
+	if len(args) != 2 || args[0] != "--group" {
+		return 0, fmt.Errorf("use --group ID")
+	}
+	id, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("--group requires a positive integer ID")
+	}
+	return id, nil
+}
+
+func parsePageHistoryFlags(args []string) (groupID, revisionID int64, err error) {
+	for i := 0; i < len(args); i += 2 {
+		if i+1 >= len(args) {
+			return 0, 0, fmt.Errorf("%s requires a positive integer ID", args[i])
+		}
+		id, e := strconv.ParseInt(args[i+1], 10, 64)
+		if e != nil || id <= 0 {
+			return 0, 0, fmt.Errorf("%s requires a positive integer ID", args[i])
+		}
+		switch args[i] {
+		case "--group":
+			if groupID != 0 {
+				return 0, 0, fmt.Errorf("--group may be supplied once")
+			}
+			groupID = id
+		case "--revision":
+			if revisionID != 0 {
+				return 0, 0, fmt.Errorf("--revision may be supplied once")
+			}
+			revisionID = id
+		default:
+			return 0, 0, fmt.Errorf("unknown page-history option %q", args[i])
+		}
+	}
+	return groupID, revisionID, nil
+}
+
 func compact(s string) string { return strings.Join(strings.Fields(s), " ") }
 func workflowError(e error) error {
 	var ce *canvas.Error

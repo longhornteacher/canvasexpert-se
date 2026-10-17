@@ -16,7 +16,8 @@ New Quizzes, including written-response items, are open for regular authoring, u
 | `engine_info` | Version/build information, local UserInstall diagnostics (`doctor`), executable launcher registration (`link`), teacher rules location status/setup, or explicit seed-managed playbook status/replacement. |
 | `list_courses`, `list_modules` | Read saved course selections by default (`source: configured`); explicit `source: canvas` discovers the live Canvas catalog. Read configured-course modules. |
 | `list_group_sets`, `list_groups`, `pull_group_set`, `pull_group_memberships` | Read collaborative sets/clubs and exact-set membership rosters, save editable set or membership baselines. Membership output uses stable student refs and aliases; differentiation tags and private identity fields are excluded. |
-| `pull_assignment`, `pull_page` | Pull exact content and its edit baseline. |
+| `pull_assignment`, `pull_page` | Pull exact content and its edit baseline. `pull_page` keeps the `query` argument and accepts optional `group_id` for group Pages. |
+| `list_page_revisions` | Read course or group Page revision metadata; optional `revision_id` returns that revision's historical body. |
 | `pull_work` | Pull pseudonymized student work/history/attachments, optionally scoped to a course and assignment. |
 | `list_workspace_files` | Discover allowed workspace files/directories, optionally recursively. |
 | `read_workspace_file` | Read root Markdown/text references (including `AGENTS.md`, `CLAUDE.md`, `README.txt`), `context/`, `playbooks/`, or `courses/` text and its SHA-256. |

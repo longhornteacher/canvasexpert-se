@@ -8,6 +8,7 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 - Dev can list collaborative group sets and clubs, pull an exact-ID baseline, and create or edit group-set settings and club names/descriptions. Canvas differentiation tags remain excluded. Local implementation checks do not establish live or student access behavior.
 - Dev can read stable-ref membership rosters and unassigned students, save explicit add/move/remove plans, and request synchronous even allocation. Membership changes are per-student and conflict-checked; submitted-work moves/removals require specific authorization. Successful allocation reports map refs from Canvas's response without a membership read-back; uncertain requests reconcile from a fresh roster and are not replayed. No CE-SE Canvas membership writes or allocations have been run.
+- Dev can create and edit collaborative group Pages, pull exact group Page baselines, and read revision history. Group Pages use exact group routes and identity checks, default to teacher-only editing, and preserve student body edits on conflict. Local operation-path tests cover routing, scoped reads, publication ordering, and unsent body preservation; student access and editor behavior remain unobserved in Canvas Live.
 
 ## 1.0.0 (2026-10-17)
 

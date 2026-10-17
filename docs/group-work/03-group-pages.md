@@ -18,7 +18,11 @@ editing_roles: [members]
 published: true
 ```
 
+`editing_roles` is authored as a YAML list. The Canvas API accepts and returns this field as a comma-separated string (`teachers,members`); the Engine converts between the two forms. The Engine accepts only `teachers` and `members` for this group-Page workflow, rejects `members` without `group_id`, and defaults an omitted setting to `teachers` (never `public`).
+
 `pull-page COURSE PAGE_ID|LINK --group GROUP_ID` / extended `pull_page {course, query, group_id?}` returns exact live HTML, editing roles, group identity and baseline. Preserve the existing MCP `query` field; do not rename it to `page`. Recognize the actual `/groups/:id/pages/:slug` route; never rewrite it into a course Page URL. Add read-only `page-history COURSE PAGE_ID --group ID` / `list_page_revisions {course, page_id, group_id?}` with optional revision selection for the body. No restore/revert write is required.
+
+Canvas's documented route family is `/api/v1/groups/:group_id/pages`, including `/:url_or_id`, `/revisions`, and `/revisions/:revision_id`. The read returns revision metadata; selecting a revision returns its historical body. Canvas requires update rights to read revision history.
 
 ## Implementation
 
@@ -27,6 +31,8 @@ Extend `internal/domain/page.go` and `internal/workflow/page.go` directly. A sma
 Existing Page semantics remain: starts unpublished during creation, saves exact returned ID/slug, applies requested publication, and sends only changed update fields. For member-editable Pages, a teacher edit drafted before student changes must hold on a body conflict and keep the unsent draft. Re-pull and merge only the requested change into current content. Never regenerate a populated notebook from its starter template. Reading revision history must not claim to measure every member's contribution or simultaneous editing.
 
 Canvas group Pages and `members` editing are documented in the [Pages API](https://developerdocs.instructure.com/services/canvas/resources/pages). Student access and editor behavior remain pending actual observation.
+
+**Contract correction:** The YAML-list specimen above is the local document contract; Canvas's wire and response representation is a comma-separated string. The route and revision fields were checked against the official Pages API documentation on 2026-10-17.
 
 ## Acceptance
 

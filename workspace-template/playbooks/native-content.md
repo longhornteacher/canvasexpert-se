@@ -16,6 +16,22 @@ Prepare static instructional content: headings, lists, tables, code, links and a
 
 1. Upload student assets with `cse upload-file`, selecting access explicitly. Keep the receipts and provenance beside the conversion drafts, with a local-to-Canvas asset map. An unpublished Page does not make its files private. Use actual returned file IDs and stable course links in authored HTML; do not save signed download URLs.
 2. Create `kind: page` documents and push them with `cse push`. Use `body_format: html` for tables, images and rich teaching bodies, or `markdown` for the Engine's small Markdown subset. Keep the returned Page ID, slug and URL in the document. To revise a Page, use `cse pull-page` and edit the pulled document. Preserve a held draft's unsent work and compare its fresh baseline before reapplying changes.
+
+For a club reading plan, evidence notebook or meeting log, use the exact configured course plus `group_id` from `cse groups COURSE --set SET_ID`; set `editing_roles: [members]` only when club members should edit (Canvas receives `members` as a role string). Group Pages cannot be placed in course modules. A starter can be as small as:
+
+```yaml
+schema: 1
+kind: page
+operation: create
+course: ELA7
+group_id: 701
+title: Evidence notebook
+body_format: html
+editing_roles: [members]
+published: true
+```
+
+Pull before each edit. If the body conflicts, keep the unsent draft and merge its requested change into a fresh pull; a title-only change leaves current student writing untouched. Never push the starter body again over a populated notebook. `cse page-history COURSE PAGE_ID --group GROUP_ID` reads history; a revision is not a complete record of who contributed or simultaneous editing.
 3. Create activities with the existing assignment contract, optionally `body_format: html`. Follow `authoring.md` and its review policy. Choose text entry, file submission, a rubric or teacher grading to suit the student product.
 4. Create assessments with `quizzes.md` and the supported QuizForge types. Matching and ordering interactions may become corresponding native questions when their semantics fit. Convert Classic source questions to supported New Quiz types; report or explicitly adapt unsupported questions rather than dropping them. Python work becomes a code/text/file submission with teacher assessment; copying its prompt does not replace vendor execution or hidden autograding. Written New Quiz responses are graded by the teacher in SpeedGrader.
 5. Assemble a `kind: module` document using verified existing Page, File, Assignment and SubHeader references. For a New Quiz use its returned assignment ID. Push the module after its children exist. An existing module receives only the requested additions and positions. Module publication does not publish its children.

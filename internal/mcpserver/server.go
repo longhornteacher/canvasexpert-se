@@ -89,6 +89,19 @@ type CourseQueryInput struct {
 	Query  string `json:"query" jsonschema:"Assignment title or ID, or Page ID or Canvas link"`
 }
 
+type PageQueryInput struct {
+	Course  string `json:"course" jsonschema:"Configured course nickname"`
+	Query   string `json:"query" jsonschema:"Exact Page ID or Canvas Page link; preserve this field name"`
+	GroupID int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID for a group Page"`
+}
+
+type PageRevisionsInput struct {
+	Course     string `json:"course" jsonschema:"Configured course nickname"`
+	PageID     int64  `json:"page_id" jsonschema:"Exact numeric Canvas Page ID"`
+	GroupID    int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID"`
+	RevisionID int64  `json:"revision_id,omitempty" jsonschema:"Optional revision ID; selected revision includes its historical body"`
+}
+
 type CourseInput struct {
 	Course string `json:"course" jsonschema:"Configured course nickname"`
 }
@@ -214,8 +227,25 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addActionTool(server, "pull_assignment", "Pull an exact Canvas assignment and its edit baseline through the CE-SE Engine.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
 		return s.command(ctx, "pull-item", in.Course, in.Query)
 	})
-	addActionTool(server, "pull_page", "Pull an exact Canvas Page and its edit baseline through the CE-SE Engine.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
-		return s.command(ctx, "pull-page", in.Course, in.Query)
+	addActionTool(server, "pull_page", "Pull an exact Canvas Page and its edit baseline through the CE-SE Engine. Use group_id for a group Page; query remains the exact Page ID or link.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PageQueryInput) (TextOutput, error) {
+		args := []string{"pull-page", in.Course, in.Query}
+		if in.GroupID != 0 {
+			if in.GroupID < 0 {
+				return TextOutput{}, errors.New("group_id must be positive")
+			}
+			args = append(args, "--group", strconv.FormatInt(in.GroupID, 10))
+		}
+		return s.command(ctx, args...)
+	})
+	addReadTool(server, "list_page_revisions", "Read revision metadata for an exact course or group Page. Set revision_id to also read that revision's historical body; this does not identify every contributor or simultaneous edits.", func(ctx context.Context, _ *mcp.CallToolRequest, in PageRevisionsInput) (TextOutput, error) {
+		args := []string{"page-history", in.Course, strconv.FormatInt(in.PageID, 10)}
+		if in.GroupID != 0 {
+			args = append(args, "--group", strconv.FormatInt(in.GroupID, 10))
+		}
+		if in.RevisionID != 0 {
+			args = append(args, "--revision", strconv.FormatInt(in.RevisionID, 10))
+		}
+		return s.command(ctx, args...)
 	})
 	addReadTool(server, "read_workspace_file", "Read a root .md/.txt teacher reference, workspace instruction, playbook, context file, or course work file through its active authority. Returns authority metadata and the file hash. Hidden folders, .cse, and Engine files are blocked.", func(_ context.Context, _ *mcp.CallToolRequest, in ReadFileInput) (TextOutput, error) {
 		path, err := s.readablePath(in.Path)
@@ -267,7 +297,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

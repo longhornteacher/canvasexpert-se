@@ -32,7 +32,7 @@ var capabilityGroups = []capabilityGroup{
 		Summary: "The tools below have recorded checks within each feature's stated scope. These checks do not establish every client or student workflow.",
 		Items: []capability{
 			{"Discover teacher courses and read modules", "Verified in Canvas Live."},
-			{"Collaborative group sets and clubs", "Local implementation checks cover collaborative-only reads, exact course/set/group guards, editable baselines and saved IDs for resumable set/club creation. No CE-SE Canvas Live write or student access check is recorded."},
+			{"Collaborative group sets, clubs, and Pages", "Slices 01–03 have local checks for collaborative-only group discovery, exact course/set/group identity, saved creates, stable-ref membership operations, and group Page routing, revision reads, editing-role mapping and body conflict preservation. No CE-SE Canvas group write or student access/editor check is recorded. Official Canvas documentation specifies group Page routes and members editing; that is API contract evidence, not deployed or student-view evidence."},
 			{"Create assignments with directions, points, dates, and submission settings", "Creation and edits verified in Canvas Live."},
 			{"Publish assignments when requested", "Verified in Canvas Live. New assignments wait for requested rubric and module pieces to succeed before publication."},
 			{"Edit existing assignments while preserving unrelated content", "Verified in Canvas Live, including preservation of unsent edits when conflicts occur."},
