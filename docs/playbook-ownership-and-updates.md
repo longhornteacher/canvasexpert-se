@@ -254,6 +254,14 @@ lines were then removed and update reported every file current.
 On request, the bell schedule was added to the teacher's own
 `context/school-calendar.md`; context files are never replaced by updates.
 
+The same install was then updated to the published 1.0.0 release by the
+README's agent steps: downloaded from the permanent link (checksum matched),
+extracted over the folder with the running Engine renamed aside, then
+`playbooks update`. Extraction replaced the UserSync pointer files with the
+full template, update restored both, every playbook was current, and the
+teacher's settings, bell schedule and override file were unchanged. Offline
+doctor passed.
+
 ## Remaining work
 
 - Push `dev` and publish a release when the teacher decides (deferred
