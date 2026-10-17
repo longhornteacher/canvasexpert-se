@@ -20,6 +20,10 @@ Per-student late timing uses that student's actual effective due date and attemp
 
 Integrate unfinished-work/completion handling: shared artifacts deduplicate downloads, but completion keys remain student/assignment/attempt/evidence for this mode. Assessing one student must not hide the remaining club members. An explicit re-pull permits reassessment without automatically rewriting completed outcomes.
 
+## Gate P observations (2026-10-17, see [README](README.md#gate-p-results-2026-10-17))
+
+In individual mode a grade and a rubric assessment each reached only the named student, and Canvas accepted a mode switch after grades existed, so the Engine's live-mode recheck before each write is the only protection against a mid-run switch.
+
 ## Code anchors (verified in Dev 2026-10-17)
 
 `completedHint` (`pull_work.go:562`) matches only `kind: results` grade rows by student ref and attempt. Individual-mode `group-results` rows must be added to that check so completing one member does not hide others and finished members do not reappear. The results-document guards (`scoring.go:286`, `408`) stay in force for `kind: results`; the new kind has its own validators. Per-student writes can reuse the existing `postGrade`/`postCommentOnly` building blocks only through a group-specific caller that has already verified live mode is individual.

@@ -23,7 +23,7 @@ Review displays the student's attributed posts with needed context, honest crite
 ## Code anchors (verified in Dev 2026-10-17)
 
 - `unpullableAssignment` (`canvas_reads.go:280`) already lets `discussion_topic` assignments through, so `pull-work` can reach a graded discussion today. Per-student checks (`unsupportedSubmission`: excused, unassigned, no submission/no attempt) are reusable unchanged.
-- **Open risk (also a Gate P item):** if a graded *group* discussion's linked assignment returns a non-null `group_category_id`, the guards at `canvas_reads.go:287`, `scoring.go:286` and `scoring.go:408` will reject it as a shared-product assignment. The contract says the group set lives on the topic, not the assignment; confirm what Canvas actually returns. If the assignment does carry it, the guards must distinguish a discussion-linked assignment (verified by topic association) from a shared product, without loosening them for real shared products.
+- **Resolved by Gate P (2026-10-17):** a graded group discussion's linked assignment returned `group_category_id: null`, so the existing group guards do not reject it. The group set lives on the topic (`group_topic_children` lists child topics and group IDs). Keep the guards as they are for real shared products.
 - `completedHint` (`pull_work.go:562`) already recognizes `kind: results` grade rows per student/attempt, so individually assessed discussions get completion handling without new code. It ignores comment-only and revise rows; keep that behavior.
 
 ## Acceptance

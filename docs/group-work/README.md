@@ -37,7 +37,7 @@ Tiers say how the work is scheduled. **A** and **B** are scheduled. **C** is bui
 Slices run **one at a time**; see Execution. Each phase ends usable.
 
 1. **Phase 1, working clubs and conversations:** 01 → 02 → 03 → 05a → 06 → 16 → playbook v1 (17, covering only what exists). Writes are additive and easy for the teacher to inspect. 05b (graded linked discussions) follows once Phase 1 has been used, or alongside 07.
-2. **Gate P, one authorized live check** (below), before any Phase 2 code that depends on propagation.
+2. **Gate P, one authorized live check** (below), before any Phase 2 code that depends on propagation. **Run 2026-10-17; results below.** Contracts for 10 and 11 stand; late timing, excused/hidden members and real submissions remain unobserved.
 3. **Phase 2, shared products and assessment:** 08 → 09 → 10 → 11, then 05b and 07. Update the playbook as each lands.
 4. **Phase 3, on request only:** 12, 13, 04, then 14 and 15. Their full specs stay here so a later request starts from a plan, not from scratch.
 
@@ -50,7 +50,26 @@ Slices 10 and 11 rest on Canvas source reading (representative-member route, `gr
 - individual mode: does a grade or rubric reach only the named student;
 - group discussion: for a graded group discussion, does the linked assignment return a non-null `group_category_id`? It decides whether slice 07 must distinguish a discussion-linked assignment from a shared product.
 
-Record what was observed as Canvas Live evidence in [engine-capabilities.md](../engine-capabilities.md) and `internal/localui/capabilities.go`. If observed behavior differs from upstream, revise slices 10 and 11 before implementing them. Slices 08 and 09 do not need the gate. No student data enters Dev fixtures. Whether to run Gate P, and on what course, is the teacher's call; implementers do not start it unprompted.
+Results are recorded below. Record what was observed as Canvas Live evidence in [engine-capabilities.md](../engine-capabilities.md) and `internal/localui/capabilities.go`. If observed behavior differs from upstream, revise slices 10 and 11 before implementing them. Slices 08 and 09 do not need the gate. No student data enters Dev fixtures. Whether to run Gate P, and on what course, is the teacher's call; implementers do not start it unprompted.
+
+## Gate P results (2026-10-17)
+
+Run on CS8 (course 121046) with raw API calls from a throwaway probe, not CE-SE. Disposable objects (a group set, one group, a group assignment with a one-criterion rubric, a graded group discussion) were created and then deleted. The group briefly held two real students; the assignment was published only to that group. Those two students may have received Canvas notifications (group membership, assignment, three submission comments). No real submission was made, so student view, lateness, excused/hidden members and real attempts were **not** observed.
+
+| Question | Observed |
+|---|---|
+| Built-in Test Student in a group | Refused: `POST /groups/:id/memberships` returned 403; `PUT /groups/:id/users/:id` 404. Group tests need real or separately enrolled students. |
+| Shared mode (`grade_group_students_individually: false`): grade via one member | Propagated: the other member showed the same `score`/`entered_score`. |
+| Shared mode: rubric assessment via one member | Propagated to the other member with the same points and criterion comments. |
+| `comment[group_comment]=false` | Only the named member received it. |
+| `comment[group_comment]=true` | Both members received it, as separate comments with **different comment IDs**. One returned ID does not identify all copies. |
+| Individual mode: grade and rubric | Each reached only the named student. |
+| Switching mode after grades existed | Canvas accepted the `PUT` (no real submission existed). Any hold on structural changes after submitted work is CE-SE policy, not a Canvas rule. |
+| `GET .../assignments/:id/users/:uid/group_members` | Returned both members in either mode as `[{id: "<string user id>", name}]`. The `id` is a **string** and `name` is present, so normalize and keep names out of packets. |
+| Graded group discussion | Linked assignment returned `group_category_id: null`, `grade_group_students_individually: false`, `has_sub_assignments: false`, `submission_types: [discussion_topic]`, and `checkpoints: []` with `include[]=checkpoints`. The topic returned `group_category_id` and `group_topic_children` `[{group_id, id}]` immediately. |
+| Unexplained | Grade `PUT`s returned 403 "user not authorized" on a member with no existing submission record, twice, including after publishing. After a comment write on that member succeeded, the same grade `PUT` succeeded. Cause not determined. The Engine should treat a 403 on a grade write as a specific hold and not retry blindly. |
+
+Consequences: the representative-member route and the group-comment flag contracts in slices 10 and 11 stand. Slice 07's open risk is resolved: ordinary guards do not misclassify a graded group discussion. Not yet observed: late timing, excused/hidden members, actual shared-artifact submissions, and student-facing views.
 
 ## Boundaries
 

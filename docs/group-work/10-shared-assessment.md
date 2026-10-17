@@ -48,6 +48,10 @@ Do not overwrite a higher entered grade into the rubric calculation. For no-rubr
 
 Add `group_results.go`, `group_post.go`, and group review builders using existing assessment/render helpers. Keep ordinary `post.go` branches stable; share only actual arithmetic/render/action helpers, not an operation registry. Completed outcomes refer to the group assignment/artifact/member scope. Membership changes do not cause an accepted shared action to be replayed against a new audience. For a timeout, reconcile only from bounded relevant evidence on explicit resumption; an unrelated individual comment with equal text is not proof of a shared comment.
 
+## Gate P observations (2026-10-17, see [README](README.md#gate-p-results-2026-10-17))
+
+Shared-mode grade and rubric propagated from one member; `group_comment=true` created separate per-member comment copies with different IDs; `group_comment=false` reached only the named member; `group_members` returns string `id` plus `name`. A first grade write on a member with no submission record returned 403 for an undetermined reason: hold that member's group action specifically and do not retry blindly. Late timing was not observed.
+
 ## Code anchors (verified in Dev 2026-10-17)
 
 - Today's `postGrade` PUTs to `/submissions/<one user>` per student row (`post.go:366`). In shared mode Canvas applies that to the whole group, so a group assignment must never reach `Post`; the guards at `scoring.go:286`/`408` and `canvas_reads.go:287` are the only barrier. Keep them. Group results get their own post entry point; do not add a branch inside `postGrade`.
