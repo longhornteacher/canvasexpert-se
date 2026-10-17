@@ -49,6 +49,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   students                      Edit student aliases and monitored status
   courses                       Discover authorized teacher courses
   modules COURSE                List a configured course's modules
+  external-resources COURSE [--group ID]  Read collaboration and conference metadata
   groups COURSE [--set ID] [--members GROUP_ID] [--groups] [--group ID]
                                 List collaborative group sets/clubs; memberships require an exact group
   pull-group-set COURSE ID      Pull a collaborative group set and its editable baseline
@@ -443,7 +444,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-work": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-work": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}

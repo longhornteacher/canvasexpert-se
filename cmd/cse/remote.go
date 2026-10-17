@@ -23,7 +23,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -287,6 +287,17 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			fmt.Fprintf(table, "%d\t%d\t%s\n", item.ID, item.Position, compact(item.Name))
 		}
 		_ = table.Flush()
+	case "external-resources":
+		groupID, resourceType, e := parseExternalResourceFlags(args[1:])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		report, e := service.ListExternalResources(ctx, args[0], groupID, resourceType)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, _ := json.MarshalIndent(report, "", "  ")
+		fmt.Fprintln(out, string(b))
 	case "pull-item":
 		p, e := service.PullItem(ctx, args[0], args[1])
 		if e != nil {
@@ -648,6 +659,36 @@ func parseOptionalPageGroup(args []string) (int64, error) {
 		return 0, fmt.Errorf("--group requires a positive integer ID")
 	}
 	return id, nil
+}
+
+func parseExternalResourceFlags(args []string) (int64, string, error) {
+	groupID, resourceType := int64(0), "all"
+	typeSet := false
+	for i := 0; i < len(args); i += 2 {
+		if i+1 >= len(args) {
+			return 0, "", fmt.Errorf("%s requires a value", args[i])
+		}
+		switch args[i] {
+		case "--group":
+			id, err := strconv.ParseInt(args[i+1], 10, 64)
+			if err != nil || id <= 0 || groupID != 0 {
+				return 0, "", fmt.Errorf("--group requires one positive integer ID")
+			}
+			groupID = id
+		case "--type":
+			if typeSet {
+				return 0, "", fmt.Errorf("--type may be supplied once")
+			}
+			typeSet = true
+			resourceType = args[i+1]
+		default:
+			return 0, "", fmt.Errorf("unknown external-resources option %q", args[i])
+		}
+	}
+	if resourceType != "all" && resourceType != "collaborations" && resourceType != "conferences" {
+		return 0, "", fmt.Errorf("--type must be collaborations, conferences, or all")
+	}
+	return groupID, resourceType, nil
 }
 
 func parsePageHistoryFlags(args []string) (groupID, revisionID int64, err error) {

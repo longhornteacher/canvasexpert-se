@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -21,10 +22,12 @@ type ModuleDocument struct {
 }
 
 type ModuleItem struct {
-	Type      string `yaml:"type"`
-	ContentID int64  `yaml:"content_id,omitempty"`
-	Title     string `yaml:"title,omitempty"`
-	Position  int    `yaml:"position,omitempty"`
+	Type        string `yaml:"type"`
+	ContentID   int64  `yaml:"content_id,omitempty"`
+	ExternalURL string `yaml:"external_url,omitempty"`
+	NewTab      *bool  `yaml:"new_tab,omitempty"`
+	Title       string `yaml:"title,omitempty"`
+	Position    int    `yaml:"position,omitempty"`
 }
 
 type ModuleCreated struct {
@@ -39,6 +42,8 @@ type ModuleItemOutcome struct {
 	Index        int           `yaml:"index"`
 	Type         string        `yaml:"type"`
 	ContentID    int64         `yaml:"content_id,omitempty"`
+	ExternalURL  string        `yaml:"external_url,omitempty"`
+	NewTab       *bool         `yaml:"new_tab,omitempty"`
 	Title        string        `yaml:"title,omitempty"`
 	Position     int           `yaml:"position,omitempty"`
 	ModuleItemID int64         `yaml:"module_item_id,omitempty"`
@@ -64,16 +69,23 @@ func (d ModuleDocument) Validate() error {
 			return fmt.Errorf("items[%d].position cannot be negative", i)
 		}
 		switch item.Type {
-		case "Page", "File", "Assignment":
-			if item.ContentID <= 0 || strings.TrimSpace(item.Title) != "" {
+		case "Page", "File", "Assignment", "Discussion":
+			if item.ContentID <= 0 || item.ExternalURL != "" || item.NewTab != nil || strings.TrimSpace(item.Title) != "" {
 				return fmt.Errorf("items[%d] %s requires a positive content_id and does not accept title", i, item.Type)
 			}
-		case "SubHeader":
+		case "ExternalUrl":
 			if item.ContentID != 0 || strings.TrimSpace(item.Title) == "" {
-				return fmt.Errorf("items[%d] SubHeader requires title and no content_id", i)
+				return fmt.Errorf("items[%d] ExternalUrl requires title and does not accept content_id", i)
+			}
+			if err := ValidateModuleExternalURL(item.ExternalURL); err != nil {
+				return fmt.Errorf("items[%d].external_url: %w", i, err)
+			}
+		case "SubHeader":
+			if item.ContentID != 0 || item.ExternalURL != "" || item.NewTab != nil || strings.TrimSpace(item.Title) == "" {
+				return fmt.Errorf("items[%d] SubHeader requires a title and rejects content_id, external_url, and new_tab", i)
 			}
 		default:
-			return fmt.Errorf("items[%d].type must be Page, File, Assignment, or SubHeader", i)
+			return fmt.Errorf("items[%d].type must be Page, File, Assignment, Discussion, ExternalUrl, or SubHeader", i)
 		}
 	}
 	if d.Created != nil {
@@ -87,6 +99,25 @@ func (d ModuleDocument) Validate() error {
 			if saved.Index < 0 || saved.Index >= len(d.Items) {
 				return fmt.Errorf("created item index %d is outside items", saved.Index)
 			}
+		}
+	}
+	return nil
+}
+
+// ValidateModuleExternalURL accepts stable teacher-selected HTTP(S) links and
+// rejects embedded credentials and common temporary/signed URL parameters.
+func ValidateModuleExternalURL(raw string) error {
+	if raw != strings.TrimSpace(raw) || strings.ContainsAny(raw, "\r\n\t") {
+		return fmt.Errorf("must be an absolute HTTP(S) URL without embedded credentials")
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+		return fmt.Errorf("must be an absolute HTTP(S) URL without embedded credentials")
+	}
+	for key := range u.Query() {
+		k := strings.ToLower(key)
+		if k == "token" || k == "access_token" || k == "auth" || k == "signature" || k == "sig" || k == "expires" || k == "key" || k == "api_key" || k == "access_key" || k == "client_secret" || k == "credential" || k == "x-amz-signature" || k == "x-amz-credential" || k == "x-amz-security-token" || k == "awsaccesskeyid" || strings.HasPrefix(k, "x-goog-") || strings.HasPrefix(k, "x-amz-") {
+			return fmt.Errorf("must not contain credentials or a signed temporary URL")
 		}
 	}
 	return nil

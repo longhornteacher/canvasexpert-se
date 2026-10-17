@@ -54,6 +54,12 @@ type CanvasGetInput struct {
 	Path string `json:"path" jsonschema:"Canvas API path beginning /api/v1/ or /api/quiz/v1/; include page/per_page query parameters to paginate"`
 }
 
+type ExternalResourcesInput struct {
+	Course       string `json:"course" jsonschema:"Configured course nickname"`
+	GroupID      int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group in this course"`
+	ResourceType string `json:"resource_type,omitempty" jsonschema:"collaborations, conferences, or all (default all)"`
+}
+
 type EngineInfoInput struct {
 	Operation      string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, or replace-playbook"`
 	SyncRoot       string `json:"sync_root,omitempty" jsonschema:"Explicit teacher-rules directory for set-rules-location; empty selects local UserInstall mode"`
@@ -63,6 +69,27 @@ type EngineInfoInput struct {
 }
 
 func (s *Server) registerOperationTools(server *mcp.Server) {
+	addReadTool(server, "list_external_resources", "Read collaboration and conference metadata for a configured course or exact collaborative group. Returns safe supplied links and known participant refs only; it does not create or open provider resources or read their contents.", func(ctx context.Context, _ *mcp.CallToolRequest, in ExternalResourcesInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		resourceType := in.ResourceType
+		if resourceType == "" {
+			resourceType = "all"
+		}
+		if resourceType != "all" && resourceType != "collaborations" && resourceType != "conferences" {
+			return TextOutput{}, errors.New("resource_type must be collaborations, conferences, or all")
+		}
+		args := []string{"external-resources", in.Course}
+		if in.GroupID < 0 {
+			return TextOutput{}, errors.New("group_id cannot be negative")
+		}
+		if in.GroupID > 0 {
+			args = append(args, "--group", strconv.FormatInt(in.GroupID, 10))
+		}
+		args = append(args, "--type", resourceType)
+		return s.command(ctx, args...)
+	})
 	addActionTool(server, "push_document", "Create/resume or update an assignment, Page, ungraded discussion/announcement, explicitly requested teacher discussion reply, native module, collaborative group-set or explicit group-membership plan; linked graded discussions are not yet supported. Membership writes use exact observed student refs, group IDs and per-row conflict checks. Discussion replies verify exact topic/parent scope and save accepted or uncertain outcomes without replay. Uses the document's exact scope and existing Engine conflict/outcome checks. For assignment creation/edits use start_review by default; call directly when the teacher explicitly skips review or to resume a partly created item as its playbook permits. Pages, discussions, replies, modules and group setup use this tool directly. Report returned held/partial/uncertain outcomes honestly.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
 		path, err := s.coursePath(in.Path)
 		if err != nil {

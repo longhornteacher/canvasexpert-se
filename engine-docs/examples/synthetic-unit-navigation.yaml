@@ -1,0 +1,22 @@
+# Synthetic example only. Replace every ID, title and URL with teacher-selected
+# values from the configured course before using it.
+schema: 1
+kind: module
+course: TEST
+title: Book Club Unit
+published: false
+items:
+  - type: Page
+    content_id: 410
+  - type: Discussion
+    content_id: 520
+  - type: ExternalUrl
+    title: Club A evidence notebook
+    external_url: https://canvas.example.edu/groups/701/pages/evidence-notebook
+    new_tab: true
+  - type: ExternalUrl
+    title: Club B evidence notebook
+    external_url: https://canvas.example.edu/groups/702/pages/evidence-notebook
+  - type: ExternalUrl
+    title: Existing club conference
+    external_url: https://meet.example.edu/club-room
