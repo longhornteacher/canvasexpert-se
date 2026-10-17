@@ -38,12 +38,11 @@ Neither choice makes that decision disposable during a product update.
   assessment score, item score(s), compact rubric breakdown, improvement tips,
   then exemplars. The teacher identified later parent-update comparisons as a
   reason to expose both score levels.
-- When a late deduction applies, the overall line shows the late-adjusted
-  score with the deduction named, for example
-  "Overall: 75/100 (10 late points deducted)". The earned assessment stays
-  recoverable from the line, and the comment matches what a parent later sees
-  in the gradebook. Canvas's late policy computes the deduction, so where the
-  Engine obtains that value is open (see Remaining design work).
+- When the work is late, the overall line shows the earned assessment, before
+  Canvas's late deduction, marked "(late)": "Overall: 85/100 (late)". The
+  Engine does not compute or name the deduction; Canvas's gradebook shows the
+  adjusted grade. A family may notice the gap; that follows from the late
+  submission and is not worth extra machinery.
 - For New Quizzes, include an overall score when Canvas supplies the complete
   quiz result for the matching attempt, including auto-scored items. Identify
   it as the Canvas overall result, distinct from the agent's written-response
@@ -85,7 +84,7 @@ information (school name) rather than removing that content.
 The bell schedule source is the 2026-2027 school bell schedule PDF the teacher
 supplied on 2026-10-17. It has four day types:
 
-| Period | Bobcat Hour (Mon-Thu) | Homeroom | Homeroom First | House Days (Homeroom Last) |
+| Period | Bobcat Hour (Mon-Thu) | Homeroom | Homeroom First | House Days / pep rally (Homeroom Last) |
 |---|---|---|---|---|
 | Homeroom | | 10:23-10:53 (after 2nd) | 8:35-9:05 | 2:30-3:55 |
 | 1st | 8:35-9:25 | 8:35-9:25 | 9:09-9:59 | 8:35-9:15 |
@@ -97,10 +96,10 @@ supplied on 2026-10-17. It has four day types:
 | 6th | 2:11-3:01 | 2:11-3:01 | 2:11-3:01 | 1:00-1:40 |
 | 7th | 3:05-3:55 | 3:05-3:55 | 3:05-3:55 | 1:45-2:25 |
 
-The PDF lists 5th before 4th on House Days, and the times confirm that order.
-It does not say which schedule Friday uses or which days are Homeroom,
-Homeroom First or House Days; the school calendar or the teacher supplies
-that.
+House Days are the pep rally schedule. The PDF lists 5th before 4th on House
+Days, and the times confirm that order. It does not say which schedule Friday
+uses or which days are Homeroom or Homeroom First; the school calendar or the
+teacher supplies that.
 
 ## Teacher-owned setup
 
@@ -215,11 +214,6 @@ guess that unexplained differences are obsolete or safe to discard.
   `context/grading.md` preference saves.
 - Build `shipped/<version>/` retention in the updater and the background
   install/update reconciliation pass.
-- Decide where the late-adjusted overall comes from. Canvas computes the
-  deduction from the course late policy after the Engine writes late timing;
-  the comment is written in the same post. Options: read the course late
-  policy and compute the same deduction, or name the deduction from the
-  teacher's late timing only. Do not add a post-write read-back.
 - Define selection guidance for matching prompts across courses and for fewer
   than two usable student examples, without blocking independent scoring or
   fabricating student work. Define when a matching set counts as scored for
