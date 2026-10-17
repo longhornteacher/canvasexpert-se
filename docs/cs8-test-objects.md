@@ -11,6 +11,6 @@ Published objects can be visible to enrolled students; clean those up first.
 | New Quiz 3698178, assignment 3698180 | Unpublished `[CSE FIELD PROBE]` | Field API probe, 2026-10-10 |
 | New Quizzes 3698182, 3698183 | Unpublished `[CSE FIELD PROBE]`; 3698183 is the optional Build/Preview check in `handoffs/retired/NEW-QUIZ-SCORING-PROBE.md` | Written-item probe, 2026-10-10 |
 
-On 2026-10-17 assignments 3698077-3698082 and 3698181 were no longer found (already deleted); their rubrics may remain. The 2026-10-17 live check used disposable assignment 3703744, visible only to the Test Student, and deleted it afterward.
+On 2026-10-17 assignments 3698077-3698082 and 3698181 were no longer found (already deleted); their rubrics may remain. The 2026-10-17 live check used disposable assignments 3703744 and 3703757, each visible only to the Test Student, and deleted both afterward.
 
 All Engine unattended assignments have `omit_from_final_grade: true` and `post_to_sis: false`. Remove a row when its object is deleted.

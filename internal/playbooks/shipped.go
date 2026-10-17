@@ -92,7 +92,7 @@ func Update(root string, now time.Time) (UpdateReport, error) {
 			return report, readErr
 		case contextPath(rel):
 			row.State = "teacher-owned"
-		case bytes.Equal(have, seed):
+		case sameText(have, seed):
 			row.State = "current"
 		case report.Previous != "" && matchesShipped(root, report.Previous, rel, have), pastSeed(rel, have):
 			if err = Replace(root, rel, fmt.Sprintf("%x", sha256.Sum256(have)), now); err != nil {
@@ -116,7 +116,7 @@ func matchesShipped(root, label, rel string, have []byte) bool {
 		return false
 	}
 	old, err := os.ReadFile(p)
-	return err == nil && bytes.Equal(old, have)
+	return err == nil && sameText(old, have)
 }
 
 func writeShipped(root, label string) error {
@@ -157,7 +157,7 @@ func writeShipped(root, label string) error {
 var pastSeeds string
 
 func pastSeed(rel string, have []byte) bool {
-	line := fmt.Sprintf("%s %x", rel, sha256.Sum256(bytes.ReplaceAll(have, []byte("\r\n"), []byte("\n"))))
+	line := fmt.Sprintf("%s %x", rel, sha256.Sum256(lf(have)))
 	for _, known := range strings.Split(strings.ReplaceAll(pastSeeds, "\r\n", "\n"), "\n") {
 		if known == line {
 			return true
@@ -165,3 +165,9 @@ func pastSeed(rel string, have []byte) bool {
 	}
 	return false
 }
+
+// sameText ignores CRLF/LF differences, which Windows editors and sync
+// clients introduce without any change a teacher meant.
+func sameText(a, b []byte) bool { return bytes.Equal(lf(a), lf(b)) }
+
+func lf(b []byte) []byte { return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n")) }

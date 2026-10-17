@@ -42,21 +42,20 @@ Neither choice makes that decision disposable during a product update.
   Engine does not compute or name the deduction; Canvas's gradebook shows the
   adjusted grade. A family may notice the gap; that follows from the late
   submission and is not worth extra machinery.
-- For New Quizzes, include an overall score when Canvas supplies the complete
-  quiz result for the matching attempt, including auto-scored items. Identify
-  it as the Canvas overall result, distinct from the agent's written-response
-  assessments. Otherwise omit the overall line and continue per-item feedback;
-  do not equate assessed written work with the full quiz result. This display
-  rule does not authorize writing quiz or item grades.
+- New Quiz feedback never has an overall line, only per-item lines. The
+  comment goes out before the teacher enters written-item points, so Canvas
+  has no complete quiz result yet, and the written portion is never presented
+  as the quiz score. (Decided 2026-10-17; this replaces showing a Canvas
+  result when available.)
 - During scoring, the agent selects the best two student exemplars for each
   written prompt. Excerpts are always anonymous; there is no named option, and
   the choice needs no separate teacher approval. Every student in a receiving
   class gets the same pair for that prompt. Automatically consider matching
   work across saved current courses; the source course need not be the
   receiving course. For example, an ELA7 class can receive ELA7 PAP exemplars.
-  Individual feedback posts as usual; the exemplars follow in a second comment
-  once the matching set is scored, so independent feedback never waits for
-  the whole set.
+  Individual feedback posts as usual; the exemplars follow in a second,
+  comment-only post when the last student who answered that prompt is scored,
+  so independent feedback never waits. The follow-up never touches a grade.
 - Use school-day lateness, excluding weekends and calendar breaks;
   early-release days count as full days.
 - Corrections are available as soon as a student finishes the assignment.
@@ -96,9 +95,9 @@ supplied on 2026-10-17. It has four day types:
 | 7th | 3:05-3:55 | 3:05-3:55 | 3:05-3:55 | 1:45-2:25 |
 
 House Days are the pep rally schedule. The PDF lists 5th before 4th on House
-Days, and the times confirm that order. Friday uses the Homeroom schedule. The
-PDF does not say which days use Homeroom First; the school calendar or the
-teacher supplies that.
+Days, and the times confirm that order. Monday-Thursday use the Bobcat Hour
+schedule and Friday the Homeroom schedule. Homeroom First and House Days are
+called ad hoc; none are scheduled yet.
 
 ## Teacher-owned setup
 
@@ -188,11 +187,13 @@ authority over teacher choices.
 2. **Shipped 2026-10-17.** Rationales are required only for auto-scored quiz
    items (`TEACHER.md`, `quizzes.md`).
 3. **Built 2026-10-17.** `score.md` has class-exemplar guidance: two anonymous
-   excerpts per prompt across saved current courses, never fabricated, sent as
-   a follow-up comment so individual feedback never waits. The Engine can't
-   post a comment without a score, so the follow-up is a second results file
-   with the same scores and `header: none`; the grade is rewritten unchanged.
-   Verified in Canvas Live (CS8, 2026-10-17, Test Student).
+   excerpts per prompt across saved current courses, never fabricated, sent
+   when the last matching student is scored. `operation: comment-only` now
+   works on ordinary assignments as well as New Quizzes and writes only the
+   comment, so the follow-up never overwrites a grade the teacher changed.
+   Verified in Canvas Live (CS8, 2026-10-17, Test Student): after the grade was
+   changed to 18 in Canvas, the follow-up added the exemplar comment and the
+   grade stayed 18.
 4. **Built 2026-10-17.** The shipped `context/parent-updates.md` and the
    Engine no longer default to Pearland's Skyward and Bobcat Hour. Teachers
    supply a portal name and address and an optional tutoring label, text and
@@ -200,8 +201,7 @@ authority over teacher choices.
    kept). Blank fields are left out of the email. Existing installs keep their
    saved values.
 5. **Shipped 2026-10-17.** New Quiz comments lead with item lines and never an
-   overall line; a labeled Canvas quiz result is allowed only when the pull
-   carries it. The Engine defect (the default header printed the written
+   overall line. The Engine defect (the default header printed the written
    portion scaled to the whole quiz) is fixed.
 6. **Built 2026-10-17.** The parent report lists corrections for finished work
    inside the window, with or without feedback. The playbook includes work
@@ -210,15 +210,17 @@ authority over teacher choices.
    promises points.
 7. **Shipped 2026-10-17.** First-task questions and tier offers check saved
    choices first, including ones from an earlier install or another computer.
-8. Open. Parent history carries assignment-level first/latest/current Canvas
-   scores, not per-item history. Out of scope here unless needed.
+8. **Dropped 2026-10-17.** Parent emails keep assignment-level scores;
+   families can open the linked assignment for item detail.
 9. **Shipped 2026-10-17.** One-task review skips are separate from standing
    preferences, which are saved in `Teacher_Override.md`.
 
 The feedback default is also built: `Overall: X/Y`, marked `(late)` when the
 agent's late timing says late, then one line per item, then tips and
 exemplars. X is the earned score before Canvas's deduction. Verified in Canvas
-Live (CS8, 2026-10-17, Test Student).
+Live (CS8, 2026-10-17, Test Student), including a real lateness write with a
+past due date: Canvas recorded late, deducted 2 points from the earned 16, and
+the comment read `Overall: 16/20 (late)`.
 
 ## First real update (2026-10-17)
 
@@ -234,18 +236,29 @@ reported every file current or teacher-owned. `grade_portal_name: "Skyward
 Family Access"` and `bobcat_hour_label: "Bobcat Hour"` were added to the saved
 parent-update settings, and offline doctor passed.
 
-Matching against git history is a Dev-side shortcut, not something a teacher's
-agent can do. A colleague's first update without `adopted.txt` still treats
-every difference as the teacher's choice and relies on agent reconciliation;
-after that, `adopted.txt` makes later updates automatic for unedited files.
+That first run matched files against Dev's git history by hand. The Engine
+now does this itself: it embeds fingerprints of every past shipped version
+(`internal/playbooks/past_seeds.txt`), so a colleague's first update replaces
+unedited older files automatically. A replay of this install's pre-update
+files confirmed it: nine updated, one deliberately edited playbook kept.
+Line-ending-only differences (Windows editors, sync clients) count as
+unchanged.
+
+A reconciliation check on the same install (2026-10-17) added a test line to
+`Teacher_Override.md` and to `playbooks/score.md`, then installed a build whose
+shipped `score.md` had changed. Update kept `score.md` and left the override
+alone. A three-way merge (previous shipped, teacher, new shipped) applied the
+four new shipped lines and kept the teacher line with no conflict. The test
+lines were then removed and update reported every file current.
 
 ## Remaining work
 
-- Agent reconciliation of genuinely teacher-edited playbooks has guidance but
-  no real run yet.
-- Determine where the existing New Quiz pull can supply the complete Canvas
-  result for the matching attempt. Per-item-only feedback continues meanwhile.
-- Parent per-item history (conflict 8) remains undesigned.
+- Push `dev` and publish a release when the teacher decides (deferred
+  2026-10-17).
+- A colleague's real update, and an agent (not the developer) doing the
+  reconciliation in the background, remain unobserved.
+- The teacher's own `context/school-calendar.md` predates the bell schedule;
+  context files are never replaced, so it is added only on request.
 
 ## Done looks like
 
