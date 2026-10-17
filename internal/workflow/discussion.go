@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"canvasexpertse/internal/domain"
@@ -110,11 +111,8 @@ func (s *Service) PullDiscussion(ctx context.Context, nickname string, topicID, 
 
 func (s *Service) writePulledDiscussion(c domain.Course, t NativeDiscussion, setID, groupID int64, folder string) (string, error) {
 	published := t.Published
-	b := domain.DiscussionSnapshot{Instance: s.Client.Origin(), CourseID: c.ID, TopicID: t.ID, URL: t.HTMLURL, GroupCategoryID: setID, GroupID: groupID, Title: t.Title, BodyHTML: t.Message, DiscussionType: t.DiscussionType, RequireInitialPost: t.RequireInitialPost, Published: t.Published, DelayedPostAt: t.DelayedPostAt, LockAt: t.LockAt, Pinned: t.Pinned, IsAnnouncement: t.IsAnnouncement}
+	b := domain.DiscussionSnapshot{Instance: s.Client.Origin(), CourseID: c.ID, TopicID: t.ID, URL: t.HTMLURL, GroupCategoryID: setID, GroupID: groupID, AssignmentID: t.AssignmentID, Title: t.Title, BodyHTML: t.Message, DiscussionType: t.DiscussionType, RequireInitialPost: t.RequireInitialPost, Published: t.Published, DelayedPostAt: t.DelayedPostAt, LockAt: t.LockAt, Pinned: t.Pinned, IsAnnouncement: t.IsAnnouncement}
 	d := domain.DiscussionDocument{Schema: 1, Kind: "discussion", Operation: "update", Course: c.Nickname, Instance: b.Instance, CourseID: b.CourseID, TopicID: b.TopicID, GroupCategoryID: setID, GroupID: groupID, Title: t.Title, BodyFormat: "html", DiscussionType: t.DiscussionType, RequireInitialPost: &b.RequireInitialPost, Published: &published, DelayedPostAt: b.DelayedPostAt, LockAt: b.LockAt, Pinned: &b.Pinned, IsAnnouncement: &b.IsAnnouncement, Observed: &b}
-	if b.IsAnnouncement {
-		d.AnnouncementIntent = ""
-	}
 	p, err := workspace.ConstrainPath(s.Root, filepath.Join("courses", c.Nickname, "pulled", filepath.Base(folder), "topic.md"))
 	if err != nil {
 		return "", err
@@ -213,7 +211,7 @@ func (s *Service) PushDiscussion(ctx context.Context, path string) (report Discu
 			fields["group_category_id"] = d.GroupCategoryID
 		}
 		var response NativeDiscussion
-		err = s.Client.WriteAccepted(ctx, "POST", discussionBase(c.ID, d.GroupID), map[string]any{"discussion_topic": fields}, &response)
+		err = s.Client.WriteAccepted(ctx, "POST", discussionBase(c.ID, d.GroupID), fields, &response)
 		if response.ID > 0 {
 			created.TopicID = response.ID
 			created.URL = response.HTMLURL
@@ -291,7 +289,7 @@ func (s *Service) PushDiscussion(ctx context.Context, path string) (report Discu
 			return report, err
 		}
 		var response NativeDiscussion
-		err = s.Client.WriteAccepted(ctx, "PUT", discussionPath(c.ID, d.GroupID, created.TopicID), map[string]any{"discussion_topic": map[string]any{"published": true}}, &response)
+		err = s.Client.WriteAccepted(ctx, "PUT", discussionPath(c.ID, d.GroupID, created.TopicID), map[string]any{"published": true}, &response)
 		if err != nil {
 			created.Publication = failedOutcome(err)
 			if saveErr := save(); saveErr != nil {
@@ -367,6 +365,9 @@ func (s *Service) updateDiscussion(ctx context.Context, path string, c domain.Co
 		r.Message = "update already completed; pull-discussion before another edit"
 		return r, nil
 	}
+	if d.Observed.AssignmentID > 0 {
+		return r, fmt.Errorf("linked graded discussions are not yet supported in slice 05a; this authoring path only edits ungraded topics")
+	}
 	if (d.IsAnnouncement != nil && *d.IsAnnouncement) != d.Observed.IsAnnouncement && d.IsAnnouncement != nil {
 		return r, fmt.Errorf("a discussion cannot be converted to an announcement or vice versa")
 	}
@@ -382,6 +383,23 @@ func (s *Service) updateDiscussion(ctx context.Context, path string, c domain.Co
 		return r, fmt.Errorf("Canvas returned a different discussion topic ID")
 	}
 	base := d.Observed
+	liveSetID := int64(0)
+	if live.GroupCategoryID != nil {
+		liveSetID = *live.GroupCategoryID
+	}
+	if liveSetID != base.GroupCategoryID || live.AssignmentID != base.AssignmentID || live.IsAnnouncement != base.IsAnnouncement {
+		folder, e := writePullFolder(s.Root, c.Nickname, live.ID, live.Title)
+		if e != nil {
+			return r, e
+		}
+		fresh, e := s.writePulledDiscussion(c, live, liveSetID, d.GroupID, folder)
+		if e != nil {
+			return r, e
+		}
+		r.Status = "held"
+		r.Message = "live discussion scope or identity changed; unsent edit preserved; fresh version: " + fresh
+		return r, nil
+	}
 	contentChanged := d.Title != base.Title || html != base.BodyHTML
 	if contentChanged && (live.Title != base.Title || live.Message != base.BodyHTML) {
 		folder, e := writePullFolder(s.Root, c.Nickname, live.ID, live.Title)
@@ -426,12 +444,15 @@ func (s *Service) updateDiscussion(ctx context.Context, path string, c domain.Co
 		r.Status = "completed"
 		return r, workspace.WriteDocument(path, d, body)
 	}
+	if base.IsAnnouncement && strings.TrimSpace(d.AnnouncementIntent) == "" {
+		return r, fmt.Errorf("announcement updates require explicit announcement_intent describing the requested content and audience")
+	}
 	d.UpdateOutcome = domain.ActionOutcome{Status: "pending"}
 	if err = workspace.WriteDocument(path, d, body); err != nil {
 		return r, err
 	}
 	var response NativeDiscussion
-	err = s.Client.WriteAccepted(ctx, "PUT", discussionPath(c.ID, d.GroupID, d.TopicID), map[string]any{"discussion_topic": patch}, &response)
+	err = s.Client.WriteAccepted(ctx, "PUT", discussionPath(c.ID, d.GroupID, d.TopicID), patch, &response)
 	if err != nil {
 		d.UpdateOutcome = failedOutcome(err)
 	} else {

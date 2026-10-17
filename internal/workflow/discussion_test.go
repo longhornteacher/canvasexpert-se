@@ -21,22 +21,18 @@ func TestDistributedDiscussionCreateScopesGroupSetOnTopicAndPullsBaseline(t *tes
 			json.NewEncoder(w).Encode(map[string]any{"id": 50, "course_id": 1, "context_type": "Course", "non_collaborative": false})
 		case "POST /api/v1/courses/1/discussion_topics":
 			methods = append(methods, r.Method+" "+r.URL.Path)
-			var req struct {
-				Topic map[string]any `json:"discussion_topic"`
-			}
+			var req map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&req)
-			if req.Topic["group_category_id"] != float64(50) || req.Topic["published"] != false {
-				t.Errorf("unexpected distributed topic fields: %#v", req.Topic)
+			if req["group_category_id"] != float64(50) || req["published"] != false || req["discussion_topic"] != nil {
+				t.Errorf("unexpected distributed topic fields: %#v", req)
 			}
 			json.NewEncoder(w).Encode(map[string]any{"id": 77, "title": "Common prompt", "message": "<p>Read and respond</p>", "group_category_id": 50, "group_topic_children": []any{map[string]any{"group_id": 60, "id": 78}}})
 		case "PUT /api/v1/courses/1/discussion_topics/77":
 			methods = append(methods, r.Method+" "+r.URL.Path)
-			var req struct {
-				Topic map[string]any `json:"discussion_topic"`
-			}
+			var req map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&req)
-			if req.Topic["published"] != true {
-				t.Errorf("publication payload=%#v", req.Topic)
+			if req["published"] != true || req["discussion_topic"] != nil {
+				t.Errorf("publication payload=%#v", req)
 			}
 			_, _ = w.Write([]byte("not-json"))
 		case "GET /api/v1/courses/1/discussion_topics/77":
@@ -160,11 +156,10 @@ func TestDiscussionSettingsOnlyUpdateIgnoresChangedBodyAndPreservesIt(t *testing
 			json.NewEncoder(w).Encode(map[string]any{"id": 5, "title": "Prompt", "message": "<p>New student reply context</p>", "pinned": false})
 			return
 		}
-		var req struct {
-			Topic map[string]any `json:"discussion_topic"`
+		_ = json.NewDecoder(r.Body).Decode(&patch)
+		if patch["discussion_topic"] != nil {
+			t.Errorf("update payload is wrapped: %#v", patch)
 		}
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		patch = req.Topic
 		_, _ = w.Write([]byte("not-json"))
 	})
 	base.Instance = s.Client.Origin()
@@ -177,5 +172,98 @@ func TestDiscussionSettingsOnlyUpdateIgnoresChangedBodyAndPreservesIt(t *testing
 	r, err := s.PushDiscussion(context.Background(), path)
 	if err != nil || r.Status != "succeeded" || len(patch) != 1 || patch["pinned"] != true {
 		t.Fatalf("report=%+v patch=%#v err=%v", r, patch, err)
+	}
+}
+
+func TestDiscussionUpdateHoldsWhenLiveAudienceOrIdentityDrifts(t *testing.T) {
+	tests := []struct {
+		name             string
+		baseSet          int64
+		liveSet          int64
+		baseAssignment   int64
+		liveAssignment   int64
+		baseAnnouncement bool
+		liveAnnouncement bool
+	}{
+		{name: "group set", baseSet: 50, liveSet: 51},
+		{name: "linked assignment", baseAssignment: 0, liveAssignment: 12},
+		{name: "announcement", baseAnnouncement: false, liveAnnouncement: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base := domain.DiscussionSnapshot{CourseID: 1, TopicID: 5, GroupCategoryID: tt.baseSet, AssignmentID: tt.baseAssignment, Title: "Prompt", BodyHTML: "<p>Old</p>", IsAnnouncement: tt.baseAnnouncement}
+			d := domain.DiscussionDocument{Schema: 1, Kind: "discussion", Operation: "update", Course: "TEST", CourseID: 1, TopicID: 5, GroupCategoryID: tt.baseSet, Title: "Teacher edit", BodyFormat: "html", Observed: &base}
+			puts := 0
+			s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.Method + " " + r.URL.Path {
+				case "GET /api/v1/group_categories/50":
+					json.NewEncoder(w).Encode(map[string]any{"id": 50, "course_id": 1, "context_type": "Course", "non_collaborative": false})
+				case "GET /api/v1/courses/1/discussion_topics/5":
+					live := map[string]any{"id": 5, "title": "Prompt", "message": "<p>Live content</p>", "assignment_id": tt.liveAssignment, "is_announcement": tt.liveAnnouncement}
+					if tt.liveSet > 0 {
+						live["group_category_id"] = tt.liveSet
+					}
+					json.NewEncoder(w).Encode(live)
+				case "PUT /api/v1/courses/1/discussion_topics/5":
+					puts++
+					w.WriteHeader(http.StatusOK)
+				default:
+					t.Errorf("unexpected Canvas request %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+				}
+			})
+			base.Instance, d.Instance = s.Client.Origin(), s.Client.Origin()
+			path := filepath.Join(s.Root, "update.md")
+			unsent := "<p>Teacher's unsent edit</p>"
+			if err := workspace.WriteDocument(path, &d, unsent); err != nil {
+				t.Fatal(err)
+			}
+			r, err := s.PushDiscussion(context.Background(), path)
+			if err != nil || r.Status != "held" || puts != 0 {
+				t.Fatalf("report=%+v puts=%d err=%v", r, puts, err)
+			}
+			body, err := workspace.ReadDocument(path, &d)
+			if err != nil || body != unsent || d.Observed.GroupCategoryID != tt.baseSet || d.Observed.AssignmentID != tt.baseAssignment {
+				t.Fatalf("unsent draft changed: body=%q doc=%+v err=%v", body, d, err)
+			}
+			pulled, err := filepath.Glob(filepath.Join(s.Root, "courses", "TEST", "pulled", "*", "topic.md"))
+			if err != nil || len(pulled) != 1 {
+				t.Fatalf("fresh baseline path=%v err=%v", pulled, err)
+			}
+			var fresh domain.DiscussionDocument
+			liveBody, err := workspace.ReadDocument(pulled[0], &fresh)
+			if err != nil || liveBody != "<p>Live content</p>" || fresh.Observed.GroupCategoryID != tt.liveSet || fresh.Observed.AssignmentID != tt.liveAssignment || fresh.Observed.IsAnnouncement != tt.liveAnnouncement {
+				t.Fatalf("fresh baseline does not reflect live identity: body=%q observed=%+v err=%v", liveBody, fresh.Observed, err)
+			}
+			if err = fresh.ValidateBody(liveBody); err != nil {
+				t.Fatalf("fresh baseline is not readable: %v", err)
+			}
+		})
+	}
+}
+
+func TestAnnouncementUpdateRequiresIntentAtWriteBoundary(t *testing.T) {
+	announcement := true
+	base := domain.DiscussionSnapshot{Instance: "https://canvas.example", CourseID: 1, TopicID: 5, Title: "Announcement", BodyHTML: "<p>Old</p>", IsAnnouncement: true}
+	d := domain.DiscussionDocument{Schema: 1, Kind: "discussion", Operation: "update", Course: "TEST", CourseID: 1, TopicID: 5, Title: "Announcement revised", BodyFormat: "html", IsAnnouncement: &announcement, Observed: &base}
+	puts := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" {
+			json.NewEncoder(w).Encode(map[string]any{"id": 5, "title": "Announcement", "message": "<p>Old</p>", "is_announcement": true})
+			return
+		}
+		puts++
+		w.WriteHeader(http.StatusOK)
+	})
+	base.Instance, d.Instance = s.Client.Origin(), s.Client.Origin()
+	path := filepath.Join(s.Root, "announcement.md")
+	if err := workspace.WriteDocument(path, &d, "<p>Old</p>"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.PushDiscussion(context.Background(), path)
+	if err == nil || puts != 0 {
+		t.Fatalf("announcement update without explicit intent wrote or succeeded: puts=%d err=%v", puts, err)
 	}
 }

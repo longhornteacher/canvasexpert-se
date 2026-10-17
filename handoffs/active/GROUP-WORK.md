@@ -1,10 +1,10 @@
 # Group work (book clubs): execution handoff for a coding agent
 
-Self-contained brief for an agent session with no prior context. Target release: **1.1.0-beta.1** ("1.1b1"), developed on the `dev` branch. This is a large body of work. Read this file first, then follow its reading order. Nothing here is implemented yet.
+Self-contained brief for an agent session with no prior context. Target release: **1.1.0-beta.1** ("1.1b1"), developed on the `dev` branch. Phase 1 slices 01–03, 05a–06, 16–17 and Phase 2 slices 08–09 are implemented in Dev. Continue from the assigned slice in [the status table](../../docs/group-work/README.md#implementation-status); no CE-SE Canvas Live group-work writes or group-submission pulls have been run.
 
 ## Paste-in kickoff
 
-> You are implementing CE-SE group-work support in this repository. Read `handoffs/active/GROUP-WORK.md`, then `AGENTS.md`, `ARCHITECTURE.md`, `SCORING-RULES.md`, `docs/group-work/README.md` and `docs/group-work/contracts.md`. Work one slice at a time in the README's phase order, starting with slice 01. A specification file is not proof a dependency exists: verify against the code. Complete each slice's CLI, MCP, review, document and playbook integration and its acceptance protections, commit it to `dev`, and report. Do not run Canvas Live writes, touch `main`, tag, or release unless the teacher says so in this session.
+> You are continuing CE-SE group-work support in this repository. Read `handoffs/active/GROUP-WORK.md`, then `AGENTS.md`, `ARCHITECTURE.md`, `SCORING-RULES.md`, `docs/group-work/README.md` and `docs/group-work/contracts.md`. Check the README status table and work only on the assigned slice; do not repeat an implemented slice. A specification file is not proof a dependency exists: verify against the code. Complete the slice's CLI, MCP, review, document and playbook integration where applicable, commit it to `dev`, and report. Do not run Canvas Live writes, touch `main`, tag, or release unless the teacher says so in this session.
 
 ## What this is and who it is for
 

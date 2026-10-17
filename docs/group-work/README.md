@@ -1,6 +1,6 @@
 # Group work implementation plan
 
-Date: 2026-10-17. Status: Phase 1 slices 01, 02, 03, 05a, 06, 16 and playbook v1 are implemented in Dev. Phase 2 slice 08 adds group assignment authoring, scoped assignment-date overrides, and the shared assignment snapshot foundation; it has local checks only, with no CE-SE Canvas Live writes. Slices 09–11 and later planned work remain unimplemented. These documents are coding handoffs for Dev. They do not authorize Canvas Live experiments, classroom writes, or changes to UserInstall.
+Date: 2026-10-17. Status: Phase 1 slices 01, 02, 03, 05a, 06, 16 and playbook v1, plus Phase 2 slices 08–09, are implemented in Dev. These paths have local checks only; no CE-SE Canvas Live group-work writes or group-submission pulls have been run. Slices 10–11 and later planned work remain unimplemented. These documents are coding handoffs for Dev. They do not authorize Canvas Live experiments, classroom writes, or changes to UserInstall.
 
 Read [shared contracts](contracts.md), then the assigned slice. Follow [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../ARCHITECTURE.md), and [SCORING-RULES.md](../../SCORING-RULES.md). Each slice includes its CLI/MCP surface, document changes, integration work, consequential checks, and acceptance scenarios. Proposed contracts are implemented only where the status table says so.
 

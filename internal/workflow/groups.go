@@ -246,7 +246,7 @@ func (s *Service) PushGroupSet(ctx context.Context, path string) (report GroupSe
 			}
 			fields := map[string]any{"name": doc.Name, "non_collaborative": false, "self_signup": apiSignup(doc.SelfSignup, "disabled"), "group_limit": apiInt(doc.GroupLimit), "auto_leader": apiLeader(doc.AutoLeader, "none")}
 			var created canvasGroupCategory
-			err = s.Client.Write(ctx, "POST", fmt.Sprintf("/api/v1/courses/%d/group_categories", course.ID), map[string]any{"group_category": fields}, &created)
+			err = s.Client.Write(ctx, "POST", fmt.Sprintf("/api/v1/courses/%d/group_categories", course.ID), fields, &created)
 			if err != nil {
 				c.Set = failedOutcome(err)
 				_ = save()
@@ -342,7 +342,7 @@ func (s *Service) PushGroupSet(ctx context.Context, path string) (report GroupSe
 			if doc.AutoLeader.Set {
 				fields["auto_leader"] = apiLeader(doc.AutoLeader, b.AutoLeader)
 			}
-			if err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/group_categories/%d", set.ID), map[string]any{"group_category": fields}, nil); err != nil {
+			if err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/group_categories/%d", set.ID), fields, nil); err != nil {
 				report.Status = failedOutcome(err).Status
 				report.Message = err.Error()
 				return report, nil
@@ -383,7 +383,7 @@ func (s *Service) PushGroupSet(ctx context.Context, path string) (report GroupSe
 				}
 			}
 			if len(patch) > 0 {
-				if err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/groups/%d", row.GroupID), map[string]any{"group": patch}, nil); err != nil {
+				if err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/groups/%d", row.GroupID), patch, nil); err != nil {
 					report.Status = failedOutcome(err).Status
 					report.Message = err.Error()
 					return report, nil
@@ -448,7 +448,7 @@ func (s *Service) PushGroupSet(ctx context.Context, path string) (report GroupSe
 			fields["description"] = *row.Description
 		}
 		var created canvasGroup
-		err = s.Client.Write(ctx, "POST", fmt.Sprintf("/api/v1/group_categories/%d/groups", set.ID), map[string]any{"group": fields}, &created)
+		err = s.Client.Write(ctx, "POST", fmt.Sprintf("/api/v1/group_categories/%d/groups", set.ID), fields, &created)
 		if err != nil {
 			c.Groups[idx].Outcome = failedOutcome(err)
 			_ = save()

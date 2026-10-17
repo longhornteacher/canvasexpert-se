@@ -22,6 +22,11 @@ func TestPushGroupSetPersistsIDsAndResumesWithoutDuplicateCreates(t *testing.T) 
 		switch r.URL.Path {
 		case "/api/v1/courses/1/group_categories":
 			if r.Method == http.MethodPost {
+				var fields map[string]any
+				_ = json.NewDecoder(r.Body).Decode(&fields)
+				if fields["name"] != "Fall clubs" || fields["group_category"] != nil {
+					t.Errorf("group-set create payload is not flat: %#v", fields)
+				}
 				sets++
 				write(map[string]any{"id": 50, "course_id": 1, "context_type": "Course", "name": "Fall clubs", "non_collaborative": false})
 				return
@@ -31,12 +36,13 @@ func TestPushGroupSetPersistsIDsAndResumesWithoutDuplicateCreates(t *testing.T) 
 			write(map[string]any{"id": 50, "course_id": 1, "context_type": "Course", "name": "Fall clubs", "non_collaborative": false, "self_signup": nil, "auto_leader": nil})
 		case "/api/v1/group_categories/50/groups":
 			if r.Method == http.MethodPost {
-				var b struct {
-					Group map[string]any `json:"group"`
-				}
+				var b map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&b)
+				if b["name"] == nil || b["group"] != nil {
+					t.Errorf("group create payload is not flat: %#v", b)
+				}
 				groups++
-				write(map[string]any{"id": int64(60 + groups), "course_id": 1, "context_type": "Course", "group_category_id": 50, "name": b.Group["name"], "html_url": fmt.Sprintf("https://canvas.example/groups/%d", 60+groups)})
+				write(map[string]any{"id": int64(60 + groups), "course_id": 1, "context_type": "Course", "group_category_id": 50, "name": b["name"], "html_url": fmt.Sprintf("https://canvas.example/groups/%d", 60+groups)})
 				return
 			}
 			write([]any{})
@@ -71,6 +77,47 @@ func TestPushGroupSetPersistsIDsAndResumesWithoutDuplicateCreates(t *testing.T) 
 	second, err := s.PushGroupSet(context.Background(), path)
 	if err != nil || second.Status != "completed" || sets != 1 || groups != 2 {
 		t.Fatalf("resume duplicated create: %+v err=%v sets=%d groups=%d", second, err, sets, groups)
+	}
+}
+
+func TestGroupSetUpdateSendsFlatCanvasFields(t *testing.T) {
+	setWrites, groupWrites := 0, 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/v1/group_categories/50":
+			json.NewEncoder(w).Encode(map[string]any{"id": 50, "course_id": 1, "context_type": "Course", "name": "Old set", "non_collaborative": false, "self_signup": "disabled", "auto_leader": "none"})
+		case "GET /api/v1/groups/60":
+			json.NewEncoder(w).Encode(map[string]any{"id": 60, "course_id": 1, "context_type": "Course", "group_category_id": 50, "name": "Old group", "description": "Old description", "non_collaborative": false})
+		case "PUT /api/v1/group_categories/50":
+			var fields map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&fields)
+			if fields["name"] != "New set" || fields["group_category"] != nil {
+				t.Errorf("group-set update payload is not flat: %#v", fields)
+			}
+			setWrites++
+		case "PUT /api/v1/groups/60":
+			var fields map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&fields)
+			if fields["name"] != "New group" || fields["description"] != "New description" || fields["group"] != nil {
+				t.Errorf("group update payload is not flat: %#v", fields)
+			}
+			groupWrites++
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	})
+	observed := &domain.GroupSetSnapshot{Instance: s.Client.Origin(), CourseID: 1, GroupCategoryID: 50, Name: "Old set", SelfSignup: "disabled", AutoLeader: "none"}
+	description := "New description"
+	doc := domain.GroupSetDocument{Schema: 1, Kind: "group-set", Operation: "update", Course: "TEST", Instance: s.Client.Origin(), CourseID: 1, GroupCategoryID: 50, Name: "New set", Observed: observed, Groups: []domain.GroupSetRow{{GroupID: 60, Name: "New group", Description: &description, Observed: &domain.GroupSnapshot{GroupID: 60, Name: "Old group", Description: "Old description"}}}}
+	path := filepath.Join(s.Root, "courses", "TEST", "drafts", "update.md")
+	if err := workspace.WriteDocument(path, doc, ""); err != nil {
+		t.Fatal(err)
+	}
+	report, err := s.PushGroupSet(context.Background(), path)
+	if err != nil || report.Status != "completed" || setWrites != 1 || groupWrites != 1 {
+		t.Fatalf("report=%+v setWrites=%d groupWrites=%d err=%v", report, setWrites, groupWrites, err)
 	}
 }
 

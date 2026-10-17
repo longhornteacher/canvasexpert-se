@@ -41,6 +41,7 @@ type DiscussionSnapshot struct {
 	URL                string  `yaml:"url,omitempty"`
 	GroupCategoryID    int64   `yaml:"group_category_id,omitempty"`
 	GroupID            int64   `yaml:"group_id,omitempty"`
+	AssignmentID       int64   `yaml:"assignment_id,omitempty"`
 	Title              string  `yaml:"title"`
 	BodyHTML           string  `yaml:"body_html"`
 	DiscussionType     string  `yaml:"discussion_type,omitempty"`
@@ -249,7 +250,7 @@ func (d *DiscussionDocument) ValidateBody(body string) error {
 	if d.Operation == "update" && d.Observed != nil && d.Observed.IsAnnouncement {
 		announcement = true
 	}
-	if announcement && strings.TrimSpace(d.AnnouncementIntent) == "" {
+	if announcement && d.Operation == "create" && strings.TrimSpace(d.AnnouncementIntent) == "" {
 		return fmt.Errorf("announcements require explicit announcement_intent describing the requested content and audience")
 	}
 	if announcement && d.Assignment != nil {

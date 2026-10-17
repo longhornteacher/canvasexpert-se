@@ -28,7 +28,7 @@ func TestDiscussionValidationScopesAnnouncementsAndGradedHold(t *testing.T) {
 	}
 }
 
-func TestPulledAnnouncementUpdateRequiresExplicitIntent(t *testing.T) {
+func TestPulledAnnouncementBaselineCanBeReviewedWithoutInventedIntent(t *testing.T) {
 	announcement := true
 	d := DiscussionDocument{
 		Schema: 1, Kind: "discussion", Operation: "update", Course: "ELA7", CourseID: 1, TopicID: 5,
@@ -36,12 +36,12 @@ func TestPulledAnnouncementUpdateRequiresExplicitIntent(t *testing.T) {
 		IsAnnouncement: &announcement,
 		Observed:       &DiscussionSnapshot{Instance: "https://canvas.example", CourseID: 1, TopicID: 5, Title: "Schedule update", IsAnnouncement: true},
 	}
-	if err := d.ValidateBody("<p>Updated schedule</p>"); err == nil || !strings.Contains(err.Error(), "announcement_intent") {
-		t.Fatalf("announcement update without explicit intent: %v", err)
+	if err := d.ValidateBody("<p>Updated schedule</p>"); err != nil {
+		t.Fatalf("pulled announcement baseline without invented intent rejected: %v", err)
 	}
 	d.IsAnnouncement = nil
-	if err := d.ValidateBody("<p>Updated schedule</p>"); err == nil || !strings.Contains(err.Error(), "announcement_intent") {
-		t.Fatalf("omitted announcement flag bypassed intent: %v", err)
+	if err := d.ValidateBody("<p>Updated schedule</p>"); err != nil {
+		t.Fatalf("omitted announcement flag on baseline rejected: %v", err)
 	}
 	d.AnnouncementIntent = "Tell club members the meeting date changed."
 	if err := d.ValidateBody("<p>Updated schedule</p>"); err != nil {
