@@ -2,7 +2,7 @@
 
 The judgment calls are yours: who needs an email, what counts as a correction, and the wording. The Engine reads Canvas, computes dates and scores, renders the email, looks up parent addresses and sends. You never see an address and never send anything: the teacher reviews every email on a private page and clicks Send there. Background and the proposed rules live in `docs/parent-update-flow.md` in Dev; the teacher does not need that.
 
-Read `AGENTS.md` and `context/parent-updates.md` first. `skyward_url` defaults to Pearland ISD's Skyward Family Access sign-in; change it only if the teacher gives a different address.
+Read `AGENTS.md` and `context/parent-updates.md` first. Its grade-portal and tutoring fields start blank. The first time the teacher sends updates, ask once for their grade portal's name and sign-in address and any tutoring sign-up link, and save them there (`skyward_url`, `grade_portal_name`, `bobcat_hour_url`, `bobcat_hour_label`, `bobcat_hour_text`; the key names are historical). Blank fields are fine: the email leaves out what's missing.
 
 ## Steps
 
@@ -18,7 +18,7 @@ Read `AGENTS.md` and `context/parent-updates.md` first. `skyward_url` defaults t
 - **Skip** a student only when every included course has a Canvas `course_score` at or above `skip_score` **and** has no `missing` items. Corrections, Due Soon and links never justify an email by themselves.
 - **Flag** (not skip, not send) when a course score is unavailable, a `flags` entry says data is incomplete, or something looks wrong. Say why in `reason`; the teacher decides.
 - Otherwise **send**.
-- The skip decision uses Canvas scores. Skyward is the official grade; it is only linked.
+- The skip decision uses Canvas scores. The school's grade portal is the official grade; it is only linked.
 
 ## What goes in each section
 
@@ -27,11 +27,11 @@ Reference assignments by `assignment_id` taken from the report. The Engine fills
 | Section | Source in the report | Your part |
 |---|---|---|
 | `missing` | `missing` | List all of them, even if older than 14 days. A `not_submitted_canvas_not_marked_missing` item says honestly that Canvas has not marked it missing. Add a `note` only for existing submission instructions. |
-| `corrections` | `corrections` | Include an assignment only when its `teacher_comments` actually contain a **rationale or an exemplar** the student can learn from. A generic "good job", a bare score, or one keyword is not enough. For a New Quiz marked `per_item_feedback: unverified`, include it only if the teacher has said it has item feedback; otherwise leave it out and say nothing. Hidden answer keys are never correction guidance. The `note` says where to find the explanation ("see the comment on your submission"). |
+| `corrections` | `corrections` | Corrections open when the student finishes the work and close on `correction_deadline` (14 calendar days after the student's due date), unless `Teacher_Override.md` sets the teacher's own correction system; then follow it. Feedback is not what opens them. Include work where the student lost points and can still improve it. When `teacher_comments` contain a rationale or exemplar, the `note` points to it ("see the comment on your submission"); otherwise the note points to the assignment itself. Never promise points back or invent a correction method the teacher hasn't set. Hidden answer keys are never correction guidance. |
 | `due_soon` | `due_soon` | Include the ones that matter to the family. A `note` may repeat existing preparation instructions from the assignment, nothing new. |
 | `history` | `history` | Include all of them. The email shows First Score and Current Score, so families can see where a curve or correction points raised a grade. Where `first_unavailable` is true the Engine shows "not available"; do not guess. |
 
-Order is fixed: Missing, Corrections, Due Soon, Grade history, footer (Skyward and Bobcat Hour). Empty sections are left out.
+Order is fixed: Missing, Corrections, Due Soon, Grade history, footer (grade portal and tutoring sign-up). Empty sections are left out.
 
 ## Defaults
 

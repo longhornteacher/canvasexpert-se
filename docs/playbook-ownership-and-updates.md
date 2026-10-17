@@ -1,9 +1,8 @@
 # Playbook ownership and updates
 
 Working design decisions from the teacher/developer conversation, 2026-10-17.
-This document records agreed direction and remaining design questions. Except
-where a conflict below is marked shipped, it does not claim that the shipped
-instructions or Engine already implement it. Read alongside ARCHITECTURE.md
+This document records agreed direction and what has been built. Items marked
+shipped or built are implemented; the rest is direction only. Read alongside ARCHITECTURE.md
 and SCORING-RULES.md; implementation changes to those contracts remain
 separate work.
 
@@ -153,81 +152,84 @@ does not need to request a file edit or know the storage layout.
 
 ## Update direction
 
-With the overlay, a product update replaces shipped playbooks and leaves the
-overlay alone. Three-way reconciliation is needed only where a teacher edited
-a shipped playbook directly, or where a new shipped default meets an overlay
-entry on the same topic.
+**Built 2026-10-17.** Install and update use the same machinery, whether the
+teacher unzips a new version and says "install" or "update", or the agent
+downloads the release ZIP itself.
 
-Reconciliation runs during "install" or "update", in the background. It must
-work for a teacher who only unzips, points the agent and talks: no merge
-prompts, no file vocabulary, and a short plain note only when a new teaching
-choice is worth mentioning.
+- The ZIP carries only the Engine, launchers and a bootstrap `AGENTS.md`. It
+  no longer carries playbooks, `TEACHER.md`, `Teacher_Override.md` or
+  `context/`, so extracting it over an existing UserInstall cannot overwrite
+  the teacher's setup or edited playbooks. On first run in a freshly extracted
+  folder, the bundled Engine lays down the starter files.
+- `cse playbooks update` (MCP `engine_info` operation `update-playbooks`)
+  adds missing files, replaces a playbook only when it still matches the
+  previous shipped copy, and reports any other difference as `kept`. With no
+  record of a previous version, every difference is the teacher's choice. It
+  never touches `context/` or `Teacher_Override.md`.
+- Each adopted seed is kept under `shipped/<version>-<hash>/` in UserInstall,
+  with `shipped/adopted.txt` naming the last one. The hash keeps development
+  builds that share a version string apart. These copies are inactive
+  reference material.
+- For each `kept` file, the agent reconciles in the background
+  (`playbooks/install.md`): previous shipped copy, active file and new shipped
+  copy. It keeps every teacher difference, brings in compatible shipped
+  improvements, keeps the teacher's choice on conflict, and mentions a new
+  teaching option only when it's worth the teacher's attention.
 
-Use the previous shipped component, the current teacher component and the new
-shipped component to inform agent reconciliation. Include relevant teacher
-instructions stored elsewhere, not only edits to the component being updated.
 The new product version contributes proposed improvements; it does not acquire
 authority over teacher choices.
 
-Retain each shipped baseline as a plain readable folder in UserInstall,
-`shipped/<version>/`, outside `.cse/` so agents can read it. The current
-updater only compares active files with the current Engine seed and can
-archive/replace whole files; archives of teacher files do not by themselves
-supply the original shipped baseline. When a baseline is unavailable, do not
-guess that unexplained differences are obsolete or safe to discard.
+## Conflicts
 
-## Current conflicts to resolve in implementation
+1. **Built 2026-10-17.** Whole-file replacement now applies only to playbooks
+   that still match what shipped; everything else is kept for reconciliation.
+2. **Shipped 2026-10-17.** Rationales are required only for auto-scored quiz
+   items (`TEACHER.md`, `quizzes.md`).
+3. **Built 2026-10-17.** `score.md` has class-exemplar guidance: two anonymous
+   excerpts per prompt across saved current courses, never fabricated, sent as
+   a follow-up comment so individual feedback never waits. The Engine can't
+   post a comment without a score, so the follow-up is a second results file
+   with the same scores and `header: none`; the grade is rewritten unchanged.
+   Verified in Canvas Live (CS8, 2026-10-17, Test Student).
+4. **Built 2026-10-17.** The shipped `context/parent-updates.md` and the
+   Engine no longer default to Pearland's Skyward and Bobcat Hour. Teachers
+   supply a portal name and address and an optional tutoring label, text and
+   link (`grade_portal_name`, `bobcat_hour_label` are new; old key names are
+   kept). Blank fields are left out of the email. Existing installs keep their
+   saved values.
+5. **Shipped 2026-10-17.** New Quiz comments lead with item lines and never an
+   overall line; a labeled Canvas quiz result is allowed only when the pull
+   carries it. The Engine defect (the default header printed the written
+   portion scaled to the whole quiz) is fixed.
+6. **Built 2026-10-17.** The parent report lists corrections for finished work
+   inside the window, with or without feedback. The playbook includes work
+   where the student lost points, points to feedback when it exists, follows a
+   teacher's own correction system from `Teacher_Override.md`, and never
+   promises points.
+7. **Shipped 2026-10-17.** First-task questions and tier offers check saved
+   choices first, including ones from an earlier install or another computer.
+8. Open. Parent history carries assignment-level first/latest/current Canvas
+   scores, not per-item history. Out of scope here unless needed.
+9. **Shipped 2026-10-17.** One-task review skips are separate from standing
+   preferences, which are saved in `Teacher_Override.md`.
 
-1. Setup and Settings use whole-file replacement. This preserves old bytes in
-   an inactive archive but does not keep teacher decisions active.
-2. **Shipped 2026-10-17.** TEACHER.md now requires rationales for every
-   auto-scored quiz item and says written items take none.
-3. The creation-time mentor exemplar does not implement the distinct scoring
-   practice of selecting two student exemplars per written prompt.
-4. Pearland/Flex defaults exist in both shipped context and Engine fallbacks;
-   rendering also assumes Skyward/Bobcat Hour. Separating the seed alone will
-   not separate this teacher's preferences.
-5. **Shipped 2026-10-17.** score.md now leads New Quiz comments with per-item
-   criterion lines and allows a labeled Canvas quiz result only when the pull
-   carries the complete result for that attempt. The review found an Engine
-   defect behind this conflict: the default comment header ignored the New
-   Quiz omission and printed `Assessment: X / Y`, the written portion scaled
-   to the whole quiz. The renderer and the revise-feedback path now omit it
-   (local tests only; no Canvas Live run).
-6. Parent-update guidance uses feedback evidence to identify corrections.
-   Align that with the planning declaration, availability on completion and
-   teacher correction norms. Existing feedback helps students correct work;
-   its publication is not what makes corrections available, and it must not
-   invent a point-recovery promise.
-7. First-task questions and repeated tier-support offers should consult saved
-   choices rather than restarting settled conversations on a new installation.
-8. Parent history currently carries assignment-level first/latest/current
-   Canvas scores, not per-item assessment history. Adding score lines to
-   feedback does not by itself implement per-item comparisons. Prefer the
-   structured scoring results for CE-SE-authored assessments; establish how
-   the parent-update workflow obtains the relevant values before claiming
-   support. Keep earned assessments distinct from adjusted Canvas grades.
-9. **Shipped 2026-10-17.** AGENTS.md, score.md, the install safety promise and
-   the `post_results` tool description now separate a one-task skip from a
-   saved standing preference, which the agent records with its scope in
-   `context/teaching-profile.md` until `Teacher_Override.md` exists. Parent-update
-   "Rules that do not bend" became "Defaults", with honest values and privacy
-   kept as non-negotiable.
+The feedback default is also built: `Overall: X/Y`, marked `(late)` when the
+agent's late timing says late, then one line per item, then tips and
+exemplars. X is the earned score before Canvas's deduction. Verified in Canvas
+Live (CS8, 2026-10-17, Test Student).
 
-## Remaining design work
+## Remaining work
 
-- Build `shipped/<version>/` retention in the updater and the background
-  install/update reconciliation pass.
-- Define selection guidance for matching prompts across courses and for fewer
-  than two usable student examples, without blocking independent scoring or
-  fabricating student work. Define when a matching set counts as scored for
-  the exemplar comment.
-- Complete the shipped-versus-personal inventory for other scoring and
-  feedback choices before writing a coding handoff.
+- Agent reconciliation of `kept` files has guidance but no real
+  version-to-version run yet. Existing installs have no `shipped/adopted.txt`,
+  so their first update reports every changed playbook as `kept`.
 - Determine where the existing New Quiz pull can supply the complete Canvas
-  result for the matching attempt. Preserve per-item-only feedback when that
-  value is unavailable; this must not block ordinary scoring.
-- Add the bell schedule to the school-calendar seed without the school name.
+  result for the matching attempt. Per-item-only feedback continues meanwhile.
+- Teacher's own install: after updating, add `grade_portal_name: "Skyward
+  Family Access"` and `bobcat_hour_label: "Bobcat Hour"` to
+  `context/parent-updates.md` (the agent can do it when asked) so emails keep
+  those names; the saved URLs already carry over.
+- Parent per-item history (conflict 8) remains undesigned.
 
 ## Done looks like
 
@@ -236,6 +238,3 @@ different correction window and their own Skyward link) unzips a newer CE-SE,
 points their agent at it and starts working. Every saved preference still
 applies, new shipped improvements apply where they don't conflict, and the
 teacher was not asked to merge anything.
-
-No coding agents have been dispatched, no teacher setup has been migrated, and
-no Canvas writes or live verification are part of this design review.

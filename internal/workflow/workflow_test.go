@@ -147,7 +147,7 @@ func TestHonestAssessmentReplacesHigherGradeAndCompletedReplay(t *testing.T) {
 	if decimalPointer(live.RubricAssessment["c1"].Points).String() != "60" || decimalPointer(live.EnteredScore).String() != "12" {
 		t.Fatal("rubric assessment or entered grade dishonest")
 	}
-	if !strings.Contains(live.Comments[0].Comment, "12 / 20") || strings.Contains(live.Comments[0].Comment, "retained") {
+	if !strings.Contains(live.Comments[0].Comment, "Overall: 12/20") || strings.Contains(live.Comments[0].Comment, "retained") {
 		t.Fatal("feedback did not report only the computed assessment")
 	}
 	before := s.Client.Requests()

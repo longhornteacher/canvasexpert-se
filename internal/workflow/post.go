@@ -504,7 +504,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		}
 	}
 	if !definite(g.Outcomes.Comment) {
-		text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student), Header: g.Header})
+		text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student), Late: isLate(g.LateTiming), Header: g.Header})
 		if e != nil {
 			return e
 		}
@@ -731,3 +731,6 @@ func ResultPaths(root string, packet domain.PacketDocument) ([]string, error) {
 	}
 	return paths, nil
 }
+
+// isLate reports whether the agent's late timing marks the attempt late.
+func isLate(t *domain.LateTiming) bool { return t != nil && t.Status == "late" }

@@ -37,12 +37,12 @@ No dated duplicates are written; the version in the ZIP name is the only variati
 
 The ZIP is the user distribution produced in Dev. It has no top-level folder: extract it into the chosen local folder, and that folder becomes UserInstall, whatever its name. Windows' Extract All normally suggests the ZIP's base name. Run directly there; first setup connects apps and Canvas without copying the product into another folder. Teachers do not need Dev or anything else from `dist/`. It holds:
 
-- the allowlisted `workspace-template` files, including installation instructions, the teaching profile/starter, `cse.cmd` and the hidden `.claude/settings.json` rule;
+- the allowlisted `workspace-template` bootstrap files: `AGENTS.md`, `CLAUDE.md`, `README.md`, `TEACHING-ASSISTANT.md`, `cse.cmd` and the hidden `.claude/settings.json` rule. Playbooks, `TEACHER.md`, `Teacher_Override.md` and `context/` are embedded in the Engine instead, which lays them down on first run and through `cse playbooks update`, so extracting a newer ZIP over a UserInstall never overwrites teacher files;
 - the Engine at `engine/cse.exe` and the ready Cowork extension at `engine/CanvasExpert-SE-Cowork.mcpb`;
 - `webui.cmd` (from `scripts/package-webui.cmd`) at the root;
 - product `VERSION` and MIT `LICENSE` at the root, with third-party notices under `engine/` (distribution metadata outside the teacher seed).
 
-Privacy and allowlist rules: example files are accepted only when their content explicitly labels them synthetic; the starter settings files must retain their empty-template markers; private `.cse` state, pulled course data, scoring files, build caches and compiler files are never package inputs. Packages ship no UserSync binding or teacher data. Course configuration lives at `context/courses.md`, the same path the Engine uses to recognize a UserInstall.
+Privacy and allowlist rules: example files are accepted only when their content explicitly labels them synthetic; the starter settings files must retain their empty-template markers; private `.cse` state, pulled course data, scoring files, build caches and compiler files are never package inputs. Packages ship no UserSync binding or teacher data. Course configuration lives at `context/courses.md`, the same path the Engine uses to recognize a UserInstall; a freshly extracted folder (bootstrap `AGENTS.md`, no `context/courses.md`) is prepared by its bundled Engine on first run.
 
 ZIP entries are written with forward slashes by the script itself, because Windows PowerShell 5.1's `CreateFromDirectory` writes backslashes.
 

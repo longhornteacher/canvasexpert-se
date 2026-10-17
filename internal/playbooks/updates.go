@@ -30,7 +30,7 @@ func seedPaths() []string {
 			return err
 		}
 		rel := strings.TrimPrefix(name, "workspace-template/")
-		if rel == "AGENTS.md" || rel == "CLAUDE.md" || rel == "TEACHER.md" || strings.HasPrefix(rel, "playbooks/") || strings.HasPrefix(rel, "context/") {
+		if rel == "AGENTS.md" || rel == "CLAUDE.md" || rel == "TEACHER.md" || rel == overrideFile || strings.HasPrefix(rel, "playbooks/") || strings.HasPrefix(rel, "context/") {
 			out = append(out, rel)
 		}
 		return nil
@@ -38,7 +38,11 @@ func seedPaths() []string {
 	sort.Strings(out)
 	return out
 }
-func contextPath(rel string) bool { return strings.HasPrefix(rel, "context/") }
+// overrideFile holds the teacher's overrides of shipped defaults. Like
+// context/, it is teacher-owned: seeded when missing, never replaced.
+const overrideFile = "Teacher_Override.md"
+
+func contextPath(rel string) bool { return strings.HasPrefix(rel, "context/") || rel == overrideFile }
 func seedBytes(rel string) ([]byte, error) {
 	return fs.ReadFile(embedded.WorkspaceTemplate, path.Join("workspace-template", rel))
 }

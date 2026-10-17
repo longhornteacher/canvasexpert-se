@@ -28,7 +28,7 @@ func TestRenderFeedbackShowsAssessmentScoresThenConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Assessment: 4.67 / 20\nCriterion scores:\n- Response 1: Evidence 3/4; Reasoning 4/6\n- Response 2: Evidence 0/4; Reasoning 0/6\n\n" + feedback
+	want := "Overall: 4.67/20\nCriterion scores:\n- Response 1: Evidence 3/4; Reasoning 4/6\n- Response 2: Evidence 0/4; Reasoning 0/6\n\n" + feedback
 	if got != want {
 		t.Fatalf("unexpected rendering\n got: %s\nwant: %s", got, want)
 	}
@@ -51,7 +51,7 @@ func TestRenderFeedbackDirectMappingAndXSS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Assessment: 7 / 10\nCriterion scores:\n- Prompt A: Read <carefully> 4/5\n- Prompt B: Write 3/5\n\n<script>alert(1)</script>"
+	want := "Overall: 7/10\nCriterion scores:\n- Prompt A: Read <carefully> 4/5\n- Prompt B: Write 3/5\n\n<script>alert(1)</script>"
 	if got != want {
 		t.Fatalf("plain text criteria or exact feedback preservation incorrect:\n got: %s\nwant: %s", got, want)
 	}
@@ -143,10 +143,18 @@ func TestHeaderLetsTheTeacherControlWhatLeadsTheComment(t *testing.T) {
 	if got, err := RenderFeedback(in); err != nil || got != "32/40\nGreat work." {
 		t.Fatalf("header none must post the feedback exactly as written: %q %v", got, err)
 	}
-	for _, h := range []string{"", "score"} {
+	in.Header = "score"
+	if got, err := RenderFeedback(in); err != nil || got != "Overall: 3/4\n\n32/40\nGreat work." {
+		t.Fatalf("header score must lead with only the overall line: %q %v", got, err)
+	}
+	for _, h := range []string{"", "full"} {
 		in.Header = h
-		if got, err := RenderFeedback(in); err != nil || got != "Assessment: 3 / 4\n\n32/40\nGreat work." {
-			t.Fatalf("header %q must lead with only the score line: %q %v", h, got, err)
+		if got, err := RenderFeedback(in); err != nil || got != "Overall: 3/4\nCriterion scores:\n- Response 1: Evidence 3/4\n\n32/40\nGreat work." {
+			t.Fatalf("header %q must lead with the overall and item lines: %q %v", h, got, err)
 		}
+	}
+	in.Header, in.Late = "score", true
+	if got, err := RenderFeedback(in); err != nil || got != "Overall: 3/4 (late)\n\n32/40\nGreat work." {
+		t.Fatalf("late work must mark the earned overall line: %q %v", got, err)
 	}
 }

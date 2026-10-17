@@ -6,7 +6,7 @@ Before designing content, read `context/teaching-profile.md`, relevant teacher r
 
 ## Standards
 
-Apply `TEACHER.md`: 100 points by default, grade-level rigor, a one-line Learning Target and three-step directions at the top, and a grade-representative exemplar for writing assignments. Once the content is shaped, offer tiered Hub support (below) once.
+Apply `TEACHER.md`: 100 points by default, grade-level rigor, a one-line Learning Target and three-step directions at the top, and a grade-representative exemplar for writing assignments, and a "Corrections available" line. Once the content is shaped, offer tiered Hub support (below) once unless saved choices settle it.
 
 ## Write the draft
 

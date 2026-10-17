@@ -12,7 +12,7 @@ For curriculum conversion, student file assets and placing an existing quiz into
 
 ## Standards
 
-Apply `TEACHER.md`: items sum to 100 points unless the teacher chooses otherwise, depth at DOK 2-3, distractors that are real misconceptions, and about two sentences of "why this is correct" per item. After shaping the quiz, offer tiered Hub support (see the Hub section below) once.
+Apply `TEACHER.md`: items sum to 100 points unless the teacher chooses otherwise, depth at DOK 2-3, distractors that are real misconceptions, and about two sentences of "why this is correct" per auto-scored item. After shaping the quiz, offer tiered Hub support (see the Hub section below) once.
 
 ## Write the quiz in QuizForge format
 

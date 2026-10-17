@@ -20,10 +20,13 @@ type FeedbackInput struct {
 	AssignmentPoints domain.Decimal
 	Feedback         string
 	OmitAssessment   bool
-	// Header is the teacher's choice of what leads the comment: "" or "score"
-	// (the default: just the score line), "full" (score and criterion lines) or
-	// "none" (the feedback exactly as written, so the teacher controls any
-	// score text).
+	// Late marks the overall line "(late)". The score stays the earned
+	// assessment; Canvas applies any late deduction in the gradebook.
+	Late bool
+	// Header is the teacher's choice of what leads the comment: "" or "full"
+	// (the default: overall line and per-item criterion lines), "score" (just
+	// the overall line) or "none" (the feedback exactly as written, so the
+	// teacher controls any score text).
 	Header string
 }
 
@@ -48,19 +51,23 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		return "", fmt.Errorf("assessment %s does not match derived value %s", in.Assessment.String(), computed.Posted.String())
 	}
 
+	overall := fmt.Sprintf("Overall: %s/%s", in.Assessment.String(), in.AssignmentPoints.String())
+	if in.Late {
+		overall += " (late)"
+	}
 	switch in.Header {
 	case "none":
 		return in.Feedback, nil
-	case "", "score", "default":
+	case "score":
 		// A New Quiz comment has no honest whole-quiz total from the written
-		// portion, so its default lead is the per-item criterion lines.
+		// portion, so it always leads with the per-item criterion lines.
 		if !in.OmitAssessment {
-			return fmt.Sprintf("Assessment: %s / %s\n\n%s", in.Assessment.String(), in.AssignmentPoints.String(), in.Feedback), nil
+			return overall + "\n\n" + in.Feedback, nil
 		}
 	}
 	var out strings.Builder
 	if !in.OmitAssessment {
-		fmt.Fprintf(&out, "Assessment: %s / %s", in.Assessment.String(), in.AssignmentPoints.String())
+		out.WriteString(overall)
 		out.WriteString("\n")
 	}
 	out.WriteString("Criterion scores:")

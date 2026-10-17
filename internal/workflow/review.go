@@ -283,7 +283,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			}
 		}
 		if c.Hold == "" && r.Grade != nil && doc.Basis() != nil {
-			text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Header: r.Grade.Header})
+			text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Late: isLate(r.Grade.LateTiming), Header: r.Grade.Header})
 			if e != nil {
 				c.Hold = e.Error()
 			} else {

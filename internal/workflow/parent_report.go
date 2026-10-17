@@ -365,7 +365,9 @@ func buildStudentReport(rs *ParentReportCourse, subs []Submission, versions map[
 			if a.NewQuiz {
 				c.PerItemFeedback = "unverified"
 			}
-			if len(c.Comments) > 0 || c.PerItemFeedback != "" {
+			// Corrections open when the student finishes, not when feedback
+			// is posted; comments only help the agent point to guidance.
+			if submitted || sub.Score != nil || len(c.Comments) > 0 || c.PerItemFeedback != "" {
 				rs.Corrections = append(rs.Corrections, c)
 			}
 		}

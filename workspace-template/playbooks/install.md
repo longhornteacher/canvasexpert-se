@@ -121,6 +121,16 @@ Do not ask about visual style, grading scale or teaching philosophy now. Ask on 
 
 Do not narrate this to the teacher.
 
+### Lay down or update the playbooks
+
+On every "set up", "install" or "update", run `.\cse.cmd playbooks update` (MCP: `engine_info` operation `update-playbooks`) before anything else. The ZIP carries only the Engine and a bootstrap `AGENTS.md`; this command lays down the playbooks, `TEACHER.md`, `Teacher_Override.md` and the `context/` starter files from the Engine, and on an update adopts the new versions without overriding the teacher. It keeps each shipped version under `shipped/<version>/` for comparison; those copies are inactive, never current rules.
+
+The report lists each file's state. `added`, `current`, `updated` and `teacher-owned` need nothing from you. For each `kept` file, reconcile it in the background: compare `shipped/<previous_shipped>/<path>` (when there is a previous version), the active file and `shipped/<current_shipped>/<path>`. Every difference between the active file and what shipped before is the teacher's choice; with no previous version, every difference is. Keep those choices, bring in new shipped improvements that don't conflict with them, and write the result to the active file. Where a new shipped default conflicts with a teacher choice, keep the teacher's. Never change `context/` or `Teacher_Override.md` during an update.
+
+Don't ask the teacher to merge anything. Tell them only what matters in plain words, for example "You're on the newest CanvasExpert; your settings and choices are unchanged." Mention a new teaching option only when it is worth their attention, in a sentence.
+
+To get a newer version for the teacher, download the versioned Windows ZIP from the latest [GitHub release](https://github.com/longhornteacher/canvasexpert-se/releases) (not GitHub's source-code ZIP) and extract it over this folder, then run the update above. It contains no playbooks or teacher files, so extracting over the folder can't overwrite the teacher's work. If `engine/cse.exe` is in use, ask the teacher to close the apps using CanvasExpert first, and never during an active review.
+
 ### Select the correct UserInstall
 
 By default `.\cse.cmd install` connects every supported app whose configuration folder exists: Claude (`cowork`), ChatGPT/Codex (`work`) and Antigravity (`antigravity`). `.\cse.cmd install --inspect` shows the read-only hints it uses; they do not prove an app is installed, running or in a supported mode. Do not read whole client configuration files or private settings. All connected apps point at this same UserInstall, so they share one Canvas credential and course list.

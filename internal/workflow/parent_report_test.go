@@ -30,6 +30,7 @@ func parentFixture(now time.Time) (map[int64]Assignment, []Submission) {
 		6: {ID: 6, Name: "Corrected", Published: true, SubmissionTypes: []string{"online_upload"}, DueAt: d(-5), Points: "10"},
 		7: {ID: 7, Name: "Too old", Published: true, SubmissionTypes: []string{"online_upload"}, DueAt: d(-30), Points: "10"},
 		8: {ID: 8, Name: "Far future", Published: true, SubmissionTypes: []string{"online_upload"}, DueAt: d(20), Points: "10"},
+		9: {ID: 9, Name: "Finished, no feedback yet", Published: true, SubmissionTypes: []string{"online_upload"}, DueAt: d(-1), Points: "10"},
 	}
 	at := str("2026-10-01T00:00:00Z")
 	one := 1
@@ -46,6 +47,7 @@ func parentFixture(now time.Time) (map[int64]Assignment, []Submission) {
 				{ID: 2, Comment: "my reply", AuthorID: 9}}},
 		{UserID: 9, AssignmentID: 7, Attempt: 1, SubmittedAt: at, Score: num("8"), Comments: []SubmissionComment{{ID: 3, Comment: "ok", AuthorID: 77}}},
 		{UserID: 9, AssignmentID: 8},
+		{UserID: 9, AssignmentID: 9, Attempt: 1, SubmittedAt: at},
 	}
 	return as, subs
 }
@@ -67,8 +69,8 @@ func TestBuildStudentReportSections(t *testing.T) {
 	if len(rs.DueSoon) != 1 || rs.DueSoon[0].AssignmentID != 5 {
 		t.Fatalf("due soon = %+v", rs.DueSoon)
 	}
-	if len(rs.Corrections) != 1 || rs.Corrections[0].AssignmentID != 6 || len(rs.Corrections[0].Comments) != 1 {
-		t.Fatalf("corrections = %+v (student's own comments and old work are excluded)", rs.Corrections)
+	if len(rs.Corrections) != 2 || rs.Corrections[0].AssignmentID != 6 || len(rs.Corrections[0].Comments) != 1 || rs.Corrections[1].AssignmentID != 9 || len(rs.Corrections[1].Comments) != 0 {
+		t.Fatalf("corrections = %+v (finished work opens corrections without feedback; student's own comments and old work are excluded)", rs.Corrections)
 	}
 	if len(rs.History) != 1 {
 		t.Fatalf("history = %+v", rs.History)

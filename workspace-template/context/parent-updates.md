@@ -1,10 +1,12 @@
 ---
 schema: 1
-# Skyward Family Access sign-in. Parent emails link to it for the official course grade. The default is Pearland ISD's.
-skyward_url: "https://skyward-pearland.iscorp.com/scripts/wsisa.dll/WService=wsedupearlandtx/seplog01.w"
-# Shown in every email footer. The default is the district Bobcat Hour sign-up.
-bobcat_hour_url: "https://flex.securly.com/login"
-bobcat_hour_text: "Sign up for tutorials and clubs"
+# Your school's family grade portal. Parent emails link to it for the official course grade. Leave the address blank to show the name without a link.
+skyward_url: ""
+grade_portal_name: ""
+# Optional tutoring or clubs sign-up shown in every email footer. Leave the address blank to leave it out.
+bobcat_hour_url: ""
+bobcat_hour_label: ""
+bobcat_hour_text: ""
 # How the email closes, for example "Mr. Beckham".
 sign_off: ""
 # Canvas current score at or above this, with no missing work in any included course, means no email is needed.

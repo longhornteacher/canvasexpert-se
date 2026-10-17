@@ -19,9 +19,13 @@ func trimPoint(v string) string { return strings.TrimSuffix(v, ".0") }
 // ParentConfig is context/parent-updates.md front matter.
 type ParentConfig struct {
 	Schema        int    `yaml:"schema"`
-	SkywardURL    string `yaml:"skyward_url"`
-	BobcatHourURL string `yaml:"bobcat_hour_url"`
-	BobcatHourTxt string `yaml:"bobcat_hour_text"`
+	// The YAML keys keep their original names for compatibility; the values
+	// are each teacher's own grade portal and tutoring sign-up.
+	SkywardURL      string `yaml:"skyward_url"`
+	GradePortalName string `yaml:"grade_portal_name"`
+	BobcatHourURL   string `yaml:"bobcat_hour_url"`
+	BobcatHourLabel string `yaml:"bobcat_hour_label"`
+	BobcatHourTxt   string `yaml:"bobcat_hour_text"`
 	SignOff       string `yaml:"sign_off"`
 	SkipScore     int    `yaml:"skip_score"`
 }
@@ -79,11 +83,11 @@ func LoadParentRun(root, dir string) (*ParentRun, error) {
 	if _, e := workspace.ReadTeacherDocument(root, "context/parent-updates.md", &run.Config); e != nil && !os.IsNotExist(e) {
 		return nil, fmt.Errorf("context/parent-updates.md: %w", e)
 	}
-	if run.Config.SkywardURL == "" {
-		run.Config.SkywardURL = "https://skyward-pearland.iscorp.com/scripts/wsisa.dll/WService=wsedupearlandtx/seplog01.w"
+	if run.Config.GradePortalName == "" {
+		run.Config.GradePortalName = "the school's grade portal"
 	}
-	if run.Config.BobcatHourURL == "" {
-		run.Config.BobcatHourURL = "https://flex.securly.com/login"
+	if run.Config.BobcatHourLabel == "" {
+		run.Config.BobcatHourLabel = "Tutoring"
 	}
 	if run.Config.BobcatHourTxt == "" {
 		run.Config.BobcatHourTxt = "Sign up for tutorials and clubs"
@@ -385,22 +389,27 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 		section("Grade history", []string{"Assignment", "First Score", "Current Score"}, hist)
 	}
 	if forStudent {
-		fmt.Fprintf(&b, `<p style="margin:18px 0 4px">Official grades: Skyward Family Access.</p><p style="margin:4px 0"><b>Bobcat Hour:</b> %s.</p>`, esc(r.Config.BobcatHourTxt))
+		fmt.Fprintf(&b, `<p style="margin:18px 0 4px">Official grades: %s.</p>`, esc(r.Config.GradePortalName))
+		if r.Config.BobcatHourURL != "" {
+			fmt.Fprintf(&b, `<p style="margin:4px 0"><b>%s:</b> %s.</p>`, esc(r.Config.BobcatHourLabel), esc(r.Config.BobcatHourTxt))
+		}
 		if r.Config.SignOff != "" {
 			fmt.Fprintf(&b, `<p style="margin:14px 0 0">%s</p>`, esc(r.Config.SignOff))
 		}
-		b.WriteString(aiNotice("This report was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check Skyward for official grades. For privacy, the AI never saw your real name, only your nickname, “" + rs.Alias + ".”"))
+		b.WriteString(aiNotice("This report was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check " + r.Config.GradePortalName + " for official grades. For privacy, the AI never saw your real name, only your nickname, “" + rs.Alias + ".”"))
 		b.WriteString(`</div>`)
 		return Rendered{Subject: student.Name, HTML: b.String()}
 	}
 	if r.Config.SkywardURL != "" {
-		fmt.Fprintf(&b, `<p style="margin:18px 0 4px"><a href="%s">Skyward Family Access</a> &mdash; official grades</p>`, esc(r.Config.SkywardURL))
+		fmt.Fprintf(&b, `<p style="margin:18px 0 4px"><a href="%s">%s</a> &mdash; official grades</p>`, esc(r.Config.SkywardURL), esc(r.Config.GradePortalName))
 	}
-	fmt.Fprintf(&b, `<p style="margin:4px 0"><b>Bobcat Hour:</b> <a href="%s">%s</a>.</p>`, esc(r.Config.BobcatHourURL), esc(r.Config.BobcatHourTxt))
+	if r.Config.BobcatHourURL != "" {
+		fmt.Fprintf(&b, `<p style="margin:4px 0"><b>%s:</b> <a href="%s">%s</a>.</p>`, esc(r.Config.BobcatHourLabel), esc(r.Config.BobcatHourURL), esc(r.Config.BobcatHourTxt))
+	}
 	if r.Config.SignOff != "" {
 		fmt.Fprintf(&b, `<p style="margin:14px 0 0">%s</p>`, esc(r.Config.SignOff))
 	}
-	b.WriteString(aiNotice("This update was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check Skyward for official grades. For privacy, the AI never saw your child’s real name or your contact information, only the nickname “" + rs.Alias + ".”"))
+	b.WriteString(aiNotice("This update was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check " + r.Config.GradePortalName + " for official grades. For privacy, the AI never saw your child’s real name or your contact information, only the nickname “" + rs.Alias + ".”"))
 	b.WriteString(`</div>`)
 	return Rendered{Subject: fmt.Sprintf("Class update for %s (%s)", student.FirstName, asOf.In(loc).Format("Jan 2")), HTML: b.String()}
 }

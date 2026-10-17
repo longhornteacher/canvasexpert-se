@@ -178,7 +178,19 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			fmt.Fprintf(out, "%s replaced with this Engine's seed; previous copy archived under playbook-old.\n", rel)
 			return 0
 		}
-		return fail(inputError(fmt.Errorf("use playbooks status or playbooks replace PATH --expected-sha256 HASH")), progress)
+		if len(args) == 1 && args[0] == "update" {
+			report, e := playbooks.Update(root, time.Now())
+			if e != nil {
+				return fail(e, progress)
+			}
+			b, e := json.MarshalIndent(report, "", "  ")
+			if e != nil {
+				return fail(e, progress)
+			}
+			fmt.Fprintln(out, string(b))
+			return 0
+		}
+		return fail(inputError(fmt.Errorf("use playbooks status, playbooks update, or playbooks replace PATH --expected-sha256 HASH")), progress)
 	}
 	if cmd == "rules-location" {
 		root, e := runtimeRoot(*rootOpt)
@@ -563,6 +575,9 @@ func runtimeRoot(explicit string) (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err
+	}
+	if err := workspace.BootstrapBundled(exe, embedded.WorkspaceTemplate, "workspace-template"); err != nil {
+		return "", fmt.Errorf("prepare this CanvasExpert folder: %w", err)
 	}
 	return workspace.ResolveRuntimeRoot(explicit, "", exe)
 }
