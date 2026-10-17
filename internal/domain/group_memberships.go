@@ -103,12 +103,18 @@ type GroupMembershipSnapshot struct {
 	GroupIDs        []int64                   `yaml:"group_ids"`
 	RosterComplete  bool                      `yaml:"roster_complete"`
 	Memberships     []GroupMembershipObserved `yaml:"memberships,omitempty"`
+	PendingRequests []GroupMembershipPending  `yaml:"pending_requests,omitempty"`
 	UnassignedRefs  []string                  `yaml:"unassigned_student_refs,omitempty"`
 }
 type GroupMembershipObserved struct {
 	StudentRef string `yaml:"student_ref"`
 	GroupID    int64  `yaml:"group_id"`
 	State      string `yaml:"state"`
+}
+type GroupMembershipPending struct {
+	StudentRef string `yaml:"student_ref" json:"student_ref"`
+	GroupID    int64  `yaml:"group_id" json:"group_id"`
+	State      string `yaml:"state" json:"state"`
 }
 type GroupMembershipOutcome struct {
 	StudentRef    string        `yaml:"student_ref"`
@@ -126,15 +132,16 @@ type GroupAllocationOutcome struct {
 }
 
 type GroupRoster struct {
-	Course          string         `json:"course"`
-	CourseID        int64          `json:"course_id"`
-	GroupCategoryID int64          `json:"group_category_id"`
-	GroupSetName    string         `json:"group_set_name"`
-	RosterComplete  bool           `json:"roster_complete"`
-	Groups          []GroupSummary `json:"groups"`
-	Unassigned      []GroupMember  `json:"unassigned_students"`
-	UnresolvedCount int            `json:"unresolved_membership_count,omitempty"`
-	PendingCount    int            `json:"pending_membership_count,omitempty"`
+	Course          string                   `json:"course"`
+	CourseID        int64                    `json:"course_id"`
+	GroupCategoryID int64                    `json:"group_category_id"`
+	GroupSetName    string                   `json:"group_set_name"`
+	RosterComplete  bool                     `json:"roster_complete"`
+	Groups          []GroupSummary           `json:"groups"`
+	Unassigned      []GroupMember            `json:"unassigned_students"`
+	PendingRequests []GroupMembershipPending `json:"pending_requests,omitempty"`
+	UnresolvedCount int                      `json:"unresolved_membership_count,omitempty"`
+	PendingCount    int                      `json:"pending_membership_count,omitempty"`
 }
 
 func (d GroupMembershipDocument) Validate() error {
@@ -168,17 +175,30 @@ func (d GroupMembershipDocument) Validate() error {
 		}
 		observed[m.StudentRef] = m
 	}
+	pending := map[string]map[int64]bool{}
+	for _, m := range b.PendingRequests {
+		if strings.TrimSpace(m.StudentRef) == "" || m.GroupID <= 0 || !groupIDs[m.GroupID] || m.State != "requested" {
+			return fmt.Errorf("group-memberships baseline contains an invalid pending request")
+		}
+		if pending[m.StudentRef] == nil {
+			pending[m.StudentRef] = map[int64]bool{}
+		}
+		if pending[m.StudentRef][m.GroupID] {
+			return fmt.Errorf("group-memberships baseline contains a duplicate pending request")
+		}
+		pending[m.StudentRef][m.GroupID] = true
+	}
 	unassigned := map[string]bool{}
 	for _, ref := range b.UnassignedRefs {
 		_, hasMembership := observed[ref]
-		if strings.TrimSpace(ref) == "" || unassigned[ref] || hasMembership {
+		if strings.TrimSpace(ref) == "" || unassigned[ref] || hasMembership || len(pending[ref]) > 0 {
 			return fmt.Errorf("group-memberships baseline has invalid unassigned references")
 		}
 		unassigned[ref] = true
 	}
 	if d.Operation == "update" {
-		if len(d.Changes) == 0 || d.Allocation != nil {
-			return fmt.Errorf("update requires explicit membership changes")
+		if d.Allocation != nil {
+			return fmt.Errorf("update cannot carry an allocation outcome")
 		}
 		seen := map[string]bool{}
 		for i, c := range d.Changes {

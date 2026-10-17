@@ -268,6 +268,188 @@ func TestMembershipSourceConflictHoldsOnlyThatStudent(t *testing.T) {
 	}
 }
 
+func TestPendingSignupAfterBaselineHoldsOnlyThatStudent(t *testing.T) {
+	current := map[int64][]canvasMembership{
+		60: {{ID: 1, GroupID: 60, UserID: 10, WorkflowState: "requested"}},
+		61: {},
+	}
+	posts := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		write := func(v any) { _ = json.NewEncoder(w).Encode(v) }
+		switch r.URL.Path {
+		case "/api/v1/group_categories/50":
+			write(map[string]any{"id": 50, "course_id": 1, "context_type": "Course", "non_collaborative": false})
+		case "/api/v1/group_categories/50/groups":
+			write([]any{map[string]any{"id": 60, "course_id": 1, "context_type": "Course", "group_category_id": 50}, map[string]any{"id": 61, "course_id": 1, "context_type": "Course", "group_category_id": 50}})
+		case "/api/v1/groups/60/memberships", "/api/v1/groups/61/memberships":
+			var id int64 = 60
+			if strings.Contains(r.URL.Path, "/61/") {
+				id = 61
+			}
+			if r.Method == http.MethodGet {
+				write(current[id])
+				return
+			}
+			posts++
+			var body struct {
+				UserID int64 `json:"user_id"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			current[id] = append(current[id], canvasMembership{ID: 2, GroupID: id, UserID: body.UserID, WorkflowState: "accepted"})
+			write(canvasMembership{ID: 2, GroupID: id, UserID: body.UserID, WorkflowState: "accepted"})
+		case "/api/v1/groups/60", "/api/v1/groups/61":
+			var id int64
+			_, _ = fmt.Sscanf(r.URL.Path, "/api/v1/groups/%d", &id)
+			write(map[string]any{"id": id, "course_id": 1, "context_type": "Course", "group_category_id": 50, "non_collaborative": false})
+		case "/api/v1/courses/1/enrollments":
+			write([]any{map[string]any{"user_id": 10, "type": "StudentEnrollment", "enrollment_state": "active", "user": map[string]any{"id": 10, "name": "Private Student 10"}}, map[string]any{"user_id": 11, "type": "StudentEnrollment", "enrollment_state": "active", "user": map[string]any{"id": 11, "name": "Private Student 11"}}})
+		case "/api/v1/courses/1/assignments":
+			write([]any{})
+		default:
+			t.Errorf("unexpected request %s", r.URL.String())
+			http.NotFound(w, r)
+		}
+	})
+	store, _ := workspace.OpenStudents(s.Root)
+	st10, _ := store.Upsert(s.Client.Origin(), 10, "Private Student 10", "", "", "")
+	st11, _ := store.Upsert(s.Client.Origin(), 11, "Private Student 11", "", "", "")
+	_ = store.Save()
+	roster, err := s.ReadGroupRoster(context.Background(), "TEST", 50)
+	if err != nil || len(roster.PendingRequests) != 1 || roster.PendingRequests[0] != (domain.GroupMembershipPending{StudentRef: st10.Ref, GroupID: 60, State: "requested"}) {
+		t.Fatalf("pending self-signup not exposed with safe identity: roster=%+v err=%v", roster, err)
+	}
+	encodedRoster, _ := json.Marshal(roster)
+	if strings.Contains(string(encodedRoster), "Private Student") || strings.Contains(string(encodedRoster), `"user_id"`) || strings.Contains(string(encodedRoster), `"10"`) {
+		t.Fatalf("pending request exposed private Canvas identity: %s", encodedRoster)
+	}
+	pulled, err := s.PullGroupMemberships(context.Background(), "TEST", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pulledDoc domain.GroupMembershipDocument
+	if _, err = workspace.ReadDocument(pulled, &pulledDoc); err != nil || len(pulledDoc.Observed.PendingRequests) != 1 || pulledDoc.Observed.PendingRequests[0].StudentRef != st10.Ref || pulledDoc.Observed.PendingRequests[0].GroupID != 60 {
+		t.Fatalf("pulled baseline omitted safe pending request identity: doc=%+v err=%v", pulledDoc.Observed, err)
+	}
+	doc := domain.GroupMembershipDocument{Schema: 1, Kind: "group-memberships", Operation: "update", Course: "TEST", Instance: s.Client.Origin(), CourseID: 1, GroupCategoryID: 50, Observed: &domain.GroupMembershipSnapshot{Instance: s.Client.Origin(), CourseID: 1, GroupCategoryID: 50, GroupIDs: []int64{60, 61}, RosterComplete: true, UnassignedRefs: []string{st10.Ref, st11.Ref}}, Changes: []domain.GroupMembershipChange{{StudentRef: st10.Ref, FromGroup: domain.NullableGroupID{Set: true, Null: true}, ToGroup: domain.NullableGroupID{Set: true, Value: 61}}, {StudentRef: st11.Ref, FromGroup: domain.NullableGroupID{Set: true, Null: true}, ToGroup: domain.NullableGroupID{Set: true, Value: 61}}}}
+	path := writeMembershipDoc(t, s, doc)
+	report, err := s.PushGroupMemberships(context.Background(), path)
+	if err != nil || report.Status != "partial" || len(report.Outcomes) != 2 || report.Outcomes[0].Outcome.Status != "held" || report.Outcomes[1].Outcome.Status != "succeeded" || posts != 1 {
+		t.Fatalf("pending request was not held independently: report=%+v err=%v posts=%d", report, err, posts)
+	}
+	current[60] = append(current[60], canvasMembership{ID: 3, GroupID: 60, UserID: 99, WorkflowState: "requested"})
+	incomplete, err := s.ReadGroupRoster(context.Background(), "TEST", 50)
+	if err != nil || incomplete.RosterComplete || incomplete.UnresolvedCount != 1 {
+		t.Fatalf("unresolved pending author did not make roster incomplete: roster=%+v err=%v", incomplete, err)
+	}
+}
+
+func TestAcceptedMembershipWriteIsNotReplayedAfterMembershipChanges(t *testing.T) {
+	current := map[int64][]canvasMembership{60: {{ID: 1, GroupID: 60, UserID: 10, WorkflowState: "accepted"}}, 61: {}}
+	posts := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		write := func(v any) { _ = json.NewEncoder(w).Encode(v) }
+		switch r.URL.Path {
+		case "/api/v1/group_categories/50":
+			write(map[string]any{"id": 50, "course_id": 1, "context_type": "Course", "non_collaborative": false})
+		case "/api/v1/group_categories/50/groups":
+			write([]any{map[string]any{"id": 60, "course_id": 1, "context_type": "Course", "group_category_id": 50}, map[string]any{"id": 61, "course_id": 1, "context_type": "Course", "group_category_id": 50}})
+		case "/api/v1/groups/60/memberships", "/api/v1/groups/61/memberships":
+			var id int64 = 60
+			if strings.Contains(r.URL.Path, "/61/") {
+				id = 61
+			}
+			if r.Method == http.MethodGet {
+				write(current[id])
+				return
+			}
+			posts++
+			current[60] = nil
+			current[61] = []canvasMembership{{ID: 2, GroupID: 61, UserID: 10, WorkflowState: "accepted"}}
+			write(current[61][0])
+		case "/api/v1/groups/60", "/api/v1/groups/61":
+			var id int64
+			_, _ = fmt.Sscanf(r.URL.Path, "/api/v1/groups/%d", &id)
+			write(map[string]any{"id": id, "course_id": 1, "context_type": "Course", "group_category_id": 50, "non_collaborative": false})
+		case "/api/v1/courses/1/enrollments":
+			write([]any{map[string]any{"user_id": 10, "type": "StudentEnrollment", "enrollment_state": "active", "user": map[string]any{"id": 10, "name": "Student"}}})
+		case "/api/v1/courses/1/assignments":
+			write([]any{})
+		default:
+			t.Errorf("unexpected request %s", r.URL.String())
+			http.NotFound(w, r)
+		}
+	})
+	store, _ := workspace.OpenStudents(s.Root)
+	student, _ := store.Upsert(s.Client.Origin(), 10, "Student", "", "", "")
+	_ = store.Save()
+	doc := domain.GroupMembershipDocument{Schema: 1, Kind: "group-memberships", Operation: "update", Course: "TEST", Instance: s.Client.Origin(), CourseID: 1, GroupCategoryID: 50, Observed: &domain.GroupMembershipSnapshot{Instance: s.Client.Origin(), CourseID: 1, GroupCategoryID: 50, GroupIDs: []int64{60, 61}, RosterComplete: true, Memberships: []domain.GroupMembershipObserved{{StudentRef: student.Ref, GroupID: 60, State: "accepted"}}}, Changes: []domain.GroupMembershipChange{{StudentRef: student.Ref, FromGroup: domain.NullableGroupID{Set: true, Value: 60}, ToGroup: domain.NullableGroupID{Set: true, Value: 61}}}}
+	path := writeMembershipDoc(t, s, doc)
+	first, err := s.PushGroupMemberships(context.Background(), path)
+	if err != nil || first.Outcomes[0].Outcome.Status != "succeeded" || posts != 1 {
+		t.Fatalf("membership write failed: report=%+v err=%v posts=%d", first, err, posts)
+	}
+	current[60] = []canvasMembership{{ID: 1, GroupID: 60, UserID: 10, WorkflowState: "accepted"}}
+	current[61] = nil
+	second, err := s.PushGroupMemberships(context.Background(), path)
+	if err != nil || second.Outcomes[0].Outcome.Status != "succeeded" || posts != 1 {
+		t.Fatalf("accepted write replayed after membership changed: report=%+v err=%v posts=%d", second, err, posts)
+	}
+}
+
+func TestUncertainMembershipWriteReconcilesWithoutReplay(t *testing.T) {
+	current := map[int64][]canvasMembership{60: {{ID: 1, GroupID: 60, UserID: 10, WorkflowState: "accepted"}}, 61: {}}
+	posts := 0
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		write := func(v any) { _ = json.NewEncoder(w).Encode(v) }
+		switch r.URL.Path {
+		case "/api/v1/group_categories/50":
+			write(map[string]any{"id": 50, "course_id": 1, "context_type": "Course", "non_collaborative": false})
+		case "/api/v1/group_categories/50/groups":
+			write([]any{map[string]any{"id": 60, "course_id": 1, "context_type": "Course", "group_category_id": 50}, map[string]any{"id": 61, "course_id": 1, "context_type": "Course", "group_category_id": 50}})
+		case "/api/v1/groups/60/memberships", "/api/v1/groups/61/memberships":
+			var id int64 = 60
+			if strings.Contains(r.URL.Path, "/61/") {
+				id = 61
+			}
+			if r.Method == http.MethodGet {
+				write(current[id])
+				return
+			}
+			posts++
+			current[60] = nil
+			current[61] = []canvasMembership{{ID: 2, GroupID: 61, UserID: 10, WorkflowState: "accepted"}}
+			http.Error(w, "simulated response loss after accepted membership", http.StatusServiceUnavailable)
+		case "/api/v1/groups/60", "/api/v1/groups/61":
+			var id int64
+			_, _ = fmt.Sscanf(r.URL.Path, "/api/v1/groups/%d", &id)
+			write(map[string]any{"id": id, "course_id": 1, "context_type": "Course", "group_category_id": 50, "non_collaborative": false})
+		case "/api/v1/courses/1/enrollments":
+			write([]any{map[string]any{"user_id": 10, "type": "StudentEnrollment", "enrollment_state": "active", "user": map[string]any{"id": 10, "name": "Student"}}})
+		case "/api/v1/courses/1/assignments":
+			write([]any{})
+		default:
+			t.Errorf("unexpected request %s", r.URL.String())
+			http.NotFound(w, r)
+		}
+	})
+	store, _ := workspace.OpenStudents(s.Root)
+	student, _ := store.Upsert(s.Client.Origin(), 10, "Student", "", "", "")
+	_ = store.Save()
+	doc := domain.GroupMembershipDocument{Schema: 1, Kind: "group-memberships", Operation: "update", Course: "TEST", Instance: s.Client.Origin(), CourseID: 1, GroupCategoryID: 50, Observed: &domain.GroupMembershipSnapshot{Instance: s.Client.Origin(), CourseID: 1, GroupCategoryID: 50, GroupIDs: []int64{60, 61}, RosterComplete: true, Memberships: []domain.GroupMembershipObserved{{StudentRef: student.Ref, GroupID: 60, State: "accepted"}}}, Changes: []domain.GroupMembershipChange{{StudentRef: student.Ref, FromGroup: domain.NullableGroupID{Set: true, Value: 60}, ToGroup: domain.NullableGroupID{Set: true, Value: 61}}}}
+	path := writeMembershipDoc(t, s, doc)
+	first, err := s.PushGroupMemberships(context.Background(), path)
+	if err != nil || first.Outcomes[0].Outcome.Status != "uncertain" || posts != 1 {
+		t.Fatalf("uncertain membership result not saved: report=%+v err=%v posts=%d", first, err, posts)
+	}
+	second, err := s.PushGroupMemberships(context.Background(), path)
+	if err != nil || second.Outcomes[0].Outcome.Status != "preserved" || posts != 1 {
+		t.Fatalf("uncertain membership was not reconciled without replay: report=%+v err=%v posts=%d", second, err, posts)
+	}
+}
+
 func writeMembershipDoc(t *testing.T, s *Service, doc domain.GroupMembershipDocument) string {
 	t.Helper()
 	path := filepath.Join(s.Root, "courses", "TEST", "drafts", fmt.Sprintf("memberships-%d.md", time.Now().UnixNano()))

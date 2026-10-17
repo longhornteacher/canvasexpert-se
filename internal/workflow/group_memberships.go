@@ -108,6 +108,14 @@ func (s *Service) groupRosterLive(ctx context.Context, nickname string, setID in
 			if m.WorkflowState == "requested" {
 				live.Pending[m.UserID] = true
 				live.Roster.PendingCount++
+				st, ok := byUser[m.UserID]
+				if !ok {
+					live.Roster.RosterComplete = false
+					live.Roster.UnresolvedCount++
+					live.Roster.Groups[groupIndex[g.ID]].RosterComplete = false
+					continue
+				}
+				live.Roster.PendingRequests = append(live.Roster.PendingRequests, domain.GroupMembershipPending{StudentRef: st.Ref, GroupID: g.ID, State: "requested"})
 				continue
 			}
 			if m.WorkflowState != "accepted" && m.WorkflowState != "invited" {
@@ -145,6 +153,12 @@ func (s *Service) groupRosterLive(ctx context.Context, nickname string, setID in
 			return live.Roster.Groups[i].Members[a].StudentRef < live.Roster.Groups[i].Members[b].StudentRef
 		})
 	}
+	sort.Slice(live.Roster.PendingRequests, func(i, j int) bool {
+		if live.Roster.PendingRequests[i].StudentRef == live.Roster.PendingRequests[j].StudentRef {
+			return live.Roster.PendingRequests[i].GroupID < live.Roster.PendingRequests[j].GroupID
+		}
+		return live.Roster.PendingRequests[i].StudentRef < live.Roster.PendingRequests[j].StudentRef
+	})
 	sort.Slice(live.Roster.Unassigned, func(i, j int) bool {
 		return live.Roster.Unassigned[i].StudentRef < live.Roster.Unassigned[j].StudentRef
 	})
@@ -174,6 +188,7 @@ func (s *Service) PullGroupMemberships(ctx context.Context, nickname string, set
 	for _, m := range live.ByRef {
 		snapshot.Memberships = append(snapshot.Memberships, m)
 	}
+	snapshot.PendingRequests = append(snapshot.PendingRequests, live.Roster.PendingRequests...)
 	for _, m := range live.Roster.Unassigned {
 		snapshot.UnassignedRefs = append(snapshot.UnassignedRefs, m.StudentRef)
 	}
@@ -270,12 +285,19 @@ func (s *Service) PushGroupMemberships(ctx context.Context, path string) (report
 			doc.Outcomes = append(doc.Outcomes, domain.GroupMembershipOutcome{StudentRef: change.StudentRef})
 			out = &doc.Outcomes[len(doc.Outcomes)-1]
 		}
+		if out.Outcome.Status == "succeeded" || out.Outcome.Status == "preserved" {
+			continue
+		}
 		uid := userIDs[change.StudentRef]
 		// Membership can change while another row is being processed. Read this
 		// student's source again immediately before deciding on its mutation.
 		rowLive, readErr := s.groupRosterLive(ctx, course.Nickname, set.ID)
 		if readErr != nil || !rowLive.Roster.RosterComplete {
-			out.Outcome = domain.ActionOutcome{Status: "held", Message: "could not re-read a complete current membership roster; this row is preserved"}
+			if ambiguous(out.Outcome) {
+				out.Outcome = domain.ActionOutcome{Status: "uncertain", Message: "could not re-read a complete current membership roster; prior write remains unclear and will not be replayed"}
+			} else {
+				out.Outcome = domain.ActionOutcome{Status: "held", Message: "could not re-read a complete current membership roster; this row is preserved"}
+			}
 			_ = save()
 			continue
 		}
@@ -287,6 +309,30 @@ func (s *Service) PushGroupMemberships(ctx context.Context, path string) (report
 		destination := int64(0)
 		if !change.ToGroup.Null {
 			destination = change.ToGroup.Value
+		}
+		if out.Outcome.Status == "pending" || out.Outcome.Status == "uncertain" {
+			if !rowLive.Pending[uid] && currentGroup == destination && (destination > 0 || !assigned) {
+				id := destination
+				out.ActualGroupID = &id
+				out.ActualState = current.State
+				if destination == 0 {
+					out.ActualState = "unassigned"
+				}
+				out.Outcome = domain.ActionOutcome{Status: "preserved", Message: "uncertain membership write resolved from the current roster"}
+			} else {
+				out.Outcome = domain.ActionOutcome{Status: "uncertain", Message: "membership write remains unclear; current membership was read and the write was not replayed"}
+			}
+			if err = save(); err != nil {
+				return report, err
+			}
+			continue
+		}
+		if rowLive.Pending[uid] {
+			out.Outcome = domain.ActionOutcome{Status: "held", Message: "student has a pending self-sign-up request; membership is preserved"}
+			if err = save(); err != nil {
+				return report, err
+			}
+			continue
 		}
 		if currentGroup == destination && (destination > 0 || (!assigned && change.ToGroup.Null)) {
 			out.Outcome = domain.ActionOutcome{Status: "preserved", Message: "student is already in the requested membership state"}
