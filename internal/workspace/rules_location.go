@@ -552,3 +552,30 @@ func ScaffoldRules(root string, template fs.FS, base string) ([]string, error) {
 	})
 	return created, err
 }
+
+// RestoreSyncBootstrap rewrites UserInstall's local AGENTS.md/CLAUDE.md
+// pointers when UserSync is active and a newer ZIP extracted over the folder
+// replaced them with full template copies. The replaced copy is archived.
+func RestoreSyncBootstrap(root string) error {
+	loc, err := GetRulesLocation(root)
+	if err != nil || loc.Mode != "sync" {
+		return nil
+	}
+	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
+		b, err := os.ReadFile(filepath.Join(loc.InstallRoot, name))
+		if err == nil && strings.HasPrefix(string(b), "# CE-SE local agent bootstrap") {
+			continue
+		}
+		if err == nil {
+			if err := archiveOne(loc.InstallRoot, name, b); err != nil {
+				return err
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if err := writeBootstrap(loc.InstallRoot, name, loc.RulesRoot); err != nil {
+			return err
+		}
+	}
+	return nil
+}

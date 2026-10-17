@@ -52,6 +52,9 @@ func SeedLabel() string {
 // Update adopts this Engine's seed without overriding teacher choices. Every
 // difference from the previous shipped copy counts as the teacher's choice.
 func Update(root string, now time.Time) (UpdateReport, error) {
+	if err := workspace.RestoreSyncBootstrap(root); err != nil {
+		return UpdateReport{}, err
+	}
 	label := SeedLabel()
 	report := UpdateReport{Current: label}
 	adoptedPath, err := workspace.ConstrainPath(root, path.Join(shippedDir, "adopted.txt"))
