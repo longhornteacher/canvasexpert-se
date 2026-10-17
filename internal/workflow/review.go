@@ -261,6 +261,9 @@ func buildDiscussionReview(path string) (ReviewModel, error) {
 		operation = "announcement · " + operation
 	}
 	m := ReviewModel{Kind: "Ungraded discussion", Title: d.Title, AllOrNothing: true, Action: "Continue to Canvas"}
+	if d.Assignment != nil {
+		m.Kind = "Graded discussion"
+	}
 	published := discussionBool(d.Published, false)
 	discussionType := d.DiscussionType
 	requireInitial := discussionBool(d.RequireInitialPost, false)
@@ -288,6 +291,18 @@ func buildDiscussionReview(path string) (ReviewModel, error) {
 	}
 	if d.IsAnnouncement != nil && *d.IsAnnouncement {
 		facts = append(facts, fact("Explicit communication intent", d.AnnouncementIntent))
+	}
+	if a := d.Assignment; a != nil {
+		facts = append(facts, fact("Grading", "individual grade per student in the gradebook; each student is graded on their own posts"), fact("Points", a.Points.String()))
+		if a.DueAt != nil {
+			facts = append(facts, fact("Due", *a.DueAt))
+		}
+		if a.Rubric != nil {
+			facts = append(facts, fact("Rubric", fmt.Sprintf("%s (%d criteria, not used for grading)", a.Rubric.Title, len(a.Rubric.Criteria))))
+		}
+		if d.GroupCategoryID > 0 {
+			facts = append(facts, fact("Group set", "the group set is on the topic only; the assignment stays individual"))
+		}
 	}
 	m.Cards = []ReviewCard{{Ref: "discussion-" + fmt.Sprint(d.GroupID) + "-" + fmt.Sprint(d.GroupCategoryID), Alias: d.Title, Operation: "create or update discussion", Facts: facts, Frames: []ReviewFrame{{Label: "Topic body", HTML: html}}}}
 	return m, nil

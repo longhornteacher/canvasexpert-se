@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"canvasexpertse/internal/domain"
@@ -30,12 +29,12 @@ func TestNativeDocumentValidationAndUploadFlagContract(t *testing.T) {
 		}
 	}
 	graded := filepath.Join(root, "graded-discussion.md")
-	content := "---\nschema: 1\nkind: discussion\noperation: create\ncourse: TEST\ntitle: Graded prompt\nbody_format: html\nassignment:\n  points: 100\n  grading_type: points\n  due_at: '2026-11-06T23:59:00-06:00'\n  rubric:\n    title: Evidence\n    criteria:\n      - description: Use evidence\n        points: 100\n---\n<p>Respond</p>\n"
+	content := "---\nschema: 1\nkind: discussion\noperation: create\ncourse: TEST\ntitle: Graded prompt\nbody_format: html\nassignment:\n  points: 100\n  grading_type: points\n  due_at: '2026-11-06T23:59:00-06:00'\n  rubric:\n    title: Evidence\n    criteria:\n      - id: evidence\n        description: Use evidence\n        points: 100\n---\n<p>Respond</p>\n"
 	if err := os.WriteFile(graded, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateDocument(graded, root); err == nil || !strings.Contains(err.Error(), "not yet supported in slice 05a") {
-		t.Fatalf("graded discussion did not produce the 05a hold: %v", err)
+	if err := validateDocument(graded, root); err != nil {
+		t.Fatalf("graded discussion did not validate: %v", err)
 	}
 	source, opts, e := parseCourseUpload(root, []string{"TEST", "image.png", "--access", "hidden", "--folder", "4", "--receipt", "image.receipt.json", "--new-upload"})
 	if e != nil || source != filepath.Join(root, "image.png") || opts.Access != "hidden" || opts.FolderID != 4 || !opts.NewUpload || opts.ReceiptPath != filepath.Join(root, "image.receipt.json") {

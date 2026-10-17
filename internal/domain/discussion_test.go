@@ -21,10 +21,10 @@ func TestDiscussionValidationScopesAnnouncementsAndGradedHold(t *testing.T) {
 		t.Fatalf("announcement without intent: %v", err)
 	}
 	d.AnnouncementIntent = "Share this update with club 7 members"
-	assignment := map[string]any{"points": 100, "grading_type": "points", "rubric": map[string]any{"criteria": []any{}}}
-	d.Assignment = &assignment
-	if err := d.ValidateBody("<p>Prompt</p>"); err == nil || !strings.Contains(err.Error(), "not yet supported") {
-		t.Fatalf("graded discussion was not clearly held: %v", err)
+	pts := MustDecimal("100")
+	d.Assignment = &DiscussionAssignment{Points: pts}
+	if err := d.ValidateBody("<p>Prompt</p>"); err == nil {
+		t.Fatal("an announcement or direct group topic accepted a graded assignment")
 	}
 }
 

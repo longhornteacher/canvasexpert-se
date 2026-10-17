@@ -174,7 +174,7 @@ func (s *Service) PushDiscussion(ctx context.Context, path string) (report Discu
 			report.Message = recoverErr.Error()
 			return report, nil
 		}
-		created.TopicID, created.URL, created.SavedHTML = found.ID, found.HTMLURL, found.Message
+		created.TopicID, created.URL, created.SavedHTML, created.AssignmentID = found.ID, found.HTMLURL, found.Message, found.AssignmentID
 		created.Topic = domain.ActionOutcome{Status: "succeeded", ID: found.ID, Message: "matched the exact recent topic, including announcement intent, after an unclear response"}
 		for _, child := range found.GroupTopicChildren {
 			if child.GroupID > 0 && child.TopicID > 0 {
@@ -210,12 +210,28 @@ func (s *Service) PushDiscussion(ctx context.Context, path string) (report Discu
 		if d.GroupCategoryID > 0 {
 			fields["group_category_id"] = d.GroupCategoryID
 		}
+		if a := d.Assignment; a != nil {
+			// The group set stays on the topic; the linked assignment is individual
+			// gradebook work only.
+			linked := map[string]any{"points_possible": a.Points, "grading_type": "points", "submission_types": []string{"discussion_topic"}}
+			if a.DueAt != nil {
+				linked["due_at"] = *a.DueAt
+			}
+			if a.UnlockAt != nil {
+				linked["unlock_at"] = *a.UnlockAt
+			}
+			if a.LockAt != nil {
+				linked["lock_at"] = *a.LockAt
+			}
+			fields["assignment"] = linked
+		}
 		var response NativeDiscussion
 		err = s.Client.WriteAccepted(ctx, "POST", discussionBase(c.ID, d.GroupID), fields, &response)
 		if response.ID > 0 {
 			created.TopicID = response.ID
 			created.URL = response.HTMLURL
 			created.SavedHTML = response.Message
+			created.AssignmentID = response.AssignmentID
 			for _, child := range response.GroupTopicChildren {
 				if child.GroupID > 0 && child.TopicID > 0 {
 					created.GroupTopicChildren = append(created.GroupTopicChildren, domain.DiscussionChild{GroupID: child.GroupID, TopicID: child.TopicID})
@@ -260,6 +276,11 @@ func (s *Service) PushDiscussion(ctx context.Context, path string) (report Discu
 		report.Message = created.Topic.Message
 		report.TopicID = created.TopicID
 		return report, nil
+	}
+	if a := created.Intent.Assignment; a != nil {
+		if held, e := s.finishGradedDiscussion(ctx, c, &d, created, a, save, &report); e != nil || held {
+			return report, e
+		}
 	}
 	// Publication is a separate scoped patch. A new topic always starts unpublished.
 	if !created.PublishedRequested {
@@ -315,7 +336,7 @@ func (s *Service) PushDiscussion(ctx context.Context, path string) (report Discu
 }
 
 func discussionIntent(d domain.DiscussionDocument) domain.DiscussionIntent {
-	return domain.DiscussionIntent{DiscussionType: d.DiscussionType, RequireInitialPost: d.RequireInitialPost, Published: discussionBool(d.Published, false), DelayedPostAt: d.DelayedPostAt, LockAt: d.LockAt, Pinned: d.Pinned, IsAnnouncement: discussionBool(d.IsAnnouncement, false), AnnouncementIntent: d.AnnouncementIntent}
+	return domain.DiscussionIntent{DiscussionType: d.DiscussionType, RequireInitialPost: d.RequireInitialPost, Published: discussionBool(d.Published, false), DelayedPostAt: d.DelayedPostAt, LockAt: d.LockAt, Pinned: d.Pinned, IsAnnouncement: discussionBool(d.IsAnnouncement, false), AnnouncementIntent: d.AnnouncementIntent, Assignment: d.Assignment}
 }
 
 func (s *Service) findUncertainDiscussion(ctx context.Context, courseID, groupID, setID int64, startedAt, title, html string, announcement bool) (NativeDiscussion, error) {
@@ -364,9 +385,6 @@ func (s *Service) updateDiscussion(ctx context.Context, path string, c domain.Co
 		r.Status = "completed"
 		r.Message = "update already completed; pull-discussion before another edit"
 		return r, nil
-	}
-	if d.Observed.AssignmentID > 0 {
-		return r, fmt.Errorf("linked graded discussions are not yet supported in slice 05a; this authoring path only edits ungraded topics")
 	}
 	if (d.IsAnnouncement != nil && *d.IsAnnouncement) != d.Observed.IsAnnouncement && d.IsAnnouncement != nil {
 		return r, fmt.Errorf("a discussion cannot be converted to an announcement or vice versa")
@@ -464,4 +482,99 @@ func (s *Service) updateDiscussion(ctx context.Context, path string, c domain.Co
 	r.Status = d.UpdateOutcome.Status
 	r.Message = d.UpdateOutcome.Message
 	return r, nil
+}
+
+// finishGradedDiscussion resolves the linked assignment's identity and attaches
+// the independent rubric. It runs after the topic exists and before publication;
+// a failure holds publication and a resume repeats only the missing stage.
+func (s *Service) finishGradedDiscussion(ctx context.Context, c domain.Course, d *domain.DiscussionDocument, created *domain.DiscussionCreated, a *domain.DiscussionAssignment, save func() error, report *DiscussionReport) (bool, error) {
+	hold := func(status, message string) (bool, error) {
+		report.Status, report.Message, report.TopicID = status, message, created.TopicID
+		return true, nil
+	}
+	if created.AssignmentID == 0 {
+		var live NativeDiscussion
+		if err := s.Client.Get(ctx, discussionPath(c.ID, d.GroupID, created.TopicID), &live); err != nil {
+			return false, err
+		}
+		if live.ID != created.TopicID {
+			return false, fmt.Errorf("Canvas returned a different discussion topic ID")
+		}
+		if live.AssignmentID == 0 {
+			return hold("held", "the topic exists but Canvas returned no linked assignment ID; publication and rubric were not attempted. Pull the topic to see its actual state")
+		}
+		created.AssignmentID = live.AssignmentID
+		if err := save(); err != nil {
+			return false, err
+		}
+	}
+	if a.Rubric == nil {
+		if !definite(created.Rubric) {
+			created.Rubric = domain.ActionOutcome{Status: "not-requested"}
+		}
+		return false, nil
+	}
+	if definite(created.Rubric) {
+		return false, nil
+	}
+	live, err := GetAssignment(ctx, s.Client, c.ID, created.AssignmentID)
+	if err != nil {
+		return false, err
+	}
+	pointsBefore := live.Points
+	switch {
+	case len(live.Rubric) > 0 && !ambiguous(created.Rubric):
+		created.Rubric = domain.ActionOutcome{Status: "preserved", Message: "the linked assignment already has a rubric in Canvas; left as it is"}
+	case ambiguous(created.Rubric):
+		snap, e := Snapshot(live, s.Client.Origin())
+		if e != nil {
+			return false, e
+		}
+		if snap.Rubric == nil {
+			if saveErr := save(); saveErr != nil {
+				return false, saveErr
+			}
+			return hold("held", "rubric creation completion remains uncertain and no rubric is attached; attach one and run again")
+		}
+		created.RubricID, created.RubricAssociationID = snap.Rubric.ID, snap.Rubric.AssociationID
+		created.Rubric = domain.ActionOutcome{Status: "succeeded", ID: created.RubricID}
+	default:
+		created.Rubric = domain.ActionOutcome{Status: "pending"}
+		if err = save(); err != nil {
+			return false, err
+		}
+		var response struct {
+			Rubric struct {
+				ID int64 `json:"id"`
+			} `json:"rubric"`
+			Association struct {
+				ID int64 `json:"id"`
+			} `json:"rubric_association"`
+		}
+		err = s.Client.Write(ctx, "POST", fmt.Sprintf("/api/v1/courses/%d/rubrics", c.ID), rubricCreateFields(*a.Rubric, created.AssignmentID), &response)
+		if err != nil {
+			created.Rubric = failedOutcome(err)
+		} else if response.Rubric.ID <= 0 || response.Association.ID <= 0 {
+			created.Rubric = domain.ActionOutcome{Status: "uncertain", Message: "rubric response lacks exact resource IDs"}
+		} else {
+			created.RubricID, created.RubricAssociationID = response.Rubric.ID, response.Association.ID
+			created.Rubric = domain.ActionOutcome{Status: "succeeded", ID: created.RubricID}
+		}
+	}
+	if err = save(); err != nil {
+		return false, fmt.Errorf("rubric outcome could not be persisted: %w", err)
+	}
+	if !definite(created.Rubric) {
+		return hold(created.Rubric.Status, created.Rubric.Message)
+	}
+	// Attaching a rubric is the author action known to change points; check the
+	// scale before the discussion becomes public.
+	after, err := GetAssignment(ctx, s.Client, c.ID, created.AssignmentID)
+	if err != nil {
+		return false, err
+	}
+	if after.Points != pointsBefore {
+		return hold("held", "rubric attachment changed the linked assignment's points; the discussion remains unpublished")
+	}
+	return false, nil
 }

@@ -3,11 +3,23 @@ package domain
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
-// DiscussionDocument authors an ungraded course, distributed group-set, or
-// direct group discussion topic. Graded discussion support is deliberately a
-// later slice; Assignment is decoded only so 05a can reject it explicitly.
+// DiscussionAssignment is the gradebook column of a linked graded discussion.
+// It is authored on create only; its rubric is independent of the grade.
+type DiscussionAssignment struct {
+	Points      Decimal `yaml:"points"`
+	GradingType string  `yaml:"grading_type,omitempty"` // points
+	DueAt       *string `yaml:"due_at,omitempty"`
+	UnlockAt    *string `yaml:"unlock_at,omitempty"`
+	LockAt      *string `yaml:"lock_at,omitempty"`
+	Rubric      *Rubric `yaml:"rubric,omitempty"`
+}
+
+// DiscussionDocument authors a course, distributed group-set, or direct group
+// discussion topic or announcement, optionally linked to a graded assignment
+// (course and distributed topics only).
 type DiscussionDocument struct {
 	Schema             int                 `yaml:"schema"`
 	Kind               string              `yaml:"kind"`
@@ -28,7 +40,7 @@ type DiscussionDocument struct {
 	Pinned             *bool               `yaml:"pinned,omitempty"`
 	IsAnnouncement     *bool               `yaml:"is_announcement,omitempty"`
 	AnnouncementIntent string              `yaml:"announcement_intent,omitempty"`
-	Assignment         *map[string]any     `yaml:"assignment,omitempty"`
+	Assignment         *DiscussionAssignment `yaml:"assignment,omitempty"`
 	Observed           *DiscussionSnapshot `yaml:"observed,omitempty"`
 	Created            *DiscussionCreated  `yaml:"created,omitempty"`
 	UpdateOutcome      ActionOutcome       `yaml:"update_outcome,omitempty"`
@@ -64,6 +76,10 @@ type DiscussionCreated struct {
 	IntendedHTML       string            `yaml:"intended_html"`
 	SavedHTML          string            `yaml:"saved_html,omitempty"`
 	GroupTopicChildren []DiscussionChild `yaml:"group_topic_children,omitempty"`
+	AssignmentID        int64         `yaml:"assignment_id,omitempty"`
+	RubricID            int64         `yaml:"rubric_id,omitempty"`
+	RubricAssociationID int64         `yaml:"rubric_association_id,omitempty"`
+	Rubric              ActionOutcome `yaml:"rubric,omitempty"`
 	Topic              ActionOutcome     `yaml:"topic,omitempty"`
 	PublishedRequested bool              `yaml:"published_requested,omitempty"`
 	Publication        ActionOutcome     `yaml:"publication,omitempty"`
@@ -79,6 +95,7 @@ type DiscussionIntent struct {
 	Pinned             *bool   `yaml:"pinned,omitempty"`
 	IsAnnouncement     bool    `yaml:"is_announcement"`
 	AnnouncementIntent string  `yaml:"announcement_intent,omitempty"`
+	Assignment         *DiscussionAssignment `yaml:"assignment,omitempty"`
 }
 
 type DiscussionChild struct {
@@ -243,8 +260,34 @@ func (d *DiscussionDocument) ValidateBody(body string) error {
 	if d.DiscussionType != "" && d.DiscussionType != "threaded" && d.DiscussionType != "side_comment" && d.DiscussionType != "not_threaded" {
 		return fmt.Errorf("discussion_type must be threaded, side_comment, or not_threaded")
 	}
-	if d.Assignment != nil {
-		return fmt.Errorf("linked graded discussions are not yet supported in slice 05a; remove assignment and use an ungraded discussion")
+	if a := d.Assignment; a != nil {
+		if d.Operation != "create" {
+			return fmt.Errorf("the linked assignment is set when a discussion is created; edit its points, dates or rubric through the assignment")
+		}
+		if d.GroupID > 0 {
+			return fmt.Errorf("a direct group topic has no linked graded assignment; use a distributed group_category_id discussion or a course discussion")
+		}
+		if !a.Points.IsSet() || a.Points.Sign() <= 0 {
+			return fmt.Errorf("assignment.points must be positive")
+		}
+		if a.GradingType != "" && a.GradingType != "points" {
+			return fmt.Errorf("graded discussions support grading_type points")
+		}
+		for _, v := range []*string{a.DueAt, a.UnlockAt, a.LockAt} {
+			if v != nil && *v != "" {
+				if _, e := time.Parse(time.RFC3339, *v); e != nil {
+					return fmt.Errorf("assignment dates must be RFC3339")
+				}
+			}
+		}
+		if a.Rubric != nil {
+			if e := ValidateRubric(*a.Rubric); e != nil {
+				return e
+			}
+			if a.Rubric.UseForGrading {
+				return fmt.Errorf("graded discussion rubrics are independent; use_for_grading must be false")
+			}
+		}
 	}
 	announcement := d.IsAnnouncement != nil && *d.IsAnnouncement
 	if d.Operation == "update" && d.Observed != nil && d.Observed.IsAnnouncement {
@@ -295,6 +338,15 @@ func (d *DiscussionDocument) ValidateBody(body string) error {
 		}
 		if c.Topic.Status == "succeeded" && c.TopicID <= 0 {
 			return fmt.Errorf("succeeded discussion creation requires exact topic_id")
+		}
+		if c.AssignmentID < 0 || c.RubricID < 0 || c.RubricAssociationID < 0 {
+			return fmt.Errorf("created discussion resource IDs cannot be negative")
+		}
+		if err := validateOutcome(c.Rubric); err != nil {
+			return err
+		}
+		if c.Complete && c.Intent.Assignment != nil && (c.AssignmentID <= 0 || (c.Intent.Assignment.Rubric != nil && !discussionDefinite(c.Rubric))) {
+			return fmt.Errorf("complete graded discussion requires its linked assignment and rubric outcome")
 		}
 		if c.Complete && (c.TopicID <= 0 || !discussionDefinite(c.Topic) || !discussionDefinite(c.Publication)) {
 			return fmt.Errorf("complete discussion requires successful topic creation")
