@@ -336,26 +336,28 @@ func TestGuideUsesSixNativeExpandableTopicsAndExplainsStorageScopes(t *testing.T
 	}
 }
 
-func TestHomeRoutesCanvasAndSyncActionsToExistingSettingsAndChecks(t *testing.T) {
+func TestHomeShowsCommandsFromTeacherContext(t *testing.T) {
 	h := newTestHub()
 	h.root = makeWorkspace(t)
 	body := hubGet(h, "/").Body.String()
-	for _, want := range []string{`href="/settings?section=connections">Connection</a>`, `href="/settings?section=connections#rules">Choose UserSync folder</a>`} {
+	for _, want := range []string{`href="/settings?section=connections">Connection details</a>`, "Scoring session", "Start a scoring session for one of my courses."} {
 		if !strings.Contains(body, want) {
-			t.Errorf("Home missing action %q", want)
+			t.Errorf("Home without a commands file missing %q", want)
 		}
 	}
-	if strings.Contains(body, `action="/rules/test"`) {
-		t.Error("Home offers a saved-folder test while rules are on this PC")
+	p := filepath.Join(h.root, "context", "commands.md")
+	if err := os.WriteFile(p, []byte("---\nschema: 1\ncommands:\n  - name: Friday sweep\n    prompt: \"Find missing work in {course}.\"\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if w := hubPost(h, "/rules-location", url.Values{"request_secret": {"nonce"}, "sync_root": {t.TempDir()}}, h.origin); w.Code != 303 {
-		t.Fatalf("bind UserSync: %d", w.Code)
-	}
-	h.flash, h.flashErr = "", ""
 	body = hubGet(h, "/").Body.String()
-	for _, want := range []string{`action="/rules/test"`, `name="request_secret" value="nonce"`, `name="sync_root"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("Home with UserSync missing %q", want)
-		}
+	if !strings.Contains(body, "Friday sweep") || !strings.Contains(body, `data-prompt="Find missing work in {course}."`) || strings.Contains(body, "Scoring session") {
+		t.Error("Home did not use the teacher's commands")
+	}
+	if err := os.WriteFile(p, []byte("---\nschema: 1\ncommands:\n  - name: No prompt\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body = hubGet(h, "/").Body.String()
+	if !strings.Contains(body, "Scoring session") || !strings.Contains(body, "could not be read") {
+		t.Error("Home did not fall back to the starter commands with a note")
 	}
 }

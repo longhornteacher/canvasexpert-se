@@ -23,6 +23,8 @@ type homeData struct {
 	Students, Monitored                               int
 	CanvasUser                                        string
 	RulesMode, RulesRoot, SyncRoot, RulesError        string
+	Commands                                          []homeCommand
+	CommandsNote, PickedCourse, FirstPrompt           string
 }
 
 type homeCourse struct {
@@ -32,7 +34,7 @@ type homeCourse struct {
 
 func init() {
 	register(
-		page{Path: "/", Template: "home", Scripts: []string{"canvas-health.js", "appearance.js"}, Connect: true,
+		page{Path: "/", Template: "home", Scripts: []string{"canvas-health.js", "home.js", "appearance.js"}, Connect: true,
 			Nav:    []navSlot{{Primary: "Home", Order: 10}},
 			Handle: func(h *Hub, w http.ResponseWriter, r *http.Request) { h.home(w, 200, "", "") }},
 	)
@@ -44,6 +46,13 @@ func (h *Hub) home(w http.ResponseWriter, status int, message, notice string) {
 	}
 	data := h.pageData()
 	data.Message, data.Notice = message, notice
+	data.Commands, data.CommandsNote = homeCommands(h.root)
+	if len(data.CourseRows) == 1 {
+		data.PickedCourse = data.CourseRows[0].Nickname
+	}
+	if len(data.Commands) > 0 {
+		data.FirstPrompt = fillPrompt(data.Commands[0].Prompt, data.PickedCourse)
+	}
 	h.render(w, status, tmpl("home"), data)
 }
 
