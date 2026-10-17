@@ -6,6 +6,8 @@ Requires: [01](01-groups.md), [08](08-group-assignment-authoring.md) snapshot co
 
 Extend `pull-work COURSE ASSIGNMENT_ID [--group GROUP_ID]` and `pull_work {course, assignment?, group_id?}`. A group filter requires an explicit assignment. Without the filter, read all in-scope groups for that assignment. Broad unfinished-work pulls can discover supported group work without silently widening an explicitly selected assignment/group.
 
+For a broad unfinished-work discovery (no assignment supplied), reuse `liveHandled`: skip a group only when its submitted member attempts are all already handled, using per-member `group-results` completion hints in known individual-grading mode. Keep every member attempt distinct while checking this. An explicit assignment pull remains a reassessment pull and includes handled groups.
+
 Save `kind: group-packet` with the assignment snapshot, pull time, and paths to `kind: group-work` files. Each group-work contains:
 
 - origin/course/assignment/set/group identity, current group label and full observed course-enrolled membership;

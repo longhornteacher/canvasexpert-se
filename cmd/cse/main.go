@@ -62,7 +62,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
                                 Upload a course asset and save a reusable receipt
   pull-item COURSE TITLE|ID|LINK Pull actual assignment HTML for editing
   pull-assignment-dates COURSE ASSIGNMENT_ID Pull exact audience override baselines for editing
-  pull-work [COURSE [ASSIGNMENT]] Pull work; no scope uses current courses
+  pull-work [COURSE [ASSIGNMENT]] [--group ID] Pull individual/group work; no scope uses current courses
   parent-report COURSE [REF ...] Read parent-update facts (missing, corrections, due soon, history) into courses/COURSE/parent-updates/
   parent-review RUN_FOLDER      Open the private page to review and send a parent-update run (Outlook)
   student-report RUN_FOLDER     Save one PDF of student reports (one per page) from a parent-update run and open it
@@ -556,6 +556,10 @@ func validateDocument(path string, roots ...string) error {
 		target = &domain.GroupSetDocument{}
 	case "group-memberships":
 		target = &domain.GroupMembershipDocument{}
+	case "group-packet":
+		target = &domain.GroupPacketDocument{}
+	case "group-work":
+		target = &domain.GroupWorkDocument{}
 	case "page":
 		target = &domain.PageDocument{}
 	case "discussion":
@@ -581,7 +585,7 @@ func validateDocument(path string, roots ...string) error {
 		case "students.md":
 			target = &domain.StudentNotes{}
 		default:
-			return fmt.Errorf("unsupported document kind %q; expected assignment, assignment-dates, group-set, page, discussion, discussion-packet, discussion-reply, module, results, packet, or student-work", kind)
+			return fmt.Errorf("unsupported document kind %q; expected assignment, assignment-dates, group-set, group-memberships, group-packet, group-work, page, discussion, discussion-packet, discussion-reply, module, results, packet, or student-work", kind)
 		}
 	}
 	if kindErr != nil && kind != "" {
@@ -604,6 +608,12 @@ func validateDocument(path string, roots ...string) error {
 			e = d.Validate()
 		}
 		if d, ok := target.(*domain.GroupMembershipDocument); ok {
+			e = d.Validate()
+		}
+		if d, ok := target.(*domain.GroupPacketDocument); ok {
+			e = d.Validate()
+		}
+		if d, ok := target.(*domain.GroupWorkDocument); ok {
 			e = d.Validate()
 		}
 		if d, ok := target.(*domain.DiscussionPacket); ok {

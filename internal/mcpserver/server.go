@@ -73,6 +73,7 @@ type WriteFileInput struct {
 type PullWorkInput struct {
 	Course     string `json:"course,omitempty" jsonschema:"Configured course nickname; omit to pull current courses"`
 	Assignment string `json:"assignment,omitempty" jsonschema:"Optional assignment title or ID"`
+	GroupID    *int64 `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID; requires course and assignment"`
 }
 
 type ParentReportInput struct {
@@ -179,7 +180,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "help", in.Topic)
 	})
-	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Student identity is pseudonymized by the Engine; never access .cse. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
+	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
 		args := []string{"pull-work"}
 		if in.Course != "" {
 			args = append(args, in.Course)
@@ -189,6 +190,12 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 				return TextOutput{}, errors.New("course is required when assignment is specified")
 			}
 			args = append(args, in.Assignment)
+		}
+		if in.GroupID != nil {
+			if *in.GroupID <= 0 || in.Course == "" || in.Assignment == "" {
+				return TextOutput{}, errors.New("positive group_id requires explicit course and assignment")
+			}
+			args = append(args, "--group", strconv.FormatInt(*in.GroupID, 10))
 		}
 		return s.longCommand(ctx, args...)
 	})

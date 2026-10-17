@@ -102,6 +102,7 @@ func (s *Service) groupRosterLive(ctx context.Context, nickname string, setID in
 			if m.UserID <= 0 {
 				live.Roster.RosterComplete = false
 				live.Roster.UnresolvedCount++
+				live.Roster.Groups[groupIndex[g.ID]].RosterComplete = false
 				continue
 			}
 			if m.WorkflowState == "requested" {
@@ -116,11 +117,14 @@ func (s *Service) groupRosterLive(ctx context.Context, nickname string, setID in
 			if !ok {
 				live.Roster.RosterComplete = false
 				live.Roster.UnresolvedCount++
+				live.Roster.Groups[groupIndex[g.ID]].RosterComplete = false
 				continue
 			}
 			if prior, exists := live.ByRef[st.Ref]; exists && prior.GroupID != g.ID {
 				live.Roster.RosterComplete = false
 				live.Roster.UnresolvedCount++
+				live.Roster.Groups[groupIndex[g.ID]].RosterComplete = false
+				live.Roster.Groups[groupIndex[prior.GroupID]].RosterComplete = false
 				continue
 			}
 			assigned[m.UserID] = true
@@ -137,7 +141,6 @@ func (s *Service) groupRosterLive(ctx context.Context, nickname string, setID in
 		live.Roster.Unassigned = append(live.Roster.Unassigned, domain.GroupMember{StudentRef: st.Ref, Alias: st.Alias, State: "unassigned"})
 	}
 	for i := range live.Roster.Groups {
-		live.Roster.Groups[i].RosterComplete = live.Roster.RosterComplete
 		sort.Slice(live.Roster.Groups[i].Members, func(a, b int) bool {
 			return live.Roster.Groups[i].Members[a].StudentRef < live.Roster.Groups[i].Members[b].StudentRef
 		})

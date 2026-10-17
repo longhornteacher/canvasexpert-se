@@ -163,6 +163,8 @@ type Submission struct {
 	SecondsLate                   int64                  `json:"seconds_late"`
 	GradeMatchesCurrentSubmission *bool                  `json:"grade_matches_current_submission"`
 	AssignmentVisible             *bool                  `json:"assignment_visible"`
+	GroupID                       int64                  `json:"group_id"`
+	Group                         *SubmissionGroup       `json:"group"`
 	User                          CanvasUser             `json:"user"`
 	History                       []Submission           `json:"submission_history"`
 	Attachments                   []Attachment           `json:"attachments"`
@@ -178,6 +180,10 @@ type Submission struct {
 		Message   string `json:"message"`
 		CreatedAt string `json:"created_at"`
 	} `json:"discussion_entries"`
+}
+type SubmissionGroup struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 type RubricScore struct {
 	Points   *json.Number `json:"points"`
@@ -238,6 +244,18 @@ func Submissions(ctx context.Context, c *canvas.Client, courseID, id int64, deta
 	}
 	var result []Submission
 	err := c.List(ctx, path, &result)
+	return result, err
+}
+func GroupSubmissions(ctx context.Context, c *canvas.Client, courseID, id int64) ([]Submission, error) {
+	path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?per_page=100&include[]=user&include[]=group&include[]=submission_history&include[]=submission_comments&include[]=rubric_assessment", courseID, id)
+	var result []Submission
+	err := c.List(ctx, path, &result)
+	return result, err
+}
+func GetGroupSubmission(ctx context.Context, c *canvas.Client, courseID, assignmentID, userID int64) (Submission, error) {
+	var result Submission
+	path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions/%d?include[]=user&include[]=group&include[]=submission_history&include[]=submission_comments&include[]=rubric_assessment", courseID, assignmentID, userID)
+	err := c.Get(ctx, path, &result)
 	return result, err
 }
 func GetSubmission(ctx context.Context, c *canvas.Client, courseID, id, userID int64) (Submission, error) {

@@ -69,6 +69,12 @@ try {
   assert.ok(assignmentDatesTool.inputSchema.properties.assignment_id, 'pull_assignment_dates must require exact assignment_id');
   for (const name of ['pull_page', 'list_page_revisions']) assert.ok(names.includes(name), `missing ${name}`);
   assert.ok(names.includes('pull_discussion'), 'missing pull_discussion');
+  assert.ok(names.includes('pull_work'), 'missing pull_work');
+  const pullWorkTool = discovered.result.tools.find(t => t.name === 'pull_work');
+  assert.ok(pullWorkTool.inputSchema.properties.group_id, 'pull_work must expose optional group_id');
+  assert.match(pullWorkTool.description, /group-packet\/group-work/);
+  await call('pull_work', { course: 'CS8', assignment: '10', group_id: 0 }, true);
+  await call('pull_work', { course: 'CS8', group_id: 60 }, true);
   const discussionTool = discovered.result.tools.find(t => t.name === 'pull_discussion');
   assert.ok(discussionTool.inputSchema.properties.topic_id, 'pull_discussion must expose topic_id');
   assert.ok(discussionTool.inputSchema.properties.group_id, 'pull_discussion must expose optional group_id');

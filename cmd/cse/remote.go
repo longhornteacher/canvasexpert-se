@@ -23,7 +23,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "pull-work": {0, 4}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -484,7 +484,20 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if len(args) > 1 {
 			query = args[1]
 		}
-		report, e := service.PullWork(ctx, nickname, query)
+		var report workflow.PullReport
+		var e error
+		if len(args) > 2 {
+			if len(args) != 4 || args[2] != "--group" || nickname == "" || query == "" {
+				return fail(fmt.Errorf("usage: pull-work COURSE ASSIGNMENT --group GROUP_ID"), progress)
+			}
+			groupID, parseErr := strconv.ParseInt(args[3], 10, 64)
+			if parseErr != nil || groupID <= 0 {
+				return fail(fmt.Errorf("group ID must be a positive integer"), progress)
+			}
+			report, e = service.PullWorkGroup(ctx, nickname, query, groupID)
+		} else {
+			report, e = service.PullWork(ctx, nickname, query)
+		}
 		if len(report.Assignments) > 0 {
 			fmt.Fprintln(table, "Course\tAssignment\tTitle\tPulled\tLate\tMissing\tExcused\tInactive\tUnsupported\tHandled\tUnreadable attachments\tDetails")
 			for _, summary := range report.Assignments {

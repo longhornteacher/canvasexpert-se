@@ -13,6 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"gopkg.in/yaml.v3"
+
 	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/render"
@@ -55,7 +57,15 @@ type PullAssignmentSummary struct {
 // assignment pulls include all genuine supported submissions for reassessment.
 // Every pull has a distinct directory and never replaces prepared results.
 func (s *Service) PullWork(ctx context.Context, nickname, query string) (report PullReport, err error) {
-	return s.pullWork(ctx, nickname, query, nil)
+	return s.pullWork(ctx, nickname, query, nil, nil)
+}
+
+// PullWorkGroup scopes a pull to one exact collaborative group and assignment.
+func (s *Service) PullWorkGroup(ctx context.Context, nickname, query string, groupID int64) (PullReport, error) {
+	if nickname == "" || query == "" || groupID <= 0 {
+		return PullReport{}, fmt.Errorf("course, assignment, and positive group ID are required for a group-scoped pull")
+	}
+	return s.pullWork(ctx, nickname, query, nil, &groupID)
 }
 
 // PullBuiltinTestStudent is an explicit developer probe entry point. Ordinary
@@ -88,7 +98,7 @@ func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, a
 	}
 	probeElapsed := time.Since(start)
 	probeRequests := s.Client.Requests() - requests
-	report, e := s.pullWork(ctx, course.Nickname, fmt.Sprint(assignmentID), &user)
+	report, e := s.pullWork(ctx, course.Nickname, fmt.Sprint(assignmentID), &user, nil)
 	report.DiscoveryElapsed += probeElapsed
 	report.DiscoveryRequests += probeRequests
 	report.Elapsed = time.Since(start)
@@ -96,7 +106,7 @@ func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, a
 	return report, e
 }
 
-func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin *CanvasUser) (report PullReport, err error) {
+func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin *CanvasUser, groupFilter *int64) (report PullReport, err error) {
 	start := time.Now()
 	requests := s.Client.Requests()
 	defer func() { report.Elapsed = time.Since(start); report.Requests = s.Client.Requests() - requests }()
@@ -115,6 +125,9 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 	defer func() { setPhase("") }()
 	if query != "" && nickname == "" {
 		return report, fmt.Errorf("assignment scope requires a configured course")
+	}
+	if groupFilter != nil && (nickname == "" || query == "") {
+		return report, fmt.Errorf("group-scoped pulls require an explicit course and assignment")
 	}
 	var courses []domain.Course
 	if nickname != "" {
@@ -201,6 +214,21 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			setPhase("discovery")
 			report.Assignments = append(report.Assignments, PullAssignmentSummary{Course: course.Nickname, AssignmentID: a.ID, Title: a.Name})
 			summary := &report.Assignments[len(report.Assignments)-1]
+			if groupFilter != nil && (a.GroupCategoryID == nil || *a.GroupCategoryID <= 0) {
+				return report, fmt.Errorf("assignment %d is not a collaborative group assignment", a.ID)
+			}
+			if builtin == nil && a.GroupCategoryID != nil && *a.GroupCategoryID > 0 {
+				paths, count, skipped, e := s.pullGroupAssignment(ctx, course, a, groupFilter, active, students, summary, query != "")
+				if e != nil {
+					return report, e
+				}
+				report.Packets = append(report.Packets, paths...)
+				summary.Packets = append(summary.Packets, paths...)
+				report.Students += count
+				summary.Students += count
+				report.Skipped = append(report.Skipped, skipped...)
+				continue
+			}
 			if reason := unpullableAssignment(a); reason != "" {
 				summary.SkipReason = reason
 				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, reason))
@@ -573,6 +601,10 @@ func (s *Service) completedHint(id int64, ref string, sub Submission, snapshot d
 		if !strings.EqualFold(filepath.Ext(path), ".md") {
 			return nil
 		}
+		if groupResultsContainCompletedGrade(path, snapshot, id, ref, sub) {
+			matched = true
+			return filepath.SkipAll
+		}
 		var results domain.ResultsDocument
 		if _, e := workspace.ReadDocument(path, &results); e != nil {
 			return nil
@@ -590,6 +622,80 @@ func (s *Service) completedHint(id int64, ref string, sub Submission, snapshot d
 		return nil
 	})
 	return matched
+}
+
+// groupResultsContainCompletedGrade reads the future group-results shape
+// tolerantly: slice 10/11 may add group/action fields that this slice does not
+// own. Header structure, assignment identity, student ref, and exact attempt
+// still have to match before a completed result suppresses a pull.
+func groupResultsContainCompletedGrade(path string, snapshot domain.AssignmentSnapshot, assignmentID int64, studentRef string, sub Submission) bool {
+	var doc map[string]any
+	if _, err := workspace.ReadDocument(path, &doc); err != nil || yamlInt(doc["schema"]) != 1 || yamlString(doc["kind"]) != "group-results" {
+		return false
+	}
+	assignment := yamlMap(doc["assignment"])
+	if yamlString(assignment["instance"]) != snapshot.Instance || yamlInt64(assignment["course_id"]) != snapshot.CourseID || yamlInt64(assignment["assignment_id"]) != assignmentID {
+		return false
+	}
+	for _, rawGroup := range yamlSlice(doc["groups"]) {
+		group := yamlMap(rawGroup)
+		for _, rawStudent := range yamlSlice(group["students"]) {
+			row := yamlMap(rawStudent)
+			if yamlString(row["operation"]) != "grade" || yamlString(row["student_ref"]) != studentRef {
+				continue
+			}
+			encoded, err := yaml.Marshal(row["grade"])
+			if err != nil {
+				continue
+			}
+			var grade domain.GradeOperation
+			if yaml.Unmarshal(encoded, &grade) == nil && gradeComplete(&grade) && sameAttempt(grade.Attempt, attemptRef(sub)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func yamlMap(value any) map[string]any {
+	switch m := value.(type) {
+	case map[string]any:
+		return m
+	default:
+		return nil
+	}
+}
+
+func yamlSlice(value any) []any {
+	if rows, ok := value.([]any); ok {
+		return rows
+	}
+	return nil
+}
+
+func yamlString(value any) string {
+	text, _ := value.(string)
+	return text
+}
+
+func yamlInt(value any) int { return int(yamlInt64(value)) }
+
+func yamlInt64(value any) int64 {
+	switch n := value.(type) {
+	case int:
+		return int64(n)
+	case int64:
+		return n
+	case uint64:
+		return int64(n)
+	case float64:
+		return int64(n)
+	case json.Number:
+		parsed, _ := n.Int64()
+		return parsed
+	default:
+		return 0
+	}
 }
 
 // fetchSubmissions reads each candidate's detailed submission concurrently

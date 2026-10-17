@@ -20,7 +20,7 @@ New Quizzes, including written-response items, are open for regular authoring, u
 | `pull_assignment`, `pull_page` | Pull exact content and its edit baseline. `pull_page` keeps the `query` argument and accepts optional `group_id` for group Pages. |
 | `pull_discussion` | Long-pull an exact course/direct-group topic or distributed parent. Saves `topic.md` plus an as-of `discussion-packet` with complete/partial threaded entry coverage and student author mapping only through existing private refs; unmapped authors remain unknown. Repeat a pending call with identical inputs to wait on the same run. |
 | `list_page_revisions` | Read course or group Page revision metadata; optional `revision_id` returns that revision's historical body. |
-| `pull_work` | Pull pseudonymized student work/history/attachments, optionally scoped to a course and assignment. |
+| `pull_work` | Pull pseudonymized student work/history/attachments, optionally scoped to a course and assignment. Group assignments save typed `group-packet`/`group-work` evidence with per-member identities; optional `group_id` requires an explicit course and assignment and limits reads to that group's members. This evidence pull does not enable group-result posting. |
 | `list_workspace_files` | Discover allowed workspace files/directories, optionally recursively. |
 | `read_workspace_file` | Read root Markdown/text references (including `AGENTS.md`, `CLAUDE.md`, `README.txt`), `context/`, `playbooks/`, or `courses/` text and its SHA-256. |
 | `write_workspace_file` | Save teacher instructions, context, and playbooks with conflict protection. |
