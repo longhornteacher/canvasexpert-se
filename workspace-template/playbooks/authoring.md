@@ -14,6 +14,10 @@ Ask only for missing details that matter: course, title, directions, points, due
 
 Write a draft in the course's `drafts/` folder using the fields in `help formats`. Put the teaching content in the body. The default Markdown renderer handles headings, paragraphs, lists, bold, italic, links and fenced code; raw HTML shows as escaped text. Use `body_format: html` explicitly for authored tables, images and Canvas file links. The local review shows HTML as escaped source; verify its saved appearance in Canvas. For standalone Pages, asset uploads and module assembly, read `native-content.md`.
 
+## Collaborative groups and book clubs
+
+Use `cse groups <course>` (or MCP `list_group_sets`) to inspect collaborative group sets. `cse groups <course> --set <ID>` lists clubs; `--members <GROUP_ID>` includes membership for one exact club. Differentiation tags are intentionally excluded. Use `pull-group-set <course> <set-ID>` to create an editable exact-ID baseline, then make only the requested name/settings changes or add keyed clubs and `push` the document. Omitted clubs/settings are preserved. The Engine checks course, group-set and club identity before writes and records created IDs so a partly completed setup can resume. Group setup uses direct teacher scope; do not create or move memberships in this workflow (membership planning is a separate capability).
+
 ## Review and create
 
 Run `.\cse.cmd review <draft-file>`. The page shows the content as the Engine will write it (it doesn't simulate the student view). When the teacher clicks Create, the Engine creates the assignment. With review skipped, run `.\cse.cmd push <draft-file>`.

@@ -23,7 +23,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-page": {2, 2}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "groups": {1, 6}, "pull-group-set": {2, 2}, "push": {1, 1}, "pull-page": {2, 2}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -85,8 +85,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 		kind := documentKind(b)
-		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "module" {
-			return fail(inputError(fmt.Errorf("push supports assignment, page, or module documents")), progress)
+		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "module" && kind != "group-set" {
+			return fail(inputError(fmt.Errorf("push supports assignment, page, module, or group-set documents")), progress)
 		}
 		if cmd == "post" && kind != "results" {
 			return fail(inputError(fmt.Errorf("post requires a results document")), progress)
@@ -118,6 +118,40 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	fmt.Fprintf(status, "%s…\n", cmd)
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	switch cmd {
+	case "groups":
+		setID, memberID, groupID, allGroups, err := parseGroupsArgs(args[1:])
+		if err != nil {
+			return fail(inputError(err), progress)
+		}
+		if setID == 0 && memberID == 0 && groupID == 0 && !allGroups {
+			sets, e := service.ListGroupSets(ctx, args[0])
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			b, _ := json.MarshalIndent(sets, "", "  ")
+			fmt.Fprintln(out, string(b))
+			return 0
+		}
+		if memberID > 0 {
+			groupID = memberID
+		}
+		groups, e := service.ListGroups(ctx, args[0], setID, groupID, memberID > 0)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, _ := json.MarshalIndent(groups, "", "  ")
+		fmt.Fprintln(out, string(b))
+		return 0
+	case "pull-group-set":
+		id, e := strconv.ParseInt(args[1], 10, 64)
+		if e != nil || id <= 0 {
+			return fail(inputError(fmt.Errorf("group-set ID must be a positive integer")), progress)
+		}
+		p, e := service.PullGroupSet(ctx, args[0], id)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, p)
 	case "upload-file":
 		report, e := service.UploadCourseFile(ctx, args[0], uploadSource, uploadOptions)
 		fmt.Fprintf(out, "%s: %s\n", report.Status, report.Path)
@@ -209,7 +243,23 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		fmt.Fprintln(out, p)
 	case "push":
 		b, _ := os.ReadFile(file)
-		if kind := documentKind(b); kind == "page" {
+		if kind := documentKind(b); kind == "group-set" {
+			report, e := service.PushGroupSet(ctx, file)
+			fmt.Fprintf(out, "%s: group set %d, %s\n", report.Status, report.GroupCategoryID, report.Path)
+			for _, g := range report.Groups {
+				fmt.Fprintf(out, "%s: %s group %d %s\n", g.Key, g.Outcome.Status, g.GroupID, g.URL)
+			}
+			if report.Message != "" {
+				fmt.Fprintln(out, report.Message)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
+				return 3
+			}
+			return 0
+		} else if kind == "page" {
 			report, e := service.PushPage(ctx, file)
 			fmt.Fprintf(out, "%s: Page %d %s\n", report.Status, report.PageID, report.Path)
 			if report.URL != "" {
@@ -449,6 +499,43 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 	}
 	return 0
+}
+
+func parseGroupsArgs(args []string) (int64, int64, int64, bool, error) {
+	var setID, memberID int64
+	var groupID int64
+	var allGroups bool
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--groups" {
+			allGroups = true
+			continue
+		}
+		if i+1 >= len(args) {
+			return 0, 0, 0, false, fmt.Errorf("%s requires an ID", args[i])
+		}
+		id, e := strconv.ParseInt(args[i+1], 10, 64)
+		if e != nil || id <= 0 {
+			return 0, 0, 0, false, fmt.Errorf("%s requires a positive integer ID", args[i])
+		}
+		switch args[i] {
+		case "--set":
+			if setID != 0 {
+				return 0, 0, 0, false, fmt.Errorf("--set may be supplied once")
+			}
+			setID = id
+		case "--members":
+			if memberID != 0 {
+				return 0, 0, 0, false, fmt.Errorf("--members may be supplied once")
+			}
+			memberID = id
+		case "--group":
+			groupID = id
+		default:
+			return 0, 0, 0, false, fmt.Errorf("unknown groups option %q", args[i])
+		}
+		i++
+	}
+	return setID, memberID, groupID, allGroups, nil
 }
 func compact(s string) string { return strings.Join(strings.Fields(s), " ") }
 func workflowError(e error) error {

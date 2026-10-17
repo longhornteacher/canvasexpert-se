@@ -4,6 +4,12 @@ Date: 2026-10-17. Status: development specifications; no slice is implemented by
 
 Read [shared contracts](contracts.md), then the assigned slice. Follow [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../ARCHITECTURE.md), and [SCORING-RULES.md](../../SCORING-RULES.md). Each slice includes its CLI/MCP surface, document changes, integration work, consequential checks, and acceptance scenarios. Names and schemas below are proposed implementation contracts, not commands that already exist.
 
+## Implementation status
+
+| Slice | Status | Local evidence | Canvas Live / student evidence |
+|---|---|---|---|
+| 01 — collaborative group sets and clubs | Implemented in Dev | Focused domain/workflow checks cover exact IDs, collaborative-only listing, pagination, baseline protection, and persisted IDs on resumed set/club creation. Compiled MCP smoke discovers all three group tools. | No CE-SE Canvas writes or student club access were tested. |
+
 ## Product result
 
 A teacher can establish book clubs, let students choose or assign memberships, supply shared working spaces, hold and assess discussions, collect shared products, give group or individual grades, arrange peer critique and conferences, and communicate within the intended audience. The agent handles instructional decisions; the Engine handles Canvas, identity, arithmetic, and scoped writes. Ordinary individual assignments and New Quizzes continue to work.

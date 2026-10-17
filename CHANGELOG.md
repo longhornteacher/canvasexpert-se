@@ -2,6 +2,12 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
+## Development notes
+
+### Collaborative group sets
+
+- Dev can list collaborative group sets and clubs, pull an exact-ID baseline, and create or edit group-set settings and club names/descriptions. Canvas differentiation tags remain excluded. Local implementation checks do not establish live or student access behavior.
+
 ## 1.0.0 (2026-10-17)
 
 First stable release.

@@ -12,8 +12,8 @@ import (
 
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/doctor"
-	"canvasexpertse/internal/outlook"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/outlook"
 	"canvasexpertse/internal/playbooks"
 	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
@@ -63,7 +63,7 @@ type EngineInfoInput struct {
 }
 
 func (s *Server) registerOperationTools(server *mcp.Server) {
-	addActionTool(server, "push_document", "Create/resume or update an assignment, Page, or native module; attach a rubric using operation: attach-rubric. Uses the document's exact scope and existing Engine conflict/outcome checks. For assignment creation/edits use start_review by default; call directly when the teacher explicitly skips review or to resume a partly created item as its playbook permits. Pages/modules and rubric attachment use this tool directly. Report returned held/partial/uncertain outcomes honestly.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
+	addActionTool(server, "push_document", "Create/resume or update an assignment, Page, native module, or collaborative group-set document; attach a rubric using operation: attach-rubric. Uses the document's exact scope and existing Engine conflict/outcome checks. For assignment creation/edits use start_review by default; call directly when the teacher explicitly skips review or to resume a partly created item as its playbook permits. Pages/modules/group setup and rubric attachment use this tool directly. Report returned held/partial/uncertain outcomes honestly.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
 		path, err := s.coursePath(in.Path)
 		if err != nil {
 			return TextOutput{}, err
