@@ -129,6 +129,11 @@ does not need to request a file edit or know the storage layout.
   wins. It sits beside `TEACHER.md` under the active rules authority
   (UserInstall, or UserSync when configured), so it follows the teacher across
   PCs. Saving a preference writes the overlay, not the shipped playbook text.
+- `Teacher_Override.md` holds only overrides of shipped defaults (for example
+  a standing review skip, a different correction window, no tiered-support
+  offers). `context/teaching-profile.md` and `context/grading.md` stay as
+  setup facts the shipped defaults leave open, such as page style, rubric
+  scale and feedback voice. Updates never replace either kind.
 - Save explicit standing preferences as they are expressed. For example,
   "Never offer extra credit without my explicit permission" becomes a
   remembered standing instruction without a separate file-edit approval.
@@ -211,10 +216,6 @@ guess that unexplained differences are obsolete or safe to discard.
 
 ## Remaining design work
 
-- Decide how `Teacher_Override.md` relates to today's
-  `context/teaching-profile.md` and `context/grading.md` preference saves:
-  absorb them, or keep them as setup facts and move only overrides of shipped
-  defaults into the overlay.
 - Build `shipped/<version>/` retention in the updater and the background
   install/update reconciliation pass.
 - Define selection guidance for matching prompts across courses and for fewer
