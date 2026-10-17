@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -88,8 +89,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if cmd == "push" && kind != "assignment" && kind != "assignment-dates" && kind != "page" && kind != "discussion" && kind != "discussion-reply" && kind != "module" && kind != "group-set" && kind != "group-memberships" {
 			return fail(inputError(fmt.Errorf("push supports assignment, assignment-dates, page, discussion/reply, module, group-set, or group-memberships documents")), progress)
 		}
-		if cmd == "post" && kind != "results" {
-			return fail(inputError(fmt.Errorf("post requires a results document")), progress)
+		if cmd == "post" && kind != "results" && kind != "group-results" {
+			return fail(inputError(fmt.Errorf("post requires a results or group-results document")), progress)
 		}
 	}
 	var config domain.CourseConfig
@@ -591,6 +592,33 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				report, e := service.PushDiscussion(ctx, file)
 				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: discussion %d %s", report.Status, report.TopicID, report.Message))}, e
 			}
+			if fileKind(file) == "group-results" {
+				service.Skip = skip
+				report, e := service.PostGroupResults(ctx, file)
+				failed := 0
+				for _, r := range report.Groups {
+					if !r.SharedDone && !skip[workflow.GroupCardRef(r.GroupID)] {
+						failed++
+					}
+					for ref, outcome := range r.Private {
+						if outcome.Status != "succeeded" && outcome.Status != "preserved" && outcome.Status != "not-requested" && !skip[workflow.GroupPrivateRef(r.GroupID, ref)] {
+							failed++
+						}
+					}
+				}
+				summary := fmt.Sprintf("%d approved group action(s) did not fully complete; run cse post output or rerun review", failed)
+				if failed == 0 {
+					summary = "all approved group actions completed"
+				}
+				status := "completed"
+				if failed > 0 || e != nil {
+					status = "partial"
+				}
+				return localui.ReviewPostResult{Status: status, Summary: summary, Path: report.Path}, e
+			}
+			if fileKind(file) != "results" {
+				return localui.ReviewPostResult{}, fmt.Errorf("review cannot post a %q document", fileKind(file))
+			}
 			service.Skip = skip
 			report, e := service.Post(ctx, file)
 			failed := 0
@@ -630,6 +658,31 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		encoded, _ := json.Marshal(outcome)
 		fmt.Fprintf(out, "Review result: %s\n", encoded)
 	case "post":
+		if fileKind(file) == "group-results" {
+			report, e := service.PostGroupResults(ctx, file)
+			partial := false
+			fmt.Fprintln(table, "Group\tOperation\tStatus\tRubric\tGrade\tShared comment\tLate\tPrivate comments\tDetails")
+			for _, r := range report.Groups {
+				private := []string{}
+				for ref, o := range r.Private {
+					private = append(private, ref+"="+o.Status)
+				}
+				sort.Strings(private)
+				fmt.Fprintf(table, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GroupID, r.Operation, r.Status, r.Outcomes.Rubric.Status, r.Outcomes.Grade.Status, r.Outcomes.Comment.Status, r.Outcomes.Late.Status, strings.Join(private, " "), compact(r.Message))
+				if r.Status != "completed" {
+					partial = true
+				}
+			}
+			_ = table.Flush()
+			fmt.Fprintln(out, "Results:", report.Path)
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if partial {
+				return 3
+			}
+			return 0
+		}
 		report, e := service.Post(ctx, file)
 		partial := false
 		fmt.Fprintln(table, "Student ref\tOperation\tStatus\tRubric\tGrade\tComment\tLate\tDetails")
@@ -849,3 +902,5 @@ func splitParentArgs(args []string) (courses, refs []string) {
 	}
 	return args, nil
 }
+
+func fileKind(path string) string { b, _ := os.ReadFile(path); return documentKind(b) }

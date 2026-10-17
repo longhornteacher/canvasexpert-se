@@ -49,7 +49,7 @@ func TestNativeDocumentValidationAndUploadFlagContract(t *testing.T) {
 }
 
 func TestGroupEvidenceSpecimensValidateAsTypedDocuments(t *testing.T) {
-	for _, name := range []string{"synthetic-group-packet.md", "synthetic-group-work.md"} {
+	for _, name := range []string{"synthetic-group-packet.md", "synthetic-group-work.md", "synthetic-group-results.md"} {
 		path := filepath.Join("..", "..", "engine-docs", "examples", name)
 		if err := validateDocument(path); err != nil {
 			t.Fatalf("%s: %v", name, err)

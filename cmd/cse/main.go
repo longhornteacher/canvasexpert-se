@@ -572,6 +572,8 @@ func validateDocument(path string, roots ...string) error {
 		target = &domain.ModuleDocument{}
 	case "results":
 		target = &domain.ResultsDocument{}
+	case "group-results":
+		target = &domain.GroupResultsDocument{}
 	case "packet":
 		target = &domain.PacketDocument{}
 	case "student-work":
@@ -585,7 +587,7 @@ func validateDocument(path string, roots ...string) error {
 		case "students.md":
 			target = &domain.StudentNotes{}
 		default:
-			return fmt.Errorf("unsupported document kind %q; expected assignment, assignment-dates, group-set, group-memberships, group-packet, group-work, page, discussion, discussion-packet, discussion-reply, module, results, packet, or student-work", kind)
+			return fmt.Errorf("unsupported document kind %q; expected assignment, assignment-dates, group-set, group-memberships, group-packet, group-work, page, discussion, discussion-packet, discussion-reply, module, results, group-results, packet, or student-work", kind)
 		}
 	}
 	if kindErr != nil && kind != "" {
@@ -614,6 +616,9 @@ func validateDocument(path string, roots ...string) error {
 			e = d.Validate()
 		}
 		if d, ok := target.(*domain.GroupWorkDocument); ok {
+			e = d.Validate()
+		}
+		if d, ok := target.(*domain.GroupResultsDocument); ok {
 			e = d.Validate()
 		}
 		if d, ok := target.(*domain.DiscussionPacket); ok {

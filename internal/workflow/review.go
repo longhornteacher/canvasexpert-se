@@ -137,6 +137,8 @@ func BuildReview(root, path string) (ReviewModel, error) {
 		m, e = buildQuizReview(path)
 	case "results":
 		m, e = buildResultsReview(root, path)
+	case "group-results":
+		m, e = buildGroupResultsReview(root, path)
 	case "discussion":
 		m, e = buildDiscussionReview(path)
 	default:
@@ -193,6 +195,10 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 		_, e = ReadQuizForge(path)
 	case "results":
 		var d domain.ResultsDocument
+		_, e = workspace.ReadDocument(path, &d)
+		courseID = d.Assignment.CourseID
+	case "group-results":
+		var d domain.GroupResultsDocument
 		_, e = workspace.ReadDocument(path, &d)
 		courseID = d.Assignment.CourseID
 	case "discussion":

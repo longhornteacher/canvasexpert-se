@@ -676,7 +676,10 @@ func (s *Service) buildGroupMember(st workspace.Student, sub Submission, current
 	return m
 }
 
-func (s *Service) groupArtifact(ctx context.Context, sub Submission, studentRef string, groupID int64, relDir string, cache map[int64]domain.Attachment) (string, domain.GroupArtifact, error) {
+// submissionFingerprint identifies a shared artifact by submission type, body,
+// URL and sorted Canvas file IDs. Group posting compares a live submission to
+// the pulled artifact with it, without downloading the evidence again.
+func submissionFingerprint(sub Submission) string {
 	fileIDs := make([]int64, 0, len(sub.Attachments))
 	for _, a := range sub.Attachments {
 		if a.ID > 0 {
@@ -689,7 +692,11 @@ func (s *Service) groupArtifact(ctx context.Context, sub Submission, studentRef 
 		identity += strconv.FormatInt(id, 10) + ","
 	}
 	hash := sha256.Sum256([]byte(identity))
-	fingerprint := hex.EncodeToString(hash[:])
+	return hex.EncodeToString(hash[:])
+}
+
+func (s *Service) groupArtifact(ctx context.Context, sub Submission, studentRef string, groupID int64, relDir string, cache map[int64]domain.Attachment) (string, domain.GroupArtifact, error) {
+	fingerprint := submissionFingerprint(sub)
 	key := "artifact-" + fingerprint[:16]
 	artifact := domain.GroupArtifact{Key: key, Fingerprint: fingerprint, SubmissionType: sub.Type, URL: sub.URL, BodyHTML: sub.Body, ReadableText: render.HTMLText(sub.Body)}
 	if sub.Type == "online_url" {
