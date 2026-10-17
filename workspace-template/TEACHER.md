@@ -19,7 +19,7 @@ Students use 11-14 inch Chromebooks and laptops in landscape. Do not build narro
 ## Exemplars and quiz rationales
 
 - **Writing assignments** include a grade-representative exemplar (a mentor text showing what top work looks like) in the directions or rubric overview.
-- **Every quiz item** gets a root `rationales` entry (see `playbooks/quizzes.md`) of about two sentences saying why the correct answer is correct, shown in green so a student reviewing an attempt gets positive reinforcement:
+- **Every auto-scored quiz item** gets a root `rationales` entry (see `playbooks/quizzes.md`) of about two sentences saying why the correct answer is correct, shown in green so a student reviewing an attempt gets positive reinforcement. Written items (essay, file upload) take no rationale entry; their feedback comes from scoring:
 
   ```html
   <p style="color: #2e7d32;"><strong>Why this is correct:</strong> two sentences naming the idea and the evidence.</p>

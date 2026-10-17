@@ -60,12 +60,14 @@ func TestRenderFeedbackDirectMappingAndXSS(t *testing.T) {
 func TestRenderCommentOnlyOmitsAggregateAssessment(t *testing.T) {
 	rubric := domain.Rubric{Title: "R", Criteria: []domain.Criterion{{ID: "a", Description: "Evidence", Points: domain.MustDecimal("5")}}}
 	interpretation := domain.Interpretation{Mapping: "repeated", Rationale: "private", Components: []domain.Component{{Key: "one", Label: "Response", Weight: domain.MustDecimal("1")}}}
-	got, err := RenderFeedback(FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: []domain.ComponentScore{{Key: "one", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal("4")}}}}, Assessment: domain.MustDecimal("16"), AssignmentPoints: domain.MustDecimal("20"), Feedback: "Good evidence.", OmitAssessment: true, Header: "full"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(got, "Assessment:") || !strings.HasPrefix(got, "Criterion scores:\n") || !strings.HasSuffix(got, "\n\nGood evidence.") {
-		t.Fatalf("comment-only text included an aggregate grade or lost feedback: %q", got)
+	for _, header := range []string{"", "full"} {
+		got, err := RenderFeedback(FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: []domain.ComponentScore{{Key: "one", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal("4")}}}}, Assessment: domain.MustDecimal("16"), AssignmentPoints: domain.MustDecimal("20"), Feedback: "Good evidence.", OmitAssessment: true, Header: header})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(got, "Assessment:") || !strings.HasPrefix(got, "Criterion scores:\n") || !strings.HasSuffix(got, "\n\nGood evidence.") {
+			t.Fatalf("header %q: comment-only text included an aggregate grade or lost feedback: %q", header, got)
+		}
 	}
 }
 

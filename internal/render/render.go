@@ -52,7 +52,11 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 	case "none":
 		return in.Feedback, nil
 	case "", "score", "default":
-		return fmt.Sprintf("Assessment: %s / %s\n\n%s", in.Assessment.String(), in.AssignmentPoints.String(), in.Feedback), nil
+		// A New Quiz comment has no honest whole-quiz total from the written
+		// portion, so its default lead is the per-item criterion lines.
+		if !in.OmitAssessment {
+			return fmt.Sprintf("Assessment: %s / %s\n\n%s", in.Assessment.String(), in.AssignmentPoints.String(), in.Feedback), nil
+		}
 	}
 	var out strings.Builder
 	if !in.OmitAssessment {

@@ -58,7 +58,7 @@ Do not ask anyone to close an app during an active CE-SE review. If nothing supp
 
 > "Now I need CanvasExpert to be able to see your courses. Canvas lets you make a private key for that. It's called an **access token**: a key that lets CanvasExpert access your courses and carry out the Canvas work you request. You can delete it in Canvas any time. It is saved in Windows Credential Manager on this computer and sent only to your Canvas site when making requests, never to the assistant in chat.
 >
-> **My safety promise:** Setting this up does not publish coursework or change grades. When we work, I follow the scope you request. Scores, new assignments and quizzes, and assignment edits normally go through a private review page; you can explicitly skip review for a task.
+> **My safety promise:** Setting this up does not publish coursework or change grades. When we work, I follow the scope you request. Scores, new assignments and quizzes, and assignment edits normally go through a private review page; you can skip review for one task, or tell me to always skip it.
 >
 > A form is opening in your browser."
 

@@ -33,7 +33,9 @@ Reference assignments by `assignment_id` taken from the report. The Engine fills
 
 Order is fixed: Missing, Corrections, Due Soon, Grade history, footer (Skyward and Bobcat Hour). Empty sections are left out.
 
-## Rules that do not bend
+## Defaults
+
+These hold unless the teacher says otherwise. Honest values and privacy are not defaults: they always hold.
 
 - **No invented work.** Everything asked of a student or adult comes from real coursework, published deadlines, existing feedback, or opportunities the teacher gave you. Never add practice, reading, conferences or "talk to your child".
 - **No parent-response requests.** Do not ask families to reply, confirm or sign.

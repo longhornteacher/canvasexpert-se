@@ -678,7 +678,7 @@ func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument,
 	text := workspace.ReplaceStudentName(r.Feedback, source.student)
 	if r.Assessment != nil {
 		var e error
-		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text, Header: r.Header})
+		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text, OmitAssessment: doc.Assignment.NewQuiz, Header: r.Header})
 		if e != nil {
 			return e
 		}
