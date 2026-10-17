@@ -103,6 +103,8 @@ Observed differences and limits:
 - Not exercised live: self sign-up and even allocation (they would touch the whole class), graded-discussion assessment (needs a student's own post; the Test Student discussion was created and deleted unused), checkpointed discussions, excused/hidden members, student-facing views and notifications.
 - Anomaly: when `cse review` opened the loopback page, a Chrome 155 browser instance submitted the form within seconds, with no click from the tester, and posted all approved cards. Deselecting a card could not be tested through the page; deselection is covered by post-level tests.
 
+The checks to make the first time each feature is used with real students are in [real-use-checks.md](real-use-checks.md).
+
 ## Boundaries
 
 - Tier A and B surfaces are scheduled deliverables, including self sign-up and individual group grades. Tier C (peer critique, calendars, group files, conference scheduling, Inbox messaging) is frozen as "maybe nice for later": specified, not scheduled, built only if the teacher asks; an implementer does not start it as a side effect of another slice.
