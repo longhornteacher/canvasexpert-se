@@ -56,9 +56,13 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 34);
+  assert.equal(names.length, 35);
   for (const name of ['list_group_sets', 'list_groups', 'pull_group_set', 'pull_group_memberships']) assert.ok(names.includes(name), `missing ${name}`);
   for (const name of ['pull_page', 'list_page_revisions']) assert.ok(names.includes(name), `missing ${name}`);
+  assert.ok(names.includes('pull_discussion'), 'missing pull_discussion');
+  const discussionTool = discovered.result.tools.find(t => t.name === 'pull_discussion');
+  assert.ok(discussionTool.inputSchema.properties.topic_id, 'pull_discussion must expose topic_id');
+  assert.ok(discussionTool.inputSchema.properties.group_id, 'pull_discussion must expose optional group_id');
   const pageTool = discovered.result.tools.find(t => t.name === 'pull_page');
   assert.ok(pageTool.inputSchema.properties.query, 'pull_page must preserve the query input');
   assert.ok(pageTool.inputSchema.properties.group_id, 'pull_page must expose optional group_id');
@@ -72,6 +76,7 @@ try {
   assert.deepEqual(configured.courses, []);
   await call('list_courses', { source: 'unknown' }, true);
   await call('pull_page', { course: 'CS8', query: '7', group_id: -1 }, true);
+  await call('pull_discussion', { course: 'CS8', topic_id: 7, group_id: -1 }, true);
   assert.equal(await readFile(path.join(root, 'context/grading.md'), 'utf8'), 'Teacher-edited grading fixture.');
   assert.match(await call('read_workspace_file', { path: 'playbooks/setup.md' }), /source: canvas/);
   const coursesRead = await call('read_workspace_file', { path: 'context/courses.md' });
@@ -149,7 +154,7 @@ try {
   assert.equal(unavailable.mode, 'sync');
   assert.match(unavailable.availability_error, /unavailable/);
   await call('read_workspace_file', { path: 'context/grading.md' }, true);
-  console.log(`PASS: 34 tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, group/Page-tool discovery, references, path exclusions, guarded context, binary asset and QuizForge/document validation${review ? ', real local review and revision status' : ''}. No Canvas writes.`);
+  console.log(`PASS: 35 tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, group/Page/discussion-tool discovery, references, path exclusions, guarded context, binary asset and QuizForge/document validation${review ? ', real local review and revision status' : ''}. No Canvas writes.`);
   console.log(`Synthetic fixture: ${root}`);
 } finally {
   child.stdin.end();

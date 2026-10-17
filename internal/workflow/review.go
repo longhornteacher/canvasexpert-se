@@ -137,8 +137,10 @@ func BuildReview(root, path string) (ReviewModel, error) {
 		m, e = buildQuizReview(path)
 	case "results":
 		m, e = buildResultsReview(root, path)
+	case "discussion":
+		m, e = buildDiscussionReview(path)
 	default:
-		return ReviewModel{}, fmt.Errorf("review supports results, new assignment and QuizForge quiz files, not %q", kind)
+		return ReviewModel{}, fmt.Errorf("review supports results, discussions, new assignments and QuizForge quiz files, not %q", kind)
 	}
 	if e != nil {
 		return m, e
@@ -193,8 +195,16 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 		var d domain.ResultsDocument
 		_, e = workspace.ReadDocument(path, &d)
 		courseID = d.Assignment.CourseID
+	case "discussion":
+		var d domain.DiscussionDocument
+		body, readErr := workspace.ReadDocument(path, &d)
+		e = readErr
+		if e == nil {
+			e = d.ValidateBody(body)
+		}
+		nickname, courseID = d.Course, d.CourseID
 	default:
-		return "", fmt.Errorf("review supports assignments, results and QuizForge quiz files, not %q", kind)
+		return "", fmt.Errorf("review supports assignments, discussions, results and QuizForge quiz files, not %q", kind)
 	}
 	if e != nil {
 		return "", e
@@ -218,6 +228,63 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 		}
 	}
 	return kind, nil
+}
+
+func buildDiscussionReview(path string) (ReviewModel, error) {
+	var d domain.DiscussionDocument
+	body, err := workspace.ReadDocument(path, &d)
+	if err != nil {
+		return ReviewModel{}, err
+	}
+	if err = d.ValidateBody(body); err != nil {
+		return ReviewModel{}, err
+	}
+	html, err := render.TeachingHTML(body, d.BodyFormat)
+	if err != nil {
+		return ReviewModel{}, err
+	}
+	scope := "Course discussion"
+	if d.GroupCategoryID > 0 {
+		scope = fmt.Sprintf("Distributed discussion for group set %d", d.GroupCategoryID)
+	}
+	if d.GroupID > 0 {
+		scope = fmt.Sprintf("Direct group topic for group %d", d.GroupID)
+	}
+	operation := d.Operation
+	if d.IsAnnouncement != nil && *d.IsAnnouncement {
+		operation = "announcement · " + operation
+	}
+	m := ReviewModel{Kind: "Ungraded discussion", Title: d.Title, AllOrNothing: true, Action: "Continue to Canvas"}
+	published := discussionBool(d.Published, false)
+	discussionType := d.DiscussionType
+	requireInitial := discussionBool(d.RequireInitialPost, false)
+	if d.Observed != nil {
+		if d.Published == nil {
+			published = d.Observed.Published
+		}
+		if discussionType == "" {
+			discussionType = d.Observed.DiscussionType
+		}
+		if d.RequireInitialPost == nil {
+			requireInitial = d.Observed.RequireInitialPost
+		}
+	}
+	facts := []ReviewFact{fact("Operation", operation), fact("Audience", scope), fact("Published", fmt.Sprint(published))}
+	if discussionType != "" {
+		facts = append(facts, fact("Discussion type", discussionType))
+	}
+	facts = append(facts, fact("Require initial post", fmt.Sprint(requireInitial)))
+	if d.DelayedPostAt != nil {
+		facts = append(facts, fact("Delayed post", *d.DelayedPostAt))
+	}
+	if d.LockAt != nil {
+		facts = append(facts, fact("Lock at", *d.LockAt))
+	}
+	if d.IsAnnouncement != nil && *d.IsAnnouncement {
+		facts = append(facts, fact("Explicit communication intent", d.AnnouncementIntent))
+	}
+	m.Cards = []ReviewCard{{Ref: "discussion-" + fmt.Sprint(d.GroupID) + "-" + fmt.Sprint(d.GroupCategoryID), Alias: d.Title, Operation: "create or update discussion", Facts: facts, Frames: []ReviewFrame{{Label: "Topic body", HTML: html}}}}
+	return m, nil
 }
 
 func buildResultsReview(root, path string) (ReviewModel, error) {

@@ -55,6 +55,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   pull-group-memberships COURSE ID  Pull an exact group set's membership baseline
   push FILE                     Create/resume assignments, Pages, modules, group sets or membership plans
   pull-page COURSE ID|LINK       Pull exact Page HTML and baseline for editing
+  pull-discussion COURSE TOPIC_ID Pull exact discussion body and edit baseline (optional --group ID)
   page-history COURSE PAGE_ID   Read Page revisions (optional --group ID --revision ID)
   upload-file COURSE FILE --access course|hidden|locked [--folder ID] [--receipt PATH] [--new-upload]
                                 Upload a course asset and save a reusable receipt
@@ -442,7 +443,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-work": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-work": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -553,6 +554,8 @@ func validateDocument(path string, roots ...string) error {
 		target = &domain.GroupMembershipDocument{}
 	case "page":
 		target = &domain.PageDocument{}
+	case "discussion":
+		target = &domain.DiscussionDocument{}
 	case "module":
 		target = &domain.ModuleDocument{}
 	case "results":
@@ -570,7 +573,7 @@ func validateDocument(path string, roots ...string) error {
 		case "students.md":
 			target = &domain.StudentNotes{}
 		default:
-			return fmt.Errorf("unsupported document kind; expected assignment, group-set, page, module, results, packet, or student-work")
+			return fmt.Errorf("unsupported document kind; expected assignment, group-set, page, discussion, module, results, packet, or student-work")
 		}
 	}
 	if kindErr != nil && kind != "" {
@@ -583,6 +586,14 @@ func validateDocument(path string, roots ...string) error {
 		}
 		if d, ok := target.(*domain.GroupMembershipDocument); ok {
 			e = d.Validate()
+		}
+		if _, ok := target.(*domain.DiscussionDocument); ok && e == nil {
+			var doc domain.DiscussionDocument
+			body, readErr := workspace.ReadDocument(path, &doc)
+			if readErr != nil {
+				return readErr
+			}
+			e = doc.ValidateBody(body)
 		}
 	}
 	return e

@@ -36,7 +36,7 @@ Exactly one scope: plain course; course + collaborative `group_category_id` for 
 
 Add feature-specific domain/workflow files. Use course/group discussion POST/PUT routes. A distributed discussion sets the group set on the topic, not on its linked assignment. Save topic ID, linked assignment ID, child topic/group IDs when returned, rubric association and optional course module-item outcome. If the children are created lazily, report them as not yet materialized rather than inventing IDs or marking parent creation failed.
 
-Create unpublished, attach the requested independent rubric to the actual linked course assignment, finish any requested course module placement, then publish/schedule as requested. An attachment or placement failure leaves known resources saved and unpublished. Resuming uses those IDs. Topic title/body edit baselines protect student and teacher content; never replace entries or an unrelated linked assignment.
+Create ungraded topics unpublished, then publish/schedule as requested. Linked-assignment rubric attachment and its failure/resume ordering belong to 05b. Course module-item placement is deferred to slice 16; 05a does not add module fields or placement stages. Resuming a topic uses its saved ID. Topic title/body edit baselines protect student and teacher content; never replace entries or an unrelated linked assignment.
 
 Review for a graded topic displays topic scope, individual grading, points/rubric, dates and publication. Ordinary ungraded authoring can proceed under the request without a new mandatory gate. Announcements need explicit communication scope; a request to create discussion activities does not imply announcements.
 

@@ -102,6 +102,12 @@ type PageRevisionsInput struct {
 	RevisionID int64  `json:"revision_id,omitempty" jsonschema:"Optional revision ID; selected revision includes its historical body"`
 }
 
+type DiscussionQueryInput struct {
+	Course  string `json:"course" jsonschema:"Configured course nickname"`
+	TopicID int64  `json:"topic_id" jsonschema:"Exact Canvas discussion topic ID"`
+	GroupID int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID for a direct group topic"`
+}
+
 type CourseInput struct {
 	Course string `json:"course" jsonschema:"Configured course nickname"`
 }
@@ -237,6 +243,16 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, args...)
 	})
+	addActionTool(server, "pull_discussion", "Pull an exact course or direct group discussion topic with editable baseline. Distributed club topics retain their group set identity from Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in DiscussionQueryInput) (TextOutput, error) {
+		args := []string{"pull-discussion", in.Course, strconv.FormatInt(in.TopicID, 10)}
+		if in.GroupID != 0 {
+			if in.GroupID < 0 {
+				return TextOutput{}, errors.New("group_id must be positive")
+			}
+			args = append(args, "--group", strconv.FormatInt(in.GroupID, 10))
+		}
+		return s.command(ctx, args...)
+	})
 	addReadTool(server, "list_page_revisions", "Read revision metadata for an exact course or group Page. Set revision_id to also read that revision's historical body; this does not identify every contributor or simultaneous edits.", func(ctx context.Context, _ *mcp.CallToolRequest, in PageRevisionsInput) (TextOutput, error) {
 		args := []string{"page-history", in.Course, strconv.FormatInt(in.PageID, 10)}
 		if in.GroupID != 0 {
@@ -297,7 +313,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

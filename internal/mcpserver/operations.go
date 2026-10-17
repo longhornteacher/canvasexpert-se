@@ -63,7 +63,7 @@ type EngineInfoInput struct {
 }
 
 func (s *Server) registerOperationTools(server *mcp.Server) {
-	addActionTool(server, "push_document", "Create/resume or update an assignment, Page, native module, collaborative group-set or explicit group-membership plan; attach a rubric using operation: attach-rubric. Membership writes use exact observed student refs, group IDs and per-row conflict checks. Uses the document's exact scope and existing Engine conflict/outcome checks. For assignment creation/edits use start_review by default; call directly when the teacher explicitly skips review or to resume a partly created item as its playbook permits. Pages/modules/group setup and rubric attachment use this tool directly. Report returned held/partial/uncertain outcomes honestly.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
+	addActionTool(server, "push_document", "Create/resume or update an assignment, Page, ungraded discussion/announcement, native module, collaborative group-set or explicit group-membership plan; linked graded discussions are not yet supported. Membership writes use exact observed student refs, group IDs and per-row conflict checks. Uses the document's exact scope and existing Engine conflict/outcome checks. For assignment creation/edits use start_review by default; call directly when the teacher explicitly skips review or to resume a partly created item as its playbook permits. Pages, discussions, modules and group setup use this tool directly. Report returned held/partial/uncertain outcomes honestly.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
 		path, err := s.coursePath(in.Path)
 		if err != nil {
 			return TextOutput{}, err

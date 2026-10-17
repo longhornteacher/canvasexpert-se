@@ -23,7 +23,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -85,8 +85,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 		kind := documentKind(b)
-		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "module" && kind != "group-set" && kind != "group-memberships" {
-			return fail(inputError(fmt.Errorf("push supports assignment, page, module, group-set, or group-memberships documents")), progress)
+		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "discussion" && kind != "module" && kind != "group-set" && kind != "group-memberships" {
+			return fail(inputError(fmt.Errorf("push supports assignment, page, discussion, module, group-set, or group-memberships documents")), progress)
 		}
 		if cmd == "post" && kind != "results" {
 			return fail(inputError(fmt.Errorf("post requires a results document")), progress)
@@ -198,6 +198,20 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(err), progress)
 		}
 		p, e := service.PullPageScoped(ctx, args[0], args[1], groupID)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, p)
+	case "pull-discussion":
+		groupID, err := parseOptionalPageGroup(args[2:])
+		if err != nil {
+			return fail(inputError(err), progress)
+		}
+		topicID, err := strconv.ParseInt(args[1], 10, 64)
+		if err != nil || topicID <= 0 {
+			return fail(inputError(fmt.Errorf("topic ID must be a positive integer")), progress)
+		}
+		p, e := service.PullDiscussion(ctx, args[0], topicID, groupID)
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}
@@ -323,6 +337,22 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				return fail(workflowError(e), progress)
 			}
 			if report.Status != "completed" && report.Status != "succeeded" {
+				return 3
+			}
+			return 0
+		} else if kind == "discussion" {
+			report, e := service.PushDiscussion(ctx, file)
+			fmt.Fprintf(out, "%s: discussion %d %s\n", report.Status, report.TopicID, report.Path)
+			if report.URL != "" {
+				fmt.Fprintln(out, report.URL)
+			}
+			if report.Message != "" {
+				fmt.Fprintln(out, report.Message)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
 				return 3
 			}
 			return 0
@@ -487,6 +517,10 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			if b, _ := os.ReadFile(file); documentKind(b) == "assignment" {
 				report, e := service.Push(ctx, file)
 				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: %s %s", report.Status, report.URL, report.Message))}, e
+			}
+			if b, _ := os.ReadFile(file); documentKind(b) == "discussion" {
+				report, e := service.PushDiscussion(ctx, file)
+				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: discussion %d %s", report.Status, report.TopicID, report.Message))}, e
 			}
 			service.Skip = skip
 			report, e := service.Post(ctx, file)
