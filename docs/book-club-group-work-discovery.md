@@ -2,7 +2,7 @@
 
 Reviewed 2026-10-17. Research and proposed direction, not an approved implementation spec. Evidence is current official API documentation and inspection of Dev. No Canvas Live requests, classroom changes, or new feature implementation were performed.
 
-The user subsequently requested detailed development slices. The [17-slice implementation plan](group-work/README.md) now expands the initial workstreams below with shared contracts, adapter/document changes, dependencies and acceptance scenarios. The plan does not change implementation or evidence status.
+The teacher subsequently requested detailed development slices. The [17-slice implementation plan](group-work/README.md) now expands the initial workstreams below with shared contracts, adapter/document changes, dependencies and acceptance scenarios. The plan does not change implementation or evidence status.
 
 ## Recommended classroom result
 

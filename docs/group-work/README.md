@@ -1,6 +1,6 @@
 # Group work implementation plan
 
-Date: 2026-10-17. Status: development specifications; no slice is implemented by this plan. The user requested enough detailed slices to implement the group-work capabilities identified in [discovery](../book-club-group-work-discovery.md). These documents are coding handoffs for Dev. They do not authorize Canvas Live experiments, classroom writes, or changes to UserInstall.
+Date: 2026-10-17. Status: development specifications; no slice is implemented by this plan. The teacher requested enough detailed slices to implement the group-work capabilities identified in [discovery](../book-club-group-work-discovery.md). These documents are coding handoffs for Dev. They do not authorize Canvas Live experiments, classroom writes, or changes to UserInstall.
 
 Read [shared contracts](contracts.md), then the assigned slice. Follow [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../ARCHITECTURE.md), and [SCORING-RULES.md](../../SCORING-RULES.md). Each slice includes its CLI/MCP surface, document changes, integration work, consequential checks, and acceptance scenarios. Names and schemas below are proposed implementation contracts, not commands that already exist.
 
