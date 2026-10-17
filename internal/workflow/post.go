@@ -94,6 +94,7 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 	}
 	basisMatches := SameGradingBasis(doc.Assignment, liveBasis)
 	coupledRubric := liveBasis.Rubric != nil && liveBasis.Rubric.UseForGradingKnown && liveBasis.Rubric.UseForGrading
+	guard := s.newDiscussionGuard(ctx, doc, liveBasis)
 	save := func() error { return workspace.WriteDocument(path, &doc, body) }
 	for i := range doc.Students {
 		r := &doc.Students[i]
@@ -133,6 +134,16 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 			continue
 		}
 		source := sources[r.StudentRef]
+		if guard != nil {
+			if hold := guard.hold(s, *r, source); hold != "" {
+				holdStudentResult(r, hold)
+				if err = save(); err != nil {
+					return report, err
+				}
+				report.Students = append(report.Students, postReport(*r))
+				continue
+			}
+		}
 		live, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, source.student.UserID)
 		if e != nil {
 			if r.Grade != nil {

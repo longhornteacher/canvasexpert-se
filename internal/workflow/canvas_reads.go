@@ -57,6 +57,9 @@ type Assignment struct {
 	GroupCategoryID                *int64                         `json:"group_category_id"`
 	GradeGroupStudentsIndividually *bool                          `json:"grade_group_students_individually"`
 	DiscussionTopicID              *int64                         `json:"discussion_topic_id"`
+	DiscussionTopic                *struct {
+		ID int64 `json:"id"`
+	} `json:"discussion_topic"`
 	HasSubAssignments              *bool                          `json:"has_sub_assignments"`
 	Checkpoints                    *[]domain.AssignmentCheckpoint `json:"checkpoints"`
 	Overrides                      []AssignmentOverrideLive       `json:"overrides"`
@@ -208,7 +211,7 @@ func Assignments(ctx context.Context, c *canvas.Client, courseID int64) ([]Assig
 }
 func GetAssignment(ctx context.Context, c *canvas.Client, courseID, id int64) (Assignment, error) {
 	var result Assignment
-	err := c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d?include[]=rubric_assessment&include[]=checkpoints&include[]=all_dates&include[]=overrides", courseID, id), &result)
+	err := c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d?include[]=rubric_assessment&include[]=checkpoints&include[]=all_dates&include[]=overrides&include[]=discussion_topic", courseID, id), &result)
 	if err != nil {
 		return result, err
 	}

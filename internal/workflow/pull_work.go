@@ -332,6 +332,10 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			if e = students.Save(); e != nil {
 				return report, e
 			}
+			var discussion *discussionAssignmentEvidence
+			if len(detailed) > 0 {
+				discussion = s.readAssignmentDiscussion(ctx, course, a, snapshot, relDir)
+			}
 			for i, sub := range detailed {
 				st := roster[i]
 				if query == "" && s.completedHint(a.ID, st.Ref, sub, snapshot) {
@@ -341,6 +345,9 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				doc := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: st.Ref, Alias: st.Alias, AssignmentID: a.ID, Excused: sub.Excused, Monitored: st.Monitored}
 				if !s.Config.Aliases {
 					doc.Alias = st.Name
+				}
+				if discussion != nil {
+					doc.DiscussionEvidence = discussion.refFor(st.Ref)
 				}
 				doc.EnteredGradeKnown, doc.EnteredGrade, doc.EnteredGradeReason = s.enteredGrade(sub)
 				doc.ObservedEnteredScore = decimalPointer(sub.EnteredScore)

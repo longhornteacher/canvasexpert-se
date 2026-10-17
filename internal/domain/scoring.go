@@ -363,6 +363,9 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			if e := validateAttempt(g.Attempt); e != nil {
 				return fail(e)
 			}
+			if e := validateEvidence(doc.Assignment, g.Evidence); e != nil {
+				return fail(e)
+			}
 			if e := validateLateTiming(g.LateTiming); e != nil {
 				return fail(e)
 			}
@@ -410,6 +413,9 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			}
 			c := s.CommentOnly
 			if e := validateAttempt(c.Attempt); e != nil {
+				return fail(e)
+			}
+			if e := validateEvidence(doc.Assignment, c.Evidence); e != nil {
 				return fail(e)
 			}
 			if basis == nil {
@@ -505,3 +511,23 @@ func validateLateTiming(t *LateTiming) error {
 	return nil
 }
 func (d *ResultsDocument) Validate() error { _, e := ValidateResults(d); return e }
+
+// validateEvidence requires a graded discussion result to say which pulled
+// posts it assessed; other assignments carry no discussion evidence.
+func validateEvidence(a AssignmentSnapshot, ev *EvidenceSelection) error {
+	if a.DiscussionTopicID == nil {
+		if ev != nil {
+			return fmt.Errorf("evidence is only for graded discussions")
+		}
+		return nil
+	}
+	if ev == nil || strings.TrimSpace(ev.Digest) == "" {
+		return fmt.Errorf("a graded discussion result needs evidence: copy digest and entry_refs from the student's discussion_evidence in the pulled work")
+	}
+	return nil
+}
+
+// ValidateResultsEvidence exposes the graded-discussion evidence rule to callers.
+func ValidateResultsEvidence(a AssignmentSnapshot, ev *EvidenceSelection) error {
+	return validateEvidence(a, ev)
+}

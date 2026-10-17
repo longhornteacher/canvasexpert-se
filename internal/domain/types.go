@@ -1,6 +1,12 @@
 package domain
 
-import "strings"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sort"
+	"strings"
+)
 
 // All machine-written documents use schema 1. Markdown/HTML body is returned
 // separately by workspace.ReadDocument so live HTML is never round-tripped.
@@ -244,6 +250,9 @@ type StudentWorkDocument struct {
 	EnteredGradeReason     string            `yaml:"entered_grade_reason,omitempty"`
 	Excused                bool              `yaml:"excused"`
 	Monitored              bool              `yaml:"monitored"`
+	// DiscussionEvidence references this student's own attributed posts in the
+	// pulled conversation packet when the assignment is a graded discussion.
+	DiscussionEvidence *DiscussionEvidenceRef `yaml:"discussion_evidence,omitempty"`
 	Notes                  []string          `yaml:"notes,omitempty"`
 }
 type Component struct {
@@ -296,8 +305,30 @@ type ActionOutcomes struct {
 	Grade   ActionOutcome `yaml:"grade,omitempty"`
 	Late    ActionOutcome `yaml:"late,omitempty"`
 }
+// DiscussionEvidenceRef is the pulled selection of one student's discussion
+// work: their own entries (by source-qualified entry reference) and a digest
+// of exactly that text. Status is complete, partial or unavailable.
+type DiscussionEvidenceRef struct {
+	Packet    string   `yaml:"packet"`
+	TopicID   int64    `yaml:"topic_id"`
+	Status    string   `yaml:"status"`
+	Reasons   []string `yaml:"reasons,omitempty"`
+	EntryRefs []string `yaml:"entry_refs,omitempty"`
+	Digest    string   `yaml:"digest,omitempty"`
+}
+
+// EvidenceSelection is the result-side record of what the assessment relied on:
+// the pulled digest of the student's own entries, and any other people's
+// entries explicitly cited as context.
+type EvidenceSelection struct {
+	Digest      string   `yaml:"digest"`
+	EntryRefs   []string `yaml:"entry_refs,omitempty"`
+	ContextRefs []string `yaml:"context_refs,omitempty"`
+}
+
 type GradeOperation struct {
 	Attempt        AttemptRef       `yaml:"attempt"`
+	Evidence       *EvidenceSelection `yaml:"evidence,omitempty"`
 	Components     []ComponentScore `yaml:"components"`
 	Assessment     Decimal          `yaml:"assessment"`
 	Feedback       string           `yaml:"feedback"`
@@ -334,6 +365,7 @@ type StudentResult struct {
 // submission comment. It deliberately has no grade, rubric, or late fields.
 type CommentOnlyOperation struct {
 	Attempt    AttemptRef       `yaml:"attempt"`
+	Evidence   *EvidenceSelection `yaml:"evidence,omitempty"`
 	Components []ComponentScore `yaml:"components"`
 	Feedback   string           `yaml:"feedback"`
 	Header     string           `yaml:"header,omitempty"`
@@ -365,4 +397,27 @@ func (d ResultsDocument) Basis() *Rubric {
 		return d.Assignment.Rubric
 	}
 	return d.ScoringBasis
+}
+
+// DiscussionEntryRef identifies a source entry by context, topic and entry ID.
+func DiscussionEntryRef(e DiscussionEntry) string {
+	return fmt.Sprintf("%s:%d:%d:%d", e.ContextType, e.ContextID, e.TopicID, e.EntryID)
+}
+
+// DiscussionEntrySignature changes whenever a post's text, deletion state or
+// edit time changes.
+func DiscussionEntrySignature(e DiscussionEntry) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%t\x00%s", e.UpdatedAt, e.HTML, e.Deleted, e.CreatedAt)))
+	return hex.EncodeToString(sum[:])
+}
+
+// DiscussionEvidenceDigest is a deterministic digest of a set of entries.
+func DiscussionEvidenceDigest(entries []DiscussionEntry) string {
+	lines := make([]string, 0, len(entries))
+	for _, e := range entries {
+		lines = append(lines, DiscussionEntryRef(e)+"="+DiscussionEntrySignature(e))
+	}
+	sort.Strings(lines)
+	sum := sha256.Sum256([]byte(strings.Join(lines, "\n")))
+	return hex.EncodeToString(sum[:])
 }

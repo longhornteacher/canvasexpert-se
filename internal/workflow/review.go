@@ -365,6 +365,17 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			feedback = r.CommentOnly.Feedback
 		}
 		c.Submission = submissionText(works[r.StudentRef], c.Attempt)
+		if w, ok := works[r.StudentRef]; ok && w.DiscussionEvidence != nil {
+			var ev *domain.EvidenceSelection
+			if r.Grade != nil {
+				ev = r.Grade.Evidence
+			} else if r.CommentOnly != nil {
+				ev = r.CommentOnly.Evidence
+			}
+			if text := discussionEvidenceText(root, w, ev); text != "" {
+				c.Submission = text
+			}
+		}
 		if store != nil {
 			if st, e := store.Resolve(doc.Assignment.Instance, r.StudentRef); e == nil {
 				feedback = workspace.ReplaceStudentName(feedback, st)

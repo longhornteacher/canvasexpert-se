@@ -66,6 +66,10 @@ func Snapshot(a Assignment, origin string) (domain.AssignmentSnapshot, error) {
 	}
 	v.GradeGroupStudentsIndividually = a.GradeGroupStudentsIndividually
 	v.DiscussionTopicID = a.DiscussionTopicID
+	if v.DiscussionTopicID == nil && a.DiscussionTopic != nil && a.DiscussionTopic.ID > 0 {
+		id := a.DiscussionTopic.ID
+		v.DiscussionTopicID = &id
+	}
 	v.HasSubAssignments = a.HasSubAssignments
 	v.Checkpoints = a.Checkpoints
 	if len(a.Rubric) > 0 {

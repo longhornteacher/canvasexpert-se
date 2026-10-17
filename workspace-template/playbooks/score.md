@@ -1,6 +1,6 @@
 # Score student work
 
-For a book-club unit, read `group-work.md` first. The current group workflow supports ungraded discussion evidence and ordinary individual assignment/New Quiz scoring; it supports shared and individual grades on a shared group product (`group-results`; see `group-work.md`), but not graded discussions. Do not turn discussion participation counts or a discussion packet into a score. Use this playbook only for a supported individual assessment.
+For a book-club unit, read `group-work.md` first. The current group workflow supports ungraded discussion evidence and ordinary individual assignment/New Quiz scoring; it supports shared and individual grades on a shared group product (`group-results`; see `group-work.md`), and graded discussions (see the graded-discussion section of `group-work.md`). Do not turn discussion participation counts or a discussion packet into a score. Use this playbook only for a supported individual assessment.
 
 The judgment calls are yours; the Engine pulls work, does the arithmetic and posts. What the teacher's words mean, the review page and how to report are in `AGENTS.md`.
 
