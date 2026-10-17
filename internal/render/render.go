@@ -51,7 +51,7 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		return "", fmt.Errorf("assessment %s does not match derived value %s", in.Assessment.String(), computed.Posted.String())
 	}
 
-	overall := fmt.Sprintf("Overall: %s/%s", in.Assessment.String(), in.AssignmentPoints.String())
+	overall := fmt.Sprintf("Overall: %s/%s", shortNumber(in.Assessment), shortNumber(in.AssignmentPoints))
 	if in.Late {
 		overall += " (late)"
 	}
@@ -91,7 +91,7 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 				out.WriteString("; ")
 			}
 			cs := byID[rubricCriterion.ID]
-			fmt.Fprintf(&out, "%s %s/%s", rubricCriterion.Description, cs.Points.String(), rubricCriterion.Points.String())
+			fmt.Fprintf(&out, "%s %s/%s", rubricCriterion.Description, shortNumber(cs.Points), shortNumber(rubricCriterion.Points))
 			printed++
 		}
 	}
@@ -147,4 +147,17 @@ func HTMLText(source string) string {
 		}
 	}
 	return strings.Join(clean, "\n")
+}
+
+// shortNumber prints a points value the way a teacher writes it: Canvas returns
+// "20.0" for whole-number maxima, which reads as noise in student feedback.
+func shortNumber(d domain.Decimal) string {
+	t := d.String()
+	if strings.Contains(t, ".") {
+		t = strings.TrimRight(strings.TrimRight(t, "0"), ".")
+	}
+	if t == "" || t == "-" {
+		return "0"
+	}
+	return t
 }

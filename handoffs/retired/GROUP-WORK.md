@@ -1,3 +1,5 @@
+> **Retired 2026-10-17.** Tier A and B (slices 01–03, 05a/05b, 06–11, 16, 17) are implemented and were checked in Canvas Live on CS8; Tier C is frozen as "maybe nice for later". Evidence and limits are in [docs/group-work/README.md](../../docs/group-work/README.md) and [docs/engine-capabilities.md](../../docs/engine-capabilities.md). Historical brief; do not execute it.
+
 # Group work (book clubs): execution handoff for a coding agent
 
 Self-contained brief for an agent session with no prior context. Target release: **1.1.0-beta.1** ("1.1b1"), developed on the `dev` branch. Phase 1 slices 01–03, 05a–06, 16–17 and Phase 2 slices 05b and 07–11 are implemented in Dev. Continue from the assigned slice in [the status table](../../docs/group-work/README.md#implementation-status); no CE-SE Canvas Live group-work writes or group-submission pulls have been run.

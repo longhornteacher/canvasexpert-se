@@ -57,7 +57,7 @@ Slices run **one at a time**; see Execution. Each phase ends usable.
 1. **Phase 1, working clubs and conversations:** 01 → 02 → 03 → 05a → 06 → 16 → playbook v1 (17, covering only what exists). Writes are additive and easy for the teacher to inspect. 05b (graded linked discussions) follows once Phase 1 has been used, or alongside 07.
 2. **Gate P, one authorized live check** (below), before any Phase 2 code that depends on propagation. **Run 2026-10-17; results below.** Contracts for 10 and 11 stand; late timing, excused/hidden members and real submissions remain unobserved.
 3. **Phase 2, shared products and assessment:** 08 → 09 → 10 → 11, then 05b and 07. Update the playbook as each lands.
-4. **Phase 3, on request only:** 12, 13, 04, then 14 and 15. Their full specs stay here so a later request starts from a plan, not from scratch.
+4. **Phase 3, frozen (maybe nice for later):** 12, 13, 04, then 14 and 15. Nothing is planned or scheduled. Their full specs stay here so a teacher request can start from a plan, not from scratch.
 
 ## Gate P: live propagation check
 
@@ -89,9 +89,23 @@ Run on CS8 (course 121046) with raw API calls from a throwaway probe, not CE-SE.
 
 Consequences: the representative-member route and the group-comment flag contracts in slices 10 and 11 stand. Slice 07's open risk is resolved: ordinary guards do not misclassify a graded group discussion. Not yet observed: late timing, excused/hidden members, actual shared-artifact submissions, and student-facing views.
 
+## Live results (2026-10-17, CS8)
+
+Live check, 2026-10-17 on CS8 (course 121046) with the dev Engine, disposable `[CSE 1.1b DISPOSABLE]` objects only, deleted afterwards except one Test-Student-only graded discussion kept for a manual post: group set and club create/read/pull/update; membership add, move and remove for two students; a member-editable group Page create, pull, edit, unpublish and revision history; ungraded distributed and direct-group discussions, a graded distributed discussion with rubric whose group set stayed on the topic while the linked assignment stayed individual, linked-topic rename syncing the assignment, whole-thread pull with child sources, and a teacher reply; a module with a SubHeader, Discussion and ExternalUrl; a group assignment with group overrides, visibility restricted to the club, and date edits; a real shared submission pull (status ready, one artifact, two members, complete audience, new attempts tracked); a shared grade and rubric that reached both members once, group and private comments with the right audience and no replay on rerun, plus a shared late timing write; an individual-mode assignment with different grades, rubrics and private comments per student; and the local review page rendering group and private cards.
+
+Observed differences and limits:
+
+- Canvas returns `discussion_topic_id: null` on an assignment read; the linked topic ID is `discussion_topic.id` with `include[]=discussion_topic`. The Engine reads both.
+- A teacher's own discussion entry comes back with `author_kind: unknown`, never as a student.
+- Canvas's course late policy computed the late deduction after the Engine wrote the entered grade and `seconds_late`; the Engine did not compute a penalty.
+- Canvas returns whole-number points as `20.0`; feedback text now prints `20`.
+- Submissions were made on behalf of two real students on disposable, club-only assignments through a dev-only helper (`tmp/cs8-group-live`); the Engine has no submit command. A first grade on a member with no submission remains blocked in the Engine (no attempt), consistent with the Gate P 403.
+- Not exercised live: self sign-up and even allocation (they would touch the whole class), graded-discussion assessment (needs a Student View post by the teacher on the kept Test Student discussion), checkpointed discussions, excused/hidden members, student-facing views and notifications.
+- Anomaly: when `cse review` opened the loopback page, a Chrome 155 browser instance submitted the form within seconds, with no click from the tester, and posted all approved cards. Deselecting a card could not be tested through the page; deselection is covered by post-level tests.
+
 ## Boundaries
 
-- Tier A and B surfaces are scheduled deliverables, including self sign-up and individual group grades. Tier C (peer critique, calendars, group files, conference scheduling, Inbox messaging) is fully specified but built only on the teacher's request; an implementer does not start it as a side effect of another slice.
+- Tier A and B surfaces are scheduled deliverables, including self sign-up and individual group grades. Tier C (peer critique, calendars, group files, conference scheduling, Inbox messaging) is frozen as "maybe nice for later": specified, not scheduled, built only if the teacher asks; an implementer does not start it as a side effect of another slice.
 - Do not provision Google/Microsoft documents or video meetings through invented Canvas REST writes. Slice 16 covers discovery and links; provider creation remains a separate integration. The public resources document reads: [Collaborations](https://developerdocs.instructure.com/services/canvas/resources/collaborations), [Conferences](https://developerdocs.instructure.com/services/canvas/resources/conferences).
 - No group quizzes, collaborative real-time editor, permanent contribution score, role-management service, new general job engine, generic HTTP-write tool, or database. Preserve existing New Quiz support.
 - Do not delete clubs containing student work, replace student Pages, shuffle active groups, or send announcements/messages merely because a unit is being assembled. Specific teacher scope controls these actions. Empty draft-object cleanup can remain teacher-directed in Canvas; automated deletion is not required for this unit.
@@ -114,3 +128,14 @@ Run focused existing tests and meaningful new regressions for the changed behavi
 An authorized live check is useful evidence, not an automatic prerequisite for ordinary use of an implemented supported path. Grade propagation, feedback audience, and student access deserve explicit observation when authorized because local fakes cannot establish Canvas behavior. Do not run probes against historical course IDs just because credentials are available.
 
 The final integrated example uses at least two clubs with different books, multiple members, an unassigned student, a common graded discussion, separate club notebook Pages, a shared product and individual reflections, plus any Tier C features actually built. It exercises resumption from actual partial outcomes and scope preservation; it is a focused example, not a certification system.
+
+## Standing teacher preferences (carried from the retired handoff) (these come from the teacher; they are not in any agent's memory)
+
+- **No read-backs.** An accepted Canvas write (no HTTP error) is done. Do not confirm by shape of the reply, do confirmation GETs after writes, or print "partial/uncertain" noise for writes that landed. Keep cheap *pre-write* guards: course/student/attempt/group identity, wrong target, duplicates, audience. Do not add retry or verification machinery after writes. A 408/5xx/redirect on a write is uncertain: do not blindly replay.
+- **Proportionality.** Do not add coverage quotas, certification rituals, universal operation frameworks or speculative migrations. A conceivable failure is not a reason to add code; ask whether the teacher would notice it and what recovery costs. Keep cheap checks for wrong-target writes, privacy exposure, dishonest grades and loss of student/unsent work. A slice's acceptance list names protections, not a test matrix.
+- **Honest grades.** Post the computed assessment even when it is lower than an entered grade. Never calculate a late penalty in CE-SE. No contribution multipliers. No automatic zeros without complete relevant evidence.
+- **Canvas Live is authoritative.** Preserve teacher intent and unsent work. Protect credentials and teacher-only notes. Respect requested posting scope.
+- **Teacher-facing copy** (review cards, WebUI text, Playbook seed text, error messages the teacher sees): a short label plus one plain sentence that names specifics. Warm but plain: no jokes, no exclamation marks, no internal jargon in primary text. Consequential actions get a brief explanation by the action. Honesty limits unchanged.
+- **Installation constraints.** The district locks work laptops (no admin, no installs). District OneDrive blocks `.exe`, `.js`, `.py` and similar, so never design anything that relies on syncing executables or scripts, and never put the CE-SE folder in OneDrive. UserSync (optional cloud folder) is for the agent app's data only.
+- **Three-step bar.** Setup and any new teacher workflow must be agent-driven in conversation; never require a teacher to hand-edit files.
+- **Docs honesty.** Keep Canvas Live evidence, local tests and pending human validation distinct. Local tests alone are never live proof. When a capability, limitation or status changes, update `internal/localui/capabilities.go` and `docs/engine-capabilities.md` together with a review date. Keep `engine-docs/` contracts and `workspace-template/` aligned with behavior, and add notable user-visible changes to `CHANGELOG.md`.

@@ -14,3 +14,5 @@ Published objects can be visible to enrolled students; clean those up first.
 On 2026-10-17 assignments 3698077-3698082 and 3698181 were no longer found (already deleted); their rubrics may remain. The 2026-10-17 live check used disposable assignments 3703744 and 3703757, each visible only to the Test Student, and deleted both afterward.
 
 All Engine unattended assignments have `omit_from_final_grade: true` and `post_to_sis: false`. Remove a row when its object is deleted.
+
+2026-10-17 group-work live check (all `[CSE 1.1b DISPOSABLE]`): everything was deleted except discussion topic 304285 and its linked assignment 3703816 (published, visible only to the built-in Test Student) with rubric 71942. They wait for a Student View post so graded-discussion scoring can be checked; delete them afterwards.

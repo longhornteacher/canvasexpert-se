@@ -1,3 +1,5 @@
+> **Retired 2026-10-17 at the teacher's request.** Direction and verified state live in [docs/parent-update-flow.md](../../docs/parent-update-flow.md). The slice 3 acceptance step below (teacher at the page) is not verified by this retirement. Historical brief; do not execute it.
+
 # Handoff: Parent Updates (Canvas → reviewed Outlook email + Band post)
 
 Created 2026-10-16. **Slice 4 (Band) was dropped by the teacher; ignore every Band reference below.** Direction and evidence: [docs/parent-update-flow.md](../../docs/parent-update-flow.md). Read it first, along with root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`.
