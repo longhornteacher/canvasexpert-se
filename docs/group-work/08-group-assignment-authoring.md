@@ -43,6 +43,14 @@ Extend `domain/types.go`, `validation.go`, `workflow/author.go`, `edit_plan.go`,
 
 Effective-due-date reads must expose each student's actual due date for later assessment timing and reports; do not assume a teacher's base assignment date is everyone's deadline. All dates use explicit RFC3339 values and configured course timezone for display.
 
+## Code anchors (verified in Dev 2026-10-17)
+
+- `UnsupportedAssignment` (`canvas_reads.go:304`) has exactly one caller: `PullItem` in `workspace_reads.go:110` (pull-for-edit). It refuses group sets, anonymous/moderated grading, non-points/percent grading and any submission type except `online_text_entry`/`online_upload`. Relax it for group assignments here; this does not touch scoring. Decide deliberately whether to also admit `discussion_topic` (needed by 05b and 12) rather than leaving the refusal in place by accident.
+- The scoring/pull guards are separate: `unpullableAssignment` (`canvas_reads.go:287`, called at `pull_work.go:204` and `257`) and the results validators (`scoring.go:286`, `408`). Leave them until slices 09-11.
+- `sameCreateCore` (`author.go:436`) requires `GroupCategoryID` nil/0, and `createFields` (`author.go:428`) sends no group fields. Resume after an uncertain group-assignment create would never match and would create a duplicate. Both must carry the requested group set and mode.
+- `SameGradingBasis` (`edit_plan.go:68`) is a deny-list: it blanks title/dates/rubric-use flags and compares everything else through `SameSnapshot` (`reflect.DeepEqual`). A new `AssignmentSnapshot` field is compared by default, so a pointer field that is nil in an old saved snapshot but `false` live would hold every unsent grade as "grading basis changed". Blank or normalize each new field explicitly, and keep a golden old-format snapshot that must still compare equal.
+- `PlanEdit` sends only changed fields and `sameEditFields` checks only replaced ones, so absent group fields on an update already mean preserve. Keep that property.
+
 ## Acceptance
 
 - Group set and grading mode survive create, pull, edit, review and resume; an absent mode on a live group stays unknown.

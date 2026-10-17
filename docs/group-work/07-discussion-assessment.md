@@ -20,6 +20,12 @@ Checkpointed discussions are a separate Canvas grading variant and are not suppo
 
 Review displays the student's attributed posts with needed context, honest criterion results, feedback, and individual audience. Existing late-timing rules apply using the student's effective due date; uncertain discussion timing omits only the timing action.
 
+## Code anchors (verified in Dev 2026-10-17)
+
+- `unpullableAssignment` (`canvas_reads.go:280`) already lets `discussion_topic` assignments through, so `pull-work` can reach a graded discussion today. Per-student checks (`unsupportedSubmission`: excused, unassigned, no submission/no attempt) are reusable unchanged.
+- **Open risk (also a Gate P item):** if a graded *group* discussion's linked assignment returns a non-null `group_category_id`, the guards at `canvas_reads.go:287`, `scoring.go:286` and `scoring.go:408` will reject it as a shared-product assignment. The contract says the group set lives on the topic, not the assignment; confirm what Canvas actually returns. If the assignment does carry it, the guards must distinguish a discussion-linked assignment (verified by topic association) from a shared product, without loosening them for real shared products.
+- `completedHint` (`pull_work.go:562`) already recognizes `kind: results` grade rows per student/attempt, so individually assessed discussions get completion handling without new code. It ignores comment-only and revise rows; keep that behavior.
+
 ## Acceptance
 
 - Two students in the same child conversation receive different results and only individual feedback.

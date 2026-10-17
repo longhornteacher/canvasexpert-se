@@ -23,6 +23,14 @@ Add a focused `group_pull.go` operation and domain types, using existing attachm
 
 Use deterministic evidence fingerprints from relevant body/file IDs/attempt references, not a permanent content store. A null/unknown group, incomplete membership, or differing current artifacts is reported and held for shared assessment rather than merged into a false consensus. Individually assessable member evidence can remain usable in slice 11. Students outside groups remain listed separately with the specific Canvas state; do not create a club for them or discard their submitted work.
 
+## Code anchors (verified in Dev 2026-10-17)
+
+- `pull_work.go` rejects group assignments at two points: discovery (`:204`, on list data) and after `GetAssignment` (`:257`). The group branch goes before the flat `Submissions` read (`:209`) and needs its own discovery using the same enrollment/`active` map built just above. Do not thread group logic through the per-student packet loop (`:307` onward); `completedHint`, `attemptWork` and the packet/student-work files all assume one student per document.
+- The `Submission` DTO has no group fields and `Submissions()` (`canvas_reads.go:204`) does not request `include[]=group`; add both for the group path only.
+- `attemptWork` downloads attachments per call. Calling it once per member would download a shared file N times; deduplicate by Canvas file identity inside the group pull, as specified.
+- Reusable unchanged: `unsupportedSubmission`, `liveHandled` (in shared mode a propagated grade makes every member read as handled, which is the right discovery behavior), `fetchSubmissions`, `attemptRef`.
+- `completedHint` (`:562`) scans only `kind: results` files and only `grade` rows. Individual-mode `group-results` (slice 11) must be recognized there, per student/attempt; shared-mode completion can rely on `liveHandled` plus the group-results outcomes.
+
 ## Acceptance
 
 - Three matching member submissions produce one artifact and three distinct member records with their own attempts and grades.

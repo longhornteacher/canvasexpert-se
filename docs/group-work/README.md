@@ -47,7 +47,8 @@ Slices 10 and 11 rest on Canvas source reading (representative-member route, `gr
 
 - one disposable group assignment, two or three test students in one group set, one rubric;
 - shared mode: does a grade written through one member propagate to all; does a rubric assessment propagate; what does `group_members` return for the representative; does `group_comment=true` reach all members and `false` only one;
-- individual mode: does a grade or rubric reach only the named student.
+- individual mode: does a grade or rubric reach only the named student;
+- group discussion: for a graded group discussion, does the linked assignment return a non-null `group_category_id`? It decides whether slice 07 must distinguish a discussion-linked assignment from a shared product.
 
 Record what was observed as Canvas Live evidence in [engine-capabilities.md](../engine-capabilities.md) and `internal/localui/capabilities.go`. If observed behavior differs from upstream, revise slices 10 and 11 before implementing them. Slices 08 and 09 do not need the gate. No student data enters Dev fixtures. Whether to run Gate P, and on what course, is the teacher's call; implementers do not start it unprompted.
 

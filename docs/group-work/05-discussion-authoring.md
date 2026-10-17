@@ -42,6 +42,10 @@ Review for a graded topic displays topic scope, individual grading, points/rubri
 
 Routes and topic fields: [Discussion Topics](https://developerdocs.instructure.com/services/canvas/resources/discussion_topics). Do not assume every district's discussion UI offers identical settings. This slice does not author checkpoint subassignments.
 
+## Code anchors (verified in Dev 2026-10-17)
+
+05b edits and rubric attachment on a linked discussion assignment cannot use the ordinary pull-for-edit path today: `PullItem` (`internal/workflow/workspace_reads.go:110`) calls `UnsupportedAssignment`, which rejects any submission type other than `online_text_entry`/`online_upload`, so a `discussion_topic` assignment is refused. Slice 08 relaxes that function (see its anchors); 05b depends on that change or must route through the discussion's own baseline (`pull-discussion`), which is the contract's intent. Do not widen `UnsupportedAssignment` here separately.
+
 ## Acceptance
 
 - A distributed create posts the group set only on the topic and records the returned linked assignment identity; a direct group topic never creates a gradebook column; mixed scopes are rejected before writes.

@@ -48,6 +48,13 @@ Do not overwrite a higher entered grade into the rubric calculation. For no-rubr
 
 Add `group_results.go`, `group_post.go`, and group review builders using existing assessment/render helpers. Keep ordinary `post.go` branches stable; share only actual arithmetic/render/action helpers, not an operation registry. Completed outcomes refer to the group assignment/artifact/member scope. Membership changes do not cause an accepted shared action to be replayed against a new audience. For a timeout, reconcile only from bounded relevant evidence on explicit resumption; an unrelated individual comment with equal text is not proof of a shared comment.
 
+## Code anchors (verified in Dev 2026-10-17)
+
+- Today's `postGrade` PUTs to `/submissions/<one user>` per student row (`post.go:366`). In shared mode Canvas applies that to the whole group, so a group assignment must never reach `Post`; the guards at `scoring.go:286`/`408` and `canvas_reads.go:287` are the only barrier. Keep them. Group results get their own post entry point; do not add a branch inside `postGrade`.
+- Skip is `s.Skip[r.StudentRef]` (`post.go:101`, `312`), fed from the review form in `localui/review.go:244-264` and set in the callback at `cmd/cse/remote.go:390`. A group/action card ref matches no student ref and would be silently ignored, posting the group anyway. The `group-results` callback needs its own skip semantics keyed by group and action, and the failed-count loop at `remote.go:393` is student-keyed too.
+- The review callback's fallback sends any non-assignment, non-quiz kind to `service.Post`. `ValidateResults` rejects other kinds, so today that fails closed, but only after the teacher approved the card. Add an explicit `group-results` branch, and make sure other new kinds (discussion, group-set) are not routed there by accident. `push`/`post` are separately allowlisted at `remote.go:88` and `91`.
+- Existing comment writes never set `comment[group_comment]`, so they remain individual. The shared comment is a new explicit action.
+
 ## Acceptance
 
 - One reviewed shared assessment issues one grade/rubric sequence and one shared-comment action for the exact group; an independent club receives its own score.
