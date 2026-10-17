@@ -521,7 +521,6 @@ func (s *Service) finishGradedDiscussion(ctx context.Context, c domain.Course, d
 	if err != nil {
 		return false, err
 	}
-	pointsBefore := live.Points
 	switch {
 	case len(live.Rubric) > 0 && !ambiguous(created.Rubric):
 		created.Rubric = domain.ActionOutcome{Status: "preserved", Message: "the linked assignment already has a rubric in Canvas; left as it is"}
@@ -566,15 +565,6 @@ func (s *Service) finishGradedDiscussion(ctx context.Context, c domain.Course, d
 	}
 	if !definite(created.Rubric) {
 		return hold(created.Rubric.Status, created.Rubric.Message)
-	}
-	// Attaching a rubric is the author action known to change points; check the
-	// scale before the discussion becomes public.
-	after, err := GetAssignment(ctx, s.Client, c.ID, created.AssignmentID)
-	if err != nil {
-		return false, err
-	}
-	if after.Points != pointsBefore {
-		return hold("held", "rubric attachment changed the linked assignment's points; the discussion remains unpublished")
 	}
 	return false, nil
 }

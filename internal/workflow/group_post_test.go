@@ -335,7 +335,7 @@ func TestPostGroupResultsFailedCommentResumesWithoutRepeatingGrade(t *testing.T)
 			t.Fatal(e)
 		}
 		return v[0]
-	}())
+	}(), false)
 	if err != nil {
 		t.Fatal(err)
 	}

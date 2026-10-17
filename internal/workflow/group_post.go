@@ -102,7 +102,7 @@ func holdGroupShared(r *domain.GroupResult, message string) {
 }
 
 // GroupSharedText renders the whole-group comment exactly as review shows and post sends.
-func GroupSharedText(doc domain.GroupResultsDocument, row domain.GroupResult, v domain.ValidatedGroup) (string, error) {
+func GroupSharedText(doc domain.GroupResultsDocument, row domain.GroupResult, v domain.ValidatedGroup, omitLate bool) (string, error) {
 	basis := doc.Basis()
 	if row.Operation == "individual" {
 		sf := row.SharedFeedback
@@ -118,7 +118,7 @@ func GroupSharedText(doc domain.GroupResultsDocument, row domain.GroupResult, v 
 		if g.FeedbackAudience != "group" {
 			return "", nil
 		}
-		return render.RenderFeedback(render.FeedbackInput{Rubric: *basis, Interpretation: doc.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: g.Feedback, Late: isLate(g.LateTiming), Header: g.Header})
+		return render.RenderFeedback(render.FeedbackInput{Rubric: *basis, Interpretation: doc.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: g.Feedback, Late: isLate(g.LateTiming) && !omitLate, Header: g.Header})
 	}
 	c := row.CommentOnly
 	return render.RenderFeedback(render.FeedbackInput{Rubric: *basis, Interpretation: doc.Interpretation, Components: c.Components, Assessment: v.Assessment.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: c.Feedback, Header: c.Header})
@@ -400,6 +400,13 @@ func groupStaticHold(row domain.GroupResult, work domain.GroupWorkDocument, memb
 func (s *Service) groupPreflight(ctx context.Context, doc domain.GroupResultsDocument, row domain.GroupResult, src groupSource) (groupLive, string, error) {
 	a := doc.Assignment
 	live := groupLive{subs: map[string]Submission{}}
+	if liveA, err := GetAssignment(ctx, s.Client, a.CourseID, a.AssignmentID); err != nil {
+		return live, "assignment could not be re-read: " + err.Error(), nil
+	} else if basis, err := Snapshot(liveA, s.Client.Origin()); err != nil {
+		return live, "", err
+	} else if !SameGradingBasis(a, basis) {
+		return live, "assignment, rubric or group grading mode changed; pull-work for reassessment", nil
+	}
 	var g groupPullIndex
 	if err := s.Client.Get(ctx, fmt.Sprintf("/api/v1/groups/%d", row.GroupID), &g); err != nil {
 		return live, "group could not be read: " + err.Error(), nil
@@ -557,7 +564,7 @@ func (s *Service) postGroupShared(ctx context.Context, doc *domain.GroupResultsD
 	}
 	attempt := src.members[row.Representative].Attempt
 	if row.CommentOnly != nil {
-		return s.postGroupComment(ctx, doc, row, v, &row.CommentOnly.Outcome, live, attempt, save)
+		return s.postGroupComment(ctx, doc, row, v, &row.CommentOnly.Outcome, live, attempt, false, save)
 	}
 	g := row.Grade
 	repID := live.rep.UserID
@@ -653,7 +660,7 @@ func (s *Service) postGroupShared(ctx context.Context, doc *domain.GroupResultsD
 			}
 			if hold != "" {
 				holdOutcome(&g.Outcomes.Comment, hold)
-			} else if err = s.postGroupComment(ctx, doc, row, v, &g.Outcomes.Comment, fresh, attempt, save); err != nil {
+			} else if err = s.postGroupComment(ctx, doc, row, v, &g.Outcomes.Comment, fresh, attempt, g.LateTiming != nil && !membersShareDue(src.members, row.MemberRefs, g.LateTiming.DueAt), save); err != nil {
 				return err
 			}
 		}
@@ -673,7 +680,7 @@ func (s *Service) postGroupShared(ctx context.Context, doc *domain.GroupResultsD
 		switch {
 		case hold != "":
 			holdOutcome(&g.Outcomes.Late, hold)
-		case !commonDueDate(fresh, g.LateTiming.DueAt):
+		case !membersShareDue(src.members, row.MemberRefs, g.LateTiming.DueAt) || !commonDueDate(fresh, g.LateTiming.DueAt):
 			// Shared lateness propagates, so it needs one timing that is true for everyone.
 			g.Outcomes.Late = domain.ActionOutcome{Status: "not-requested", Message: "members have different effective due dates; late timing was omitted and the grade and feedback continued"}
 		default:
@@ -683,6 +690,18 @@ func (s *Service) postGroupShared(ctx context.Context, doc *domain.GroupResultsD
 		}
 	}
 	return save()
+}
+
+// membersShareDue reports whether every reviewed member's pulled effective due
+// date matches the one late timing was worked out against.
+func membersShareDue(members map[string]domain.GroupWorkMember, refs []string, due string) bool {
+	for _, ref := range refs {
+		m, ok := members[ref]
+		if !ok || m.EffectiveDueAt == "" || !sameDate(&m.EffectiveDueAt, &due) {
+			return false
+		}
+	}
+	return true
 }
 
 func commonDueDate(live groupLive, due string) bool {
@@ -696,8 +715,8 @@ func commonDueDate(live groupLive, due string) bool {
 
 // postGroupComment sends one whole-group comment through the representative
 // route with comment[group_comment]=true.
-func (s *Service) postGroupComment(ctx context.Context, doc *domain.GroupResultsDocument, row *domain.GroupResult, v domain.ValidatedGroup, out *domain.ActionOutcome, live groupLive, attempt int, save func() error) error {
-	text, err := GroupSharedText(*doc, *row, v)
+func (s *Service) postGroupComment(ctx context.Context, doc *domain.GroupResultsDocument, row *domain.GroupResult, v domain.ValidatedGroup, out *domain.ActionOutcome, live groupLive, attempt int, omitLate bool, save func() error) error {
+	text, err := GroupSharedText(*doc, *row, v, omitLate)
 	if err != nil {
 		return err
 	}
@@ -727,8 +746,12 @@ func (s *Service) postGroupComment(ctx context.Context, doc *domain.GroupResults
 		}
 		return save()
 	}
-	if has(live.subs[row.Representative]) {
-		*out = domain.ActionOutcome{Status: "preserved", PostedText: text, Message: "exact intended text is already present; ownership not assumed"}
+	allHave := true
+	for _, ref := range row.MemberRefs {
+		allHave = allHave && has(live.subs[ref])
+	}
+	if allHave {
+		*out = domain.ActionOutcome{Status: "preserved", PostedText: text, Message: "exact intended text is already present for every member; ownership not assumed"}
 		return save()
 	}
 	*out = domain.ActionOutcome{Status: "pending", PostedText: text}
@@ -883,7 +906,8 @@ func buildGroupResultsReview(root, path string) (ReviewModel, error) {
 			}
 		}
 		if c.Hold == "" {
-			text, te := GroupSharedText(doc, row, v)
+			omitLate := row.Grade != nil && row.Grade.LateTiming != nil && !membersShareDue(members, row.MemberRefs, row.Grade.LateTiming.DueAt)
+			text, te := GroupSharedText(doc, row, v, omitLate)
 			if te != nil {
 				c.Hold = te.Error()
 			}
@@ -1021,7 +1045,7 @@ func (s *Service) postGroupIndividual(ctx context.Context, doc *domain.GroupResu
 		return save()
 	}
 	s.privateGroupComments = false
-	return s.postGroupComment(ctx, doc, row, v, &sf.Outcome, live, src.members[row.Representative].Attempt, save)
+	return s.postGroupComment(ctx, doc, row, v, &sf.Outcome, live, src.members[row.Representative].Attempt, false, save)
 }
 
 // individualSharedHold covers the audience conditions of a whole-group comment
@@ -1160,7 +1184,7 @@ func individualReviewCards(root string, doc domain.GroupResultsDocument, row dom
 			c.Hold = individualSharedHold(row, groupSource{work: work, members: members})
 		}
 		if c.Hold == "" {
-			text, err := GroupSharedText(doc, row, v)
+			text, err := GroupSharedText(doc, row, v, false)
 			if err != nil {
 				c.Hold = err.Error()
 			}
