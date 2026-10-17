@@ -97,8 +97,8 @@ supplied on 2026-10-17. It has four day types:
 | 7th | 3:05-3:55 | 3:05-3:55 | 3:05-3:55 | 1:45-2:25 |
 
 House Days are the pep rally schedule. The PDF lists 5th before 4th on House
-Days, and the times confirm that order. It does not say which schedule Friday
-uses or which days are Homeroom or Homeroom First; the school calendar or the
+Days, and the times confirm that order. Friday uses the Homeroom schedule. The
+PDF does not say which days use Homeroom First; the school calendar or the
 teacher supplies that.
 
 ## Teacher-owned setup
@@ -124,9 +124,11 @@ stays in UserInstall. Product updates do not change this ownership boundary.
 Updating guidance is a normal part of teacher-agent conversation. The teacher
 does not need to request a file edit or know the storage layout.
 
-- Teacher decisions live in a separate teacher overlay that the agent reads
-  after the shipped playbooks; where they differ, the overlay wins. Saving a
-  preference writes the overlay, not the shipped playbook text.
+- Teacher decisions live in `Teacher_Override.md`, a separate overlay that
+  the agent reads after the shipped playbooks; where they differ, the overlay
+  wins. It sits beside `TEACHER.md` under the active rules authority
+  (UserInstall, or UserSync when configured), so it follows the teacher across
+  PCs. Saving a preference writes the overlay, not the shipped playbook text.
 - Save explicit standing preferences as they are expressed. For example,
   "Never offer extra credit without my explicit permission" becomes a
   remembered standing instruction without a separate file-edit approval.
@@ -203,15 +205,16 @@ guess that unexplained differences are obsolete or safe to discard.
 9. **Shipped 2026-10-17.** AGENTS.md, score.md, the install safety promise and
    the `post_results` tool description now separate a one-task skip from a
    saved standing preference, which the agent records with its scope in
-   `context/teaching-profile.md` until the overlay exists. Parent-update
+   `context/teaching-profile.md` until `Teacher_Override.md` exists. Parent-update
    "Rules that do not bend" became "Defaults", with honest values and privacy
    kept as non-negotiable.
 
 ## Remaining design work
 
-- Name the overlay file, its location under the active rules authority, and
-  how it replaces today's scattered `context/teaching-profile.md` and
-  `context/grading.md` preference saves.
+- Decide how `Teacher_Override.md` relates to today's
+  `context/teaching-profile.md` and `context/grading.md` preference saves:
+  absorb them, or keep them as setup facts and move only overrides of shipped
+  defaults into the overlay.
 - Build `shipped/<version>/` retention in the updater and the background
   install/update reconciliation pass.
 - Define selection guidance for matching prompts across courses and for fewer
