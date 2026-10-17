@@ -128,6 +128,74 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 	if d.ModuleID < 0 {
 		return fmt.Errorf("module_id cannot be negative")
 	}
+	if d.GroupCategoryID < 0 {
+		return fmt.Errorf("group_category_id cannot be negative")
+	}
+	if d.GroupCategoryID > 0 && d.GradeGroupStudentsIndividually == nil && (d.Operation == "create" || d.Observed == nil || d.Observed.GroupCategoryID != d.GroupCategoryID) {
+		return fmt.Errorf("a group assignment requires an explicit grade_group_students_individually value")
+	}
+	if d.GradeGroupStudentsIndividually != nil && d.GroupCategoryID == 0 && (d.Operation == "create" || d.Observed == nil || d.Observed.GroupCategoryID == 0) {
+		return fmt.Errorf("grade_group_students_individually requires a group assignment")
+	}
+	if d.GroupCategoryID > 0 && (d.Operation == "create" || d.Observed == nil) && containsSubmissionType(d.SubmissionTypes, "external_tool") {
+		return fmt.Errorf("group mode cannot be applied to a New Quiz")
+	}
+	if d.Operation != "create" && (len(d.Overrides) > 0 || d.OnlyVisibleToOverrides != nil) {
+		return fmt.Errorf("assignment-date audience changes use kind: assignment-dates")
+	}
+	if d.Operation == "create" {
+		if d.OnlyVisibleToOverrides != nil && *d.OnlyVisibleToOverrides && len(d.Overrides) == 0 {
+			return fmt.Errorf("only_visible_to_overrides requires at least one requested override")
+		}
+		keys := map[string]bool{}
+		for i, row := range d.Overrides {
+			if row.Operation != "create" || row.OverrideID != 0 || row.Observed != nil {
+				return fmt.Errorf("overrides[%d] on assignment creation must be a new create row", i)
+			}
+			if strings.TrimSpace(row.Key) == "" || keys[row.Key] {
+				return fmt.Errorf("overrides[%d] requires a unique key", i)
+			}
+			keys[row.Key] = true
+			if row.GroupID < 0 || row.CourseSectionID < 0 {
+				return fmt.Errorf("overrides[%d] target IDs cannot be negative", i)
+			}
+			targets := 0
+			if row.GroupID > 0 {
+				targets++
+			}
+			if len(row.StudentRefs) > 0 {
+				targets++
+			}
+			if row.CourseSectionID > 0 {
+				targets++
+			}
+			if targets != 1 {
+				return fmt.Errorf("overrides[%d] must choose exactly one target", i)
+			}
+			if len(row.StudentRefs) > 0 && strings.TrimSpace(row.Title) == "" {
+				return fmt.Errorf("overrides[%d] student target requires a title", i)
+			}
+			if d.GroupCategoryID == 0 && row.GroupID > 0 {
+				return fmt.Errorf("group override requires a group assignment")
+			}
+			if d.GroupCategoryID > 0 && row.GroupID == 0 && len(row.StudentRefs) == 0 && row.CourseSectionID == 0 {
+				return fmt.Errorf("group assignment override requires exact target")
+			}
+			if !row.DueAt.Set && !row.UnlockAt.Set && !row.LockAt.Set {
+				return fmt.Errorf("overrides[%d] requires at least one date", i)
+			}
+			for _, date := range []OptionalDate{row.DueAt, row.UnlockAt, row.LockAt} {
+				if date.Null && !date.Set {
+					return fmt.Errorf("overrides[%d] null date must also set the field", i)
+				}
+				if date.Set && !date.Null {
+					if _, e := time.Parse(time.RFC3339, date.Value); e != nil {
+						return fmt.Errorf("overrides[%d] date requires RFC3339 with explicit offset", i)
+					}
+				}
+			}
+		}
+	}
 	if d.Timezone != "" {
 		if _, e := time.LoadLocation(d.Timezone); e != nil {
 			return fmt.Errorf("invalid timezone %q", d.Timezone)
@@ -203,6 +271,15 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 		}
 	}
 	return nil
+}
+
+func containsSubmissionType(types []string, want string) bool {
+	for _, t := range types {
+		if t == want {
+			return true
+		}
+	}
+	return false
 }
 
 func validateRubricAttachment(d AssignmentDocument, body string) error {
@@ -319,6 +396,14 @@ func validateCreated(d AssignmentDocument) error {
 		}
 		if c.Publication.Status != "succeeded" && c.Publication.Status != "preserved" {
 			return fmt.Errorf("complete create requires definite publication outcome")
+		}
+		for _, row := range c.Overrides {
+			if row.Outcome.Status != "succeeded" && row.Outcome.Status != "preserved" {
+				return fmt.Errorf("complete create requires definite override outcomes")
+			}
+		}
+		if d.OnlyVisibleToOverrides != nil && c.Visibility.Status != "succeeded" && c.Visibility.Status != "preserved" {
+			return fmt.Errorf("complete create requires definite override visibility outcome")
 		}
 	}
 	return nil

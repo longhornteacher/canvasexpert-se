@@ -130,6 +130,11 @@ type PullGroupMembershipsInput struct {
 	GroupCategoryID int64  `json:"group_category_id" jsonschema:"Exact collaborative group-set ID"`
 }
 
+type PullAssignmentDatesInput struct {
+	Course       string `json:"course" jsonschema:"Configured course nickname"`
+	AssignmentID int64  `json:"assignment_id" jsonschema:"Exact numeric Canvas assignment ID"`
+}
+
 type PathInput struct {
 	Path string `json:"path" jsonschema:"Workspace-relative document path"`
 }
@@ -230,6 +235,12 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addActionTool(server, "pull_group_memberships", "Save an exact group-set membership baseline with stable student refs, aliases, membership states and the unassigned roster. The returned path can be edited with explicit changes or allocate-unassigned and pushed through push_document.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullGroupMembershipsInput) (TextOutput, error) {
 		return s.longCommand(ctx, "pull-group-memberships", in.Course, strconv.FormatInt(in.GroupCategoryID, 10))
 	})
+	addActionTool(server, "pull_assignment_dates", "Pull the exact assignment override IDs, targets, date baselines and per-student effective dates into an editable assignment-dates document. Student targets appear only through existing private student refs.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullAssignmentDatesInput) (TextOutput, error) {
+		if in.AssignmentID <= 0 {
+			return TextOutput{}, errors.New("assignment_id must be positive")
+		}
+		return s.command(ctx, "pull-assignment-dates", in.Course, strconv.FormatInt(in.AssignmentID, 10))
+	})
 	addActionTool(server, "pull_assignment", "Pull an exact Canvas assignment and its edit baseline through the CE-SE Engine.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
 		return s.command(ctx, "pull-item", in.Course, in.Query)
 	})
@@ -313,7 +324,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

@@ -59,6 +59,12 @@ func PlanEdit(doc domain.AssignmentDocument, html string) (map[string]any, error
 	if doc.Published != base.Published {
 		patch["published"] = doc.Published
 	}
+	if doc.GroupCategoryID > 0 && doc.GroupCategoryID != base.GroupCategoryID {
+		patch["group_category_id"] = doc.GroupCategoryID
+	}
+	if doc.GradeGroupStudentsIndividually != nil && !sameOptionalBool(doc.GradeGroupStudentsIndividually, base.GradeGroupStudentsIndividually) {
+		patch["grade_group_students_individually"] = *doc.GradeGroupStudentsIndividually
+	}
 	return patch, nil
 }
 
@@ -83,6 +89,11 @@ func SameGradingBasis(a, b domain.AssignmentSnapshot) bool {
 		b.Rubric = &r
 	}
 	a.DescriptionHTML, b.DescriptionHTML = "", ""
+	// Old individual snapshots predate this field. Canvas commonly returns false
+	// for an individual assignment, so absence is equivalent only off-group.
+	if a.GroupCategoryID == 0 && b.GroupCategoryID == 0 {
+		a.GradeGroupStudentsIndividually, b.GradeGroupStudentsIndividually = nil, nil
+	}
 	return SameSnapshot(a, b)
 }
 
@@ -123,6 +134,14 @@ func sameEditFields(a, b domain.AssignmentSnapshot, patch map[string]any) bool {
 			}
 		case "published":
 			if a.Published != b.Published {
+				return false
+			}
+		case "group_category_id":
+			if a.GroupCategoryID != b.GroupCategoryID {
+				return false
+			}
+		case "grade_group_students_individually":
+			if !sameOptionalBool(a.GradeGroupStudentsIndividually, b.GradeGroupStudentsIndividually) {
 				return false
 			}
 		}
@@ -226,7 +245,28 @@ func SameSnapshot(a, b domain.AssignmentSnapshot) bool {
 	b.UnlockAt = canonicalDate(b.UnlockAt)
 	a.LockAt = canonicalDate(a.LockAt)
 	b.LockAt = canonicalDate(b.LockAt)
+	if a.GroupCategoryID == 0 && b.GroupCategoryID == 0 {
+		a.GradeGroupStudentsIndividually, b.GradeGroupStudentsIndividually = nil, nil
+	}
+	// These fields describe discussion/checkpoint wiring, not grading. Older
+	// packets and Canvas responses may omit them; absence on either side is
+	// treated as unknown for compatibility, while two observed values compare.
+	if a.DiscussionTopicID == nil || b.DiscussionTopicID == nil {
+		a.DiscussionTopicID, b.DiscussionTopicID = nil, nil
+	}
+	if a.HasSubAssignments == nil || b.HasSubAssignments == nil {
+		a.HasSubAssignments, b.HasSubAssignments = nil, nil
+	}
+	if a.Checkpoints == nil || b.Checkpoints == nil {
+		a.Checkpoints, b.Checkpoints = nil, nil
+	}
 	return reflect.DeepEqual(a, b)
+}
+func sameOptionalBool(a, b *bool) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 func canonicalDate(v *string) *string {
 	if v == nil || *v == "" {

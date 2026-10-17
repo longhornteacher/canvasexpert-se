@@ -23,7 +23,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "pull-work": {0, 2}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -85,8 +85,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 		kind := documentKind(b)
-		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "discussion" && kind != "discussion-reply" && kind != "module" && kind != "group-set" && kind != "group-memberships" {
-			return fail(inputError(fmt.Errorf("push supports assignment, page, discussion/reply, module, group-set, or group-memberships documents")), progress)
+		if cmd == "push" && kind != "assignment" && kind != "assignment-dates" && kind != "page" && kind != "discussion" && kind != "discussion-reply" && kind != "module" && kind != "group-set" && kind != "group-memberships" {
+			return fail(inputError(fmt.Errorf("push supports assignment, assignment-dates, page, discussion/reply, module, group-set, or group-memberships documents")), progress)
 		}
 		if cmd == "post" && kind != "results" {
 			return fail(inputError(fmt.Errorf("post requires a results document")), progress)
@@ -304,9 +304,41 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(e, progress)
 		}
 		fmt.Fprintln(out, p)
+	case "pull-assignment-dates":
+		id, parseErr := strconv.ParseInt(args[1], 10, 64)
+		if parseErr != nil || id <= 0 {
+			return fail(inputError(fmt.Errorf("assignment ID must be positive")), progress)
+		}
+		report, e := service.PullAssignmentDates(ctx, args[0], id)
+		fmt.Fprintf(out, "%s: %d override rows, %s\n", report.Status, len(report.Rows), report.Path)
+		if report.Message != "" {
+			fmt.Fprintln(out, report.Message)
+		}
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		if report.Status != "completed" {
+			return 3
+		}
 	case "push":
 		b, _ := os.ReadFile(file)
-		if kind := documentKind(b); kind == "group-set" {
+		if kind := documentKind(b); kind == "assignment-dates" {
+			report, e := service.PushAssignmentDates(ctx, file)
+			fmt.Fprintf(out, "%s: %d override rows, %s\n", report.Status, len(report.Rows), report.Path)
+			if report.Message != "" {
+				fmt.Fprintln(out, report.Message)
+			}
+			for _, row := range report.Rows {
+				fmt.Fprintf(out, "%s: %s override %d %s\n", row.Key, row.Outcome.Status, row.OverrideID, row.Outcome.Message)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
+				return 3
+			}
+			return 0
+		} else if kind == "group-set" {
 			report, e := service.PushGroupSet(ctx, file)
 			fmt.Fprintf(out, "%s: group set %d, %s\n", report.Status, report.GroupCategoryID, report.Path)
 			for _, g := range report.Groups {

@@ -54,13 +54,14 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
                                 List collaborative group sets/clubs; memberships require an exact group
   pull-group-set COURSE ID      Pull a collaborative group set and its editable baseline
   pull-group-memberships COURSE ID  Pull an exact group set's membership baseline
-  push FILE                     Create/resume assignments, Pages, discussions/replies, modules, group sets or membership plans
+  push FILE                     Create/resume assignments, date overrides, Pages, discussions/replies, modules, group sets or membership plans
   pull-page COURSE ID|LINK       Pull exact Page HTML and baseline for editing
   pull-discussion COURSE TOPIC_ID Pull topic.md plus full/partial discussion packet (optional --group ID)
   page-history COURSE PAGE_ID   Read Page revisions (optional --group ID --revision ID)
   upload-file COURSE FILE --access course|hidden|locked [--folder ID] [--receipt PATH] [--new-upload]
                                 Upload a course asset and save a reusable receipt
   pull-item COURSE TITLE|ID|LINK Pull actual assignment HTML for editing
+  pull-assignment-dates COURSE ASSIGNMENT_ID Pull exact audience override baselines for editing
   pull-work [COURSE [ASSIGNMENT]] Pull work; no scope uses current courses
   parent-report COURSE [REF ...] Read parent-update facts (missing, corrections, due soon, history) into courses/COURSE/parent-updates/
   parent-review RUN_FOLDER      Open the private page to review and send a parent-update run (Outlook)
@@ -444,7 +445,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-work": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "pull-work": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -549,6 +550,8 @@ func validateDocument(path string, roots ...string) error {
 	switch kind {
 	case "assignment":
 		target = &domain.AssignmentDocument{}
+	case "assignment-dates":
+		target = &domain.AssignmentDatesDocument{}
 	case "group-set":
 		target = &domain.GroupSetDocument{}
 	case "group-memberships":
@@ -578,7 +581,7 @@ func validateDocument(path string, roots ...string) error {
 		case "students.md":
 			target = &domain.StudentNotes{}
 		default:
-			return fmt.Errorf("unsupported document kind %q; expected assignment, group-set, page, discussion, discussion-packet, discussion-reply, module, results, packet, or student-work", kind)
+			return fmt.Errorf("unsupported document kind %q; expected assignment, assignment-dates, group-set, page, discussion, discussion-packet, discussion-reply, module, results, packet, or student-work", kind)
 		}
 	}
 	if kindErr != nil && kind != "" {
@@ -586,6 +589,17 @@ func validateDocument(path string, roots ...string) error {
 	}
 	_, e = workspace.ReadDocument(path, target)
 	if e == nil {
+		if _, ok := target.(*domain.AssignmentDocument); ok {
+			var doc domain.AssignmentDocument
+			body, readErr := workspace.ReadDocument(path, &doc)
+			if readErr != nil {
+				return readErr
+			}
+			e = domain.ValidateAssignment(doc, body)
+		}
+		if d, ok := target.(*domain.AssignmentDatesDocument); ok {
+			e = domain.ValidateAssignmentDates(*d)
+		}
 		if d, ok := target.(*domain.GroupSetDocument); ok {
 			e = d.Validate()
 		}

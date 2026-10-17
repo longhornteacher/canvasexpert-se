@@ -903,6 +903,28 @@ func TestCreateRecoveryAcceptsEquivalentDatesDecimalsAndGeneratedIDs(t *testing.
 	}
 }
 
+func TestGroupAssignmentCreateFieldsAndRecoveryIdentity(t *testing.T) {
+	mode := false
+	doc := domain.AssignmentDocument{Title: "Club product", Points: domain.MustDecimal("20"), SubmissionTypes: []string{"online_upload"}, GroupCategoryID: 50, GradeGroupStudentsIndividually: &mode}
+	fields := createFields(doc, "<p>Work</p>")
+	if fields["group_category_id"] != int64(50) || fields["grade_group_students_individually"] != false {
+		t.Fatalf("group audience fields missing: %#v", fields)
+	}
+	live := fixtureAssignment()
+	live.Name, live.Description, live.SubmissionTypes = doc.Title, "<p>Work</p>", doc.SubmissionTypes
+	live.GroupCategoryID = ptrInt64(50)
+	live.GradeGroupStudentsIndividually = &mode
+	if !sameCreateCore(live, doc, live.Description) {
+		t.Fatal("group assignment identity did not survive uncertain-create recovery")
+	}
+	individual := domain.AssignmentDocument{Title: live.Name, Points: doc.Points, SubmissionTypes: doc.SubmissionTypes}
+	if _, ok := createFields(individual, "x")["grade_group_students_individually"]; ok {
+		t.Fatal("individual create unexpectedly sent group mode")
+	}
+}
+
+func ptrInt64(v int64) *int64 { return &v }
+
 func TestRepresentativeSyntheticClassPullPost(t *testing.T) {
 	const size = 30
 	lives := map[int64]Submission{}

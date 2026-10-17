@@ -56,7 +56,7 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 36);
+  assert.equal(names.length, 37);
   assert.ok(names.includes('list_external_resources'), 'missing list_external_resources');
   const externalResourcesTool = discovered.result.tools.find(t => t.name === 'list_external_resources');
   assert.ok(externalResourcesTool.inputSchema.properties.course, 'list_external_resources must require course');
@@ -64,6 +64,9 @@ try {
   assert.ok(externalResourcesTool.inputSchema.properties.resource_type, 'list_external_resources must expose resource_type');
   await call('list_external_resources', { course: 'CS8', resource_type: 'invalid' }, true);
   for (const name of ['list_group_sets', 'list_groups', 'pull_group_set', 'pull_group_memberships']) assert.ok(names.includes(name), `missing ${name}`);
+  assert.ok(names.includes('pull_assignment_dates'), 'missing pull_assignment_dates');
+  const assignmentDatesTool = discovered.result.tools.find(t => t.name === 'pull_assignment_dates');
+  assert.ok(assignmentDatesTool.inputSchema.properties.assignment_id, 'pull_assignment_dates must require exact assignment_id');
   for (const name of ['pull_page', 'list_page_revisions']) assert.ok(names.includes(name), `missing ${name}`);
   assert.ok(names.includes('pull_discussion'), 'missing pull_discussion');
   const discussionTool = discovered.result.tools.find(t => t.name === 'pull_discussion');
@@ -129,6 +132,12 @@ try {
   const assignment = (await readFile('engine-docs/examples/synthetic-assignment-create.md', 'utf8')).replace('course: DEMO', 'course: CS8');
   await call('write_draft', { path: 'courses/assignment.md', content: assignment });
   await call('validate_document', { path: 'courses/assignment.md' });
+  const groupAssignment = (await readFile('engine-docs/examples/synthetic-group-assignment.md', 'utf8')).replace('course: ELA7', 'course: CS8');
+  await call('write_draft', { path: 'courses/group-assignment.md', content: groupAssignment });
+  await call('validate_document', { path: 'courses/group-assignment.md' });
+  const assignmentDates = await readFile('engine-docs/examples/synthetic-assignment-dates.md', 'utf8');
+  await call('write_draft', { path: 'courses/assignment-dates.md', content: assignmentDates });
+  await call('validate_document', { path: 'courses/assignment-dates.md' });
   const discussionPacket = await readFile('engine-docs/examples/synthetic-discussion-packet.yaml', 'utf8');
   await call('write_draft', { path: 'courses/discussion-packet.yaml', content: discussionPacket });
   await call('validate_document', { path: 'courses/discussion-packet.yaml' });

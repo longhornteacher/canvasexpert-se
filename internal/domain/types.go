@@ -56,24 +56,38 @@ type Rubric struct {
 	Criteria                  []Criterion `yaml:"criteria" json:"criteria"`
 }
 type AssignmentSnapshot struct {
-	Instance         string   `yaml:"instance"`
-	CourseID         int64    `yaml:"course_id"`
-	AssignmentID     int64    `yaml:"assignment_id"`
-	Title            string   `yaml:"title"`
-	Points           Decimal  `yaml:"points"`
-	DescriptionHTML  string   `yaml:"description_html"`
-	SubmissionTypes  []string `yaml:"submission_types"`
-	DueAt            *string  `yaml:"due_at,omitempty"`
-	UnlockAt         *string  `yaml:"unlock_at,omitempty"`
-	LockAt           *string  `yaml:"lock_at,omitempty"`
-	Published        bool     `yaml:"published"`
-	UpdatedAt        string   `yaml:"updated_at,omitempty"`
-	Rubric           *Rubric  `yaml:"rubric,omitempty"`
-	GradingType      string   `yaml:"grading_type"`
-	AnonymousGrading bool     `yaml:"anonymous_grading"`
-	ModeratedGrading bool     `yaml:"moderated_grading"`
-	GroupCategoryID  int64    `yaml:"group_category_id,omitempty"`
-	NewQuiz          bool     `yaml:"new_quiz,omitempty"`
+	Instance                       string                  `yaml:"instance"`
+	CourseID                       int64                   `yaml:"course_id"`
+	AssignmentID                   int64                   `yaml:"assignment_id"`
+	Title                          string                  `yaml:"title"`
+	Points                         Decimal                 `yaml:"points"`
+	DescriptionHTML                string                  `yaml:"description_html"`
+	SubmissionTypes                []string                `yaml:"submission_types"`
+	DueAt                          *string                 `yaml:"due_at,omitempty"`
+	UnlockAt                       *string                 `yaml:"unlock_at,omitempty"`
+	LockAt                         *string                 `yaml:"lock_at,omitempty"`
+	Published                      bool                    `yaml:"published"`
+	UpdatedAt                      string                  `yaml:"updated_at,omitempty"`
+	Rubric                         *Rubric                 `yaml:"rubric,omitempty"`
+	GradingType                    string                  `yaml:"grading_type"`
+	AnonymousGrading               bool                    `yaml:"anonymous_grading"`
+	ModeratedGrading               bool                    `yaml:"moderated_grading"`
+	GroupCategoryID                int64                   `yaml:"group_category_id,omitempty"`
+	GradeGroupStudentsIndividually *bool                   `yaml:"grade_group_students_individually,omitempty"`
+	DiscussionTopicID              *int64                  `yaml:"discussion_topic_id,omitempty"`
+	HasSubAssignments              *bool                   `yaml:"has_sub_assignments,omitempty"`
+	Checkpoints                    *[]AssignmentCheckpoint `yaml:"checkpoints,omitempty"`
+	NewQuiz                        bool                    `yaml:"new_quiz,omitempty"`
+}
+
+// AssignmentCheckpoint is the assignment-linked discussion checkpoint metadata
+// returned when Canvas is asked to include checkpoints.
+type AssignmentCheckpoint struct {
+	Tag      string   `yaml:"tag,omitempty"`
+	DueAt    *string  `yaml:"due_at,omitempty"`
+	UnlockAt *string  `yaml:"unlock_at,omitempty"`
+	LockAt   *string  `yaml:"lock_at,omitempty"`
+	Points   *Decimal `yaml:"points_possible,omitempty"`
 }
 
 // Tier is one differentiated-hub tier of a create document: a supplement page
@@ -108,44 +122,55 @@ type TierPage struct {
 }
 
 type CreatedResources struct {
-	TierPages           []TierPage    `yaml:"tier_pages,omitempty"`
-	StartedAt           string        `yaml:"create_started_at,omitempty"`
-	IntendedHTML        string        `yaml:"intended_html,omitempty"`
-	SavedHTML           string        `yaml:"saved_html,omitempty"`
-	AssignmentID        int64         `yaml:"assignment_id,omitempty"`
-	RubricID            int64         `yaml:"rubric_id,omitempty"`
-	RubricAssociationID int64         `yaml:"rubric_association_id,omitempty"`
-	ModuleItemID        int64         `yaml:"module_item_id,omitempty"`
-	URL                 string        `yaml:"url,omitempty"`
-	Complete            bool          `yaml:"complete,omitempty"`
-	Assignment          ActionOutcome `yaml:"assignment,omitempty"`
-	Rubric              ActionOutcome `yaml:"rubric,omitempty"`
-	Module              ActionOutcome `yaml:"module,omitempty"`
-	Publication         ActionOutcome `yaml:"publication,omitempty"`
+	TierPages           []TierPage                  `yaml:"tier_pages,omitempty"`
+	StartedAt           string                      `yaml:"create_started_at,omitempty"`
+	IntendedHTML        string                      `yaml:"intended_html,omitempty"`
+	SavedHTML           string                      `yaml:"saved_html,omitempty"`
+	AssignmentID        int64                       `yaml:"assignment_id,omitempty"`
+	RubricID            int64                       `yaml:"rubric_id,omitempty"`
+	RubricAssociationID int64                       `yaml:"rubric_association_id,omitempty"`
+	ModuleItemID        int64                       `yaml:"module_item_id,omitempty"`
+	URL                 string                      `yaml:"url,omitempty"`
+	Complete            bool                        `yaml:"complete,omitempty"`
+	Assignment          ActionOutcome               `yaml:"assignment,omitempty"`
+	Rubric              ActionOutcome               `yaml:"rubric,omitempty"`
+	Module              ActionOutcome               `yaml:"module,omitempty"`
+	Publication         ActionOutcome               `yaml:"publication,omitempty"`
+	Overrides           []AssignmentOverrideOutcome `yaml:"overrides,omitempty"`
+	Visibility          ActionOutcome               `yaml:"visibility,omitempty"`
+}
+type AssignmentOverrideOutcome struct {
+	Key        string        `yaml:"key"`
+	OverrideID int64         `yaml:"override_id,omitempty"`
+	Outcome    ActionOutcome `yaml:"outcome,omitempty"`
 }
 type AssignmentDocument struct {
-	Schema          int                 `yaml:"schema"`
-	Kind            string              `yaml:"kind"`
-	Operation       string              `yaml:"operation"`
-	Course          string              `yaml:"course"`
-	Instance        string              `yaml:"instance,omitempty"`
-	CourseID        int64               `yaml:"course_id,omitempty"`
-	AssignmentID    int64               `yaml:"assignment_id,omitempty"`
-	Title           string              `yaml:"title"`
-	BodyFormat      string              `yaml:"body_format,omitempty"`
-	Points          Decimal             `yaml:"points"`
-	SubmissionTypes []string            `yaml:"submission_types"`
-	DueAt           *string             `yaml:"due_at,omitempty"`
-	UnlockAt        *string             `yaml:"unlock_at,omitempty"`
-	LockAt          *string             `yaml:"lock_at,omitempty"`
-	Timezone        string              `yaml:"timezone,omitempty"`
-	ModuleID        int64               `yaml:"module_id,omitempty"`
-	Published       bool                `yaml:"published"`
-	Rubric          *Rubric             `yaml:"rubric,omitempty"`
-	Tiers           []Tier              `yaml:"tiers,omitempty"` // create-time differentiated hub
-	Observed        *AssignmentSnapshot `yaml:"observed,omitempty"`
-	Created         *CreatedResources   `yaml:"created,omitempty"`
-	UpdateOutcome   ActionOutcome       `yaml:"update_outcome,omitempty"`
+	Schema                         int                     `yaml:"schema"`
+	Kind                           string                  `yaml:"kind"`
+	Operation                      string                  `yaml:"operation"`
+	Course                         string                  `yaml:"course"`
+	Instance                       string                  `yaml:"instance,omitempty"`
+	CourseID                       int64                   `yaml:"course_id,omitempty"`
+	AssignmentID                   int64                   `yaml:"assignment_id,omitempty"`
+	Title                          string                  `yaml:"title"`
+	BodyFormat                     string                  `yaml:"body_format,omitempty"`
+	Points                         Decimal                 `yaml:"points"`
+	SubmissionTypes                []string                `yaml:"submission_types"`
+	DueAt                          *string                 `yaml:"due_at,omitempty"`
+	UnlockAt                       *string                 `yaml:"unlock_at,omitempty"`
+	LockAt                         *string                 `yaml:"lock_at,omitempty"`
+	Timezone                       string                  `yaml:"timezone,omitempty"`
+	ModuleID                       int64                   `yaml:"module_id,omitempty"`
+	Published                      bool                    `yaml:"published"`
+	GroupCategoryID                int64                   `yaml:"group_category_id,omitempty"`
+	GradeGroupStudentsIndividually *bool                   `yaml:"grade_group_students_individually,omitempty"`
+	OnlyVisibleToOverrides         *bool                   `yaml:"only_visible_to_overrides,omitempty"`
+	Overrides                      []AssignmentOverrideRow `yaml:"overrides,omitempty"`
+	Rubric                         *Rubric                 `yaml:"rubric,omitempty"`
+	Tiers                          []Tier                  `yaml:"tiers,omitempty"` // create-time differentiated hub
+	Observed                       *AssignmentSnapshot     `yaml:"observed,omitempty"`
+	Created                        *CreatedResources       `yaml:"created,omitempty"`
+	UpdateOutcome                  ActionOutcome           `yaml:"update_outcome,omitempty"`
 }
 type PacketDocument struct {
 	Schema     int                `yaml:"schema"`

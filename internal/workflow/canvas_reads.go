@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"canvasexpertse/internal/canvas"
+	"canvasexpertse/internal/domain"
 )
 
 type Course struct {
@@ -39,33 +40,62 @@ type Criterion struct {
 	Range           bool        `json:"criterion_use_range"`
 }
 type Assignment struct {
-	ID              int64       `json:"id"`
-	CourseID        int64       `json:"course_id"`
-	Name            string      `json:"name"`
-	Description     string      `json:"description"`
-	Points          json.Number `json:"points_possible"`
-	SubmissionTypes []string    `json:"submission_types"`
-	Published       bool        `json:"published"`
-	DueAt           *string     `json:"due_at"`
-	UnlockAt        *string     `json:"unlock_at"`
-	LockAt          *string     `json:"lock_at"`
-	UpdatedAt       string      `json:"updated_at"`
-	CreatedAt       string      `json:"created_at"`
-	HTMLURL         string      `json:"html_url"`
-	GradingType     string      `json:"grading_type"`
-	GroupCategoryID *int64      `json:"group_category_id"`
-	Anonymous       bool        `json:"anonymous_grading"`
-	Moderated       bool        `json:"moderated_grading"`
-	QuizID          *int64      `json:"quiz_id"`
-	NewQuiz         bool        `json:"is_quiz_lti_assignment"`
-	Rubric          []Criterion `json:"rubric"`
-	RubricSettings  struct {
+	ID                             int64                          `json:"id"`
+	CourseID                       int64                          `json:"course_id"`
+	Name                           string                         `json:"name"`
+	Description                    string                         `json:"description"`
+	Points                         json.Number                    `json:"points_possible"`
+	SubmissionTypes                []string                       `json:"submission_types"`
+	Published                      bool                           `json:"published"`
+	DueAt                          *string                        `json:"due_at"`
+	UnlockAt                       *string                        `json:"unlock_at"`
+	LockAt                         *string                        `json:"lock_at"`
+	UpdatedAt                      string                         `json:"updated_at"`
+	CreatedAt                      string                         `json:"created_at"`
+	HTMLURL                        string                         `json:"html_url"`
+	GradingType                    string                         `json:"grading_type"`
+	GroupCategoryID                *int64                         `json:"group_category_id"`
+	GradeGroupStudentsIndividually *bool                          `json:"grade_group_students_individually"`
+	DiscussionTopicID              *int64                         `json:"discussion_topic_id"`
+	HasSubAssignments              *bool                          `json:"has_sub_assignments"`
+	Checkpoints                    *[]domain.AssignmentCheckpoint `json:"checkpoints"`
+	Overrides                      []AssignmentOverrideLive       `json:"overrides"`
+	OnlyVisibleToOverrides         *bool                          `json:"only_visible_to_overrides"`
+	AllDates                       *[]AssignmentAllDateLive       `json:"all_dates"`
+	Anonymous                      bool                           `json:"anonymous_grading"`
+	Moderated                      bool                           `json:"moderated_grading"`
+	QuizID                         *int64                         `json:"quiz_id"`
+	NewQuiz                        bool                           `json:"is_quiz_lti_assignment"`
+	Rubric                         []Criterion                    `json:"rubric"`
+	RubricSettings                 struct {
 		ID       int64       `json:"id"`
 		Title    string      `json:"title"`
 		Points   json.Number `json:"points_possible"`
 		FreeForm bool        `json:"free_form_criterion_comments"`
 	} `json:"rubric_settings"`
 	RubricAssociation *RubricAssociation `json:"rubric_association"`
+}
+
+type AssignmentOverrideLive struct {
+	ID              int64   `json:"id"`
+	Title           string  `json:"title"`
+	GroupID         int64   `json:"group_id"`
+	StudentIDs      []int64 `json:"student_ids"`
+	CourseSectionID int64   `json:"course_section_id"`
+	DueAt           *string `json:"due_at"`
+	UnlockAt        *string `json:"unlock_at"`
+	LockAt          *string `json:"lock_at"`
+}
+type AssignmentAllDateLive struct {
+	ID              int64   `json:"id"`
+	Base            bool    `json:"base"`
+	UserID          int64   `json:"user_id"`
+	StudentID       int64   `json:"student_id"`
+	GroupID         int64   `json:"group_id"`
+	CourseSectionID int64   `json:"course_section_id"`
+	DueAt           *string `json:"due_at"`
+	UnlockAt        *string `json:"unlock_at"`
+	LockAt          *string `json:"lock_at"`
 }
 type RubricAssociation struct {
 	ID              int64  `json:"id"`
@@ -172,7 +202,7 @@ func Assignments(ctx context.Context, c *canvas.Client, courseID int64) ([]Assig
 }
 func GetAssignment(ctx context.Context, c *canvas.Client, courseID, id int64) (Assignment, error) {
 	var result Assignment
-	err := c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d?include[]=rubric_assessment", courseID, id), &result)
+	err := c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d?include[]=rubric_assessment&include[]=checkpoints&include[]=all_dates&include[]=overrides", courseID, id), &result)
 	if err != nil {
 		return result, err
 	}
@@ -307,9 +337,6 @@ func UnsupportedAssignment(a Assignment) string {
 	}
 	if a.Moderated {
 		return "moderated grading isn't supported yet"
-	}
-	if a.GroupCategoryID != nil && *a.GroupCategoryID != 0 {
-		return "group submissions aren't supported yet"
 	}
 	if a.QuizID != nil && !a.NewQuiz {
 		return "quizzes aren't supported yet"

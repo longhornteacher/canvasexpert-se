@@ -62,6 +62,13 @@ func buildAssignmentReview(path string) (ReviewModel, error) {
 			fact("Published", fmt.Sprint(doc.Published)),
 		},
 		Frames: []ReviewFrame{{Label: "Directions (HTML field)", HTML: directions}}}
+	if doc.GroupCategoryID > 0 {
+		mode := "unknown"
+		if doc.GradeGroupStudentsIndividually != nil {
+			mode = fmt.Sprint(*doc.GradeGroupStudentsIndividually)
+		}
+		card.Facts = append(card.Facts, fact("Collaborative group set", fmt.Sprint(doc.GroupCategoryID)), fact("Grade group members individually", mode))
+	}
 	if doc.ModuleID > 0 {
 		card.Facts = append(card.Facts, fact("Module", fmt.Sprint(doc.ModuleID)))
 	}
