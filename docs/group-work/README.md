@@ -101,7 +101,7 @@ Observed differences and limits:
 - Canvas returns whole-number points as `20.0`; feedback text now prints `20`.
 - Submissions were made on behalf of two real students on disposable, club-only assignments through a dev-only helper (`tmp/cs8-group-live`); the Engine has no submit command. A first grade on a member with no submission remains blocked in the Engine (no attempt), consistent with the Gate P 403.
 - Not exercised live: self sign-up and even allocation (they would touch the whole class), graded-discussion assessment (needs a student's own post; the Test Student discussion was created and deleted unused), checkpointed discussions, excused/hidden members, student-facing views and notifications.
-- Review page: the CLI opened the loopback page in the teacher's browser, and the teacher approved it within seconds (the cards are approved by default), which explains the posts that looked automatic. The page does not submit itself. Because of that, deselecting a card through the page was not tested live; post-level tests cover it.
+- Review page: the CLI opened the loopback page in the teacher's browser, and the teacher approved it within seconds (cards are approved by default), which explains the posts that looked automatic. A second live run, with nobody clicking, confirmed the page waits: one private card was marked Revise through the page, and only the shared grade, rubric, shared comment and the other private comment reached Canvas. The Revise card was reported back and nothing was posted for it.
 
 The checks to make the first time each feature is used with real students are in [real-use-checks.md](real-use-checks.md).
 
