@@ -38,7 +38,7 @@ Do them with the first real club or assignment, and note the result in [engine-c
 - **Once students post:** run `pull-work` on the discussion's assignment. Good: each student's own posts and a digest; the whole thread as context. Check one student by hand against what they wrote.
 - **Edited posts:** have a student edit a post after the pull and confirm the Engine holds only that student on posting.
 - **Checkpointed discussions:** if a discussion uses Canvas checkpoints, expect the grade to be held and graded in SpeedGrader. If that surprises you, tell the agent.
-- **The review page:** during the first real review, confirm the page waits for you to click Post. If it ever posts without a click, close it and tell the agent.
+- **The review page:** it opens in your browser with every card approved by default. Revise or deselect any card you do not want before clicking Post. If it ever posts without a click from you, close it and tell the agent.
 
 ## Navigation and external links
 
