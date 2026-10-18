@@ -1,4 +1,4 @@
-> **Retired 2026-10-18 — Dev implementation complete.** The current-term inventory landed in `aae89b1`; the subsequent explicit-null date defect is fixed and locally verified in the [follow-up record](PARENT-DATES-AND-EXTRA-TIME-FOLLOWUP.md). Original design and dated evidence below are historical. Remaining adoption and real-use observations are tracked in the [delivery follow-up](../active/CALENDAR-SCORING-DELIVERY.md); retirement does not claim Canvas Live or family-delivery verification.
+> **Retired 2026-10-18 — Dev implementation complete.** The current-term inventory landed in `aae89b1`; the subsequent explicit-null date defect is fixed and locally verified in the [follow-up record](PARENT-DATES-AND-EXTRA-TIME-FOLLOWUP.md). Original design and dated evidence below are historical. Remaining adoption and real-use observations are tracked in the [delivery follow-up](CALENDAR-SCORING-DELIVERY.md); retirement does not claim Canvas Live or family-delivery verification.
 
 # Parent reports: current grading period
 

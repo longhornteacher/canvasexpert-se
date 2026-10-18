@@ -1,4 +1,4 @@
-> **Retired 2026-10-18 — implemented and locally verified in Dev.** Both gaps below are closed. The implementation record at the end states the checks; remaining distribution, installed-playbook adoption and authorized real-use observations are tracked in the [delivery follow-up](../active/CALENDAR-SCORING-DELIVERY.md). No new Canvas Live result is claimed.
+> **Retired 2026-10-18 — implemented and locally verified in Dev.** Both gaps below are closed. The implementation record at the end states the checks; remaining distribution, installed-playbook adoption and authorized real-use observations are tracked in the [delivery follow-up](CALENDAR-SCORING-DELIVERY.md). No new Canvas Live result is claimed.
 
 # Close the parent-date and extra-time gaps
 

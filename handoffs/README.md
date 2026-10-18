@@ -4,7 +4,7 @@ A handoff is bounded execution work for an agent session. It should say whether 
 
 Current development authority lives in the root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`; build instructions and dated observations live under `docs/`.
 
-`active/` now contains only the [calendar/scoring delivery follow-up](active/CALENDAR-SCORING-DELIVERY.md): updated distribution, UserInstall/playbook adoption and authorized real-use observations. The teacher's grading-period calendar adoption is already recorded as complete. No Dev implementation work remains open from these briefs, and pending observations are not prerequisites for ordinary supported use.
+`active/` has no remaining handoffs. The [calendar/scoring delivery follow-up](retired/CALENDAR-SCORING-DELIVERY.md) is complete: the user requested the Git merge and local update, the beta ZIP was built and adopted in UserInstall, effective UserSync playbooks updated, and teacher context/overrides were preserved. The existing 1.0 adapter still needs a reconnect; pending Canvas/client/family observations remain in the capability record and are not prerequisites for ordinary supported use.
 
 The [school-calendar/scoring plan](retired/SCHOOL-CALENDAR-SCORING-AND-PARENT-UPDATES.md), [current-term parent-report contract](retired/PARENT-REPORT-CURRENT-TERM.md), and [parent-date/Extra time follow-up](retired/PARENT-DATES-AND-EXTRA-TIME-FOLLOWUP.md) are retired with completion banners and dated evidence. The last closes the explicit-null parent date defect and exposes the saved private flag for documented accommodation decisions; it supplies no default allowance. Full Go tests, vet and a fresh 38-tool compiled MCP smoke passed on 2026-10-18, without Canvas writes.
 
