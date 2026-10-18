@@ -4,6 +4,11 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Development notes
 
+### Parent dates and private extra-time evidence (2026-10-18)
+
+- Parent classification now preserves an explicit null student due date instead of falling back to the general assignment deadline. Completion/classification regressions cover null and empty dates, malformed dates, omitted-date fallback and individualized dates; the current-term/14-day reporting gate is unchanged.
+- New individual and group scoring pulls include the saved private Extra time flag as true/false, using stable student identity and the active teacher-setup authority. Older absent fields remain unknown. The scoring/group playbooks resolve only established allowances to an absolute deadline, avoid double extensions already in Canvas and hold only timing when a flagged student has no documented rule. Local preparation checks cover calendar seconds, first-genuine attempts and preservation of Canvas's due-date guard. No duration is implied by the checkbox, and this does not edit Canvas deadlines. Packaging, installed playbook adoption and Canvas Live observation remain separate.
+
 ### School calendar and parent-report scope (2026-10-18)
 
 - The school calendar now supports named inclusive grading periods and timezone-based current-period resolution. Late timing can be prepared from a first-genuine attempt decision, with school-time, skipped-date and current-Canvas timing provenance; `late-only` updates timing fields without changing grades or feedback. Local focused tests pass. Canvas Live timing writes and destination-client adoption remain pending.

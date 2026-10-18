@@ -253,6 +253,7 @@ type StudentWorkDocument struct {
 	EnteredGradeReason     string            `yaml:"entered_grade_reason,omitempty"`
 	Excused                bool              `yaml:"excused"`
 	Monitored              bool              `yaml:"monitored"`
+	ExtraTime              *bool             `yaml:"extra_time,omitempty"` // private saved fact; absent in older packets
 	// DiscussionEvidence references this student's own attributed posts in the
 	// pulled conversation packet when the assignment is a graded discussion.
 	DiscussionEvidence *DiscussionEvidenceRef `yaml:"discussion_evidence,omitempty"`

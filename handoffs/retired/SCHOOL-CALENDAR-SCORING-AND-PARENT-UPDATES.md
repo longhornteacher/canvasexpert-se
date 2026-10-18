@@ -1,3 +1,5 @@
+> **Retired 2026-10-18 — Dev implementation complete.** Calendar/timing and parent inventory landed in `aae89b1`; the parent-date/Extra time [follow-up](PARENT-DATES-AND-EXTRA-TIME-FOLLOWUP.md) is also implemented and locally verified. Original execution instructions and dated evidence below are historical. The recorded UserSync calendar adoption is complete; remaining distribution, installed-playbook adoption and authorized Canvas/client observations are consolidated in the [delivery follow-up](../active/CALENDAR-SCORING-DELIVERY.md). No new live result is implied.
+
 # School calendar in scoring sessions and parent updates
 
 Status: implemented locally in Dev on 2026-10-18; focused calendar, parent and late-only tests pass. Canvas Live timing writes, a new parent report, UserInstall calendar adoption, distribution and destination-client validation remain pending. This plan coordinates the [parent-report contract](PARENT-REPORT-CURRENT-TERM.md). Earlier research/design sections are retained as history. Read root AGENTS.md, ARCHITECTURE.md and SCORING-RULES.md before further execution.

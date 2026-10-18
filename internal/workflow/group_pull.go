@@ -485,7 +485,11 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 			if memberSeen[ref] {
 				continue
 			}
-			work.Members = append(work.Members, domain.GroupWorkMember{StudentRef: ref, Alias: current.Alias, CurrentMember: true, MembershipState: current.State, WorkflowState: "no submission record returned"})
+			memberDoc := domain.GroupWorkMember{StudentRef: ref, Alias: current.Alias, CurrentMember: true, MembershipState: current.State, WorkflowState: "no submission record returned"}
+			if st, ok := roster.ByUserID[roster.ByRefID[ref]]; ok {
+				memberDoc.ExtraTime = &st.ExtraTime
+			}
+			work.Members = append(work.Members, memberDoc)
 			work.SharedAssessmentReasons = append(work.SharedAssessmentReasons, "a current group member has no submission record; work state remains unknown")
 		}
 		sort.Slice(work.Members, func(i, j int) bool { return work.Members[i].StudentRef < work.Members[j].StudentRef })
@@ -719,7 +723,7 @@ func parseGroupAudienceID(raw json.RawMessage) (int64, error) {
 }
 
 func (s *Service) buildGroupMember(st workspace.Student, sub Submission, current domain.GroupWorkMembership, isCurrent bool) domain.GroupWorkMember {
-	m := domain.GroupWorkMember{StudentRef: st.Ref, Alias: st.Alias, CurrentMember: isCurrent, SubmissionID: sub.ID, SubmissionGroupID: submissionGroupID(sub), Attempt: sub.Attempt, WorkflowState: sub.State, Missing: sub.Missing, Excused: sub.Excused, Late: sub.Late, ObservedTiming: observedTiming(sub), AssignmentVisible: sub.AssignmentVisible, GradeMatchesCurrent: sub.GradeMatchesCurrentSubmission, ObservedScore: decimalPointer(sub.Score), PointsDeducted: decimalPointer(sub.PointsDeducted), EffectiveDueAt: ""}
+	m := domain.GroupWorkMember{StudentRef: st.Ref, Alias: st.Alias, ExtraTime: &st.ExtraTime, CurrentMember: isCurrent, SubmissionID: sub.ID, SubmissionGroupID: submissionGroupID(sub), Attempt: sub.Attempt, WorkflowState: sub.State, Missing: sub.Missing, Excused: sub.Excused, Late: sub.Late, ObservedTiming: observedTiming(sub), AssignmentVisible: sub.AssignmentVisible, GradeMatchesCurrent: sub.GradeMatchesCurrentSubmission, ObservedScore: decimalPointer(sub.Score), PointsDeducted: decimalPointer(sub.PointsDeducted), EffectiveDueAt: ""}
 	if isCurrent {
 		m.MembershipState = current.State
 	}

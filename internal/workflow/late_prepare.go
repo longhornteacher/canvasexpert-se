@@ -636,7 +636,7 @@ func groupMemberAsStudentWork(group domain.GroupWorkDocument, member domain.Grou
 	for _, attempt := range member.Prior {
 		prior = append(prior, domain.AttemptWork{Ref: attempt.Attempt, Late: attempt.Late})
 	}
-	return domain.StudentWorkDocument{StudentRef: member.StudentRef, AssignmentID: group.AssignmentID, AssignmentVisible: member.AssignmentVisible, Current: current, Prior: prior, Excused: member.Excused}
+	return domain.StudentWorkDocument{StudentRef: member.StudentRef, ExtraTime: member.ExtraTime, AssignmentID: group.AssignmentID, AssignmentVisible: member.AssignmentVisible, Current: current, Prior: prior, Excused: member.Excused}
 }
 
 func allGroupTimingUnchanged(observed map[string]domain.ObservedTiming, timing domain.LateTiming) bool {

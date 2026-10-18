@@ -104,6 +104,12 @@ func TestUncertainCreateCannotReplay(t *testing.T) {
 func TestExplicitPublicationPersistsScopedAuthorization(t *testing.T) {
 	writes := 0
 	p := fixtureProbe(t, func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "student_view_student") {
+			return response(r, `{"id":5}`), nil
+		}
+		if strings.HasSuffix(r.URL.Path, "/overrides") {
+			return response(r, `[{"id":77,"student_ids":[5],"course_section_id":null,"group_id":null}]`), nil
+		}
 		if r.Method == "PUT" {
 			writes++
 			b, e := io.ReadAll(r.Body)
@@ -115,13 +121,33 @@ func TestExplicitPublicationPersistsScopedAuthorization(t *testing.T) {
 			}
 			return response(r, `{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":true,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
 		}
-		return response(r, `{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
+		return response(r, `{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"only_visible_to_overrides":true,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
 	})
+	p.state.OverrideID = 77
 	if e := p.publication(context.Background(), true); e != nil {
 		t.Fatal(e)
 	}
 	if writes != 1 || !p.state.PublicationAuthorized {
 		t.Fatal("explicit scoped publication not recorded")
+	}
+}
+func TestPublicationRefusesAssignmentNotLimitedToTestStudent(t *testing.T) {
+	writes := 0
+	p := fixtureProbe(t, func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "student_view_student") {
+			return response(r, `{"id":5}`), nil
+		}
+		if r.Method != "GET" {
+			writes++
+		}
+		return response(r, `{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"only_visible_to_overrides":false,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
+	})
+	p.state.OverrideID = 77
+	if e := p.publication(context.Background(), true); e == nil {
+		t.Fatal("publish allowed without Test-Student-only visibility")
+	}
+	if writes != 0 {
+		t.Fatal("unrestricted publish sent a write")
 	}
 }
 func TestDeniedUnpublishTruthfullyKeepsPublishedScope(t *testing.T) {

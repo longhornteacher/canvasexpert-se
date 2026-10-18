@@ -37,6 +37,7 @@ type probeState struct {
 	AssignmentID          int64                           `json:"assignment_id,omitempty"`
 	RubricID              int64                           `json:"rubric_id,omitempty"`
 	AssociationID         int64                           `json:"association_id,omitempty"`
+	OverrideID            int64                           `json:"override_id,omitempty"`
 	CriterionID           string                          `json:"criterion_id,omitempty"`
 	CriterionIDs          []string                        `json:"criterion_ids,omitempty"`
 	ModuleID              int64                           `json:"module_id,omitempty"`
@@ -70,7 +71,7 @@ func run(ctx context.Context, args []string) error {
 	}
 	if len(args) == 0 || args[0] == "help" {
 		fmt.Println("Optional leading --state PATH. Unattended helpers: select --assignment ID | configure-fixture [--assignment ID] [--submission-types online_text_entry,online_upload] | create-module --name '[CSE UNATTENDED] ...' | read-module | submit-file --file SYNTHETIC_PATH. Read-only field probe: field-read course | image-files | page ID | new-quiz ID | assignment ID ([CSE FIELD PROBE] objects only). Use a separate state per assignment; configure only unpublished exact named fixtures, then select. select never adopts legacy coursework.")
-		fmt.Println("DEV ONLY: cse-probe inspect-test-student | create | attach-rubric | read | submit [--body SYNTHETIC_TEXT] [--submitted-at RFC3339] | submit-as [same flags] | grade [--grade POINTS] [--rubric POINTS] [--comment SYNTHETIC_TEXT] | edit-comment --id ID --text SYNTHETIC_TEXT | couple-association [--enabled=false] | late --status none|late | set-due --at RFC3339 | publish | unpublish | pull [--workspace DEV_ROOT] | post --results RESULTS [--workspace DEV_ROOT] | inspect-state\nHardcoded CS8 course 121046; exact disposable assignment; built-in Test Student only. Publish requires separate teacher authorization and an explicit invocation; no automatic publication. Unpublish may be rejected by Canvas after submissions; no policy workaround. No delete/course-policy commands. State: " + statePath)
+		fmt.Println("DEV ONLY: cse-probe inspect-test-student | create | restrict | verify-visibility | attach-rubric | read | submit [--body SYNTHETIC_TEXT] [--submitted-at RFC3339] | submit-as [same flags] | grade [--grade POINTS] [--rubric POINTS] [--comment SYNTHETIC_TEXT] | edit-comment --id ID --text SYNTHETIC_TEXT | couple-association [--enabled=false] | late --status none|late | set-due --at RFC3339 | publish | unpublish | pull [--workspace DEV_ROOT] | post --results RESULTS [--workspace DEV_ROOT] | inspect-state\nHardcoded CS8 course 121046; exact disposable assignment; built-in Test Student only. Publish requires separate teacher authorization and an explicit invocation; no automatic publication. Unpublish may be rejected by Canvas after submissions; no policy workaround. No delete/course-policy commands. State: " + statePath)
 		return nil
 	}
 	if len(args) > 0 && args[0] == "outlook-self-test" {
@@ -145,6 +146,19 @@ func run(ctx context.Context, args []string) error {
 			return fmt.Errorf("create takes no arguments")
 		}
 		return p.create(ctx)
+	case "restrict":
+		if len(args) != 0 {
+			return fmt.Errorf("restrict takes no arguments")
+		}
+		return p.restrict(ctx)
+	case "verify-visibility":
+		if len(args) != 0 {
+			return fmt.Errorf("verify-visibility takes no arguments")
+		}
+		if e := p.verifyTestStudentOnly(ctx); e != nil {
+			return e
+		}
+		return emit(map[string]any{"assignment_id": p.state.AssignmentID, "test_student_only": true, "override_id": p.state.OverrideID})
 	case "attach-rubric":
 		if len(args) != 0 {
 			return fmt.Errorf("attach-rubric takes no arguments")
@@ -376,6 +390,11 @@ func (p *probe) publication(ctx context.Context, published bool) error {
 	if e = validateAssignment(a, check); e != nil {
 		return e
 	}
+	if published {
+		if e = p.verifyTestStudentOnly(ctx); e != nil {
+			return e
+		}
+	}
 	if strings.HasPrefix(a.Name, unattendedPrefix) && !fixture.safelyExcluded() {
 		return fmt.Errorf("unattended publication requires final-grade and SIS exclusion")
 	}
@@ -414,6 +433,82 @@ func (p *probe) publication(ctx context.Context, published bool) error {
 		return f
 	}
 	return emit(assignmentShape(response))
+}
+
+// restrict limits the disposable assignment to the built-in Test Student before any publish.
+func (p *probe) restrict(ctx context.Context) error {
+	a, e := p.assignment(ctx)
+	if e != nil {
+		return e
+	}
+	if a.Published {
+		return fmt.Errorf("restrict requires an unpublished disposable assignment")
+	}
+	if e = p.target(ctx); e != nil {
+		return e
+	}
+	if p.state.OverrideID == 0 {
+		if e = p.begin("restrict-override"); e != nil {
+			return e
+		}
+		var override struct {
+			ID int64 `json:"id"`
+		}
+		e = p.c.Write(ctx, "POST", fmt.Sprintf("/api/v1/courses/%d/assignments/%d/overrides", courseID, p.state.AssignmentID), map[string]any{"assignment_override": map[string]any{"title": prefix + " Test Student only", "student_ids": []int64{p.state.TestStudentID}}}, &override)
+		if e == nil && override.ID <= 0 {
+			e = &canvas.Error{Kind: "uncertain", Uncertain: true}
+		}
+		if e == nil {
+			p.state.OverrideID = override.ID
+		}
+		if f := p.finish("restrict-override", e, override.ID); f != nil {
+			return f
+		}
+	}
+	if a.OnlyVisibleToOverrides == nil || !*a.OnlyVisibleToOverrides {
+		if e = p.begin("restrict-visibility"); e != nil {
+			return e
+		}
+		var response workflow.Assignment
+		e = p.c.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d", courseID, p.state.AssignmentID), map[string]any{"assignment": map[string]any{"only_visible_to_overrides": true}}, &response)
+		if e == nil && response.ID != p.state.AssignmentID {
+			e = &canvas.Error{Kind: "uncertain", Uncertain: true}
+		}
+		if f := p.finish("restrict-visibility", e, p.state.AssignmentID); f != nil {
+			return f
+		}
+	}
+	if e = p.verifyTestStudentOnly(ctx); e != nil {
+		return e
+	}
+	return emit(map[string]any{"assignment_id": p.state.AssignmentID, "test_student_only": true, "override_id": p.state.OverrideID, "published": false})
+}
+
+// verifyTestStudentOnly is the publish guard: only the exact Test Student override may see the assignment.
+func (p *probe) verifyTestStudentOnly(ctx context.Context) error {
+	if e := p.target(ctx); e != nil {
+		return e
+	}
+	a, e := p.assignment(ctx)
+	if e != nil {
+		return e
+	}
+	if a.OnlyVisibleToOverrides == nil || !*a.OnlyVisibleToOverrides || p.state.OverrideID <= 0 {
+		return fmt.Errorf("assignment is not limited to overrides; run restrict before publishing")
+	}
+	var overrides []struct {
+		ID              int64   `json:"id"`
+		StudentIDs      []int64 `json:"student_ids"`
+		CourseSectionID int64   `json:"course_section_id"`
+		GroupID         int64   `json:"group_id"`
+	}
+	if e = p.c.List(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d/overrides?per_page=100", courseID, p.state.AssignmentID), &overrides); e != nil {
+		return e
+	}
+	if len(overrides) != 1 || overrides[0].ID != p.state.OverrideID || len(overrides[0].StudentIDs) != 1 || overrides[0].StudentIDs[0] != p.state.TestStudentID || overrides[0].CourseSectionID != 0 || overrides[0].GroupID != 0 {
+		return fmt.Errorf("visibility is not limited to exactly the built-in Test Student; refusing")
+	}
+	return nil
 }
 func (p *probe) submission(ctx context.Context) (workflow.Submission, error) {
 	if e := p.target(ctx); e != nil {

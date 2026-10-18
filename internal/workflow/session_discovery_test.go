@@ -347,6 +347,59 @@ func TestCalculateTimingCountsAccommodatedDeadlineWithoutChangingCanvasGuard(t *
 	}
 }
 
+func TestPrepareLateTimingUsesEstablishedExtraTimeDeadlineOnce(t *testing.T) {
+	const extended = "2026-10-16T16:00:00-05:00" // synthetic rule: one additional school day
+	for _, tc := range []struct{ name, canvasDue, basis string }{
+		{"allowance outside Canvas", "2026-10-15T16:00:00-05:00", "Synthetic standing allowance adds one school day; Canvas still has the base date."},
+		{"Canvas already includes allowance", extended, "Synthetic standing allowance is already included in Canvas; use that deadline once."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			observed := &domain.ObservedTiming{StatusKnown: true, LateKnown: true, Late: true, SecondsLateKnown: true, SecondsLate: 400000}
+			service, file, _ := studentTimingFixture(t, observed, false)
+			calendar := workspace.SchoolCalendar{Schema: 1, Timezone: "America/Chicago", StartDate: "2026-08-01", EndDate: "2027-05-31", NonSchoolDates: []string{"2026-10-19"}}
+			if err := workspace.WriteTeacherDocument(service.Root, "context/school-calendar.md", calendar, "Synthetic calendar with Monday off."); err != nil {
+				t.Fatal(err)
+			}
+			studentPath := filepath.Join(service.Root, "courses", "TEST", "unit", "student-work.md")
+			var work domain.StudentWorkDocument
+			if _, err := workspace.ReadDocument(studentPath, &work); err != nil {
+				t.Fatal(err)
+			}
+			work.ExtraTime = boolPtr(true)
+			first := domain.AttemptRef{Attempt: 1, SubmittedAt: "2026-10-20T16:30:00-05:00"}
+			work.Current.Ref = domain.AttemptRef{Attempt: 2, SubmittedAt: "2026-10-21T16:30:00-05:00"}
+			work.Current.EffectiveDueAt = tc.canvasDue
+			work.Prior = []domain.AttemptWork{{Ref: first, ReadableText: "First genuine academic response."}}
+			if err := workspace.WriteDocument(studentPath, work, ""); err != nil {
+				t.Fatal(err)
+			}
+			var decisions LateTimingDecisionsDocument
+			decisionPath := filepath.Join(service.Root, filepath.FromSlash(file))
+			if _, err := workspace.ReadDocument(decisionPath, &decisions); err != nil {
+				t.Fatal(err)
+			}
+			decisions.Students[0].FirstGenuine = first
+			decisions.Students[0].AccommodatedDeadline = extended
+			decisions.Students[0].AccommodationBasis = tc.basis
+			if err := workspace.WriteDocument(decisionPath, decisions, ""); err != nil {
+				t.Fatal(err)
+			}
+			prepared, err := service.PrepareLateTiming(file)
+			if err != nil || len(prepared.Students) != 1 {
+				t.Fatalf("preparation=%+v err=%v", prepared, err)
+			}
+			row := prepared.Students[0]
+			if row.Status != "proposed" || row.Timing == nil || row.Timing.Status != "late" || row.Timing.SecondsLate != 88200 || row.Timing.DueAt != tc.canvasDue || row.Timing.Basis != tc.basis {
+				t.Fatalf("allowance must be counted once without replacing Canvas's write guard: %+v", row)
+			}
+			provenance := row.Timing.SchoolTime
+			if provenance == nil || provenance.Deadline != extended || provenance.Attempt != first || len(provenance.SkippedDates) != 3 {
+				t.Fatalf("weekend/holiday or first-genuine provenance lost: %+v", provenance)
+			}
+		})
+	}
+}
+
 func mustRel(t *testing.T, root, path string) string {
 	t.Helper()
 	rel, err := filepath.Rel(root, path)

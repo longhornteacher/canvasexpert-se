@@ -36,10 +36,10 @@ func TestPullGroupAssignmentSelectedReadsOnlySelectedMembersAndKeepsUnsentResult
 		case "/api/v1/groups/60":
 			write(map[string]any{"id": 60, "course_id": 1, "context_type": "Course", "group_category_id": 50, "name": "Blue", "non_collaborative": false})
 		case "/api/v1/groups/60/memberships":
-			write([]any{map[string]any{"group_id": 60, "user_id": 10, "workflow_state": "accepted"}, map[string]any{"group_id": 60, "user_id": 11, "workflow_state": "accepted"}, map[string]any{"group_id": 60, "user_id": 12, "workflow_state": "accepted"}, map[string]any{"group_id": 60, "user_id": 13, "workflow_state": "accepted"}})
+			write([]any{map[string]any{"group_id": 60, "user_id": 10, "workflow_state": "accepted"}, map[string]any{"group_id": 60, "user_id": 11, "workflow_state": "accepted"}, map[string]any{"group_id": 60, "user_id": 12, "workflow_state": "accepted"}, map[string]any{"group_id": 60, "user_id": 13, "workflow_state": "accepted"}, map[string]any{"group_id": 60, "user_id": 14, "workflow_state": "accepted"}})
 		case "/api/v1/courses/1/enrollments":
 			rows := []any{}
-			for id := int64(10); id <= 13; id++ {
+			for id := int64(10); id <= 14; id++ {
 				rows = append(rows, map[string]any{"user_id": id, "type": "StudentEnrollment", "enrollment_state": "active", "user": map[string]any{"id": id, "name": fmt.Sprintf("Private Student %d", id), "short_name": fmt.Sprintf("Student %d", id)}})
 			}
 			write(rows)
@@ -47,6 +47,10 @@ func TestPullGroupAssignmentSelectedReadsOnlySelectedMembersAndKeepsUnsentResult
 			broadReads++
 			t.Errorf("selected-group pull used assignment-wide submissions route")
 			http.Error(w, "wrong scope", 500)
+		case "/api/v1/courses/1/assignments/10/submissions/14":
+			// This current member has work in a different historical group, so
+			// no submission record is kept for them in the selected group.
+			write(map[string]any{"user_id": 14, "assignment_id": 10, "group_id": 61, "attempt": 1})
 		case "/api/v1/courses/1/assignments/10/submissions/10", "/api/v1/courses/1/assignments/10/submissions/11", "/api/v1/courses/1/assignments/10/submissions/12", "/api/v1/courses/1/assignments/10/submissions/13":
 			if !strings.Contains(r.URL.RawQuery, "include[]=group") || !strings.Contains(r.URL.RawQuery, "include[]=submission_history") {
 				t.Errorf("scoped submission did not request required evidence: %s", r.URL.RawQuery)
@@ -74,8 +78,8 @@ func TestPullGroupAssignmentSelectedReadsOnlySelectedMembersAndKeepsUnsentResult
 				grade = 11
 			}
 			write(map[string]any{"id": 700 + userID, "user_id": userID, "assignment_id": 10, "group_id": 60, "attempt": 1, "submitted_at": "2026-10-16T18:00:00Z", "workflow_state": "submitted", "submission_type": "online_upload", "body": "shared work", "entered_score": grade, "attachments": []any{map[string]any{"id": 800, "filename": "shared.txt", "content_type": "text/plain", "url": serverURL + "/files/shared"}}})
-		case "/api/v1/courses/1/assignments/10/users/10/group_members", "/api/v1/courses/1/assignments/10/users/11/group_members", "/api/v1/courses/1/assignments/10/users/12/group_members", "/api/v1/courses/1/assignments/10/users/13/group_members":
-			write([]any{map[string]any{"id": "10"}, map[string]any{"id": "11"}, map[string]any{"id": "12"}, map[string]any{"id": "13"}})
+		case "/api/v1/courses/1/assignments/10/users/10/group_members", "/api/v1/courses/1/assignments/10/users/11/group_members", "/api/v1/courses/1/assignments/10/users/12/group_members", "/api/v1/courses/1/assignments/10/users/13/group_members", "/api/v1/courses/1/assignments/10/users/14/group_members":
+			write([]any{map[string]any{"id": "10"}, map[string]any{"id": "11"}, map[string]any{"id": "12"}, map[string]any{"id": "13"}, map[string]any{"id": "14"}})
 		default:
 			if strings.Contains(r.URL.Path, "/submissions/") && strings.HasSuffix(r.URL.Path, "/submissions/11") {
 				otherGroupReads++
@@ -86,8 +90,13 @@ func TestPullGroupAssignmentSelectedReadsOnlySelectedMembersAndKeepsUnsentResult
 	})
 	serverURL = server.URL
 	store, _ := workspace.OpenStudents(s.Root)
-	for id := int64(10); id <= 13; id++ {
+	for id := int64(10); id <= 14; id++ {
 		_, _ = store.Upsert(s.Client.Origin(), id, fmt.Sprintf("Private Student %d", id), fmt.Sprintf("Student %d", id), "", "")
+	}
+	extraTime := map[string]bool{}
+	for i := range store.Rows {
+		store.Rows[i].ExtraTime = store.Rows[i].UserID == 10 || store.Rows[i].UserID == 14
+		extraTime[store.Rows[i].Ref] = store.Rows[i].ExtraTime
 	}
 	_ = store.Save()
 	unsent := filepath.Join(s.Root, "courses", "TEST", "prepared-results.md")
@@ -118,8 +127,21 @@ func TestPullGroupAssignmentSelectedReadsOnlySelectedMembersAndKeepsUnsentResult
 			unknownFound = true
 		}
 	}
-	if len(work.Members) != 4 || !placeholderFound || !unknownFound || len(work.Artifacts) != 1 || len(work.Artifacts[0].Sources) != 2 {
+	if len(work.Members) != 5 || !placeholderFound || !unknownFound || len(work.Artifacts) != 1 || len(work.Artifacts[0].Sources) != 2 {
 		t.Fatalf("member identities/artifact dedup/placeholder mismatch: members=%+v artifacts=%+v", work.Members, work.Artifacts)
+	}
+	noRecordFound := false
+	for _, member := range work.Members {
+		want, mapped := extraTime[member.StudentRef]
+		if !mapped || member.ExtraTime == nil || *member.ExtraTime != want {
+			t.Fatalf("member lost its saved Extra time fact: %+v", member)
+		}
+		if member.WorkflowState == "no submission record returned" {
+			noRecordFound = true
+		}
+	}
+	if !noRecordFound {
+		t.Fatal("fixture must exercise a known member without a returned submission")
 	}
 	grades := map[string]string{}
 	for _, member := range work.Members {

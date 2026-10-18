@@ -115,7 +115,7 @@ The proposed shape follows the existing `start_review` / `review_status` pattern
 3. **Send.** The teacher's Send button triggers the Engine directly, which creates and sends a fresh Outlook item for each recipient. The agent never calls send and never sees addresses, so this needs no MCP send tool or approval token. A "Drafts only" option on the same page fills Outlook Drafts instead.
 4. **Outcome.** `review_status` returns counts and outcomes by student reference only: sent, skipped, failed or uncertain, with no addresses. Outcomes are recorded locally in UserInstall so a retry never resends an accepted message.
 
-Band follows the same page, with no copy-paste. A "Post to Band" button uses the BAND API if it supports posting; otherwise, Cowork computer use posts the approved class-wide text. See [the handoff](../handoffs/active/PARENT-UPDATES.md), slice 4.
+Band follows the same page, with no copy-paste. A "Post to Band" button uses the BAND API if it supports posting; otherwise, Cowork computer use posts the approved class-wide text. See [the historical handoff](../handoffs/retired/PARENT-UPDATES.md), slice 4.
 
 Engine notes:
 - Do COM work on a dedicated OS-locked thread (`go-ole`, `CoInitialize`) so the MCP server's goroutines don't matter.

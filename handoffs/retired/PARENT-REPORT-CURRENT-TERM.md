@@ -1,3 +1,5 @@
+> **Retired 2026-10-18 — Dev implementation complete.** The current-term inventory landed in `aae89b1`; the subsequent explicit-null date defect is fixed and locally verified in the [follow-up record](PARENT-DATES-AND-EXTRA-TIME-FOLLOWUP.md). Original design and dated evidence below are historical. Remaining adoption and real-use observations are tracked in the [delivery follow-up](../active/CALENDAR-SCORING-DELIVERY.md); retirement does not claim Canvas Live or family-delivery verification.
+
 # Parent reports: current grading period
 
 Status: implemented locally in Dev on 2026-10-18; focused tests pass. No new Canvas Live report, parent-email delivery, UserInstall adoption or destination-client validation has been performed. This remains the parent component contract of [the combined calendar/scoring implementation plan](SCHOOL-CALENDAR-SCORING-AND-PARENT-UPDATES.md). Earlier sections preserve the design and evidence gathered before implementation.

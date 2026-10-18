@@ -160,6 +160,57 @@ func TestCompleteStudentSubmissionsResolvesMissingVisibilityRow(t *testing.T) {
 	}
 }
 
+func TestParentCompletionAndClassificationPreserveStudentDueDatePresence(t *testing.T) {
+	for _, tc := range []struct {
+		name, dateJSON string
+		bulk           bool
+		work, soon     int
+		malformed      bool
+	}{
+		{name: "explicit null from bulk", dateJSON: `,"cached_due_date":null`, bulk: true},
+		{name: "explicit null from targeted read", dateJSON: `,"cached_due_date":null`},
+		{name: "explicit empty date", dateJSON: `,"cached_due_date":""`, bulk: true},
+		{name: "malformed date stays unavailable", dateJSON: `,"cached_due_date":"not-a-date"`, bulk: true, malformed: true},
+		{name: "omitted date uses catalog", bulk: true, work: 1},
+		{name: "individual date takes precedence", dateJSON: `,"cached_due_date":"2026-10-19T12:00:00-05:00"`, bulk: true, soon: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"user_id":9,"assignment_id":7,"assignment_visible":true,"missing":true` + tc.dateJSON + `}`
+			svc, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				if tc.bulk || r.URL.Path != "/api/v1/courses/1/assignments/7/submissions/9" {
+					t.Errorf("unexpected targeted read: %s", r.URL.Path)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(body))
+			})
+			var bulk []Submission
+			if tc.bulk {
+				var row Submission
+				if err := json.Unmarshal([]byte(body), &row); err != nil {
+					t.Fatal(err)
+				}
+				bulk = []Submission{row}
+			}
+			loc, _ := time.LoadLocation("America/Chicago")
+			now := time.Date(2026, 10, 18, 12, 0, 0, 0, loc)
+			start, soonEnd := now.AddDate(0, 0, -14), now.AddDate(0, 0, 7)
+			assignment := Assignment{ID: 7, Name: "Individual deadline", Published: true, DueAt: str("2026-10-17T12:00:00-05:00"), Points: "5", SubmissionTypes: []string{"online_text_entry"}}
+			rows, flags := completeStudentSubmissions(t.Context(), svc.Client, 1, 9, []Assignment{assignment}, bulk, start, now, soonEnd)
+			if len(rows) != 1 || (len(flags) > 0) != tc.malformed {
+				t.Fatalf("completion rows=%+v flags=%v", rows, flags)
+			}
+			if tc.malformed && !strings.Contains(flags[0], "assignment 7 (Individual deadline): Canvas returned a malformed effective due date") {
+				t.Fatalf("malformed date needs the item-specific explanation: %v", flags)
+			}
+			course := ParentReportCourse{WorkDue: []ParentWorkDueItem{}}
+			buildStudentReportScoped(&course, rows, nil, map[int64]Assignment{7: assignment}, now, loc, start, soonEnd)
+			if len(course.WorkDue) != tc.work || len(course.Missing) != tc.work || len(course.DueSoon) != tc.soon || len(course.Corrections) != 0 || len(course.History) != 0 {
+				t.Fatalf("student date was not preserved in classification: %+v", course)
+			}
+		})
+	}
+}
+
 func TestCompleteStudentSubmissionsChecksUndatedCatalogForStudentOverride(t *testing.T) {
 	svc, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

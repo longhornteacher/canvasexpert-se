@@ -673,6 +673,9 @@ func hasGradeHistoryChange(versions []Submission) bool {
 }
 
 func effectiveDueForStudent(sub Submission, a Assignment, studentID int64) *time.Time {
+	if sub.CachedDueDatePresent && sub.CachedDueDate == nil {
+		return nil // An explicit student no-date response overrides the catalog.
+	}
 	if sub.CachedDueDate != nil {
 		if strings.TrimSpace(*sub.CachedDueDate) == "" {
 			return nil // Canvas explicitly reports this student's assignment as undated.
