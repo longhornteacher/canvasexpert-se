@@ -56,7 +56,7 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 37);
+  assert.equal(names.length, 38);
   assert.ok(names.includes('list_external_resources'), 'missing list_external_resources');
   const externalResourcesTool = discovered.result.tools.find(t => t.name === 'list_external_resources');
   assert.ok(externalResourcesTool.inputSchema.properties.course, 'list_external_resources must require course');
@@ -70,8 +70,12 @@ try {
   for (const name of ['pull_page', 'list_page_revisions']) assert.ok(names.includes(name), `missing ${name}`);
   assert.ok(names.includes('pull_discussion'), 'missing pull_discussion');
   assert.ok(names.includes('pull_work'), 'missing pull_work');
+  assert.ok(names.includes('prepare_late_timing'), 'missing prepare_late_timing');
+  const prepareLateTool = discovered.result.tools.find(t => t.name === 'prepare_late_timing');
+  for (const field of ['packet', 'students', 'groups']) assert.ok(prepareLateTool.inputSchema.properties[field], `prepare_late_timing must expose ${field}`);
   const pullWorkTool = discovered.result.tools.find(t => t.name === 'pull_work');
   assert.ok(pullWorkTool.inputSchema.properties.group_id, 'pull_work must expose optional group_id');
+  assert.ok(pullWorkTool.inputSchema.properties.session, 'pull_work must expose scoring-session discovery');
   assert.match(pullWorkTool.description, /group-packet\/group-work/);
   await call('pull_work', { course: 'CS8', assignment: '10', group_id: 0 }, true);
   await call('pull_work', { course: 'CS8', group_id: 60 }, true);
@@ -102,6 +106,19 @@ try {
   const updatedCourses = JSON.parse(await call('list_courses', { source: 'configured' }));
   assert.equal(updatedCourses.root, root);
   assert.deepEqual(updatedCourses.courses, [{ nickname: 'CS8', id: 11, current: true, timezone: 'America/Chicago' }, { nickname: 'OLD', id: 22, current: false }]);
+  await call('write_draft', { path: 'courses/mcp-late/packet.yaml', content: `---\nschema: 1\nkind: packet\ncourse: CS8\nassignment:\n  instance: ${origin}\n  course_id: 11\n  assignment_id: 20\n  title: MCP timing fixture\n  points: 10\n  submission_types: [online_text_entry]\nstudents: [courses/mcp-late/student.yaml]\n---\n` });
+  await call('write_draft', { path: 'courses/mcp-late/student.yaml', content: `---\nschema: 1\nkind: student-work\nstudent_ref: s-mcp\nalias: Student\nassignment_id: 20\nassignment_visible: true\ncurrent:\n  ref:\n    attempt: 1\n    submitted_at: "2026-10-18T10:00:00-05:00"\n  effective_due_at: "2026-10-19T10:00:00-05:00"\n  observed_timing:\n    status_known: true\n    late_policy_status: null\n    late_known: true\n    late: false\n    seconds_late_known: true\n    seconds_late: 0\n    custom_status_known: true\n    has_custom_status: false\n---\n` });
+  const preparedLate = JSON.parse(await call('prepare_late_timing', {
+    packet: 'courses/mcp-late/packet.yaml',
+    students: [{ student_ref: 's-mcp', first_genuine: { attempt: 1, submitted_at: '2026-10-18T10:00:00-05:00' } }],
+  }));
+  assert.equal(preparedLate.kind, 'late-timing-preparation');
+  assert.equal(preparedLate.students[0].student_ref, 's-mcp');
+  assert.equal(preparedLate.students[0].status, 'unchanged');
+  await call('write_draft', { path: 'courses/mcp-late/decisions.yaml', content: `---\nschema: 1\nkind: late-timing-decisions\npacket: courses/mcp-late/packet.yaml\nstudents:\n  - student_ref: s-mcp\n    first_genuine:\n      attempt: 1\n      submitted_at: "2026-10-18T10:00:00-05:00"\n---\n` });
+  const cliPreparedLate = spawnSync(installedEngine, ['--workspace', root, 'prepare-late-timing', 'courses/mcp-late/decisions.yaml'], { windowsHide: true, cwd: otherDirectory, encoding: 'utf8' });
+  assert.equal(cliPreparedLate.status, 0, cliPreparedLate.stderr);
+  assert.deepEqual(JSON.parse(cliPreparedLate.stdout), preparedLate, 'CLI and MCP preparation should agree without Canvas credentials');
   await call('engine_info');
   const syncRoot = await mkdtemp(path.join(tmpdir(), 'cse-rules-sync-'));
   const binding = JSON.parse(await call('engine_info', { operation: 'set-rules-location', sync_root: syncRoot }));

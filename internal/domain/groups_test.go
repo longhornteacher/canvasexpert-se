@@ -37,3 +37,19 @@ func TestGroupSetRejectsDuplicateKeysAndLimitWithoutSignup(t *testing.T) {
 		t.Fatal("limit without sign-up accepted")
 	}
 }
+
+func TestSharedGroupLateOnlyNeedsNoPointsOrRubric(t *testing.T) {
+	individual := false
+	baseline := ObservedTiming{StatusKnown: true, LateKnown: true, SecondsLateKnown: true}
+	doc := GroupResultsDocument{
+		Schema: 1, Kind: "group-results", Packet: "courses/TEST/pull.md",
+		Assignment: AssignmentSnapshot{Instance: "https://canvas.example", CourseID: 1, AssignmentID: 2, SubmissionTypes: []string{"online_upload"}, GradingType: "points", GroupCategoryID: 4, GradeGroupStudentsIndividually: &individual},
+		Groups: []GroupResult{{GroupID: 7, MemberRefs: []string{"a", "b"}, Operation: "late-only", LateOnly: &GroupLateOnly{
+			LateTiming:      LateTiming{Status: "none", DueAt: "2026-10-08T12:00:00Z", Basis: "submitted before the due time"},
+			ObservedMembers: map[string]ObservedTiming{"a": baseline, "b": baseline},
+		}}},
+	}
+	if _, err := ValidateGroupResults(&doc); err != nil {
+		t.Fatalf("group timing-only action incorrectly required points or a rubric: %v", err)
+	}
+}

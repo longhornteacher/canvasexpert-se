@@ -25,6 +25,7 @@ import (
 	"canvasexpertse/internal/mcpserver"
 	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/playbooks"
+	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 )
 
@@ -62,7 +63,10 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
                                 Upload a course asset and save a reusable receipt
   pull-item COURSE TITLE|ID|LINK Pull actual assignment HTML for editing
   pull-assignment-dates COURSE ASSIGNMENT_ID Pull exact audience override baselines for editing
-  pull-work [COURSE [ASSIGNMENT]] [--group ID] Pull individual/group work; no scope uses current courses
+  pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
+  prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
+  prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
+  prepare-late-timing FILE  Check first-genuine choices against pulled work and propose timing changes; never writes to Canvas
   parent-report COURSE [REF ...] Read parent-update facts (missing, corrections, due soon, history) into courses/COURSE/parent-updates/
   parent-review RUN_FOLDER      Open the private page to review and send a parent-update run (Outlook)
   student-report RUN_FOLDER     Save one PDF of student reports (one per page) from a parent-update run and open it
@@ -445,7 +449,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "pull-work": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -517,6 +521,10 @@ func previewResults(path string, out io.Writer) {
 	}
 	for _, v := range rows {
 		g := v.Student.Grade
+		if v.Student.Operation == "late-only" && v.Student.LateOnly != nil {
+			fmt.Fprintf(out, "%s  late-only  late: %s\n", v.Student.StudentRef, lateText(v.Student.LateOnly.LateTiming))
+			continue
+		}
 		if g == nil {
 			continue
 		}
@@ -578,6 +586,8 @@ func validateDocument(path string, roots ...string) error {
 		target = &domain.PacketDocument{}
 	case "student-work":
 		target = &domain.StudentWorkDocument{}
+	case "late-timing-decisions":
+		target = &workflow.LateTimingDecisionsDocument{}
 	default:
 		switch filepath.Base(path) {
 		case "courses.md":
@@ -595,6 +605,9 @@ func validateDocument(path string, roots ...string) error {
 	}
 	_, e = workspace.ReadDocument(path, target)
 	if e == nil {
+		if d, ok := target.(*workflow.LateTimingDecisionsDocument); ok {
+			e = d.Validate()
+		}
 		if _, ok := target.(*domain.AssignmentDocument); ok {
 			var doc domain.AssignmentDocument
 			body, readErr := workspace.ReadDocument(path, &doc)

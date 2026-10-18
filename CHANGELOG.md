@@ -4,6 +4,15 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Development notes
 
+### School calendar and parent-report scope (2026-10-18)
+
+- The school calendar now supports named inclusive grading periods and timezone-based current-period resolution. Late timing can be prepared from a first-genuine attempt decision, with school-time, skipped-date and current-Canvas timing provenance; `late-only` updates timing fields without changing grades or feedback. Local focused tests pass. Canvas Live timing writes and destination-client adoption remain pending.
+- Parent reports now require a saved current-period scope and complete due-based inventory for the 14-day retrospective window, with Due Soon limited to the next 7 calendar days and clipped at the period boundary. Student-specific effective dates, explicit undated overrides, visibility evidence and unreleased-grade privacy are handled; all inventory rows appear in email and print. Empty windows are skipped, and legacy reports remain preserved but require a fresh pull before send or print. Focused local parent and calendar tests pass; Canvas Live, delivery and destination-client adoption remain pending.
+
+### Parent-report classifications (1.1.0-beta.1)
+
+- Parent reports resolve stale Canvas missing/no-submission indicators using positive teacher-entered grades before drafting. Current recorded zeros lead under Missing/0, retain grade history and never repeat under Corrections. The Engine computes skip eligibility after classification: every included course must meet the configured cutoff (90 by default), with no Missing/0 items. Playbook and context seeds carry these standing rules. Verification is local; no new Canvas Live or delivery claim.
+
 ### Collaborative group sets
 
 - Dev can list collaborative group sets and clubs, pull an exact-ID baseline, and create or edit group-set settings and club names/descriptions. Canvas differentiation tags remain excluded. Local implementation checks do not establish live or student access behavior.

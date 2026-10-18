@@ -70,10 +70,26 @@ Neither choice makes that decision disposable during a product update.
   prescribe a correction method, promise a point increase, or require the
   teacher to establish a formula before the assignment can be created.
   Teachers develop their own correction norms; remember them when expressed.
-- Parent updates skip students at 90+ with no missing work in the included
-  courses; never request parent replies; never invent extra-credit
-  opportunities; include only existing coursework and teacher-authorized
-  opportunities.
+- Parent updates use Engine-resolved Missing/0 classifications: a positive
+  teacher-entered grade overrides stale missing/no-submission indicators;
+  a current recorded zero belongs in Missing/0 without implying it was
+  unsubmitted. Keep grade history, but never repeat Missing/0 items under
+  Corrections. Skip only after classification, when every included course
+  meets `skip_score` (90 by default) and no Missing/0 items remain. Never
+  request parent replies or invent extra-credit opportunities; include only
+  existing coursework and teacher-authorized opportunities.
+
+- Parent reports are scoped by the active grading period in
+  `context/school-calendar.md`. The Engine inventories all required visible
+  work due within the saved retrospective window, resolves student-specific
+  effective dates, and limits Missing/0, Corrections and History to that
+  inventory. Email and print render every inventory row even when the agent's
+  draft selects none. An empty window is an explicit skip. Do not disclose
+  grades whose `posted_at` is explicitly null.
+- Lateness is separate from score arithmetic. The Engine counts school time
+  from the first genuine submission using the calendar; the agent records its
+  reasoning and accommodation basis. `late-only` changes only Canvas lateness
+  fields on an existing grade, and review remains the normal posting gate.
 
 The school calendar, bell schedule and timezone remain in shipped starter
 context; they are the expensive content to recreate. Strip identifying

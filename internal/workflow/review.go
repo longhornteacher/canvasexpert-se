@@ -363,6 +363,14 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 		case r.CommentOnly != nil:
 			c.Attempt = r.CommentOnly.Attempt.Attempt
 			feedback = r.CommentOnly.Feedback
+		case r.LateOnly != nil:
+			c.Attempt = r.LateOnly.Attempt.Attempt
+			c.Late = lateSummary(r.LateOnly.LateTiming)
+			c.LateBasis = r.LateOnly.LateTiming.Basis
+			c.Facts = append(c.Facts, timingReviewFacts(r.LateOnly.LateTiming)...)
+		}
+		if r.Grade != nil && r.Grade.LateTiming != nil {
+			c.Facts = append(c.Facts, timingReviewFacts(*r.Grade.LateTiming)...)
 		}
 		c.Submission = submissionText(works[r.StudentRef], c.Attempt)
 		if w, ok := works[r.StudentRef]; ok && w.DiscussionEvidence != nil {
@@ -461,4 +469,28 @@ func lateSummary(t domain.LateTiming) string {
 	}
 	h := t.SecondsLate / 3600
 	return fmt.Sprintf("late %dd %dh", h/24, h%24)
+}
+
+func timingReviewFacts(t domain.LateTiming) []ReviewFact {
+	facts := []ReviewFact{{Label: "Timing action", Value: "late policy status: " + t.Status}}
+	if t.Status == "late" {
+		facts = append(facts, ReviewFact{Label: "Seconds late", Value: fmt.Sprint(t.SecondsLate)})
+	}
+	if t.Observed != nil {
+		observed := "automatic or no explicit status"
+		if t.Observed.LatePolicyStatus != nil {
+			observed = *t.Observed.LatePolicyStatus
+		}
+		facts = append(facts, ReviewFact{Label: "Current Canvas timing", Value: fmt.Sprintf("status %s; late=%t; seconds=%d", observed, t.Observed.Late, t.Observed.SecondsLate)})
+	}
+	if t.SchoolTime != nil {
+		facts = append(facts,
+			ReviewFact{Label: "First genuine submission counted", Value: fmt.Sprintf("attempt %d at %s", t.SchoolTime.Attempt.Attempt, t.SchoolTime.SubmittedAt)},
+			ReviewFact{Label: "School-time deadline", Value: t.SchoolTime.Deadline},
+		)
+		if len(t.SchoolTime.SkippedDates) > 0 {
+			facts = append(facts, ReviewFact{Label: "Calendar days skipped", Value: strings.Join(t.SchoolTime.SkippedDates, ", ")})
+		}
+	}
+	return facts
 }

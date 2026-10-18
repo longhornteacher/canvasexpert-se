@@ -18,6 +18,7 @@ import (
 
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -74,6 +75,13 @@ type PullWorkInput struct {
 	Course     string `json:"course,omitempty" jsonschema:"Configured course nickname; omit to pull current courses"`
 	Assignment string `json:"assignment,omitempty" jsonschema:"Optional assignment title or ID"`
 	GroupID    *int64 `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID; requires course and assignment"`
+	Session    bool   `json:"session,omitempty" jsonschema:"Prepare this pull for a scoring session, including current-term discovery and timing-only evidence"`
+}
+
+type PrepareLateTimingInput struct {
+	Packet   string                               `json:"packet" jsonschema:"Workspace-relative packet or group-packet path under courses/"`
+	Students []workflow.LateTimingStudentDecision `json:"students,omitempty" jsonschema:"First-genuine choices for individual packet members"`
+	Groups   []workflow.LateTimingGroupDecision   `json:"groups,omitempty" jsonschema:"Per-member first-genuine choices for group-packet entries"`
 }
 
 type ParentReportInput struct {
@@ -180,7 +188,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "help", in.Topic)
 	})
-	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
+	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Set session for current-term scoring discovery and timing-only evidence. Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
 		args := []string{"pull-work"}
 		if in.Course != "" {
 			args = append(args, in.Course)
@@ -197,7 +205,25 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 			}
 			args = append(args, "--group", strconv.FormatInt(*in.GroupID, 10))
 		}
+		if in.Session {
+			args = append(args, "--session")
+		}
 		return s.longCommand(ctx, args...)
+	})
+	addActionTool(server, "prepare_late_timing", "Check first-genuine submission and deadline decisions against a pulled packet, compute school time from the active calendar when needed, and return proposed/unchanged/held actions. This only prepares a reviewable result; it never writes to Canvas.", false, func(_ context.Context, _ *mcp.CallToolRequest, in PrepareLateTimingInput) (TextOutput, error) {
+		var config domain.CourseConfig
+		if _, err := workspace.ReadTeacherDocument(s.root, "context/courses.md", &config); err != nil {
+			return TextOutput{}, err
+		}
+		prepared, err := (&workflow.Service{Root: s.root, Config: config}).PrepareLateTimingDecisions(workflow.LateTimingDecisionsDocument{Schema: 1, Kind: "late-timing-decisions", Packet: in.Packet, Students: in.Students, Groups: in.Groups})
+		if err != nil {
+			return TextOutput{}, err
+		}
+		encoded, err := json.MarshalIndent(prepared, "", "  ")
+		if err != nil {
+			return TextOutput{}, err
+		}
+		return TextOutput{Text: string(encoded)}, nil
 	})
 	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates (course score, missing work, correction candidates, due soon, grade history) into courses/<course>/parent-updates/<run>/report.json. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
 		return s.longCommand(ctx, append(append([]string{"parent-report"}, in.Courses...), in.Students...)...)

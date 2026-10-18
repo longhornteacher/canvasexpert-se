@@ -24,6 +24,7 @@ type groupPostEnv struct {
 	audience []string // live group_members ids
 	failText string   // comment text whose write should fail with 400
 	attempt  map[int64]int
+	timing   map[int64]map[string]any
 	shared   *bool // live grade_group_students_individually, as Canvas currently reports it
 }
 
@@ -50,7 +51,7 @@ func newGroupPostEnv(t *testing.T, coupled bool) *groupPostEnv {
 
 func newGroupEnv(t *testing.T, coupled, individual bool) *groupPostEnv {
 	t.Helper()
-	env := &groupPostEnv{audience: []string{"10", "11", "12"}, attempt: map[int64]int{10: 1, 11: 1, 12: 1}}
+	env := &groupPostEnv{audience: []string{"10", "11", "12"}, attempt: map[int64]int{10: 1, 11: 1, 12: 1}, timing: map[int64]map[string]any{}}
 	setID := int64(50)
 	mode := individual
 	env.shared = &mode
@@ -66,7 +67,11 @@ func newGroupEnv(t *testing.T, coupled, individual bool) *groupPostEnv {
 		w.Header().Set("Content-Type", "application/json")
 		write := func(v any) { _ = json.NewEncoder(w).Encode(v) }
 		sub := func(user int64) map[string]any {
-			return map[string]any{"id": 700 + user, "user_id": user, "assignment_id": 10, "group_id": 60, "attempt": env.attempt[user], "submitted_at": "2026-10-16T18:00:00Z", "workflow_state": "submitted", "submission_type": "online_text_entry", "body": "<p>Our club's shared interpretation.</p>", "cached_due_date": "2026-10-15T12:00:00Z"}
+			result := map[string]any{"id": 700 + user, "user_id": user, "assignment_id": 10, "group_id": 60, "attempt": env.attempt[user], "submitted_at": "2026-10-16T18:00:00Z", "workflow_state": "submitted", "submission_type": "online_text_entry", "body": "<p>Our club's shared interpretation.</p>", "cached_due_date": "2026-10-15T12:00:00Z", "late": false, "late_policy_status": nil, "seconds_late": 0, "assignment_visible": true}
+			for key, value := range env.timing[user] {
+				result[key] = value
+			}
+			return result
 		}
 		path := r.URL.Path
 		switch {
@@ -298,6 +303,161 @@ func TestPostGroupResultsHoldsChangedAttempt(t *testing.T) {
 	if status := env.reload(t).Grade.Outcomes.Grade.Status; status != "held" {
 		t.Fatalf("status=%s", status)
 	}
+}
+
+func TestPostGroupLateOnlyRenewsFullAudienceAndWritesTimingOnce(t *testing.T) {
+	env := newGroupPostEnv(t, false)
+	prepareGroupLateOnly(t, env)
+	if _, err := env.s.PostGroupResults(context.Background(), env.results); err != nil {
+		t.Fatal(err)
+	}
+	if len(env.puts) != 1 || len(env.putsTo(10))+len(env.putsTo(11))+len(env.putsTo(12)) != 1 {
+		t.Fatalf("shared timing should make one write for the representative: %+v", env.puts)
+	}
+	fields, ok := env.puts[0].body["submission"].(map[string]any)
+	if !ok || len(fields) != 2 || fields["late_policy_status"] != "late" || fields["seconds_late_override"] != float64(3600) {
+		t.Fatalf("unexpected shared timing patch: %#v", env.puts[0].body)
+	}
+}
+
+func TestPostGroupLateOnlyHoldsWhenAudienceIsIncomplete(t *testing.T) {
+	env := newGroupPostEnv(t, false)
+	prepareGroupLateOnly(t, env)
+	env.audience = []string{"10", "11"}
+	if report, err := env.s.PostGroupResults(context.Background(), env.results); err != nil || len(env.puts) != 0 || len(report.Groups) != 1 || report.Groups[0].Outcomes.Late.Status != "held" {
+		t.Fatalf("incomplete live group audience should hold the one shared action: report=%+v puts=%+v err=%v", report, env.puts, err)
+	}
+}
+
+func TestPostGroupLateOnlyReconcilesUncertainWriteWhenEveryMemberMatches(t *testing.T) {
+	env := newGroupPostEnv(t, false)
+	prepareGroupLateOnly(t, env)
+	row := &env.doc.Groups[0]
+	row.LateOnly.Outcome = domain.ActionOutcome{Status: "uncertain"}
+	// All three live submissions show the accepted target, but the earlier
+	// write response was ambiguous. Reconcile without sending another PUT.
+	for user := int64(10); user <= 12; user++ {
+		env.timing[user] = map[string]any{"late": true, "late_policy_status": "late", "seconds_late": 3600}
+	}
+	env.save(t)
+	report, err := env.s.PostGroupResults(context.Background(), env.results)
+	if err != nil || len(env.puts) != 0 || len(report.Groups) != 1 || report.Groups[0].Outcomes.Late.Status != "preserved" {
+		t.Fatalf("accepted uncertain write should reconcile only when all members match: report=%+v puts=%+v err=%v", report, env.puts, err)
+	}
+}
+
+func TestSharedGradeTimingHoldDoesNotBlockAcademicActions(t *testing.T) {
+	env := newGroupPostEnv(t, false)
+	var packet domain.GroupPacketDocument
+	if _, err := workspace.ReadDocument(filepath.Join(env.s.Root, filepath.FromSlash(env.doc.Packet)), &packet); err != nil {
+		t.Fatal(err)
+	}
+	var work domain.GroupWorkDocument
+	if _, err := workspace.ReadDocument(filepath.Join(env.s.Root, filepath.FromSlash(packet.Groups[0].Path)), &work); err != nil {
+		t.Fatal(err)
+	}
+	var baseline *domain.ObservedTiming
+	for _, member := range work.Members {
+		if member.StudentRef == env.doc.Groups[0].Representative || baseline == nil {
+			baseline = member.ObservedTiming
+		}
+	}
+	if baseline == nil {
+		t.Fatal("group pull has no timing baseline")
+	}
+	env.doc.Groups[0].Grade.LateTiming = &domain.LateTiming{Status: "late", SecondsLate: 3600, DueAt: "2026-10-15T12:00:00Z", Basis: "one elapsed hour late", Observed: baseline}
+	env.timing[11] = map[string]any{"late": true, "late_policy_status": "late", "seconds_late": 60}
+	env.save(t)
+	report, err := env.s.PostGroupResults(context.Background(), env.results)
+	if err != nil || len(report.Groups) != 1 {
+		t.Fatalf("post report=%+v err=%v", report, err)
+	}
+	outcomes := report.Groups[0].Outcomes
+	if !definite(outcomes.Rubric) || !definite(outcomes.Grade) || !definite(outcomes.Comment) || outcomes.Late.Status != "held" {
+		t.Fatalf("per-member timing change should hold only lateness: %+v", outcomes)
+	}
+}
+
+func TestPostGroupIndividualLateOnlyHoldsOnlyMemberWithNewAttempt(t *testing.T) {
+	env := newGroupEnv(t, false, true)
+	var packet domain.GroupPacketDocument
+	if _, err := workspace.ReadDocument(filepath.Join(env.s.Root, filepath.FromSlash(env.doc.Packet)), &packet); err != nil {
+		t.Fatal(err)
+	}
+	var work domain.GroupWorkDocument
+	if _, err := workspace.ReadDocument(filepath.Join(env.s.Root, filepath.FromSlash(packet.Groups[0].Path)), &work); err != nil {
+		t.Fatal(err)
+	}
+	byRef := map[string]domain.GroupWorkMember{}
+	for _, member := range work.Members {
+		byRef[member.StudentRef] = member
+	}
+	row := &env.doc.Groups[0]
+	row.Operation, row.Grade, row.IndividualFeedback = "individual", nil, nil
+	row.Students = nil
+	for _, ref := range row.MemberRefs {
+		member := byRef[ref]
+		row.Students = append(row.Students, domain.StudentResult{StudentRef: ref, Operation: "late-only", LateOnly: &domain.LateOnlyOperation{
+			Attempt:    domain.AttemptRef{Attempt: member.Attempt, SubmittedAt: member.SubmittedAt},
+			LateTiming: domain.LateTiming{Status: "late", SecondsLate: 3600, DueAt: member.EffectiveDueAt, Basis: "one elapsed hour late", Observed: member.ObservedTiming},
+		}})
+	}
+	env.doc.Assignment.Title = ""
+	env.doc.Assignment.Points = domain.Decimal{}
+	env.doc.Assignment.Rubric = nil
+	env.doc.ScoringBasis = nil
+	env.attempt[11] = 2
+	env.save(t)
+	report, err := env.s.PostGroupResults(context.Background(), env.results)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(env.puts) != 2 {
+		t.Fatalf("only the two unchanged members should receive timing writes: %+v", env.puts)
+	}
+	statuses := map[string]string{}
+	for _, student := range report.Groups[0].Students {
+		statuses[student.StudentRef] = student.Status
+	}
+	held, completed := 0, 0
+	for _, status := range statuses {
+		if status == "held" {
+			held++
+		} else if status == "completed" {
+			completed++
+		}
+	}
+	if held != 1 || completed != 2 {
+		t.Fatalf("individual timing hold was not scoped to one member: %+v", statuses)
+	}
+}
+
+func prepareGroupLateOnly(t *testing.T, env *groupPostEnv) {
+	t.Helper()
+	var work domain.GroupWorkDocument
+	var packet domain.GroupPacketDocument
+	if _, err := workspace.ReadDocument(filepath.Join(env.s.Root, filepath.FromSlash(env.doc.Packet)), &packet); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.ReadDocument(filepath.Join(env.s.Root, filepath.FromSlash(packet.Groups[0].Path)), &work); err != nil {
+		t.Fatal(err)
+	}
+	baselines := map[string]domain.ObservedTiming{}
+	for _, member := range work.Members {
+		if member.ObservedTiming == nil {
+			t.Fatalf("member %s has no pulled timing baseline", member.StudentRef)
+		}
+		baselines[member.StudentRef] = *member.ObservedTiming
+	}
+	row := &env.doc.Groups[0]
+	row.Operation, row.Grade, row.IndividualFeedback = "late-only", nil, nil
+	row.ArtifactKey = ""
+	row.LateOnly = &domain.GroupLateOnly{LateTiming: domain.LateTiming{Status: "late", SecondsLate: 3600, DueAt: "2026-10-15T12:00:00Z", Basis: "one elapsed hour late"}, ObservedMembers: baselines}
+	env.doc.Assignment.Title = ""
+	env.doc.Assignment.Points = domain.Decimal{}
+	env.doc.Assignment.Rubric = nil
+	env.doc.ScoringBasis = nil
+	env.save(t)
 }
 
 func TestPostGroupResultsSkipKeysSuppressExactActions(t *testing.T) {

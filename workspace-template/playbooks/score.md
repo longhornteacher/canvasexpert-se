@@ -9,10 +9,10 @@ Read this playbook and grading/calendar references through their logical MCP pat
 ## Pull
 
 ```powershell
-.\cse.cmd pull-work [course] [assignment]
+.\cse.cmd pull-work [course] [assignment] --session
 ```
 
-Read the packet and student files it writes. A fresh pull never overwrites unsent scoring work. Before judging anything, read `context/teaching-profile.md` for grade/subject, instructional priorities and relevant standards, `context/grading.md` (the teacher's `voice` and `feedback_guidance`; they override style defaults here, never the rubric or posting rules) and `context/students.md`. Use this teacher's preferences, never another teacher's course/tag policies. Student notes also arrive with each student's pulled work. Apply established accommodations without asking the teacher to repeat them. An incomplete profile does not block scoring when directions, rubric and work supply the needed evidence.
+For every ordinary scoring session, use `--session`, even when the teacher selects a course or assignment (MCP: `pull_work` with `session: true` and the same optional scope). This finds current-period work and includes timing candidates even when the grade was already handled. Use a bare `pull-work` for non-session pulls and reassessment compatibility. Read the packet and student files, especially each row's `work_purpose`: `score`, `late-only`, or `score-and-late`. A fresh pull never overwrites unsent scoring work. Before judging anything, read `context/teaching-profile.md` for grade/subject, instructional priorities and relevant standards, `context/grading.md` (the teacher's `voice` and `feedback_guidance`; they override style defaults here, never the rubric or posting rules) and `context/students.md`. Use this teacher's preferences, never another teacher's course/tag policies. Student notes also arrive with each student's pulled work. Apply established accommodations without asking the teacher to repeat them. An incomplete profile does not block scoring when directions, rubric and work supply the needed evidence.
 
 New Quiz written items (`ESSAY`, `FILEUPLOAD`) are open for regular scoring. Pull the quiz explicitly by its assignment ID: `.\cse.cmd pull-work COURSE QUIZ_ID` (MCP: `pull_work` with that assignment ID). If the teacher gives a quiz name, resolve its assignment ID through `pull_assignment` (CLI `pull-item`) rather than asking them to find the ID. Broad class pulls include New Quizzes with submitted work. Their results are **comment-only**; follow the New Quiz section below instead of ordinary assignment grade/lateness instructions.
 
@@ -46,14 +46,16 @@ For ordinary assignments, post the honest computed score for the current work, e
 
 ### Lateness
 
-You judge lateness; the Engine writes it; Canvas computes the penalty.
+Canvas calculates late point penalties. For each timing candidate in a scoring session, prepare one batch of first-genuine attempt and accommodation choices with `prepare_late_timing` (CLI: `cse prepare-late-timing FILE`; MCP: `prepare_late_timing` with the packet and student/group choices). Do this for both new assessment candidates and already-graded timing candidates. The Engine counts from the applicable deadline to the selected first genuine submission, records school-time provenance, and checks current Canvas state. Use prepared proposals on `score-and-late` grade rows; use `operation: late-only` only for already-graded work. Never hand-calculate new session seconds or substitute a prepared `late-only` row for a grade row. If preparation holds or cannot resolve a timing choice, hold only that timing action and continue the academic assessment when its evidence is sufficient.
 
-1. Find the first genuine submission (not blank, placeholder or accidental). Later drafts inherit its timing.
-2. Find the deadline: the student's pulled `effective_due_at`, plus documented extra time from teacher directions or `context/students.md`. If Canvas already includes the extension, don't add it again. Never infer extra time from a tag name or bare flag. The hub's private extra-time setting is not in pulled work.
-3. Count only school time past that deadline: weekdays not listed in `context/school-calendar.md`, in its time zone, full days (early release counts as a full day). Use a quick PowerShell script, not mental math.
-4. Supply `late_timing`: `status` (`late` or `none`), `seconds_late`, `due_at` **equal to the pulled `effective_due_at` even when the accommodated deadline differs** (the Engine checks it against Canvas), and `basis`. The teacher reads `basis` on the review page, so write it for them, for example "1 school day, 3 h; skipped Mon 10/12 holiday; +2 days per IEP".
+1. For each session candidate, use the batch preparation tool against the referenced packet. It checks the selected first genuine submission against pulled current/prior attempts (not blank, placeholder or accidental); later drafts inherit its timing.
+2. Use the student's pulled `effective_due_at` as the Canvas date. Apply extra time only when documented in directions or `context/students.md`, and only if Canvas has not already applied it. Never infer extra time from a tag name or bare flag.
+3. The Engine's school-calendar calculation counts weekdays, holidays and non-school ranges from deadline to submission in the calendar's IANA timezone; early-release days count as full days. An on-time result needs no school-time interval. Review the returned timing, basis and any skipped dates.
+4. For a `score-and-late` candidate, attach the prepared proposal's `late_timing` to its grade row. For `late-only`, use only the prepared attempt and timing fields. The Engine rechecks the attempt, live due date, observed timing and school-calendar calculation before writing lateness. A timing hold does not block an otherwise valid grade or comment.
 
-If the due date, first genuine work, calendar coverage or accommodation details are unclear, omit `late_timing` for that student, say what's missing, and continue the grade and feedback. Extra time changes timing, never the score or feedback.
+For a scoring session, prepare all timing candidates as one batch before saving results. The typed MCP preparation accepts `packet`, `students`, and `groups` inline; the CLI reads a `late-timing-decisions` file under `courses/`. Inspect proposed, unchanged and held rows. Attach proposals to matching grade rows where `work_purpose` is `score-and-late`; create `late-only` rows only for already-graded candidates. Report corrected or unchanged timing and any held candidates with scoring outcomes. Preparation is read-only; review remains the default before any write. See `help formats` for the complete field shape and synthetic example.
+
+If the due date, first genuine work, calendar coverage or accommodation details are unclear, omit timing for that student or keep the late-only row held, say what's missing, and continue independent work. Extra time changes timing, never the score or feedback. New Quiz comment-only work has no lateness action.
 
 ## Feedback
 

@@ -214,6 +214,7 @@ type AttemptWork struct {
 	WrittenFiles     []WrittenFile     `yaml:"written_files,omitempty"`
 	Attachments      []Attachment      `yaml:"attachments,omitempty"`
 	Late             bool              `yaml:"late"`
+	ObservedTiming   *ObservedTiming   `yaml:"observed_timing,omitempty"`
 	EffectiveDueAt   string            `yaml:"effective_due_at,omitempty"`
 	EnteredGrade     *Decimal          `yaml:"entered_grade,omitempty"`
 	RubricAssessment []CriterionScore  `yaml:"rubric_assessment,omitempty"`
@@ -236,9 +237,11 @@ type WrittenFile struct {
 type StudentWorkDocument struct {
 	Schema                 int               `yaml:"schema"`
 	Kind                   string            `yaml:"kind"`
+	WorkPurpose            string            `yaml:"work_purpose,omitempty"` // score, late-only, or score-and-late
 	StudentRef             string            `yaml:"student_ref"`
 	Alias                  string            `yaml:"alias"`
 	AssignmentID           int64             `yaml:"assignment_id"`
+	AssignmentVisible      *bool             `yaml:"assignment_visible,omitempty"`
 	Current                AttemptWork       `yaml:"current"`
 	Prior                  []AttemptWork     `yaml:"prior,omitempty"`
 	Comments               []ExistingComment `yaml:"comments,omitempty"`
@@ -253,7 +256,7 @@ type StudentWorkDocument struct {
 	// DiscussionEvidence references this student's own attributed posts in the
 	// pulled conversation packet when the assignment is a graded discussion.
 	DiscussionEvidence *DiscussionEvidenceRef `yaml:"discussion_evidence,omitempty"`
-	Notes                  []string          `yaml:"notes,omitempty"`
+	Notes              []string               `yaml:"notes,omitempty"`
 }
 type Component struct {
 	Key          string   `yaml:"key"`
@@ -287,10 +290,37 @@ type PriorComparison struct {
 // the Engine never parses it. DueAt guards against a deadline moved after the
 // agent counted.
 type LateTiming struct {
-	Status      string `yaml:"status"` // late or none
-	SecondsLate int64  `yaml:"seconds_late,omitempty"`
-	DueAt       string `yaml:"due_at"`
-	Basis       string `yaml:"basis"`
+	Status      string                `yaml:"status" json:"status"` // late or none
+	SecondsLate int64                 `yaml:"seconds_late,omitempty" json:"seconds_late,omitempty"`
+	DueAt       string                `yaml:"due_at" json:"due_at"`
+	Basis       string                `yaml:"basis" json:"basis"`
+	SchoolTime  *SchoolTimeProvenance `yaml:"school_time,omitempty" json:"school_time,omitempty"`
+	Observed    *ObservedTiming       `yaml:"observed,omitempty" json:"observed,omitempty"`
+}
+
+// ObservedTiming preserves the timing fields seen on the current Canvas
+// attempt. StatusKnown distinguishes an unavailable/omitted field from Canvas
+// explicitly returning null.
+type ObservedTiming struct {
+	StatusKnown       bool    `yaml:"status_known" json:"status_known"`
+	LatePolicyStatus  *string `yaml:"late_policy_status" json:"late_policy_status"`
+	LateKnown         bool    `yaml:"late_known" json:"late_known"`
+	Late              bool    `yaml:"late" json:"late"`
+	SecondsLateKnown  bool    `yaml:"seconds_late_known" json:"seconds_late_known"`
+	SecondsLate       int64   `yaml:"seconds_late" json:"seconds_late"`
+	CustomStatusKnown bool    `yaml:"custom_status_known" json:"custom_status_known"`
+	HasCustomStatus   bool    `yaml:"has_custom_status" json:"has_custom_status"`
+}
+
+// SchoolTimeProvenance records the actual first genuine submission and
+// deadline used by the agent's school-calendar calculation.
+type SchoolTimeProvenance struct {
+	Attempt      AttemptRef `yaml:"attempt" json:"attempt"`
+	SubmittedAt  string     `yaml:"submitted_at" json:"submitted_at"`
+	Deadline     string     `yaml:"deadline" json:"deadline"`
+	Status       string     `yaml:"status" json:"status"`
+	SecondsLate  int64      `yaml:"seconds_late,omitempty" json:"seconds_late,omitempty"`
+	SkippedDates []string   `yaml:"skipped_dates,omitempty" json:"skipped_dates,omitempty"`
 }
 
 type ActionOutcome struct {
@@ -305,6 +335,7 @@ type ActionOutcomes struct {
 	Grade   ActionOutcome `yaml:"grade,omitempty"`
 	Late    ActionOutcome `yaml:"late,omitempty"`
 }
+
 // DiscussionEvidenceRef is the pulled selection of one student's discussion
 // work: their own entries (by source-qualified entry reference) and a digest
 // of exactly that text. Status is complete, partial or unavailable.
@@ -327,16 +358,16 @@ type EvidenceSelection struct {
 }
 
 type GradeOperation struct {
-	Attempt        AttemptRef       `yaml:"attempt"`
+	Attempt        AttemptRef         `yaml:"attempt"`
 	Evidence       *EvidenceSelection `yaml:"evidence,omitempty"`
-	Components     []ComponentScore `yaml:"components"`
-	Assessment     Decimal          `yaml:"assessment"`
-	Feedback       string           `yaml:"feedback"`
-	Header         string           `yaml:"header,omitempty"`
-	TeacherNote    string           `yaml:"teacher_note,omitempty"`
-	StrongestPrior *PriorComparison `yaml:"strongest_prior,omitempty"`
-	LateTiming     *LateTiming      `yaml:"late_timing,omitempty"`
-	Outcomes       ActionOutcomes   `yaml:"outcomes,omitempty"`
+	Components     []ComponentScore   `yaml:"components"`
+	Assessment     Decimal            `yaml:"assessment"`
+	Feedback       string             `yaml:"feedback"`
+	Header         string             `yaml:"header,omitempty"`
+	TeacherNote    string             `yaml:"teacher_note,omitempty"`
+	StrongestPrior *PriorComparison   `yaml:"strongest_prior,omitempty"`
+	LateTiming     *LateTiming        `yaml:"late_timing,omitempty"`
+	Outcomes       ActionOutcomes     `yaml:"outcomes,omitempty"`
 }
 
 // FeedbackAssessment supplies a preserved display basis, never write instructions.
@@ -359,17 +390,26 @@ type StudentResult struct {
 	Grade          *GradeOperation       `yaml:"grade,omitempty"`
 	CommentOnly    *CommentOnlyOperation `yaml:"comment_only,omitempty"`
 	ReviseFeedback *FeedbackRevision     `yaml:"revise_feedback,omitempty"`
+	LateOnly       *LateOnlyOperation    `yaml:"late_only,omitempty" json:"late_only,omitempty"`
+}
+
+// LateOnlyOperation changes Canvas lateness fields without changing the
+// academic grade, rubric assessment or feedback.
+type LateOnlyOperation struct {
+	Attempt    AttemptRef    `yaml:"attempt" json:"attempt"`
+	LateTiming LateTiming    `yaml:"late_timing" json:"late_timing"`
+	Outcome    ActionOutcome `yaml:"outcome,omitempty" json:"outcome,omitempty"`
 }
 
 // CommentOnlyOperation carries per-criterion scores into a New Quiz
 // submission comment. It deliberately has no grade, rubric, or late fields.
 type CommentOnlyOperation struct {
-	Attempt    AttemptRef       `yaml:"attempt"`
+	Attempt    AttemptRef         `yaml:"attempt"`
 	Evidence   *EvidenceSelection `yaml:"evidence,omitempty"`
-	Components []ComponentScore `yaml:"components"`
-	Feedback   string           `yaml:"feedback"`
-	Header     string           `yaml:"header,omitempty"`
-	Outcome    ActionOutcome    `yaml:"outcome,omitempty"`
+	Components []ComponentScore   `yaml:"components"`
+	Feedback   string             `yaml:"feedback"`
+	Header     string             `yaml:"header,omitempty"`
+	Outcome    ActionOutcome      `yaml:"outcome,omitempty"`
 }
 type ResultsDocument struct {
 	Schema         int                `yaml:"schema"`

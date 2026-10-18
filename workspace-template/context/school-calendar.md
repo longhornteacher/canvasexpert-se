@@ -3,6 +3,19 @@ schema: 1
 timezone: America/Chicago
 start_date: "2026-08-19"
 end_date: "2027-05-27"
+grading_periods:
+  - name: Term 1
+    start_date: "2026-08-19"
+    end_date: "2026-10-08"
+  - name: Term 2
+    start_date: "2026-10-13"
+    end_date: "2026-12-18"
+  - name: Term 3
+    start_date: "2027-01-06"
+    end_date: "2027-03-19"
+  - name: Term 4
+    start_date: "2027-03-22"
+    end_date: "2027-05-27"
 non_school_dates:
   - "2026-09-07"
   - "2026-09-21"

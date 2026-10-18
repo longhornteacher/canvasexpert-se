@@ -18,7 +18,7 @@ func trimPoint(v string) string { return strings.TrimSuffix(v, ".0") }
 
 // ParentConfig is context/parent-updates.md front matter.
 type ParentConfig struct {
-	Schema        int    `yaml:"schema"`
+	Schema int `yaml:"schema"`
 	// The YAML keys keep their original names for compatibility; the values
 	// are each teacher's own grade portal and tutoring sign-up.
 	SkywardURL      string `yaml:"skyward_url"`
@@ -26,8 +26,28 @@ type ParentConfig struct {
 	BobcatHourURL   string `yaml:"bobcat_hour_url"`
 	BobcatHourLabel string `yaml:"bobcat_hour_label"`
 	BobcatHourTxt   string `yaml:"bobcat_hour_text"`
-	SignOff       string `yaml:"sign_off"`
-	SkipScore     int    `yaml:"skip_score"`
+	SignOff         string `yaml:"sign_off"`
+	SkipScore       int    `yaml:"skip_score"`
+}
+
+func loadParentConfig(root string) (ParentConfig, error) {
+	var config ParentConfig
+	if _, err := workspace.ReadTeacherDocument(root, "context/parent-updates.md", &config); err != nil && !os.IsNotExist(err) {
+		return config, fmt.Errorf("context/parent-updates.md: %w", err)
+	}
+	if config.SkipScore == 0 {
+		config.SkipScore = 90
+	}
+	if config.GradePortalName == "" {
+		config.GradePortalName = "the school's grade portal"
+	}
+	if config.BobcatHourLabel == "" {
+		config.BobcatHourLabel = "Tutoring"
+	}
+	if config.BobcatHourTxt == "" {
+		config.BobcatHourTxt = "Sign up for tutorials and clubs"
+	}
+	return config, nil
 }
 
 // ParentDrafts is the agent's decisions and short instruction text. Assignment
@@ -80,21 +100,16 @@ func LoadParentRun(root, dir string) (*ParentRun, error) {
 			return nil, fmt.Errorf("%s is not valid JSON: %v", name, e)
 		}
 	}
-	if _, e := workspace.ReadTeacherDocument(root, "context/parent-updates.md", &run.Config); e != nil && !os.IsNotExist(e) {
-		return nil, fmt.Errorf("context/parent-updates.md: %w", e)
-	}
-	if run.Config.GradePortalName == "" {
-		run.Config.GradePortalName = "the school's grade portal"
-	}
-	if run.Config.BobcatHourLabel == "" {
-		run.Config.BobcatHourLabel = "Tutoring"
-	}
-	if run.Config.BobcatHourTxt == "" {
-		run.Config.BobcatHourTxt = "Sign up for tutorials and clubs"
+	var err error
+	run.Config, err = loadParentConfig(root)
+	if err != nil {
+		return nil, err
 	}
 	run.students = map[string]ParentReportStudent{}
-	for _, s := range run.Report.Students {
-		run.students[s.Ref] = s
+	for i := range run.Report.Students {
+		s := &run.Report.Students[i]
+		s.SkipEligible = parentSkipEligible(*s, run.Config.SkipScore)
+		run.students[s.Ref] = *s
 	}
 	if e := run.validate(); e != nil {
 		return nil, e
@@ -105,6 +120,9 @@ func LoadParentRun(root, dir string) (*ParentRun, error) {
 var scoreLike = regexp.MustCompile(`\d\s*/\s*\d|%|\bout of\b|\bpoints?\b`)
 
 func (r *ParentRun) validate() error {
+	if err := validateParentReportScope(r.Report); err != nil {
+		return err
+	}
 	d := r.Drafts
 	if d.Schema != 1 || d.Kind != "parent-drafts" {
 		return fmt.Errorf("drafts.json must have schema 1 and kind parent-drafts")
@@ -122,6 +140,10 @@ func (r *ParentRun) validate() error {
 			return fmt.Errorf("student %s appears twice", sd.Ref)
 		}
 		seen[sd.Ref] = true
+		hasWindowWork := false
+		for _, c := range rs.Courses {
+			hasWindowWork = hasWindowWork || len(c.WorkDue) > 0
+		}
 		if e := checkFreeText(sd.Ref, sd.StudentIntro); e != nil {
 			return e
 		}
@@ -173,10 +195,28 @@ func (r *ParentRun) validate() error {
 				return false
 			}},
 		}
-		total := 0
+		if hasWindowWork {
+			for _, section := range []struct {
+				name string
+				ids  []ParentItemRef
+			}{
+				{"missing", sd.Missing}, {"corrections", sd.Corrections}, {"history", sd.History},
+			} {
+				for _, ref := range section.ids {
+					present := false
+					for _, c := range rs.Courses {
+						for _, item := range c.WorkDue {
+							present = present || item.AssignmentID == ref.AssignmentID
+						}
+					}
+					if !present {
+						return fmt.Errorf("%s: assignment %d is not in the saved work_due inventory", section.name, ref.AssignmentID)
+					}
+				}
+			}
+		}
 		for _, sec := range sections {
 			for _, it := range sec.items {
-				total++
 				found := false
 				for _, c := range rs.Courses {
 					found = found || sec.has(c, it.AssignmentID)
@@ -189,8 +229,8 @@ func (r *ParentRun) validate() error {
 				}
 			}
 		}
-		if total == 0 {
-			return fmt.Errorf("%s: a send decision needs at least one item", sd.Ref)
+		if !hasWindowWork {
+			return fmt.Errorf("%s: there is no work due in this report window; mark this student skip with that reason", sd.Ref)
 		}
 		if e := checkFreeText(sd.Ref, sd.Intro); e != nil {
 			return e
@@ -205,6 +245,98 @@ func (r *ParentRun) validate() error {
 	if len(missing) > 0 {
 		sort.Strings(missing)
 		return fmt.Errorf("every student in the report needs a decision; missing: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func validateParentReportScope(report ParentReportPacket) error {
+	scope := report.Scope
+	if scope == nil {
+		return fmt.Errorf("this saved parent report has no calendar scope; pull a fresh parent report before sending or printing. Existing drafts and delivery outcomes are preserved")
+	}
+	loc, err := time.LoadLocation(scope.Timezone)
+	if err != nil || scope.Timezone == "" {
+		return fmt.Errorf("saved parent report scope has an invalid timezone")
+	}
+	start, err := time.ParseInLocation("2006-01-02", scope.PeriodStartDate, loc)
+	if err != nil {
+		return fmt.Errorf("saved parent report scope has an invalid period start date")
+	}
+	end, err := time.ParseInLocation("2006-01-02", scope.PeriodEndDate, loc)
+	if err != nil || end.Before(start) || strings.TrimSpace(scope.PeriodName) == "" {
+		return fmt.Errorf("saved parent report scope has invalid period dates or name")
+	}
+	asOf, err := time.Parse(time.RFC3339, report.AsOf)
+	if err != nil {
+		return fmt.Errorf("saved parent report has an invalid as_of timestamp")
+	}
+	localDay := asOf.In(loc).Format("2006-01-02")
+	if localDay < scope.PeriodStartDate || localDay > scope.PeriodEndDate {
+		return fmt.Errorf("saved parent report as_of date does not fall within its saved grading period")
+	}
+	recentStart, err := time.Parse(time.RFC3339, scope.RecentStartAt)
+	if err != nil {
+		return fmt.Errorf("saved parent report scope has an invalid recent_start_at")
+	}
+	recentEnd, err := time.Parse(time.RFC3339, scope.RecentEndAt)
+	if err != nil || !recentEnd.Equal(asOf) {
+		return fmt.Errorf("saved parent report scope recent_end_at must match as_of")
+	}
+	expectedStart := asOf.In(loc).AddDate(0, 0, -correctionWindowDays)
+	if start.After(expectedStart) {
+		expectedStart = start
+	}
+	if !recentStart.Equal(expectedStart) {
+		return fmt.Errorf("saved parent report scope recent_start_at does not match the saved period and as_of")
+	}
+	dueSoonEnd, err := time.Parse(time.RFC3339, scope.DueSoonEndAt)
+	if err != nil {
+		return fmt.Errorf("saved parent report scope has an invalid due_soon_end_at")
+	}
+	expectedSoonEnd := asOf.In(loc).AddDate(0, 0, dueSoonDays)
+	if end.AddDate(0, 0, 1).Before(expectedSoonEnd) {
+		expectedSoonEnd = end.AddDate(0, 0, 1)
+	}
+	if !dueSoonEnd.Equal(expectedSoonEnd) {
+		return fmt.Errorf("saved parent report scope due_soon_end_at does not match the saved period and as_of")
+	}
+	for _, student := range report.Students {
+		for _, course := range student.Courses {
+			if course.WorkDue == nil {
+				return fmt.Errorf("saved parent report course %s is missing its work_due inventory", course.Course)
+			}
+			for _, item := range course.WorkDue {
+				due, parseErr := time.Parse(time.RFC3339, item.DueAt)
+				if parseErr != nil || due.Before(recentStart) || due.After(asOf) {
+					return fmt.Errorf("saved parent report inventory item %d is outside its saved due-date window", item.AssignmentID)
+				}
+			}
+			inventory := map[int64]bool{}
+			for _, item := range course.WorkDue {
+				inventory[item.AssignmentID] = true
+			}
+			for _, item := range course.Missing {
+				if !inventory[item.AssignmentID] {
+					return fmt.Errorf("saved Missing/0 item %d is outside the work_due inventory", item.AssignmentID)
+				}
+			}
+			for _, item := range course.Corrections {
+				if !inventory[item.AssignmentID] {
+					return fmt.Errorf("saved correction item %d is outside the work_due inventory", item.AssignmentID)
+				}
+			}
+			for _, item := range course.History {
+				if !inventory[item.AssignmentID] {
+					return fmt.Errorf("saved history item %d is outside the work_due inventory", item.AssignmentID)
+				}
+			}
+			for _, item := range course.DueSoon {
+				due, parseErr := time.Parse(time.RFC3339, item.DueAt)
+				if parseErr != nil || !due.After(asOf) || !due.Before(dueSoonEnd) {
+					return fmt.Errorf("saved parent report due-soon item %d is outside its saved window", item.AssignmentID)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -250,11 +382,6 @@ func (r *ParentRun) RenderStudent(sd ParentStudentDraft, student workspace.Stude
 		}
 		for _, it := range c.DueSoon {
 			all.DueSoon = append(all.DueSoon, ParentItemRef{AssignmentID: it.AssignmentID, Note: noteFor(sd.DueSoon, it.AssignmentID)})
-		}
-		history := append([]ParentHistoryItem(nil), c.History...)
-		sort.SliceStable(history, func(i, j int) bool { return history[i].DueAt < history[j].DueAt })
-		for _, it := range history {
-			all.History = append(all.History, ParentItemRef{AssignmentID: it.AssignmentID})
 		}
 	}
 	return r.render(all, student, true)
@@ -333,11 +460,23 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 		for _, c := range rs.Courses {
 			missing += len(c.Missing)
 		}
-		if missing == 0 {
-			intro = strings.TrimSpace(intro + " Nothing is missing. Keep it up.")
+		complete := true
+		for _, c := range rs.Courses {
+			if len(c.Flags) > 0 {
+				complete = false
+			}
+		}
+		if missing == 0 && complete {
+			intro = strings.TrimSpace(intro + " No Missing/0 work in this report window.")
 		}
 	} else {
 		fmt.Fprintf(&b, `<p style="margin:0 0 4px"><b>%s</b> &middot; As of %s</p>`, esc(student.FirstName), esc(asOf.In(loc).Format("Mon Jan 2, 3:04 pm")))
+	}
+	if r.Report.Scope != nil {
+		scope := r.Report.Scope
+		recentStart, _ := time.Parse(time.RFC3339, scope.RecentStartAt)
+		recentEnd, _ := time.Parse(time.RFC3339, scope.RecentEndAt)
+		fmt.Fprintf(&b, `<p style="margin:0 0 8px;color:#52606d">%s · %s–%s · Recent window %s–%s</p>`, esc(scope.PeriodName), esc(scope.PeriodStartDate), esc(scope.PeriodEndDate), esc(recentStart.In(loc).Format("Jan 2")), esc(recentEnd.In(loc).Format("Jan 2")))
 	}
 	if intro != "" {
 		fmt.Fprintf(&b, `<p style="margin:6px 0">%s</p>`, name(intro))
@@ -347,7 +486,7 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 	}
 	multi := len(rs.Courses) > 1
 	for _, c := range rs.Courses {
-		var miss, corr, soon, hist []string
+		var miss, corr, soon, dueRows []string
 		for _, it := range sortedBy(c.Missing, sd.Missing, order) {
 			miss = append(miss, fmt.Sprintf(`<tr><td %s>%s</td><td %s>%s</td><td %s>%s</td></tr>`, cellStyle, title(it), cellStyle, esc(day(it.DueAt)), cellStyle, noteOf(sd.Missing, it.AssignmentID)))
 		}
@@ -357,10 +496,31 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 		for _, it := range sortedBy(c.DueSoon, sd.DueSoon, order) {
 			soon = append(soon, fmt.Sprintf(`<tr><td %s>%s</td><td %s>%s</td><td %s>%s</td></tr>`, cellStyle, title(it), cellStyle, esc(day(it.DueAt)), cellStyle, noteOf(sd.DueSoon, it.AssignmentID)))
 		}
-		for _, it := range sortedHist(c.History, sd.History, order) {
-			hist = append(hist, fmt.Sprintf(`<tr><td %s>%s</td><td %s>%s</td><td %s>%s</td></tr>`, cellStyle, title(it.ParentReportItem), cellStyle, score(it.First, it.Possible), cellStyle, score(it.Current, it.Possible)))
+		for _, it := range c.WorkDue {
+			current := score(it.Current, it.Possible)
+			status := it.Status
+			if status == "awaiting_grading" {
+				status = "Awaiting grading"
+			} else if status == "grade_not_released" {
+				status = "Grade not released"
+			} else if status == "no_grade" {
+				status = "No grade recorded"
+			} else if status == "recorded_zero" {
+				status = "Recorded zero"
+			} else if status == "not_submitted" {
+				status = "Not submitted"
+			} else if status == "missing" {
+				status = "Missing"
+			} else if status == "graded" {
+				status = "Graded"
+			}
+			first := score(it.First, it.Possible)
+			if it.First == nil {
+				first = "not available"
+			}
+			dueRows = append(dueRows, fmt.Sprintf(`<tr><td %s>%s</td><td %s>%s</td><td %s>%s</td><td %s>%s</td><td %s>%s</td></tr>`, cellStyle, title(it.ParentReportItem), cellStyle, esc(day(it.DueAt)), cellStyle, esc(status), cellStyle, first, cellStyle, current))
 		}
-		if len(miss)+len(corr)+len(soon)+len(hist) == 0 {
+		if len(miss)+len(corr)+len(soon)+len(dueRows) == 0 {
 			continue
 		}
 		if multi {
@@ -377,16 +537,16 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 			b.WriteString(`</tr>` + strings.Join(rows, "") + `</table>`)
 		}
 		if forStudent {
-			section("Missing: turn these in", []string{"Assignment", "Was due", ""}, miss)
+			section("Missing/0", []string{"Assignment", "Was due", ""}, miss)
 			section("Corrections you can still make", []string{"Assignment", "Correct by", "Where to look"}, corr)
 			section("Due soon", []string{"Assignment", "Due", ""}, soon)
-			section("Your grade history", []string{"Assignment", "First Score", "Current Score"}, hist)
+			section("Work due in this period", []string{"Assignment", "Due", "Status", "First score", "Current score"}, dueRows)
 			continue
 		}
-		section("Missing / not turned in", []string{"Assignment", "Due", ""}, miss)
+		section("Missing/0", []string{"Assignment", "Due", ""}, miss)
 		section("Corrections available", []string{"Assignment", "Correct by", "Where to look"}, corr)
 		section("Due soon", []string{"Assignment", "Due", ""}, soon)
-		section("Grade history", []string{"Assignment", "First Score", "Current Score"}, hist)
+		section("Work due in this period", []string{"Assignment", "Due", "Status", "First score", "Current score"}, dueRows)
 	}
 	if forStudent {
 		fmt.Fprintf(&b, `<p style="margin:18px 0 4px">Official grades: %s.</p>`, esc(r.Config.GradePortalName))

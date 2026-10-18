@@ -87,6 +87,7 @@ type GroupWorkMembership struct {
 type GroupWorkMember struct {
 	StudentRef          string             `yaml:"student_ref"`
 	Alias               string             `yaml:"alias"`
+	WorkPurpose         string             `yaml:"work_purpose,omitempty"` // score, late-only, or score-and-late
 	CurrentMember       bool               `yaml:"current_member"`
 	MembershipState     string             `yaml:"membership_state,omitempty"`
 	SubmissionID        int64              `yaml:"submission_id"`
@@ -99,6 +100,7 @@ type GroupWorkMember struct {
 	Missing             bool               `yaml:"missing"`
 	Excused             bool               `yaml:"excused"`
 	Late                bool               `yaml:"late"`
+	ObservedTiming      *ObservedTiming    `yaml:"observed_timing,omitempty"`
 	AssignmentVisible   *bool              `yaml:"assignment_visible,omitempty"`
 	GradeMatchesCurrent *bool              `yaml:"grade_matches_current_submission,omitempty"`
 	EnteredGradeKnown   bool               `yaml:"entered_grade_known"`

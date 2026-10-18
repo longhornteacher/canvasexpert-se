@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -102,6 +103,14 @@ func Snapshot(a Assignment, origin string) (domain.AssignmentSnapshot, error) {
 		v.Rubric = &r
 	}
 	return v, nil
+}
+
+// TimingSnapshot captures assignment identity and timing-relevant mode fields
+// without requiring grading points or rubric data.
+func TimingSnapshot(a Assignment, origin string) (domain.AssignmentSnapshot, error) {
+	a.Points = json.Number("0")
+	a.Rubric = nil
+	return Snapshot(a, origin)
 }
 
 // PullItem writes a fresh file every time; an earlier unsent edit remains intact.

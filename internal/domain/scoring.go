@@ -268,6 +268,7 @@ func validateOutcome(o ActionOutcome) error {
 	}
 	return nil
 }
+
 // numericGradeType reports whether Canvas takes the Engine's computed points as
 // the grade. Letter and GPA-scale assignments map a points value onto the
 // course's own scale. Pass/fail and not-graded have no points to post.
@@ -277,6 +278,16 @@ func numericGradeType(t string) bool {
 		return true
 	}
 	return false
+}
+
+func validateTimingSnapshot(s AssignmentSnapshot) error {
+	// Timing-only actions do not interpret points, title or rubric. Keep all
+	// identity, date and submission-shape checks while clearing those grading
+	// requirements for validation only.
+	s.Points = MustDecimal("0")
+	s.Title = "timing-only"
+	s.Rubric = nil
+	return ValidateSnapshot(s)
 }
 
 func validateNumericTarget(s AssignmentSnapshot) error {
@@ -295,13 +306,26 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 	if doc.Packet == "" {
 		return nil, fmt.Errorf("packet path required")
 	}
-	if e := ValidateSnapshot(doc.Assignment); e != nil {
-		return nil, e
+	timingOnly := len(doc.Students) > 0
+	for _, student := range doc.Students {
+		if student.Operation != "late-only" {
+			timingOnly = false
+			break
+		}
+	}
+	var snapshotErr error
+	if timingOnly {
+		snapshotErr = validateTimingSnapshot(doc.Assignment)
+	} else {
+		snapshotErr = ValidateSnapshot(doc.Assignment)
+	}
+	if snapshotErr != nil {
+		return nil, snapshotErr
 	}
 	if len(doc.Students) == 0 {
 		return nil, fmt.Errorf("results requires students")
 	}
-	if doc.Assignment.Rubric != nil && doc.ScoringBasis != nil {
+	if !timingOnly && doc.Assignment.Rubric != nil && doc.ScoringBasis != nil {
 		return nil, fmt.Errorf("scoring_basis is only for assignments without a Canvas rubric; this assignment has one")
 	}
 	basis := doc.Basis()
@@ -319,6 +343,9 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 	}
 	variants := map[string]Interpretation{}
 	for i, variant := range doc.Variants {
+		if timingOnly {
+			break
+		}
 		if variant.Key == "" || strings.TrimSpace(variant.Basis) == "" {
 			return nil, fmt.Errorf("variants[%d]: key and established accommodation basis required", i)
 		}
@@ -356,7 +383,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			if e := validateNumericTarget(doc.Assignment); e != nil {
 				return fail(e)
 			}
-			if s.Grade == nil || s.ReviseFeedback != nil {
+			if s.Grade == nil || s.ReviseFeedback != nil || s.LateOnly != nil {
 				return fail(fmt.Errorf("grade operation requires grade only"))
 			}
 			g := s.Grade
@@ -368,6 +395,9 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			}
 			if e := validateLateTiming(g.LateTiming); e != nil {
 				return fail(e)
+			}
+			if g.LateTiming != nil && g.LateTiming.SchoolTime != nil && g.LateTiming.Observed == nil {
+				return fail(fmt.Errorf("late_timing.school_time requires the pulled observed timing baseline"))
 			}
 			a, e := ComputeAssessment(*basis, v.Interpretation, g.Components, doc.Assignment.Points)
 			var unknown *UnknownEvidenceError
@@ -405,7 +435,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			}
 			v.Assessment = &a
 		case "comment-only":
-			if s.Grade != nil || s.ReviseFeedback != nil || s.CommentOnly == nil {
+			if s.Grade != nil || s.ReviseFeedback != nil || s.LateOnly != nil || s.CommentOnly == nil {
 				return fail(fmt.Errorf("comment-only operation requires comment_only only; grade, rubric, and late writes forbidden"))
 			}
 			if !numericGradeType(doc.Assignment.GradingType) || doc.Assignment.AnonymousGrading || doc.Assignment.ModeratedGrading || doc.Assignment.GroupCategoryID != 0 {
@@ -440,7 +470,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 				return fail(e)
 			}
 		case "revise-feedback":
-			if s.Grade != nil || s.ReviseFeedback == nil {
+			if s.Grade != nil || s.CommentOnly != nil || s.ReviseFeedback == nil || s.LateOnly != nil {
 				return fail(fmt.Errorf("revise-feedback requires revise_feedback only; grade/late writes forbidden"))
 			}
 			r := s.ReviseFeedback
@@ -475,6 +505,25 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 
 				v.Assessment = &a
 			}
+		case "late-only":
+			if s.LateOnly == nil || s.Grade != nil || s.CommentOnly != nil || s.ReviseFeedback != nil {
+				return fail(fmt.Errorf("late-only operation requires late_only only"))
+			}
+			if doc.Assignment.NewQuiz || doc.Assignment.GroupCategoryID != 0 || doc.Assignment.AnonymousGrading || doc.Assignment.ModeratedGrading {
+				return fail(fmt.Errorf("late-only requires a supported ordinary individual assignment"))
+			}
+			if e := validateAttempt(s.LateOnly.Attempt); e != nil {
+				return fail(e)
+			}
+			if e := validateLateTiming(&s.LateOnly.LateTiming); e != nil {
+				return fail(e)
+			}
+			if !observedTimingKnown(s.LateOnly.LateTiming.Observed) {
+				return fail(fmt.Errorf("late-only requires the observed Canvas timing baseline from the pulled attempt"))
+			}
+			if e := validateOutcome(s.LateOnly.Outcome); e != nil {
+				return fail(e)
+			}
 		default:
 			return fail(fmt.Errorf("unsupported operation %q", s.Operation))
 		}
@@ -482,6 +531,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 	}
 	return validated, nil
 }
+
 // validHeader accepts the teacher's choices for what leads a comment.
 func validHeader(h string) bool {
 	return h == "" || h == "default" || h == "score" || h == "full" || h == "none"
@@ -508,7 +558,36 @@ func validateLateTiming(t *LateTiming) error {
 	if strings.TrimSpace(t.Basis) == "" {
 		return fmt.Errorf("late_timing: basis is required")
 	}
+	if t.Observed != nil && !observedTimingKnown(t.Observed) {
+		return fmt.Errorf("late_timing.observed: status and seconds_late must both be known")
+	}
+	if p := t.SchoolTime; p != nil {
+		if e := validateAttempt(p.Attempt); e != nil {
+			return fmt.Errorf("late_timing.school_time.attempt must identify a valid first submission")
+		}
+		if _, e := time.Parse(time.RFC3339Nano, p.SubmittedAt); e != nil {
+			return fmt.Errorf("late_timing.school_time.submitted_at must be RFC3339: %w", e)
+		}
+		attemptSubmitted, e := time.Parse(time.RFC3339Nano, p.Attempt.SubmittedAt)
+		if e != nil || p.Attempt.SubmittedAt == "" {
+			return fmt.Errorf("late_timing.school_time.attempt.submitted_at must be RFC3339")
+		}
+		provenanceSubmitted, _ := time.Parse(time.RFC3339Nano, p.SubmittedAt)
+		if !attemptSubmitted.Equal(provenanceSubmitted) {
+			return fmt.Errorf("late_timing.school_time submitted_at disagrees with its attempt reference")
+		}
+		if _, e := time.Parse(time.RFC3339Nano, p.Deadline); e != nil {
+			return fmt.Errorf("late_timing.school_time.deadline must be RFC3339: %w", e)
+		}
+		if p.Status != t.Status || p.SecondsLate != t.SecondsLate {
+			return fmt.Errorf("late_timing.school_time result must match late_timing status and seconds_late")
+		}
+	}
 	return nil
+}
+
+func observedTimingKnown(t *ObservedTiming) bool {
+	return t != nil && t.StatusKnown && t.LateKnown && t.SecondsLateKnown
 }
 func (d *ResultsDocument) Validate() error { _, e := ValidateResults(d); return e }
 

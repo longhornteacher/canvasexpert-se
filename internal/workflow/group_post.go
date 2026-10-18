@@ -22,12 +22,12 @@ func GroupPrivateRef(groupID int64, studentRef string) string {
 }
 
 type GroupRowReport struct {
-	GroupID                  int64
-	SharedDone               bool
+	GroupID                    int64
+	SharedDone                 bool
 	Operation, Status, Message string
-	Outcomes                 domain.ActionOutcomes
-	Private                  map[string]domain.ActionOutcome
-	Students                 []StudentPostReport
+	Outcomes                   domain.ActionOutcomes
+	Private                    map[string]domain.ActionOutcome
+	Students                   []StudentPostReport
 }
 type GroupPostReport struct {
 	Path     string
@@ -51,6 +51,21 @@ type groupLive struct {
 	rep  workspace.Student
 }
 
+func groupUsesOnlyLateTiming(row domain.GroupResult) bool {
+	if row.Operation == "late-only" {
+		return true
+	}
+	if row.Operation != "individual" || len(row.Students) == 0 || row.SharedFeedback != nil {
+		return false
+	}
+	for _, student := range row.Students {
+		if student.Operation != "late-only" {
+			return false
+		}
+	}
+	return true
+}
+
 // GroupStudentRef is the review/skip key of one student's indivisible
 // grade-and-comment card in an individual-mode group row.
 func GroupStudentRef(groupID int64, studentRef string) string {
@@ -64,6 +79,9 @@ func groupSharedComplete(r domain.GroupResult) bool {
 	if r.Operation == "grade" {
 		g := r.Grade
 		return g != nil && definite(g.Outcomes.Comment) && definite(g.Outcomes.Rubric) && definite(g.Outcomes.Grade) && definite(g.Outcomes.Late)
+	}
+	if r.Operation == "late-only" {
+		return r.LateOnly != nil && definite(r.LateOnly.Outcome)
 	}
 	return r.CommentOnly != nil && definite(r.CommentOnly.Outcome)
 }
@@ -98,6 +116,8 @@ func holdGroupShared(r *domain.GroupResult, message string) {
 		holdGroupGrade(r.Grade, message)
 	} else if r.CommentOnly != nil {
 		holdOutcome(&r.CommentOnly.Outcome, message)
+	} else if r.LateOnly != nil {
+		holdOutcome(&r.LateOnly.Outcome, message)
 	}
 }
 
@@ -133,6 +153,9 @@ func groupReport(r domain.GroupResult) GroupRowReport {
 	} else if r.CommentOnly != nil {
 		p.Outcomes.Comment = r.CommentOnly.Outcome
 		outcomes = append(outcomes, r.CommentOnly.Outcome)
+	} else if r.LateOnly != nil {
+		p.Outcomes.Late = r.LateOnly.Outcome
+		outcomes = append(outcomes, r.LateOnly.Outcome)
 	}
 	if r.SharedFeedback != nil {
 		p.Outcomes.Comment = r.SharedFeedback.Outcome
@@ -228,7 +251,19 @@ func (s *Service) PostGroupResults(ctx context.Context, path string) (report Gro
 	if liveAssignment.CourseID == 0 {
 		liveAssignment.CourseID = doc.Assignment.CourseID
 	}
-	liveBasis, err := Snapshot(liveAssignment, s.Client.Origin())
+	timingOnly := len(doc.Groups) > 0
+	for _, row := range doc.Groups {
+		if !groupUsesOnlyLateTiming(row) {
+			timingOnly = false
+			break
+		}
+	}
+	var liveBasis domain.AssignmentSnapshot
+	if timingOnly {
+		liveBasis, err = TimingSnapshot(liveAssignment, s.Client.Origin())
+	} else {
+		liveBasis, err = Snapshot(liveAssignment, s.Client.Origin())
+	}
 	if err != nil {
 		return report, err
 	}
@@ -245,6 +280,26 @@ func (s *Service) PostGroupResults(ctx context.Context, path string) (report Gro
 		if row.Operation == "individual" {
 			if err = s.postGroupIndividual(ctx, &doc, row, v, src, save); err != nil {
 				return report, err
+			}
+			continue
+		}
+		if row.Operation == "late-only" {
+			hold := src.hold
+			if hold == "" {
+				hold = lateTimingAssignmentHold(liveAssignment, true)
+			}
+			if hold == "" && !SameGroupTimingMode(doc.Assignment, liveBasis) {
+				hold = "assignment group grading mode changed; pull-work before adjusting timing"
+			}
+			if hold != "" {
+				holdOutcome(&row.LateOnly.Outcome, hold)
+				if err = save(); err != nil {
+					return report, err
+				}
+			} else if !groupSharedComplete(*row) && !s.Skip[GroupCardRef(row.GroupID)] {
+				if err = s.postGroupLateOnly(ctx, &doc, row, src, save); err != nil {
+					return report, err
+				}
 			}
 			continue
 		}
@@ -293,8 +348,8 @@ func (s *Service) groupPostSources(doc domain.GroupResultsDocument) (map[int64]g
 	if err = packet.Validate(); err != nil {
 		return nil, err
 	}
-	if !SameGradingBasis(packet.Assignment, doc.Assignment) {
-		return nil, fmt.Errorf("group results grading basis differs from source packet")
+	if packet.Assignment.Instance != doc.Assignment.Instance || packet.Assignment.CourseID != doc.Assignment.CourseID || packet.Assignment.AssignmentID != doc.Assignment.AssignmentID {
+		return nil, fmt.Errorf("group results target differs from source packet")
 	}
 	paths := map[int64]string{}
 	for _, g := range packet.Groups {
@@ -328,7 +383,7 @@ func (s *Service) groupPostSources(doc domain.GroupResultsDocument) (map[int64]g
 		if work.GroupID != row.GroupID || work.Instance != a.Instance || work.CourseID != a.CourseID || work.AssignmentID != a.AssignmentID || work.GroupCategoryID != a.GroupCategoryID {
 			return nil, fmt.Errorf("group %d work file belongs to a different origin, course, assignment, set or group", row.GroupID)
 		}
-		if !SameGradingBasis(work.Assignment, doc.Assignment) {
+		if !groupUsesOnlyLateTiming(row) && !SameGradingBasis(work.Assignment, doc.Assignment) {
 			return nil, fmt.Errorf("group %d work grading basis differs from results", row.GroupID)
 		}
 		src := groupSource{work: work, students: map[string]workspace.Student{}, members: map[string]domain.GroupWorkMember{}}
@@ -337,7 +392,7 @@ func (s *Service) groupPostSources(doc domain.GroupResultsDocument) (map[int64]g
 				src.artifact = art
 			}
 		}
-		if src.artifact.Key == "" {
+		if src.artifact.Key == "" && row.Operation != "late-only" {
 			return nil, fmt.Errorf("group %d artifact %q is absent from the pulled work", row.GroupID, row.ArtifactKey)
 		}
 		for _, m := range work.Members {
@@ -350,7 +405,9 @@ func (s *Service) groupPostSources(doc domain.GroupResultsDocument) (map[int64]g
 			}
 			src.students[ref] = st
 		}
-		if row.Operation != "individual" {
+		if row.Operation == "late-only" {
+			src.hold = groupLateStaticHold(row, work, src.members)
+		} else if row.Operation != "individual" {
 			src.hold = groupStaticHold(row, work, src.members)
 		}
 		out[row.GroupID] = src
@@ -394,17 +451,96 @@ func groupStaticHold(row domain.GroupResult, work domain.GroupWorkDocument, memb
 	return ""
 }
 
+func groupLateStaticHold(row domain.GroupResult, work domain.GroupWorkDocument, members map[string]domain.GroupWorkMember) string {
+	if !work.PropagationAudienceComplete {
+		return "the assignment-specific group audience was not fully read; timing cannot be assumed to affect only these members"
+	}
+	requested := append([]string(nil), row.MemberRefs...)
+	audience := append([]string(nil), work.PropagationAudience...)
+	sort.Strings(requested)
+	sort.Strings(audience)
+	if fmt.Sprint(requested) != fmt.Sprint(audience) {
+		return "requested members differ from the reviewed assignment audience; a subset cannot become a group timing write"
+	}
+	attempt := 0
+	due := row.LateOnly.LateTiming.DueAt
+	for _, ref := range row.MemberRefs {
+		m, ok := members[ref]
+		if !ok || !m.CurrentMember || m.SubmissionGroupID != row.GroupID || m.Attempt <= 0 || m.SubmissionID <= 0 {
+			return "member " + ref + " does not have a current submission attempt in this group"
+		}
+		if m.Excused || (m.AssignmentVisible != nil && !*m.AssignmentVisible) {
+			return "member " + ref + " is excused or cannot see the assignment; timing would reach them"
+		}
+		if m.EffectiveDueAt == "" || !sameDate(&m.EffectiveDueAt, &due) {
+			return "members do not share the effective due date used for this timing calculation"
+		}
+		if attempt != 0 && m.Attempt != attempt {
+			return "members have different current attempts"
+		}
+		attempt = m.Attempt
+		baseline, ok := row.LateOnly.ObservedMembers[ref]
+		if !ok || !sameObservedTiming(m.ObservedTiming, &baseline) {
+			return "member " + ref + " timing baseline differs from the pulled group work"
+		}
+	}
+	return ""
+}
+
+func SameGroupTimingMode(want, live domain.AssignmentSnapshot) bool {
+	return want.Instance == live.Instance && want.CourseID == live.CourseID && want.AssignmentID == live.AssignmentID &&
+		want.GroupCategoryID > 0 && want.GroupCategoryID == live.GroupCategoryID &&
+		!want.NewQuiz && !live.NewQuiz && !want.AnonymousGrading && !live.AnonymousGrading && !want.ModeratedGrading && !live.ModeratedGrading &&
+		!hasTimingCheckpoints(want) && !hasTimingCheckpoints(live) &&
+		isNumericGradingType(want.GradingType) && isNumericGradingType(live.GradingType) &&
+		want.GradeGroupStudentsIndividually != nil && !*want.GradeGroupStudentsIndividually &&
+		live.GradeGroupStudentsIndividually != nil && !*live.GradeGroupStudentsIndividually
+}
+
+func hasTimingCheckpoints(a domain.AssignmentSnapshot) bool {
+	return (a.HasSubAssignments != nil && *a.HasSubAssignments) || (a.Checkpoints != nil && len(*a.Checkpoints) > 0)
+}
+
+func isNumericGradingType(value string) bool {
+	return value == "points" || value == "percent"
+}
+
+func SameGroupIndividualTimingMode(want, live domain.AssignmentSnapshot) bool {
+	return want.Instance == live.Instance && want.CourseID == live.CourseID && want.AssignmentID == live.AssignmentID &&
+		want.GroupCategoryID > 0 && want.GroupCategoryID == live.GroupCategoryID &&
+		!want.NewQuiz && !live.NewQuiz && !want.AnonymousGrading && !live.AnonymousGrading && !want.ModeratedGrading && !live.ModeratedGrading &&
+		isNumericGradingType(want.GradingType) && isNumericGradingType(live.GradingType) &&
+		want.GradeGroupStudentsIndividually != nil && *want.GradeGroupStudentsIndividually &&
+		live.GradeGroupStudentsIndividually != nil && *live.GradeGroupStudentsIndividually
+}
+
+func sameObservedTiming(a, b *domain.ObservedTiming) bool {
+	if !knownObservedTiming(a) || !knownObservedTiming(b) || a.Late != b.Late || a.SecondsLate != b.SecondsLate {
+		return false
+	}
+	if a.LatePolicyStatus == nil {
+		if b.LatePolicyStatus != nil {
+			return false
+		}
+	} else if b.LatePolicyStatus == nil || *a.LatePolicyStatus != *b.LatePolicyStatus {
+		return false
+	}
+	return !a.CustomStatusKnown || (b.CustomStatusKnown && a.HasCustomStatus == b.HasCustomStatus)
+}
+
 // groupPreflight renews every live precondition immediately before one
 // propagated action: group identity, current enrolled membership, the
 // assignment-specific audience, and each member's attempt and evidence.
-func (s *Service) groupPreflight(ctx context.Context, doc domain.GroupResultsDocument, row domain.GroupResult, src groupSource) (groupLive, string, error) {
+func (s *Service) groupPreflight(ctx context.Context, doc domain.GroupResultsDocument, row domain.GroupResult, src groupSource, timingOnly ...bool) (groupLive, string, error) {
 	a := doc.Assignment
 	live := groupLive{subs: map[string]Submission{}}
 	if liveA, err := GetAssignment(ctx, s.Client, a.CourseID, a.AssignmentID); err != nil {
 		return live, "assignment could not be re-read: " + err.Error(), nil
-	} else if basis, err := Snapshot(liveA, s.Client.Origin()); err != nil {
+	} else if len(timingOnly) > 0 && timingOnly[0] && lateTimingAssignmentHold(liveA, true) != "" {
+		return live, lateTimingAssignmentHold(liveA, true), nil
+	} else if basis, err := groupTimingSnapshot(liveA, s.Client.Origin(), len(timingOnly) > 0 && timingOnly[0]); err != nil {
 		return live, "", err
-	} else if !SameGradingBasis(a, basis) {
+	} else if (len(timingOnly) > 0 && timingOnly[0] && !SameGroupTimingMode(a, basis)) || ((len(timingOnly) == 0 || !timingOnly[0]) && !SameGradingBasis(a, basis)) {
 		return live, "assignment, rubric or group grading mode changed; pull-work for reassessment", nil
 	}
 	var g groupPullIndex
@@ -475,12 +611,24 @@ func (s *Service) groupPreflight(ctx context.Context, doc domain.GroupResultsDoc
 		return live, "Canvas's assignment audience differs from the reviewed members; the grade would reach a different set of students", nil
 	}
 	for _, ref := range row.MemberRefs {
-		hold := s.checkGroupMember(ctx, a, row, src, ref, &live)
+		var hold string
+		if len(timingOnly) > 0 && timingOnly[0] {
+			hold = s.checkGroupTimingMember(ctx, a, row, src, ref, &live)
+		} else {
+			hold = s.checkGroupMember(ctx, a, row, src, ref, &live)
+		}
 		if hold != "" {
 			return live, hold, nil
 		}
 	}
 	return live, "", nil
+}
+
+func groupTimingSnapshot(a Assignment, origin string, timingOnly bool) (domain.AssignmentSnapshot, error) {
+	if timingOnly {
+		return TimingSnapshot(a, origin)
+	}
+	return Snapshot(a, origin)
 }
 
 // checkGroupMember compares one member's live submission with the pulled work.
@@ -521,6 +669,122 @@ func (s *Service) checkGroupMember(ctx context.Context, a domain.AssignmentSnaps
 	}
 	live.subs[ref] = sub
 	return ""
+}
+
+func (s *Service) checkGroupTimingMember(ctx context.Context, a domain.AssignmentSnapshot, row domain.GroupResult, src groupSource, ref string, live *groupLive) string {
+	student := src.students[ref]
+	m := src.members[ref]
+	sub, err := GetGroupSubmission(ctx, s.Client, a.CourseID, a.AssignmentID, student.UserID)
+	if err != nil {
+		return "submission for " + ref + " could not be read: " + err.Error()
+	}
+	user := sub.UserID
+	if user <= 0 {
+		user = sub.User.ID
+	}
+	if user != student.UserID || (sub.AssignmentID != 0 && sub.AssignmentID != a.AssignmentID) {
+		return "live submission identity for " + ref + " disagrees with the requested target"
+	}
+	if submissionGroupID(sub) != row.GroupID || sub.ID != m.SubmissionID || !sameAttempt(domain.AttemptRef{Attempt: m.Attempt}, attemptRef(sub)) {
+		return "submission attempt or group changed for " + ref + "; pull-work before adjusting timing"
+	}
+	if sub.Excused || (sub.AssignmentVisible != nil && !*sub.AssignmentVisible) {
+		return "member " + ref + " is excused or cannot see the assignment; timing would reach them"
+	}
+	if sub.CachedDueDate == nil || !sameDate(sub.CachedDueDate, &row.LateOnly.LateTiming.DueAt) {
+		return "member " + ref + " live due date differs from the common timing deadline"
+	}
+	timing := row.LateOnly.LateTiming
+	if provenance, ok := row.LateOnly.MemberSchoolTime[ref]; ok {
+		timing.SchoolTime = &provenance
+	}
+	if reason := s.schoolTimeHold(sub, &timing); reason != "" {
+		return "member " + ref + ": " + reason
+	}
+	baseline := row.LateOnly.ObservedMembers[ref]
+	if !timingMatchesBaseline(sub, &baseline) && !(ambiguous(row.LateOnly.Outcome) && timingMatches(sub, row.LateOnly.LateTiming)) {
+		return "Canvas timing changed for " + ref + " since the group timing baseline was pulled"
+	}
+	if hasCustomStatus(sub) {
+		return "Canvas has a custom grading status for " + ref + "; changing late timing would clear it"
+	}
+	live.subs[ref] = sub
+	return ""
+}
+
+func (s *Service) checkGroupIndividualTimingMember(ctx context.Context, a domain.AssignmentSnapshot, row domain.GroupResult, src groupSource, ref string, baseline domain.ObservedTiming, timing domain.LateTiming, live *groupLive) string {
+	student := src.students[ref]
+	m := src.members[ref]
+	sub, err := GetGroupSubmission(ctx, s.Client, a.CourseID, a.AssignmentID, student.UserID)
+	if err != nil {
+		return "submission for " + ref + " could not be read: " + err.Error()
+	}
+	user := sub.UserID
+	if user <= 0 {
+		user = sub.User.ID
+	}
+	if user != student.UserID || (sub.AssignmentID != 0 && sub.AssignmentID != a.AssignmentID) || submissionGroupID(sub) != row.GroupID || sub.ID != m.SubmissionID || !sameAttempt(domain.AttemptRef{Attempt: m.Attempt}, attemptRef(sub)) {
+		return "submission identity, group or attempt changed for " + ref + "; pull-work before adjusting timing"
+	}
+	if sub.Excused || (sub.AssignmentVisible != nil && !*sub.AssignmentVisible) {
+		return "member " + ref + " is excused or cannot see the assignment; timing was left unchanged"
+	}
+	if sub.CachedDueDate == nil || !sameDate(sub.CachedDueDate, &timing.DueAt) {
+		return "live due date changed for " + ref + "; recompute timing"
+	}
+	if reason := s.schoolTimeHold(sub, &timing); reason != "" {
+		return reason
+	}
+	if !timingMatchesBaseline(sub, &baseline) && !(ambiguous(individualLateOutcome(row, ref)) && timingMatches(sub, timing)) {
+		return "Canvas timing changed for " + ref + " since it was pulled"
+	}
+	if hasCustomStatus(sub) {
+		return "Canvas has a custom grading status for " + ref + "; changing late timing would clear it"
+	}
+	live.subs[ref] = sub
+	return ""
+}
+
+func individualLateOutcome(row domain.GroupResult, ref string) domain.ActionOutcome {
+	for _, student := range row.Students {
+		if student.StudentRef == ref && student.LateOnly != nil {
+			return student.LateOnly.Outcome
+		}
+	}
+	return domain.ActionOutcome{}
+}
+
+func (s *Service) postGroupLateOnly(ctx context.Context, doc *domain.GroupResultsDocument, row *domain.GroupResult, src groupSource, save func() error) error {
+	target := &row.LateOnly.LateTiming
+	if !membersShareDue(src.members, row.MemberRefs, target.DueAt) {
+		holdOutcome(&row.LateOnly.Outcome, "members do not share the effective due date used for this timing calculation")
+		return save()
+	}
+	live, hold, err := s.groupPreflight(ctx, *doc, *row, src, true)
+	if err != nil {
+		return err
+	}
+	if hold == "" && !commonDueDate(live, target.DueAt) {
+		hold = "live members do not share the effective due date used for this timing calculation"
+	}
+	if hold != "" {
+		holdOutcome(&row.LateOnly.Outcome, hold)
+		return save()
+	}
+	representative := row.Representative
+	if representative == "" {
+		representative = chooseRepresentative(*row)
+		row.Representative = representative
+		if err := save(); err != nil {
+			return err
+		}
+	}
+	baseline := row.LateOnly.ObservedMembers[representative]
+	target.Observed = &baseline
+	if provenance, ok := row.LateOnly.MemberSchoolTime[representative]; ok {
+		target.SchoolTime = &provenance
+	}
+	return s.postLateTiming(ctx, doc.Assignment, src.students[representative].UserID, domain.AttemptRef{Attempt: src.members[representative].Attempt}, target, &row.LateOnly.Outcome, save)
 }
 
 func sameKeys(a, b map[string]bool) bool {
@@ -684,12 +948,53 @@ func (s *Service) postGroupShared(ctx context.Context, doc *domain.GroupResultsD
 			// Shared lateness propagates, so it needs one timing that is true for everyone.
 			g.Outcomes.Late = domain.ActionOutcome{Status: "not-requested", Message: "members have different effective due dates; late timing was omitted and the grade and feedback continued"}
 		default:
-			if err = s.postLateTiming(ctx, a, repID, domain.AttemptRef{Attempt: attempt}, g.LateTiming, &g.Outcomes.Late, save); err != nil {
-				return err
+			if timingHold := s.checkGroupGradeLateTiming(*row, src, fresh, g.LateTiming); timingHold != "" {
+				holdOutcome(&g.Outcomes.Late, timingHold)
+			} else {
+				if baseline, ok := src.members[row.Representative].ObservedTiming, row.Representative != ""; ok && g.LateTiming.Observed != nil {
+					g.LateTiming.Observed = baseline
+				}
+				if provenance, ok := g.MemberSchoolTime[row.Representative]; ok {
+					g.LateTiming.SchoolTime = &provenance
+				}
+				if err = s.postLateTiming(ctx, a, repID, domain.AttemptRef{Attempt: attempt}, g.LateTiming, &g.Outcomes.Late, save); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return save()
+}
+
+func (s *Service) checkGroupGradeLateTiming(row domain.GroupResult, src groupSource, live groupLive, timing *domain.LateTiming) string {
+	if timing == nil || (timing.Observed == nil && timing.SchoolTime == nil) {
+		return ""
+	}
+	for _, ref := range row.MemberRefs {
+		member := src.members[ref]
+		sub, ok := live.subs[ref]
+		if !ok {
+			return "live timing for member " + ref + " could not be verified; grade and feedback may continue"
+		}
+		if member.ObservedTiming == nil || !knownObservedTiming(member.ObservedTiming) || !timingMatchesBaseline(sub, member.ObservedTiming) {
+			return "Canvas timing changed or was not observed for member " + ref + "; the timing action was held while grade and feedback continued"
+		}
+		if hasCustomStatus(sub) {
+			return "member " + ref + " has a custom grading status; timing was held while grade and feedback continued"
+		}
+		memberTiming := *timing
+		if timing.SchoolTime != nil {
+			provenance, ok := row.Grade.MemberSchoolTime[ref]
+			if !ok {
+				return "school-time provenance is missing for member " + ref + "; timing was held while grade and feedback continued"
+			}
+			memberTiming.SchoolTime = &provenance
+		}
+		if reason := s.schoolTimeHold(sub, &memberTiming); reason != "" {
+			return "member " + ref + ": " + reason + "; grade and feedback continued"
+		}
+	}
+	return ""
 }
 
 // membersShareDue reports whether every reviewed member's pulled effective due
@@ -864,7 +1169,7 @@ func buildGroupResultsReview(root, path string) (ReviewModel, error) {
 		for _, mem := range work.Membership {
 			aliases[mem.StudentRef] = mem.Alias
 		}
-		if hold == "" {
+		if hold == "" && row.Operation != "late-only" {
 			var artifactFound bool
 			for _, a := range work.Artifacts {
 				artifactFound = artifactFound || a.Key == row.ArtifactKey
@@ -874,6 +1179,8 @@ func buildGroupResultsReview(root, path string) (ReviewModel, error) {
 			} else {
 				hold = groupStaticHold(row, work, members)
 			}
+		} else if hold == "" {
+			hold = groupLateStaticHold(row, work, members)
 		}
 		memberAliases := []string{}
 		for _, ref := range row.MemberRefs {
@@ -884,12 +1191,43 @@ func buildGroupResultsReview(root, path string) (ReviewModel, error) {
 			memberAliases = append(memberAliases, label)
 		}
 		c := ReviewCard{Ref: GroupCardRef(row.GroupID), Alias: names[row.GroupID], Operation: row.Operation, Hold: hold, Done: groupSharedComplete(row)}
-		c.Facts = []ReviewFact{{"Group", fmt.Sprintf("%s (group %d)", names[row.GroupID], row.GroupID)}, {"Affects", strings.Join(memberAliases, ", ")}, {"Artifact", row.ArtifactKey}, {"Grading", "one shared grade for the whole group"}}
-		for _, a := range work.Artifacts {
-			if a.Key == row.ArtifactKey {
-				c.Submission = strings.TrimSpace(a.ReadableText)
-				for _, att := range a.Attachments {
-					c.Submission += "\n[attachment: " + att.Name + "]"
+		c.Facts = []ReviewFact{{"Group", fmt.Sprintf("%s (group %d)", names[row.GroupID], row.GroupID)}, {"Affects", strings.Join(memberAliases, ", ")}}
+		if row.Operation == "late-only" {
+			c.Facts = append(c.Facts, ReviewFact{"Grading", "late timing only; no grade, rubric or comment will change"})
+			c.Late = lateSummary(row.LateOnly.LateTiming)
+			c.LateBasis = row.LateOnly.LateTiming.Basis
+			c.Facts = append(c.Facts, timingReviewFacts(row.LateOnly.LateTiming)...)
+			for _, ref := range row.MemberRefs {
+				baseline := row.LateOnly.ObservedMembers[ref]
+				status := "automatic or no explicit status"
+				if baseline.LatePolicyStatus != nil {
+					status = *baseline.LatePolicyStatus
+				}
+				label := aliases[ref]
+				if label == "" {
+					label = ref
+				}
+				c.Facts = append(c.Facts, ReviewFact{"Current timing for " + label, fmt.Sprintf("status %s; late=%t; seconds=%d", status, baseline.Late, baseline.SecondsLate)})
+				if provenance, ok := row.LateOnly.MemberSchoolTime[ref]; ok {
+					c.Facts = append(c.Facts,
+						ReviewFact{"First genuine submission counted for " + label, fmt.Sprintf("attempt %d at %s", provenance.Attempt.Attempt, provenance.SubmittedAt)},
+						ReviewFact{"School-time deadline for " + label, provenance.Deadline},
+					)
+					if len(provenance.SkippedDates) > 0 {
+						c.Facts = append(c.Facts, ReviewFact{"Calendar days skipped for " + label, strings.Join(provenance.SkippedDates, ", ")})
+					}
+				}
+			}
+		} else {
+			c.Facts = append(c.Facts, ReviewFact{"Artifact", row.ArtifactKey}, ReviewFact{"Grading", "one shared grade for the whole group"})
+		}
+		if row.Operation != "late-only" {
+			for _, a := range work.Artifacts {
+				if a.Key == row.ArtifactKey {
+					c.Submission = strings.TrimSpace(a.ReadableText)
+					for _, att := range a.Attachments {
+						c.Submission += "\n[attachment: " + att.Name + "]"
+					}
 				}
 			}
 		}
@@ -905,7 +1243,7 @@ func buildGroupResultsReview(root, path string) (ReviewModel, error) {
 				c.Facts = append(c.Facts, ReviewFact{"Shared comment", "none"})
 			}
 		}
-		if c.Hold == "" {
+		if c.Hold == "" && row.Operation != "late-only" {
 			omitLate := row.Grade != nil && row.Grade.LateTiming != nil && !membersShareDue(members, row.MemberRefs, row.Grade.LateTiming.DueAt)
 			text, te := GroupSharedText(doc, row, v, omitLate)
 			if te != nil {
@@ -943,6 +1281,8 @@ func holdStudentResult(r *domain.StudentResult, message string) {
 		holdGrade(r.Grade, message)
 	} else if r.CommentOnly != nil {
 		holdOutcome(&r.CommentOnly.Outcome, message)
+	} else if r.LateOnly != nil {
+		holdOutcome(&r.LateOnly.Outcome, message)
 	}
 }
 
@@ -971,11 +1311,18 @@ func (s *Service) postGroupIndividual(ctx context.Context, doc *domain.GroupResu
 				if live.CourseID == 0 {
 					live.CourseID = a.CourseID
 				}
-				basis, err := Snapshot(live, s.Client.Origin())
+				if r.Operation == "late-only" {
+					hold = lateTimingAssignmentHold(live, true)
+				}
+				basis, err := groupTimingSnapshot(live, s.Client.Origin(), r.Operation == "late-only")
 				if err != nil {
 					return err
 				}
-				if !SameGradingBasis(a, basis) {
+				if r.Operation == "late-only" {
+					if !SameGroupIndividualTimingMode(a, basis) {
+						hold = "assignment group grading mode changed; pull-work before adjusting timing"
+					}
+				} else if !SameGradingBasis(a, basis) {
 					hold = "assignment, rubric or group grading mode changed; pull-work for reassessment"
 				}
 				coupled = basis.Rubric != nil && basis.Rubric.UseForGradingKnown && basis.Rubric.UseForGrading
@@ -988,6 +1335,8 @@ func (s *Service) postGroupIndividual(ctx context.Context, doc *domain.GroupResu
 			attempt = r.Grade.Attempt.Attempt
 		} else if r.CommentOnly != nil {
 			attempt = r.CommentOnly.Attempt.Attempt
+		} else if r.LateOnly != nil {
+			attempt = r.LateOnly.Attempt.Attempt
 		}
 		if hold == "" && (!known || !member || !m.CurrentMember || m.SubmissionGroupID != row.GroupID || m.Attempt <= 0 || m.Excused) {
 			hold = "member is not a current, non-excused submitter in this group"
@@ -998,7 +1347,16 @@ func (s *Service) postGroupIndividual(ctx context.Context, doc *domain.GroupResu
 		var probe groupLive
 		if hold == "" {
 			probe = groupLive{subs: map[string]Submission{}}
-			hold = s.checkGroupMember(ctx, a, *row, src, r.StudentRef, &probe)
+			if r.LateOnly != nil {
+				m := src.members[r.StudentRef]
+				if m.EffectiveDueAt == "" || !sameDate(&m.EffectiveDueAt, &r.LateOnly.LateTiming.DueAt) || !sameObservedTiming(m.ObservedTiming, r.LateOnly.LateTiming.Observed) {
+					hold = "timing deadline or observed baseline differs from the pulled work"
+				} else {
+					hold = s.checkGroupIndividualTimingMember(ctx, a, *row, src, r.StudentRef, *r.LateOnly.LateTiming.Observed, r.LateOnly.LateTiming, &probe)
+				}
+			} else {
+				hold = s.checkGroupMember(ctx, a, *row, src, r.StudentRef, &probe)
+			}
 		}
 		if hold != "" {
 			holdStudentResult(r, hold)
@@ -1009,7 +1367,9 @@ func (s *Service) postGroupIndividual(ctx context.Context, doc *domain.GroupResu
 		}
 		source := postSource{student: student}
 		var err error
-		if r.CommentOnly != nil {
+		if r.LateOnly != nil {
+			err = s.postLateTiming(ctx, a, student.UserID, r.LateOnly.Attempt, &r.LateOnly.LateTiming, &r.LateOnly.Outcome, save)
+		} else if r.CommentOnly != nil {
 			err = s.postCommentOnly(ctx, tmp, r, vs, source, probe.subs[r.StudentRef], save)
 		} else {
 			err = s.postGrade(ctx, tmp, r, vs, source, probe.subs[r.StudentRef], coupled, save)
@@ -1122,6 +1482,12 @@ func individualReviewCards(root string, doc domain.GroupResultsDocument, row dom
 			}
 		case r.CommentOnly != nil:
 			attempt, feedback = r.CommentOnly.Attempt.Attempt, r.CommentOnly.Feedback
+		case r.LateOnly != nil:
+			attempt = r.LateOnly.Attempt.Attempt
+			c.Late = lateSummary(r.LateOnly.LateTiming)
+			c.LateBasis = r.LateOnly.LateTiming.Basis
+			c.Facts = append(c.Facts, ReviewFact{"Grading", "late timing only; no grade, rubric or comment will change"})
+			c.Facts = append(c.Facts, timingReviewFacts(r.LateOnly.LateTiming)...)
 		}
 		c.Attempt = attempt
 		if c.Hold == "" {
@@ -1133,9 +1499,11 @@ func individualReviewCards(root string, doc domain.GroupResultsDocument, row dom
 				c.Hold = "member is not a current, non-excused submitter in this group"
 			case mem.Attempt != attempt:
 				c.Hold = "target attempt differs from the pulled work"
+			case r.LateOnly != nil && (mem.EffectiveDueAt == "" || !sameDate(&mem.EffectiveDueAt, &r.LateOnly.LateTiming.DueAt) || !sameObservedTiming(mem.ObservedTiming, r.LateOnly.LateTiming.Observed)):
+				c.Hold = "timing deadline or observed baseline differs from the pulled work"
 			}
 		}
-		if mem, ok := members[r.StudentRef]; ok {
+		if mem, ok := members[r.StudentRef]; ok && r.LateOnly == nil {
 			art := artifacts[mem.CurrentArtifactKey]
 			c.Submission = strings.TrimSpace(art.ReadableText)
 			for _, att := range art.Attachments {

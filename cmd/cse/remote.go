@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "pull-work": {0, 4}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -96,6 +96,18 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	var config domain.CourseConfig
 	if _, e := workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
 		return fail(inputError(e), progress)
+	}
+	if cmd == "prepare-late-timing" {
+		prepared, e := (&workflow.Service{Root: root, Config: config}).PrepareLateTiming(args[0])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		encoded, e := json.MarshalIndent(prepared, "", "  ")
+		if e != nil {
+			return fail(e, progress)
+		}
+		fmt.Fprintln(out, string(encoded))
+		return 0
 	}
 	credential, e := platform.LoadCredential()
 	if e != nil {
@@ -479,25 +491,52 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		fmt.Fprintf(out, "%d students\n", len(packet.Students))
 	case "pull-work":
 		nickname, query := "", ""
-		if len(args) > 0 {
-			nickname = args[0]
+		var groupID int64
+		groupScoped, session := false, false
+		positionals := []string{}
+		for i := 0; i < len(args); i++ {
+			switch args[i] {
+			case "--session":
+				if session {
+					return fail(fmt.Errorf("--session may be supplied once"), progress)
+				}
+				session = true
+			case "--group":
+				if groupScoped || i+1 >= len(args) {
+					return fail(fmt.Errorf("--group requires one positive ID"), progress)
+				}
+				i++
+				parsed, parseErr := strconv.ParseInt(args[i], 10, 64)
+				if parseErr != nil || parsed <= 0 {
+					return fail(fmt.Errorf("group ID must be a positive integer"), progress)
+				}
+				groupID, groupScoped = parsed, true
+			default:
+				if strings.HasPrefix(args[i], "--") {
+					return fail(fmt.Errorf("unknown pull-work option %q", args[i]), progress)
+				}
+				positionals = append(positionals, args[i])
+			}
 		}
-		if len(args) > 1 {
-			query = args[1]
+		if len(positionals) > 2 {
+			return fail(fmt.Errorf("usage: pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session]"), progress)
+		}
+		if len(positionals) > 0 {
+			nickname = positionals[0]
+		}
+		if len(positionals) > 1 {
+			query = positionals[1]
+		}
+		if groupScoped && (nickname == "" || query == "") {
+			return fail(fmt.Errorf("--group requires explicit course and assignment"), progress)
 		}
 		var report workflow.PullReport
 		var e error
-		if len(args) > 2 {
-			if len(args) != 4 || args[2] != "--group" || nickname == "" || query == "" {
-				return fail(fmt.Errorf("usage: pull-work COURSE ASSIGNMENT --group GROUP_ID"), progress)
-			}
-			groupID, parseErr := strconv.ParseInt(args[3], 10, 64)
-			if parseErr != nil || groupID <= 0 {
-				return fail(fmt.Errorf("group ID must be a positive integer"), progress)
-			}
-			report, e = service.PullWorkGroup(ctx, nickname, query, groupID)
+		options := workflow.PullWorkOptions{Session: session}
+		if groupScoped {
+			report, e = service.PullWorkGroupWithOptions(ctx, nickname, query, groupID, options)
 		} else {
-			report, e = service.PullWork(ctx, nickname, query)
+			report, e = service.PullWorkWithOptions(ctx, nickname, query, options)
 		}
 		if len(report.Assignments) > 0 {
 			fmt.Fprintln(table, "Course\tAssignment\tTitle\tPulled\tLate\tMissing\tExcused\tInactive\tUnsupported\tHandled\tUnreadable attachments\tDetails")
