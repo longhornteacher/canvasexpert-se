@@ -410,7 +410,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				return 3
 			}
 			return 0
-		} else if kind == "discussion" {			report, e := service.PushDiscussion(ctx, file)
+		} else if kind == "discussion" {
+			report, e := service.PushDiscussion(ctx, file)
 			fmt.Fprintf(out, "%s: discussion %d %s\n", report.Status, report.TopicID, report.Path)
 			if report.URL != "" {
 				fmt.Fprintln(out, report.URL)

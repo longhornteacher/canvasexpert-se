@@ -443,6 +443,15 @@ func (s *Service) applyAssignmentAudience(ctx context.Context, course domain.Cou
 			}
 		}
 		st.Application = domain.ActionOutcome{Status: "succeeded"}
+		// AppliedRefs records the students this action actually granted access to;
+		// manual exceptions keep their own access and are reported separately.
+		st.AppliedRefs = nil
+		for _, row := range st.Owned {
+			if definite(row.Outcome) {
+				st.AppliedRefs = append(st.AppliedRefs, row.Baseline.StudentRefs...)
+			}
+		}
+		sort.Strings(st.AppliedRefs)
 		if err := save(); err != nil {
 			return false, err
 		}

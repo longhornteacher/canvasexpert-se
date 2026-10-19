@@ -170,6 +170,15 @@ try {
   const clubQuiz = await readFile('engine-docs/examples/synthetic-individual-club-quiz.md', 'utf8');
   await call('write_draft', { path: 'courses/individual-club-quiz.md', content: clubQuiz });
   await call('validate_quiz', { path: 'courses/individual-club-quiz.md' });
+  // The integrated book-club unit example embeds one QuizForge block; validate it
+  // and confirm the example still documents all three resource kinds.
+  const unitExample = await readFile('engine-docs/examples/synthetic-book-club-unit.md', 'utf8');
+  for (const kind of ['kind: page', 'kind: assignment', '<QUIZFORGE_JSON>', 'prepare-audience']) {
+    assert.ok(unitExample.includes(kind), `book-club unit example must document ${kind}`);
+  }
+  const unitQuiz = unitExample.slice(unitExample.indexOf('<QUIZFORGE_JSON>'), unitExample.indexOf('</QUIZFORGE_JSON>') + '</QUIZFORGE_JSON>'.length);
+  await call('write_draft', { path: 'courses/book-club-unit-quiz.txt', content: unitQuiz });
+  await call('validate_quiz', { path: 'courses/book-club-unit-quiz.txt' });
   const clubAudience = await readFile('engine-docs/examples/synthetic-individual-club-assignment.md', 'utf8');
   await call('write_draft', { path: 'courses/individual-club-assignment.md', content: clubAudience });
   await call('validate_document', { path: 'courses/individual-club-assignment.md' });

@@ -1,6 +1,6 @@
 # Book-group audiences for individual content: execution brief
 
-Prepared 2026-10-19 against Dev branch `dev`, revision `56109c6`. **Slices 1-3 are implemented, validated and committed on `dev`; slices 4-5 have not started.** The original pause checkpoint at the end is retained as history; its "slice 2 working tree" section is superseded by the slice 2 execution record. This brief does not authorize Canvas Live operations, release, or UserInstall/UserSync adoption.
+Prepared 2026-10-19 against Dev branch `dev`, revision `56109c6`. **Slices 1-5 are implemented, validated and committed on `dev`.** The original pause checkpoint at the end is retained as history; its "slice 2 working tree" section is superseded by the slice 2 execution record. This brief does not authorize Canvas Live operations, release, or UserInstall/UserSync adoption.
 
 Source requirements: [original book-group audience handoff](../CSSE_Book_Group_Audiences_Codex_Brief.md). That supplied file is preserved unchanged. This brief supplies the execution sequence and code audit; it does not turn the source's request to implement into authorization to implement during this planning session.
 
@@ -160,6 +160,22 @@ For each completed slice, append actual files changed, final contract decisions,
 
 Keep real teacher data, credentials, UserInstall and UserSync untouched during Dev implementation. Historical classroom IDs in the source handoff are reference only; synthetic tests use synthetic IDs. Any later migration from existing group-calendar links to native restricted course Pages is a separate teacher-authorized task preserving the originals and student work, never an automatic completion step.
 
+## Final capability map and paths (2026-10-19)
+
+All five slices are delivered in Dev. One `audience` intent — `mode: individual`, `policy: snapshot`, `source: {group_category_id, group_ids}` — now targets three resource kinds, and one club unit can place all three in an existing shared module.
+
+| Resource | Document | Create path | Refresh path |
+|---|---|---|---|
+| Individual assignment | `kind: assignment`, `operation: create`, top-level `audience` | `prepare-audience COURSE FILE` → `review FILE` → `push FILE` (MCP `prepare_audience` → `start_review` → `push_document`) | `prepare-audience COURSE RECEIPT_OR_LAST_ACTION --refresh` → review/push the returned `path` |
+| Existing assignment audience | `kind: assignment-dates` from `pull-assignment-dates` | `prepare-audience COURSE FILE` → review → `push FILE` | same `--refresh` route |
+| Course Page | `kind: page`, `operation: create`, top-level `audience` | `prepare-audience COURSE FILE` → `push FILE` | `prepare-audience COURSE FILE --refresh` → push the returned `path` |
+| New Quiz | QuizForge file with `metadata.canvas.audience` | `prepare-audience COURSE FILE` → `review FILE` → `push-quiz COURSE FILE` | `prepare-audience COURSE FILE --refresh` → push the returned `path` |
+| Shared module | `kind: module` with native `Page`/`Assignment` entries | `push FILE` after the resources exist | rerun the same file; accepted entries are verified, not re-added |
+
+Validated examples: [synthetic-individual-club-assignment.md](../../engine-docs/examples/synthetic-individual-club-assignment.md), [synthetic-individual-club-refresh.md](../../engine-docs/examples/synthetic-individual-club-refresh.md), [synthetic-individual-club-page.md](../../engine-docs/examples/synthetic-individual-club-page.md), [synthetic-individual-club-quiz.md](../../engine-docs/examples/synthetic-individual-club-quiz.md), [synthetic-book-club-unit.md](../../engine-docs/examples/synthetic-book-club-unit.md), and [synthetic-unit-navigation.yaml](../../engine-docs/examples/synthetic-unit-navigation.yaml) for the module shape.
+
+Standing limits, unchanged by this work: no Canvas Live operation was run for any slice, so direct targeted/untargeted student access, shared-module listing and actual student rendering remain unobserved. Pages have no submission evidence route, so Page refresh removals are not work-protected. A teacher-token/API result is not proof of a student's session. No release, UserInstall/UserSync change or classroom migration was performed.
+
 ## Future execution prompt
 
 > Implement slice N of `handoffs/active/BOOK-GROUP-AUDIENCES.md` in Dev. Read the current repository instructions, shared group-work contracts and original source handoff, then verify the slice's dependencies in current code. Complete only the assigned slice, including its adapters, review where applicable, examples, guidance and focused validation. Reuse existing student overrides, Page/quiz lifecycles and private identity mapping. Preserve individual submissions, restricted visibility, manual exceptions, unsent work and accepted outcomes. Do not run Canvas Live operations, alter UserInstall/UserSync, migrate classroom materials or release unless separately authorized. Report actual results and evidence limits and update the slice record before stopping.
@@ -207,6 +223,18 @@ Checks actually run (Go 1.27.1, `GOTOOLCHAIN=local`, Dev-local caches): focused 
 Defects found and fixed during this slice: `finishQuiz` read the document's audience intent instead of the sidecar's prepared state, so the audience stage never completed; the restricted item-resume flag was inverted, so accepted items were re-posted; a refused audience returned a nil error and reported `completed`, so the quiz looked finished while unpublished; and the ordinary-quiz stage-done flags were inverted, which would have skipped settings and module placement for unrestricted quizzes.
 
 Remaining evidence: no Canvas Live operation, real UserInstall/UserSync change, release or adoption was performed. Canvas Live club-audience quiz creation, direct targeted/untargeted student access and student-view rendering remain pending. The integrated shared-module demonstration (slice 5) remains to be implemented.
+
+## Execution record - slice 5 (2026-10-19)
+
+Implemented the integrated club unit. Files: new `internal/workflow/book_club_unit_test.go` (one stateful synthetic course with two collaborative clubs, an unassigned student and a pre-populated shared module; three integrated checks); `internal/workflow/audience.go` (the accepted assignment audience now records `applied_refs` from its accepted owned rows, so a push report describes the actual recipients instead of "0 students"); `cmd/cse/remote.go` (repaired a collapsed newline introduced in slice 3 that left the `discussion` push branch unformatted); new `engine-docs/examples/synthetic-book-club-unit.md`. Docs: `CHANGELOG.md`, `docs/engine-capabilities.md`, `docs/mcp-adapter.md`, `engine-docs/formats.md`, `engine-docs/field-limits.md`, `internal/localui/capabilities.go`, `scripts/check-mcp.mjs`, `workspace-template/playbooks/{group-work,native-content}.md`.
+
+Final contract: a club unit is three independent resources sharing one audience — a course Page, an individual assignment and a New Quiz. Each is prepared, reviewed and pushed on its own, so a held resource never blocks the others. Each is created unpublished, restricted to the selected clubs, placed in the requested existing module and published last. The module is a navigation list and carries no audience; each child keeps its own restriction. Push the resources before the module so every native reference exists. An existing module keeps its unrelated entries and gains one native entry per resource in the requested order; a New Quiz entry uses its associated assignment ID, and a restricted course Page is an ordinary native `Page` entry rather than a group `ExternalUrl`. Membership refresh is per resource: assignment and quiz removals are work-protected, Page removals are not because Pages have no submission evidence route. No resource sets native `group_category_id`, uses a collaborative group override, or changes club membership.
+
+Checks actually run (Go 1.27.1, `GOTOOLCHAIN=local`, Dev-local caches): focused `go test ./internal/workflow -run 'TestBookClubUnit' -count=1` passed (3 integrated tests); boundary regression `go test ./internal/workflow -run 'TestBookClubUnit|TestAudience|TestPageAudience|TestQuizAudience|TestPushModule|TestModule|TestHub|TestPushQuiz|TestQuiz|TestPushAssignmentDates|TestDiscussion' -count=1` passed; `go vet ./...` passed; full `go test ./... -count=1` passed; fresh temporary CLI build passed `node scripts/check-mcp.mjs` (**39 tools**, compiled stdio, root binding, schema discovery, the new unit example's embedded QuizForge block and existing document/QuizForge validation; no Canvas writes).
+
+Defect found and fixed during this slice: the accepted assignment audience never recorded `applied_refs`, so a push report described the applied audience as "0 students" even though the override row was correct. The Page path already recorded it; the assignment path now derives it from its accepted owned rows.
+
+Remaining evidence: no Canvas Live operation, real UserInstall/UserSync change, release or adoption was performed. Canvas Live club-audience creation for all three resource kinds, direct targeted/untargeted student access, shared-module listing and actual student rendering remain pending. A teacher-token/API result would not be proof of a targeted or untargeted student's session.
 
 ## Pause checkpoint — 2026-10-19
 
@@ -261,4 +289,4 @@ For coordination if this same chat resumes: `/root/audience_implementation` impl
 
 ### Post-pause continuation (2026-10-19)
 
-Slice 2 was finished and committed on `dev` after the pause. Slice 3 (native course Pages) was then implemented and validated; see its execution record. Slice 4 (New Quizzes) was then implemented and validated; see its execution record. Slice 5 (shared Book Club module and integrated end-to-end example) is next.
+Slice 2 was finished and committed on `dev` after the pause. Slice 3 (native course Pages) was then implemented and validated; see its execution record. Slice 4 (New Quizzes) was then implemented and validated; see its execution record. Slice 5 (shared Book Club module and integrated end-to-end example) was then implemented and validated; see its execution record and the final capability map above. All five slices are delivered in Dev.
