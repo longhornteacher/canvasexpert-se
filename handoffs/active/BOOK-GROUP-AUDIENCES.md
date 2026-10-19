@@ -1,6 +1,6 @@
 # Book-group audiences for individual content: execution brief
 
-Prepared 2026-10-19 against Dev branch `dev`, revision `56109c6`. **Execution authorized by the user on 2026-10-19. Slice 1 is implemented; slices 2-5 remain planned.** This brief does not authorize Canvas Live operations, release, or UserInstall/UserSync adoption.
+Prepared 2026-10-19 against Dev branch `dev`, revision `56109c6`. **Slices 1 and 2 are implemented, validated and committed on `dev`; slices 3-5 have not started.** The original pause checkpoint at the end is retained as history; its "slice 2 working tree" section is superseded by the slice 2 execution record. This brief does not authorize Canvas Live operations, release, or UserInstall/UserSync adoption.
 
 Source requirements: [original book-group audience handoff](../CSSE_Book_Group_Audiences_Codex_Brief.md). That supplied file is preserved unchanged. This brief supplies the execution sequence and code audit; it does not turn the source's request to implement into authorization to implement during this planning session.
 
@@ -66,7 +66,7 @@ Execute serially, one writer at a time. Every slice touches shared schemas, adap
 | Slice | Usable result | Depends on | Status |
 |---|---|---|---|
 | 1 | Resolve book-club members and create/initially target an individual assignment | Existing Engine | Implemented in Dev; local evidence only |
-| 2 | Explicitly refresh an individual assignment's audience without losing access to work | 1 | Planned |
+| 2 | Explicitly refresh an individual assignment's audience without losing access to work | 1 | In progress; paused before final integration checks/commit |
 | 3 | Create/update/refresh a restricted native course Page | 1, 2 | Planned |
 | 4 | Create a restricted New Quiz and refresh its audience through its assignment | 1, 2; run after 3 | Planned |
 | 5 | Demonstrate the complete shared-module workflow and finish cross-feature guidance | 1–4 | Planned |
@@ -175,3 +175,67 @@ Prepare reads Canvas and writes only the course-local draft. Initial `assignment
 Checks actually run: `.tools/go1.27.1/go/bin/go.exe test ./internal/workflow -run 'TestAudience|TestPushAssignmentDates' -count=1` passed after the final targeted fixes. Affected package suite `go test ./internal/workflow ./internal/domain ./internal/mcpserver ./cmd/cse ./internal/localui` passed during integration and was rerun at slice close. A fresh temporary CLI build at `C:/Users/adamb/AppData/Local/Temp/cse-audience-slice1-db0f4902-0695-47ef-a3d6-7b77203e582c/cse.exe` passed `node scripts/check-mcp.mjs ENGINE`: **39 tools**, compiled stdio, root binding, schema discovery, new example and existing document/QuizForge validation; no Canvas writes. Tests use synthetic IDs/private fixtures and cover overlap, unassigned students, exact identity/tag refusal, known versus pending/unresolved enrollment/membership, selected-read failure, empty drafts, source-change zero writes, manual exception disclosure/preservation, stale manual/visibility baselines, uncertain override no-replay and accepted restriction/publication-failure resume (including pending publication no-replay).
 
 Remaining evidence: no Canvas Live operation, real UserInstall/UserSync change, release or adoption was performed. Direct targeted/untargeted student access, module listing and actual student rendering remain pending. Explicit refresh and Page/quiz integration remain the next slices; ordinary supported initial assignment use is not blocked by those pending observations.
+
+## Execution record - slice 2 (2026-10-19)
+
+Implemented explicit refresh and work-preserving removals. Files: `internal/domain/audience.go` (refresh/hold/change types, `authorized_submitted_work_change_refs`, refresh validation); `internal/workflow/audience_refresh.go` (new: receipt/action link following, live baseline capture, add/remove/retain planning, removal protection, per-change apply, ownership carry-forward, summary); `internal/workflow/audience.go` (refresh dispatch, empty-source allowance for refresh, refresh apply routing); `internal/workflow/assignment_dates.go` (partial/completed refresh reporting); `internal/workflow/canvas_reads.go` (`submission_history` presence and `grade`); `internal/workflow/review_author.go` (refresh facts/holds); `internal/mcpserver/operations.go` (tool help). New `audience_refresh_test.go`; new `engine-docs/examples/synthetic-individual-club-refresh.md`. Docs: `CHANGELOG.md`, `docs/engine-capabilities.md`, `docs/mcp-adapter.md`, `engine-docs/formats.md`, `engine-docs/field-limits.md`, `internal/localui/capabilities.go`, `scripts/check-mcp.mjs`, `workspace-template/playbooks/{authoring,edit,group-work}.md`.
+
+Final contract: `prepare-audience COURSE FILE --refresh` / MCP `prepare_audience {course, path, refresh: true}` accepts a saved assignment create receipt or an `assignment-dates` action and returns a new course-local `assignment-dates` action path. `audience.state.latest_refresh_path` links the source document to the newest action; preparation follows those links, requires the original exact target, and keeps the original create receipt and its `created` outcomes. Requested source/authorization intent comes from the caller, not the linked state. `state.refresh` records `add`/`remove`/`retain`, `protected`/`unknown` holds and per-row `changes` with `before`, desired `student_refs`, intended `remove_refs`, `outcome` and, once applied, `applied_operation`/`applied_student_refs`/`applied_remove_refs`. `state.student_refs` stays the requested current source; `state.applied_refs` is the known actual managed audience. Only exact accepted owned rows change; updates preserve inherited/overridden/null dates and an empty owned row uses its exact DELETE. Removal protection reads the exact student/assignment submission plus requested history: real work, saved body/file/link/media, score including zero, grade/rubric, earlier work or a genuine New Quiz attempt retains access; missing history, unreadable evidence or wrong identity holds. Safe independent removals proceed while newly protected students stay in the same row, and the narrower actual write is saved. `authorized_submitted_work_change_refs` is the only exception and cannot bypass unreadable evidence. Pending/uncertain writes are neither erased by preparation nor replayed; accepted actions skip on rerun; membership/visibility/manual/owned baselines are rechecked even for a no-op refresh.
+
+Checks actually run (Go 1.27.1, `GOTOOLCHAIN=local`, Dev-local caches): focused `go test ./internal/workflow -run 'TestAudience|TestPushAssignmentDates' -count=1` passed; affected packages `go test ./internal/workflow ./internal/domain ./internal/mcpserver ./cmd/cse ./internal/localui -count=1` passed; `go vet ./...` passed; fresh temporary CLI build at `C:/Users/adamb/AppData/Local/Temp/cse-audience-slice2-d53e7f9f/cse.exe` passed `node scripts/check-mcp.mjs` (**39 tools**, compiled stdio, root binding, schema discovery, new refresh example and existing document/QuizForge validation; no Canvas writes); full `go test ./... -count=1` passed. One earlier full-suite run failed `internal/canvas` `TestWriteTimeoutUncertainAndNeverReplayed` (a timing-sensitive test in an untouched package); it passed 5/5 in isolation and in the subsequent full run. Also repaired two mangled curly quotes in the new `group-work.md` paragraph.
+
+Remaining evidence: no Canvas Live operation, real UserInstall/UserSync change, release or adoption was performed. Direct targeted/untargeted student access, module listing and actual student rendering remain pending. Page (slice 3) and New Quiz (slice 4) authoring audiences, and the integrated shared-module demonstration (slice 5), remain to be implemented.
+
+## Pause checkpoint — 2026-10-19
+
+The user explicitly requested a pause and progress record because usage is running low. Implementation agents were stopped. **Do not continue automatically.** All work remains in Dev on branch `dev`; nothing was pushed, released, adopted into UserInstall/UserSync, or written to Canvas Live.
+
+### Completed and committed
+
+Slice 1 is committed as **`8f71b23` — `feat: prepare club audiences for individual assignments`**. It includes the preserved original source handoff and this execution brief. The repository-wide baseline `go test ./...` passed at the start of execution. Slice 1's focused checks, affected-package suite and fresh 39-tool compiled MCP smoke are recorded above. Later slice 2 changes are not part of that committed evidence.
+
+### Slice 2 working tree — superseded
+
+Slice 2 was completed, validated and committed after the pause; see the slice 2 execution record above. The file list below is retained only as a historical record of what was in the working tree at pause.
+
+Modified files at pause:
+
+- `internal/domain/audience.go`; `internal/workflow/audience.go`, `assignment_dates.go`, `canvas_reads.go`, `review_author.go`; `internal/mcpserver/operations.go`.
+- New `internal/workflow/audience_refresh.go` and `audience_refresh_test.go`.
+- `CHANGELOG.md`, `docs/engine-capabilities.md`, `docs/mcp-adapter.md`, `engine-docs/formats.md`, `engine-docs/field-limits.md`, `internal/localui/capabilities.go`, `scripts/check-mcp.mjs`.
+- `workspace-template/playbooks/authoring.md`, `edit.md`, `group-work.md`; new `engine-docs/examples/synthetic-individual-club-refresh.md`.
+- This brief and `handoffs/README.md` contain the pause record added by the orchestrator.
+
+Implemented slice 2 behavior:
+
+- `prepare-audience COURSE FILE --refresh` / MCP `prepare_audience {course, path, refresh: true}` prepares a separate `assignment-dates` action and returns its course-local path. Completed creates keep their original receipt. `latest_refresh_path` carries ownership forward; linked actions must retain the originally requested assignment target and remain in the course directory. Current requested source/authorization intent comes from the caller rather than being silently lost while following the link.
+- Embedded `AudienceRefresh` records add/remove/retain, protected/unknown cases, per-row before baselines, prepared changes, actual applied recipients/removals and accepted/uncertain outcomes. `applied_refs` distinguishes retained access from the desired source audience. Existing manual rows are preserved; newly added rows target students only.
+- Removal protection uses exact-student/exact-assignment `GetSubmission`, current/history work, grades including zero, rubric/artifacts and known empty-placeholder status. Missing history or unreadable evidence holds removal. Ordinary empty placeholders are distinguished from work; New Quiz attempt protection is reserved through the assignment's quiz flag. Exact `authorized_removal_refs` supplies the existing narrowly scoped exception convention; there is no generic force switch.
+- Only exact accepted owned rows may be changed. Updates preserve inherited versus overridden/null dates; a truly empty owned row uses an exact DELETE. Teacher changes to an owned row hold affected recipients, preventing a new addition from undoing a teacher's removal, while genuinely independent additions continue.
+- Fresh membership, visibility, manual and owned baselines are checked even for an unfinished no-op refresh. Newly protected A is retained while safe B can still be removed from the same row; the actual narrower write is saved separately and the overall result remains partial. Accepted actions skip on rerun; uncertain writes are not replayed. Reports show completed/unfinished actions, actual managed recipients and specific holds.
+
+Latest reported focused result from the implementation agent: **`TestAudienceRefresh` passed after the final review fixes (4.290s)**. Cases include protected zero/history/unknown evidence, empty placeholders, late-arriving work, manual exceptions, inherited/null/overridden date payloads, completed-create to successive refresh ownership, exact DELETE, teacher edits before/after preparation, no regrant of removed recipients, independent additions/removals, uncertain addition no-replay, stale no-op baselines, linked-target mismatch and a plan attempting to edit a manual row. Earlier focused refresh runs also passed. This is synthetic local evidence only.
+
+The agent was finishing schema guards, example/docs/capability updates, MCP smoke and affected-package validation when paused. **No final slice 2 affected-package run or fresh compiled MCP smoke result was received by the orchestrator.** Treat the current documentation/example edits as work in progress and inspect them before declaring support complete. There is no known unaddressed review finding after the last focused pass, but final validation remains required.
+
+### Exact resume point
+
+1. ~~Finish and commit slice 2.~~ Done: slice 2 is committed; see its execution record.
+2. Proceed serially with slice 3 (native course Pages), then 4 (New Quizzes), then 5 (shared-module demonstration and final integrated checks). Do not mark the brief complete until all five slices are delivered.
+3. Go is not on PATH. Use `.tools/go1.27.1/go/bin/go.exe`, with `GOTOOLCHAIN=local`, `GOCACHE=<Dev>/.cache/go-build`, `GOMODCACHE=<Dev>/.cache/go-mod`. Node is available. Build temporary test binaries outside `dist/`; no release/adoption was requested.
+
+### Page/quiz audit retained for the next slices
+
+No slice 3 source edits were started. The read-only Page/quiz audit recommended:
+
+- Keep ordinary `kind: page`, the shared audience intent/state and teacher-only editing default. Use a small Page-specific helper, separate audience/date outcomes from content `UpdateOutcome`, and presence-aware availability dates; Pages have no graded due date. Preserve group Pages and Hub semantics.
+- Route date-details through **`nativePagePath(courseID, pageID) + "/date_details"`** to force `page_id:ID`. GET returns an object with paginated `overrides`; existing `Client.ListField(..., "overrides", ...)` follows the pages. Use the scalar envelope plus the complete collection. The PUT replaces the full collection and accepts 204. Preserve exact IDs, supported target kinds, date presence/null and `unassign_item`; do not save returned `students[]` names/raw user IDs. Unknown rows hold replacement instead of being dropped. Do not reuse Hub's tag-only `pageDates` DTO.
+- Create unpublished, persist Page identity, apply audience before publication, keep native module stages, and skip accepted stages on resume. Audience-only updates after live text edits must send no stale body/title PUT. Refresh should return a fresh Page update action using live content as an unchanged baseline. Pages have no assignment-submission evidence route; do not invent a contribution-analysis subsystem. Keep any unsupported/student-editable case narrowly held rather than expanding scope.
+- Accepted 204 may omit new override IDs. A later identity-dependent action may use its own bounded preflight to resolve one unique full intended row among new IDs absent from the saved pre-write collection; hold ambiguity and never infer ownership from title alone. Do not add routine confirmation reads after writes.
+- New Quiz strict metadata parsing and sidecar live in `quiz_author.go`; preserve `assignment_id` and `tier_pages`, add origin/course and separate accepted stage outcomes for the restricted path. Current legacy `finishQuiz` repeats settings/module/publication, so the new restricted lifecycle needs explicit no-replay. Audience-only quiz updates should reuse `assignment-dates` and never call `PushQuiz` or recreate items. Use cheap exact submission/history reads for protected removals, not Student Analysis report generation.
+
+For coordination if this same chat resumes: `/root/audience_implementation` implemented slices 1-2 and is stopped; `/root/page_quiz_audit` performed read-only audits and was ready to implement slice 3 **only after an explicit start following slice 2's commit**. No subagent is authorized to keep working while the user-requested pause remains in effect. A new session can simply use this checkpoint without those agents.
+
+### Post-pause continuation (2026-10-19)
+
+Slice 2 was finished and committed on `dev` after the pause. Slice 3 has not started; the Page/quiz audit above remains the starting point for it.

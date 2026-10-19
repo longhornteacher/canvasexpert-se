@@ -208,6 +208,8 @@ type Submission struct {
 	GroupID                       int64                  `json:"group_id"`
 	Group                         *SubmissionGroup       `json:"group"`
 	User                          CanvasUser             `json:"user"`
+	HistoryPresent                bool                   `json:"-"`
+	Grade                         *string                `json:"grade"`
 	History                       []Submission           `json:"submission_history"`
 	Attachments                   []Attachment           `json:"attachments"`
 	Comments                      []SubmissionComment    `json:"submission_comments"`
@@ -241,6 +243,11 @@ func (s *Submission) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	_, s.HistoryPresent = fields["submission_history"]
 	s.CachedDueDatePresent = len(decoded.CachedDueDate) > 0
 	if s.CachedDueDatePresent {
 		if bytes.Equal(bytes.TrimSpace(decoded.CachedDueDate), []byte("null")) {

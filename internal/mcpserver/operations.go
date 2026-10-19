@@ -23,7 +23,7 @@ import (
 type PrepareAudienceInput struct {
 	Course  string `json:"course" jsonschema:"Configured course nickname"`
 	Path    string `json:"path" jsonschema:"Course-local assignment or assignment-dates draft"`
-	Refresh bool   `json:"refresh,omitempty" jsonschema:"Explicit refresh; initial support only until refresh is delivered"`
+	Refresh bool   `json:"refresh,omitempty" jsonschema:"Explicitly prepare additions and work-preserving removals for an existing audience"`
 }
 
 type QuizInput struct {
@@ -75,7 +75,7 @@ type EngineInfoInput struct {
 }
 
 func (s *Server) registerOperationTools(server *mcp.Server) {
-	addActionTool(server, "prepare_audience", "Prepare a dated individual audience from selected collaborative clubs into the draft. Reads Canvas and saves stable refs, completeness and ownership state; makes no Canvas writes. Prepare before assignment review. Membership changes require explicit preparation. Refresh is not available yet.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PrepareAudienceInput) (TextOutput, error) {
+	addActionTool(server, "prepare_audience", "Prepare a dated individual audience from selected collaborative clubs into the draft. Reads Canvas and saves stable refs, completeness and ownership state; makes no Canvas writes. Prepare before assignment review. Membership changes require explicit preparation. With refresh, returns the new assignment-dates action path with additions, removals, protected work and manual exceptions; review/push that returned path.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PrepareAudienceInput) (TextOutput, error) {
 		if err := requireCourse(in.Course); err != nil {
 			return TextOutput{}, err
 		}

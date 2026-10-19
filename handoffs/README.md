@@ -4,7 +4,7 @@ A handoff is bounded execution work for an agent session. It should say whether 
 
 Current development authority lives in the root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`; build instructions and dated observations live under `docs/`.
 
-The [book-group audience brief](active/BOOK-GROUP-AUDIENCES.md) is planned for later execution: five sequential slices cover club-member resolution and individual assignments, safe audience refresh, restricted native course Pages, New Quiz integration, and the shared-module workflow. It includes a code audit and links the preserved [source handoff](CSSE_Book_Group_Audiences_Codex_Brief.md). No implementation or classroom changes were made by this planning work.
+The [book-group audience brief](active/BOOK-GROUP-AUDIENCES.md) is **paused at the user's request on 2026-10-19**. Slice 1 is committed as `8f71b23`; slice 2 has core implementation and passing focused checks in the working tree, with final integration validation/commit still pending. Slices 3-5 have not started. Its pause checkpoint records exact files, evidence, review fixes and where to resume. The preserved [source handoff](CSSE_Book_Group_Audiences_Codex_Brief.md) remains unchanged. No Canvas Live, UserInstall/UserSync, release or adoption changes were made.
 
 The [calendar/scoring delivery follow-up](retired/CALENDAR-SCORING-DELIVERY.md) is complete: the user requested the Git merge and local update, the beta ZIP was built and adopted in UserInstall, effective UserSync playbooks updated, and teacher context/overrides were preserved. The existing 1.0 adapter still needs a reconnect; pending Canvas/client/family observations remain in the capability record and are not prerequisites for ordinary supported use.
 

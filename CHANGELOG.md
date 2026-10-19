@@ -4,6 +4,11 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Development notes
 
+### Explicit assignment audience refresh (2026-10-19)
+
+- Agents can prepare and review a current-club audience refresh through the saved assignment receipt or latest action. The returned assignment-dates path preserves exact owned rows, manual exceptions, date semantics and original create receipts. Current/history work and grades protect access; safe independent changes still proceed with accurate partial results. Pending/uncertain writes are retained without replay. Local synthetic evidence only; Page/quiz authoring integration and student access observations remain separate.
+
+
 ### Individual book-club assignment audiences (2026-10-19)
 
 - Dev can prepare a dated private-ref audience from selected collaborative clubs and create or initially target an individual assignment. Review shows recipients and preserved manual exceptions; empty, incomplete or changed snapshots hold publication. Student-only audiences need no artificial date, accepted/uncertain override writes are retained, and ordinary assignment-date updates preserve all overridden date values. Explicit refresh and Page/quiz audience integration follow in later slices. Local synthetic evidence only; no Canvas Live access check is claimed.

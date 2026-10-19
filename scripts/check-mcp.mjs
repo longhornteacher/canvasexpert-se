@@ -161,6 +161,9 @@ try {
   const groupAssignment = (await readFile('engine-docs/examples/synthetic-group-assignment.md', 'utf8')).replace('course: ELA7', 'course: CS8');
   await call('write_draft', { path: 'courses/group-assignment.md', content: groupAssignment });
   await call('validate_document', { path: 'courses/group-assignment.md' });
+  const clubRefresh = await readFile('engine-docs/examples/synthetic-individual-club-refresh.md', 'utf8');
+  await call('write_draft', { path: 'courses/individual-club-refresh.md', content: clubRefresh });
+  await call('validate_document', { path: 'courses/individual-club-refresh.md' });
   const clubAudience = await readFile('engine-docs/examples/synthetic-individual-club-assignment.md', 'utf8');
   await call('write_draft', { path: 'courses/individual-club-assignment.md', content: clubAudience });
   await call('validate_document', { path: 'courses/individual-club-assignment.md' });

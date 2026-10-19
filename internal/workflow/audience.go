@@ -144,12 +144,10 @@ func safeMembershipState(state string) string {
 	return "unsupported"
 }
 
-// PrepareAudience records a snapshot without writing to Canvas. Refresh is added
-// by the next slice; accepted ownership is never discarded by initial preparation.
+// PrepareAudience records a snapshot without writing to Canvas. Explicit refresh
+// returns an assignment-dates action; initial preparation preserves ownership.
 func (s *Service) PrepareAudience(ctx context.Context, nickname, path string, refresh bool) (*domain.AudienceState, error) {
-	if refresh {
-		return nil, fmt.Errorf("audience refresh is not available yet; initial preparation only")
-	}
+
 	course, err := s.Course(nickname)
 	if err != nil {
 		return nil, err
@@ -167,6 +165,9 @@ func (s *Service) PrepareAudience(ctx context.Context, nickname, path string, re
 	rel, err := filepath.Rel(s.Root, constrained)
 	if err != nil || !strings.HasPrefix(filepath.ToSlash(rel), "courses/"+course.Nickname+"/") {
 		return nil, fmt.Errorf("audience draft must be under courses/%s/", course.Nickname)
+	}
+	if refresh {
+		return s.prepareAssignmentAudienceRefresh(ctx, course, constrained)
 	}
 	kind, err := ReviewInputKind(constrained)
 	if err != nil {
@@ -215,7 +216,7 @@ func (s *Service) PrepareAudience(ctx context.Context, nickname, path string, re
 		return nil, fmt.Errorf("draft requires an audience intent")
 	}
 	if a.State != nil && (len(a.State.Owned) > 0 || definite(a.State.Application) || ambiguous(a.State.Application) || definite(a.State.Visibility) || ambiguous(a.State.Visibility)) {
-		return nil, fmt.Errorf("audience action already began; preserve its state and use explicit refresh when available")
+		return nil, fmt.Errorf("audience action already began; preserve its state and use explicit refresh")
 	}
 	state, err := s.resolveAudience(ctx, course, a)
 	if err != nil {
@@ -264,7 +265,7 @@ func (s *Service) checkAudience(ctx context.Context, course domain.Course, a *do
 	if !st.Complete {
 		return fmt.Errorf("audience is incomplete: %s", strings.Join(st.Reasons, "; "))
 	}
-	if len(st.StudentRefs) == 0 {
+	if len(st.StudentRefs) == 0 && st.Refresh == nil {
 		return fmt.Errorf("selected clubs have no eligible members; keep this draft and prepare again after members are added")
 	}
 	fresh, err := s.resolveAudience(ctx, course, a)
@@ -284,6 +285,9 @@ func (s *Service) applyAssignmentAudience(ctx context.Context, course domain.Cou
 		return true, nil
 	}
 	st := a.State
+	if st != nil && st.Refresh != nil {
+		return s.applyAssignmentAudienceRefresh(ctx, course, assignment, a, save)
+	}
 	if st != nil && ambiguous(st.Application) && len(st.Owned) > 0 {
 		all := true
 		for _, owned := range st.Owned {

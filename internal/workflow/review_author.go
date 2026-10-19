@@ -288,10 +288,29 @@ func addAudienceReview(card *ReviewCard, a *domain.Audience) {
 	}
 	st := a.State
 	card.Facts = append(card.Facts, fact("Selected clubs", strings.Join(st.Labels, "; ")), fact("Students", fmt.Sprintf("%d: %s", len(st.StudentRefs), strings.Join(st.StudentRefs, ", "))), fact("Observed", st.ObservedAt), fact("Preserved exceptions", strings.Join(st.Exceptions, "; ")), fact("Excluded", strings.Join(st.Exclusions, "; ")))
+	if st.Refresh != nil {
+		plan := st.Refresh
+		card.Facts = append(card.Facts, fact("Add", strings.Join(plan.Add, ", ")), fact("Remove", strings.Join(plan.Remove, ", ")), fact("Retain", strings.Join(plan.Retain, ", ")), fact("Applied managed students", strings.Join(st.AppliedRefs, ", ")))
+		for _, hold := range plan.Protected {
+			label := "Protected access"
+			if hold.Authorized {
+				label = "Teacher-authorized removal"
+			}
+			card.Facts = append(card.Facts, fact(label, hold.StudentRef+": "+hold.Reason))
+		}
+		for _, hold := range plan.Unknown {
+			card.Facts = append(card.Facts, fact("Unknown; preserve access", hold.StudentRef+": "+hold.Reason))
+		}
+		for _, change := range plan.Changes {
+			if change.Outcome.Message != "" {
+				card.Facts = append(card.Facts, fact(fmt.Sprintf("Override %d %s", change.OverrideID, change.Operation), change.Outcome.Message))
+			}
+		}
+	}
 	if !st.Complete {
 		card.Hold = strings.Join(st.Reasons, "; ")
 	}
-	if len(st.StudentRefs) == 0 {
+	if len(st.StudentRefs) == 0 && st.Refresh == nil {
 		card.Hold = "The selected clubs have no eligible members; keep this draft and prepare after members are added"
 	}
 }

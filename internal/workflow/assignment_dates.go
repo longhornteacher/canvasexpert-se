@@ -162,11 +162,18 @@ func (s *Service) PushAssignmentDates(ctx context.Context, path string) (report 
 		if !complete {
 			report.Status = "held"
 			report.Message = "Individual audience needs attention; existing access is preserved"
+			if doc.Audience.State != nil && doc.Audience.State.Refresh != nil {
+				report.Status = "partial"
+				report.Message = audienceRefreshSummary(doc.Audience.State)
+			}
 			return report, nil
 		}
 		report.Status = "completed"
 		report.Rows = doc.Rows
 		report.Message = strings.Join(doc.Audience.State.Exceptions, "; ")
+		if doc.Audience.State.Refresh != nil {
+			report.Message = appendMessage(audienceRefreshSummary(doc.Audience.State), report.Message)
+		}
 		return report, save()
 	}
 	if doc.Rows == nil && doc.Audience == nil {
