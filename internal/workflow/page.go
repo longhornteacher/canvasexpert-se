@@ -155,6 +155,9 @@ func (s *Service) PullPageScoped(ctx context.Context, nickname, query string, gr
 	if strings.HasPrefix(identifier, "page_id:") && identifier != fmt.Sprintf("page_id:%d", p.PageID) {
 		return "", fmt.Errorf("Canvas returned a different Page ID")
 	}
+	if groupID == 0 {
+		return s.writePulledPageWithDates(ctx, course, p)
+	}
 	return s.writePulledPageScoped(course, p, groupID)
 }
 
@@ -174,6 +177,36 @@ func (s *Service) writePulledPageScoped(course domain.Course, p NativePage, grou
 		return "", e
 	}
 	return path, workspace.WriteDocument(path, &d, p.Body)
+}
+
+// writePulledPageWithDates also records the exact date-details baseline so a
+// later audience or availability-date change can preserve every unrelated row.
+// An unreadable baseline does not fail the pull; audience preparation reads the
+// live collection itself and holds if it cannot be preserved safely.
+func (s *Service) writePulledPageWithDates(ctx context.Context, course domain.Course, p NativePage) (string, error) {
+	path, err := s.writePulledPageScoped(course, p, 0)
+	if err != nil {
+		return "", err
+	}
+	live, err := s.readPageDates(ctx, course.ID, p.PageID)
+	if err != nil {
+		return path, nil
+	}
+	store, err := workspace.OpenStudents(s.Root)
+	if err != nil {
+		return path, nil
+	}
+	snap, err := s.pageDatesSnapshot(live, store)
+	if err != nil {
+		return path, nil
+	}
+	var d domain.PageDocument
+	body, err := workspace.ReadDocument(path, &d)
+	if err != nil {
+		return "", err
+	}
+	d.ObservedDates = &snap
+	return path, workspace.WriteDocument(path, &d, body)
 }
 
 func (s *Service) PageHistory(ctx context.Context, nickname string, pageID, groupID, revisionID int64) ([]NativePageRevision, error) {
@@ -332,6 +365,18 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 		report.Status, report.Message = "completed", "already created; pull-page before editing"
 		return report, nil
 	}
+	// Restrict the Page before module placement and publication. A failed or
+	// uncertain audience stage must never publish it.
+	if d.Audience != nil {
+		audienceComplete, audienceErr := s.applyPageAudience(ctx, course, &d, c.PageID, save)
+		if audienceErr != nil {
+			return report, audienceErr
+		}
+		if !audienceComplete {
+			report.Status, report.Message = "held", "Individual audience is incomplete; this Page has not been placed or published by this action"
+			return report, nil
+		}
+	}
 	if d.ModuleID == 0 {
 		c.Module = domain.ActionOutcome{Status: "not-requested"}
 	} else if c.ModuleItemID > 0 {
@@ -432,12 +477,15 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 			}
 		}
 	}
-	c.Complete = definite(c.Page) && definite(c.Module) && definite(c.Publication)
+	c.Complete = definite(c.Page) && definite(c.Module) && definite(c.Publication) && (d.Audience == nil || definite(d.AudienceOutcome))
 	if err = save(); err != nil {
 		return report, err
 	}
 	report.Status = "partial"
 	report.Message = c.Publication.Message
+	if d.Audience != nil {
+		report.Message = appendMessage(pageAudienceSummary(&d), report.Message)
+	}
 	if c.Complete {
 		report.Status = "completed"
 		if c.SavedHTML != html {
@@ -515,7 +563,7 @@ func pagePatchMatches(p NativePage, title, html string, published bool, patch ma
 
 func (s *Service) pushPageUpdate(ctx context.Context, path string, course domain.Course, d *domain.PageDocument, body string) (PagePushReport, error) {
 	r := PagePushReport{Path: path, PageID: d.PageID, URL: d.URL}
-	if definite(d.UpdateOutcome) {
+	if definite(d.UpdateOutcome) && d.Audience == nil && !pageDatesChanged(d) {
 		r.Status, r.Message = "completed", "update already completed; pull-page before another edit"
 		return r, nil
 	}
@@ -550,12 +598,13 @@ func (s *Service) pushPageUpdate(ctx context.Context, path string, course domain
 		return r, e
 	}
 	r.URL = s.pageURL(course.ID, p)
+	save := func() error { return workspace.WriteDocument(path, d, body) }
 	if !pagePatchMatches(p, b.Title, b.BodyHTML, b.Published, patch) {
 		if ambiguous(d.UpdateOutcome) && pagePatchMatches(p, d.Title, html, d.Published, patch) {
 			d.UpdateOutcome = domain.ActionOutcome{Status: "succeeded", ID: d.PageID, Message: "intended live state recovered"}
 			d.Slug, d.URL = p.Slug, r.URL
 			r.Status = "completed"
-			return r, workspace.WriteDocument(path, d, body)
+			return r, save()
 		}
 		fresh, e := s.writePulledPageScoped(course, p, d.GroupID)
 		if e != nil {
@@ -568,40 +617,79 @@ func (s *Service) pushPageUpdate(ctx context.Context, path string, course domain
 		r.Status, r.Message = "held", "prior Page update completion is uncertain; unchanged read does not authorize replay"
 		return r, nil
 	}
-	if len(patch) == 0 {
-		d.UpdateOutcome = domain.ActionOutcome{Status: "preserved"}
-		r.Status = "completed"
-		return r, workspace.WriteDocument(path, d, body)
-	}
-	d.UpdateOutcome = domain.ActionOutcome{Status: "pending"}
-	if e = workspace.WriteDocument(path, d, body); e != nil {
-		return r, e
-	}
-	var response NativePage
-	e = s.Client.Write(ctx, "PUT", pagePathFor(course.ID, d.GroupID, d.PageID), map[string]any{"wiki_page": patch}, &response)
-	if e != nil {
-		d.UpdateOutcome = failedOutcome(e)
-	} else if response.PageID != d.PageID || response.Slug == "" {
-		d.UpdateOutcome = domain.ActionOutcome{Status: "uncertain", Message: "update response lacks exact Page identity"}
-	} else {
-		d.Slug, d.URL = response.Slug, s.pageURL(course.ID, response)
-		if d.GroupID > 0 {
-			d.URL = s.Client.Origin() + fmt.Sprintf("/groups/%d/pages/%s", d.GroupID, url.PathEscape(response.Slug))
+	if len(patch) > 0 {
+		d.UpdateOutcome = domain.ActionOutcome{Status: "pending"}
+		if e = save(); e != nil {
+			return r, e
 		}
-		r.URL = d.URL
-		if (patch["title"] != nil && response.Title != d.Title) || (patch["published"] != nil && response.Published != d.Published) || (patch["editing_roles"] != nil && normalizeEditingRoles(response.EditingRoles) != normalizeEditingRoles(patch["editing_roles"].(string))) {
-			d.UpdateOutcome = domain.ActionOutcome{Status: "uncertain", Message: "Page update response did not confirm targeted fields"}
+		var response NativePage
+		e = s.Client.Write(ctx, "PUT", pagePathFor(course.ID, d.GroupID, d.PageID), map[string]any{"wiki_page": patch}, &response)
+		if e != nil {
+			d.UpdateOutcome = failedOutcome(e)
+		} else if response.PageID != d.PageID || response.Slug == "" {
+			d.UpdateOutcome = domain.ActionOutcome{Status: "uncertain", Message: "update response lacks exact Page identity"}
 		} else {
-			d.UpdateOutcome = domain.ActionOutcome{Status: "succeeded", ID: d.PageID}
-			if patch["body"] != nil && response.Body != html {
-				d.UpdateOutcome.Message = "Canvas normalized the body; observed.body_html records actual saved HTML; verify it in Canvas"
+			d.Slug, d.URL = response.Slug, s.pageURL(course.ID, response)
+			if d.GroupID > 0 {
+				d.URL = s.Client.Origin() + fmt.Sprintf("/groups/%d/pages/%s", d.GroupID, url.PathEscape(response.Slug))
 			}
-			d.Observed = &domain.PageSnapshot{Instance: d.Instance, CourseID: d.CourseID, GroupID: d.GroupID, PageID: d.PageID, Slug: response.Slug, URL: d.URL, Title: response.Title, BodyHTML: response.Body, Published: response.Published, EditingRoles: response.EditingRoles, UpdatedAt: response.UpdatedAt}
+			r.URL = d.URL
+			if (patch["title"] != nil && response.Title != d.Title) || (patch["published"] != nil && response.Published != d.Published) || (patch["editing_roles"] != nil && normalizeEditingRoles(response.EditingRoles) != normalizeEditingRoles(patch["editing_roles"].(string))) {
+				d.UpdateOutcome = domain.ActionOutcome{Status: "uncertain", Message: "Page update response did not confirm targeted fields"}
+			} else {
+				d.UpdateOutcome = domain.ActionOutcome{Status: "succeeded", ID: d.PageID}
+				if patch["body"] != nil && response.Body != html {
+					d.UpdateOutcome.Message = "Canvas normalized the body; observed.body_html records actual saved HTML; verify it in Canvas"
+				}
+				d.Observed = &domain.PageSnapshot{Instance: d.Instance, CourseID: d.CourseID, GroupID: d.GroupID, PageID: d.PageID, Slug: response.Slug, URL: d.URL, Title: response.Title, BodyHTML: response.Body, Published: response.Published, EditingRoles: response.EditingRoles, UpdatedAt: response.UpdatedAt}
+			}
+		}
+		if err := save(); err != nil {
+			return r, fmt.Errorf("Canvas Page update outcome could not be saved: %w", err)
+		}
+		if !definite(d.UpdateOutcome) {
+			r.Status, r.Message = d.UpdateOutcome.Status, d.UpdateOutcome.Message
+			return r, nil
+		}
+	} else if d.UpdateOutcome.Status == "" {
+		d.UpdateOutcome = domain.ActionOutcome{Status: "preserved"}
+	}
+	// Audience and availability-date actions are separate from the content
+	// patch, so an audience-only change never sends a stale body or title.
+	if d.Audience != nil {
+		complete, err := s.applyPageAudience(ctx, course, d, d.PageID, save)
+		if err != nil {
+			return r, err
+		}
+		if !complete {
+			r.Status, r.Message = "held", "Individual audience is incomplete; the Page content edit is preserved"
+			return r, nil
 		}
 	}
-	if err := workspace.WriteDocument(path, d, body); err != nil {
-		return r, fmt.Errorf("Canvas Page update outcome could not be saved: %w", err)
+	if pageDatesChanged(d) {
+		complete, err := s.applyPageDates(ctx, course, d, d.PageID, save)
+		if err != nil {
+			return r, err
+		}
+		if !complete {
+			r.Status, r.Message = "held", "Availability-date change is incomplete; the Page content edit is preserved"
+			return r, nil
+		}
 	}
-	r.Status, r.Message = d.UpdateOutcome.Status, d.UpdateOutcome.Message
+	if err := save(); err != nil {
+		return r, err
+	}
+	if d.Audience == nil && !pageDatesChanged(d) {
+		// Preserve the existing content-update status wording.
+		if len(patch) == 0 {
+			r.Status = "completed"
+		} else {
+			r.Status = d.UpdateOutcome.Status
+		}
+		r.Message = d.UpdateOutcome.Message
+		return r, nil
+	}
+	r.Status = "completed"
+	r.Message = appendMessage(pageAudienceSummary(d), pageDatesSummary(d))
 	return r, nil
 }

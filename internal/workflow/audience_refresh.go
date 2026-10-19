@@ -46,8 +46,28 @@ func (s *Service) refreshDocument(course domain.Course, path string) (*domain.Au
 			return nil, 0, nil, fmt.Errorf("refresh draft differs from configured Canvas/course")
 		}
 		return d.Audience, d.AssignmentID, func() error { return workspace.WriteDocument(path, &d, body) }, nil
+	case "page":
+		var d domain.PageDocument
+		body, e := workspace.ReadDocument(path, &d)
+		if e != nil {
+			return nil, 0, nil, e
+		}
+		if e = d.ValidateBody(body); e != nil {
+			return nil, 0, nil, e
+		}
+		if d.Course != course.Nickname || d.Instance != s.Client.Origin() || d.CourseID != course.ID || d.GroupID != 0 {
+			return nil, 0, nil, fmt.Errorf("refresh requires a saved course Page identity in this Canvas/course")
+		}
+		target := d.PageID
+		if target == 0 && d.Created != nil {
+			target = d.Created.PageID
+		}
+		if target <= 0 {
+			return nil, 0, nil, fmt.Errorf("refresh requires a saved Page identity")
+		}
+		return d.Audience, target, func() error { return workspace.WriteDocument(path, &d, body) }, nil
 	}
-	return nil, 0, nil, fmt.Errorf("refresh requires an assignment receipt or assignment-dates audience")
+	return nil, 0, nil, fmt.Errorf("refresh requires an assignment receipt, assignment-dates audience or course Page")
 }
 
 func (s *Service) prepareAssignmentAudienceRefresh(ctx context.Context, course domain.Course, path string) (*domain.AudienceState, error) {

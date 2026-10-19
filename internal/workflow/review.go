@@ -133,6 +133,8 @@ func BuildReview(root, path string) (ReviewModel, error) {
 	switch kind {
 	case "assignment-dates":
 		m, e = buildAssignmentDatesReview(path)
+	case "page":
+		m, e = buildPageReview(path)
 	case "assignment":
 		m, e = buildAssignmentReview(path)
 	case "quiz":
@@ -144,7 +146,7 @@ func BuildReview(root, path string) (ReviewModel, error) {
 	case "discussion":
 		m, e = buildDiscussionReview(path)
 	default:
-		return ReviewModel{}, fmt.Errorf("review supports results, discussions, new assignments and QuizForge quiz files, not %q", kind)
+		return ReviewModel{}, fmt.Errorf("review supports results, discussions, new assignments, Pages and QuizForge quiz files, not %q", kind)
 	}
 	if e != nil {
 		return m, e
@@ -197,6 +199,14 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 		if e == nil && d.Operation != "create" && d.Operation != "update" {
 			e = fmt.Errorf("review supports assignment create or update documents")
 		}
+	case "page":
+		var d domain.PageDocument
+		body, readErr := workspace.ReadDocument(path, &d)
+		e = readErr
+		if e == nil {
+			e = d.ValidateBody(body)
+		}
+		nickname, courseID = d.Course, d.CourseID
 	case "quiz":
 		if course == "" {
 			return "", fmt.Errorf("QuizForge review requires an explicit course nickname")
@@ -219,7 +229,7 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 		}
 		nickname, courseID = d.Course, d.CourseID
 	default:
-		return "", fmt.Errorf("review supports assignments, discussions, results and QuizForge quiz files, not %q", kind)
+		return "", fmt.Errorf("review supports assignments, Pages, discussions, results and QuizForge quiz files, not %q", kind)
 	}
 	if e != nil {
 		return "", e

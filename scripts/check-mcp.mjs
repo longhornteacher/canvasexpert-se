@@ -164,6 +164,9 @@ try {
   const clubRefresh = await readFile('engine-docs/examples/synthetic-individual-club-refresh.md', 'utf8');
   await call('write_draft', { path: 'courses/individual-club-refresh.md', content: clubRefresh });
   await call('validate_document', { path: 'courses/individual-club-refresh.md' });
+  const clubPage = await readFile('engine-docs/examples/synthetic-individual-club-page.md', 'utf8');
+  await call('write_draft', { path: 'courses/individual-club-page.md', content: clubPage });
+  await call('validate_document', { path: 'courses/individual-club-page.md' });
   const clubAudience = await readFile('engine-docs/examples/synthetic-individual-club-assignment.md', 'utf8');
   await call('write_draft', { path: 'courses/individual-club-assignment.md', content: clubAudience });
   await call('validate_document', { path: 'courses/individual-club-assignment.md' });

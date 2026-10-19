@@ -410,8 +410,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				return 3
 			}
 			return 0
-		} else if kind == "discussion" {
-			report, e := service.PushDiscussion(ctx, file)
+		} else if kind == "discussion" {			report, e := service.PushDiscussion(ctx, file)
 			fmt.Fprintf(out, "%s: discussion %d %s\n", report.Status, report.TopicID, report.Path)
 			if report.URL != "" {
 				fmt.Fprintln(out, report.URL)
@@ -644,6 +643,10 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			if fileKind(file) == "assignment-dates" {
 				report, e := service.PushAssignmentDates(ctx, file)
 				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: report.Message}, e
+			}
+			if fileKind(file) == "page" {
+				report, e := service.PushPage(ctx, file)
+				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: Page %d %s %s", report.Status, report.PageID, report.URL, report.Message))}, e
 			}
 			if b, _ := os.ReadFile(file); documentKind(b) == "discussion" {
 				report, e := service.PushDiscussion(ctx, file)

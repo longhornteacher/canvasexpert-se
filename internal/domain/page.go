@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Page documents author ordinary course instruction. Hub tier pages remain a
@@ -27,6 +28,43 @@ type PageDocument struct {
 	Observed       *PageSnapshot `yaml:"observed,omitempty"`
 	Created        *PageCreated  `yaml:"created,omitempty"`
 	UpdateOutcome  ActionOutcome `yaml:"update_outcome,omitempty"`
+	// Audience restricts a course Page to selected club members who work
+	// individually. Group Pages and Hub tier Pages never use it.
+	Audience *Audience `yaml:"audience,omitempty"`
+	// ObservedDates is the pulled date-details baseline. A collection write
+	// replaces every override, so unrelated rows and availability dates are
+	// preserved from here.
+	ObservedDates *PageDatesSnapshot `yaml:"observed_dates,omitempty"`
+	// UnlockAt and LockAt are optional availability-date edits. Omitted dates
+	// preserve the observed value; null clears it.
+	UnlockAt *OptionalDate `yaml:"unlock_at,omitempty"`
+	LockAt   *OptionalDate `yaml:"lock_at,omitempty"`
+	// AudienceOutcome and DatesOutcome stay separate from UpdateOutcome so an
+	// audience-only change never sends a stale body or title.
+	AudienceOutcome ActionOutcome `yaml:"audience_outcome,omitempty"`
+	DatesOutcome    ActionOutcome `yaml:"dates_outcome,omitempty"`
+}
+
+// PageDatesSnapshot is the exact date-details baseline for one course Page.
+// Pages have availability dates and no graded due date.
+type PageDatesSnapshot struct {
+	OnlyVisibleToOverrides *bool             `yaml:"only_visible_to_overrides,omitempty"`
+	VisibleToEveryone      *bool             `yaml:"visible_to_everyone,omitempty"`
+	UnlockAt               *string           `yaml:"unlock_at,omitempty"`
+	LockAt                 *string           `yaml:"lock_at,omitempty"`
+	Overrides              []PageOverrideRow `yaml:"overrides,omitempty"`
+}
+
+// PageOverrideRow is one date-details override. Student targets use private
+// refs; raw Canvas user IDs never enter a document.
+type PageOverrideRow struct {
+	ID              int64    `yaml:"id,omitempty"`
+	Title           string   `yaml:"title,omitempty"`
+	GroupID         int64    `yaml:"group_id,omitempty"`
+	CourseSectionID int64    `yaml:"course_section_id,omitempty"`
+	StudentRefs     []string `yaml:"student_refs,omitempty"`
+	UnlockAt        *string  `yaml:"unlock_at,omitempty"`
+	LockAt          *string  `yaml:"lock_at,omitempty"`
 }
 
 type PageSnapshot struct {
@@ -113,6 +151,81 @@ func (d *PageDocument) ValidateBody(body string) error {
 	if e := validateOutcome(d.UpdateOutcome); e != nil {
 		return e
 	}
+	if e := validateOutcome(d.AudienceOutcome); e != nil {
+		return e
+	}
+	if e := validateOutcome(d.DatesOutcome); e != nil {
+		return e
+	}
+	if e := ValidateAudience(d.Audience); e != nil {
+		return e
+	}
+	if d.Audience != nil {
+		if d.GroupID > 0 {
+			return fmt.Errorf("individual audience applies to course Pages, not group Pages")
+		}
+	}
+	if d.ObservedDates != nil {
+		if d.GroupID > 0 {
+			return fmt.Errorf("date-details audience applies to course Pages, not group Pages")
+		}
+		if d.Operation == "create" && d.Audience == nil {
+			return fmt.Errorf("create cannot carry a date-details baseline")
+		}
+		if d.ObservedDates.OnlyVisibleToOverrides != nil && d.ObservedDates.VisibleToEveryone != nil && *d.ObservedDates.OnlyVisibleToOverrides == *d.ObservedDates.VisibleToEveryone {
+			return fmt.Errorf("observed date-details visibility is contradictory")
+		}
+		seen := map[int64]bool{}
+		for i, row := range d.ObservedDates.Overrides {
+			if row.ID < 0 || row.ID > 0 && seen[row.ID] {
+				return fmt.Errorf("observed_dates.overrides[%d] requires a unique nonnegative override ID", i)
+			}
+			if row.ID > 0 {
+				seen[row.ID] = true
+			}
+			targets := 0
+			if row.GroupID > 0 {
+				targets++
+			}
+			if row.CourseSectionID > 0 {
+				targets++
+			}
+			if len(row.StudentRefs) > 0 {
+				targets++
+			}
+			if targets != 1 {
+				return fmt.Errorf("observed_dates.overrides[%d] requires exactly one supported target", i)
+			}
+			if e := validateObservedDate(row.UnlockAt); e != nil {
+				return fmt.Errorf("observed_dates.overrides[%d] unlock_at: %w", i, e)
+			}
+			if e := validateObservedDate(row.LockAt); e != nil {
+				return fmt.Errorf("observed_dates.overrides[%d] lock_at: %w", i, e)
+			}
+		}
+		if e := validateObservedDate(d.ObservedDates.UnlockAt); e != nil {
+			return fmt.Errorf("observed_dates.unlock_at: %w", e)
+		}
+		if e := validateObservedDate(d.ObservedDates.LockAt); e != nil {
+			return fmt.Errorf("observed_dates.lock_at: %w", e)
+		}
+	}
+	if d.UnlockAt != nil {
+		if d.ObservedDates == nil {
+			return fmt.Errorf("availability-date edits require the pulled date-details baseline")
+		}
+		if e := validateOptionalDate(d.UnlockAt); e != nil {
+			return fmt.Errorf("unlock_at: %w", e)
+		}
+	}
+	if d.LockAt != nil {
+		if d.ObservedDates == nil {
+			return fmt.Errorf("availability-date edits require the pulled date-details baseline")
+		}
+		if e := validateOptionalDate(d.LockAt); e != nil {
+			return fmt.Errorf("lock_at: %w", e)
+		}
+	}
 	if d.Operation == "create" {
 		if d.Observed != nil || d.UpdateOutcome.Status != "" || d.PageID != 0 {
 			return fmt.Errorf("create cannot carry an update baseline or page_id; created.page_id records a resumed create")
@@ -174,4 +287,35 @@ func (d *PageDocument) ValidateBody(body string) error {
 
 func pageDefinite(o ActionOutcome) bool {
 	return o.Status == "succeeded" || o.Status == "preserved" || o.Status == "not-requested"
+}
+
+// validateObservedDate accepts an absent or RFC3339 observed date.
+func validateObservedDate(d *string) error {
+	if d == nil || *d == "" {
+		return nil
+	}
+	if _, err := time.Parse(time.RFC3339, *d); err != nil {
+		return fmt.Errorf("dates require RFC3339 with explicit offset")
+	}
+	return nil
+}
+
+// validateOptionalDate accepts an omitted date, an explicit null, or RFC3339.
+func validateOptionalDate(d *OptionalDate) error {
+	if d == nil || !d.Set {
+		return nil
+	}
+	if d.Null {
+		if d.Value != "" {
+			return fmt.Errorf("a cleared date cannot also carry a value")
+		}
+		return nil
+	}
+	if d.Value == "" {
+		return fmt.Errorf("a set date requires an RFC3339 value or null")
+	}
+	if _, err := time.Parse(time.RFC3339, d.Value); err != nil {
+		return fmt.Errorf("dates require RFC3339 with explicit offset")
+	}
+	return nil
 }

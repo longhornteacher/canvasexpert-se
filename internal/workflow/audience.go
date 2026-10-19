@@ -167,6 +167,13 @@ func (s *Service) PrepareAudience(ctx context.Context, nickname, path string, re
 		return nil, fmt.Errorf("audience draft must be under courses/%s/", course.Nickname)
 	}
 	if refresh {
+		kind, e := ReviewInputKind(constrained)
+		if e != nil {
+			return nil, e
+		}
+		if kind == "page" {
+			return s.preparePageAudienceRefresh(ctx, course, constrained)
+		}
 		return s.prepareAssignmentAudienceRefresh(ctx, course, constrained)
 	}
 	kind, err := ReviewInputKind(constrained)
@@ -209,8 +216,24 @@ func (s *Service) PrepareAudience(ctx context.Context, nickname, path string, re
 		a = d.Audience
 		target = d.AssignmentID
 		save = func() error { return workspace.WriteDocument(constrained, &d, body) }
+	case "page":
+		var d domain.PageDocument
+		body, e := workspace.ReadDocument(constrained, &d)
+		if e != nil {
+			return nil, e
+		}
+		if e = d.ValidateBody(body); e != nil {
+			return nil, e
+		}
+		if d.Course != course.Nickname || (d.Instance != "" && d.Instance != s.Client.Origin()) || (d.CourseID != 0 && d.CourseID != course.ID) {
+			return nil, fmt.Errorf("audience draft differs from configured course/Canvas")
+		}
+		if d.Audience == nil {
+			return nil, fmt.Errorf("draft requires an audience intent")
+		}
+		return s.preparePageAudience(ctx, course, &d, func() error { return workspace.WriteDocument(constrained, &d, body) })
 	default:
-		return nil, fmt.Errorf("audience preparation supports assignments and assignment-dates")
+		return nil, fmt.Errorf("audience preparation supports assignments, assignment-dates and course Pages")
 	}
 	if a == nil {
 		return nil, fmt.Errorf("draft requires an audience intent")

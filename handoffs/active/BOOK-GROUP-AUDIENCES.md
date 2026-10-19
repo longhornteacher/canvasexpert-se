@@ -1,6 +1,6 @@
 # Book-group audiences for individual content: execution brief
 
-Prepared 2026-10-19 against Dev branch `dev`, revision `56109c6`. **Slices 1 and 2 are implemented, validated and committed on `dev`; slices 3-5 have not started.** The original pause checkpoint at the end is retained as history; its "slice 2 working tree" section is superseded by the slice 2 execution record. This brief does not authorize Canvas Live operations, release, or UserInstall/UserSync adoption.
+Prepared 2026-10-19 against Dev branch `dev`, revision `56109c6`. **Slices 1-3 are implemented, validated and committed on `dev`; slices 4-5 have not started.** The original pause checkpoint at the end is retained as history; its "slice 2 working tree" section is superseded by the slice 2 execution record. This brief does not authorize Canvas Live operations, release, or UserInstall/UserSync adoption.
 
 Source requirements: [original book-group audience handoff](../CSSE_Book_Group_Audiences_Codex_Brief.md). That supplied file is preserved unchanged. This brief supplies the execution sequence and code audit; it does not turn the source's request to implement into authorization to implement during this planning session.
 
@@ -186,6 +186,16 @@ Checks actually run (Go 1.27.1, `GOTOOLCHAIN=local`, Dev-local caches): focused 
 
 Remaining evidence: no Canvas Live operation, real UserInstall/UserSync change, release or adoption was performed. Direct targeted/untargeted student access, module listing and actual student rendering remain pending. Page (slice 3) and New Quiz (slice 4) authoring audiences, and the integrated shared-module demonstration (slice 5), remain to be implemented.
 
+## Execution record - slice 3 (2026-10-19)
+
+Implemented restricted native course Pages. Files: `internal/domain/page.go` (audience, `observed_dates`, `unlock_at`/`lock_at`, separate `audience_outcome`/`dates_outcome`, `PageDatesSnapshot`/`PageOverrideRow`, optional-date validation); new `internal/workflow/page_dates.go` (complete date-details read via `nativePagePath + "/date_details"` with paginated `overrides`, snapshot/fingerprint, collection payload, preserved-row and exception helpers); new `internal/workflow/page_audience.go` (prepare, apply, refresh apply, availability-date apply, summary); new `internal/workflow/page_audience_refresh.go` (receipt/action link following, managed-row resolution by exact saved student set, add/remove/retain planning); `internal/workflow/page.go` (pull records `observed_dates` non-fatally, create restricts before module placement and publication, update separates audience/dates from the content patch); `internal/workflow/audience.go` (Page prepare and refresh routing); `internal/workflow/audience_refresh.go` (Page refresh document); `internal/workflow/review.go`/`review_author.go` (Page review); `cmd/cse/remote.go` (Page review post and push dispatch). New `page_audience_test.go`; new `engine-docs/examples/synthetic-individual-club-page.md`. Docs: `CHANGELOG.md`, `docs/engine-capabilities.md`, `docs/mcp-adapter.md`, `engine-docs/formats.md`, `engine-docs/field-limits.md`, `internal/localui/capabilities.go`, `scripts/check-mcp.mjs`, `workspace-template/playbooks/{authoring,edit,group-work}.md`.
+
+Final contract: a course Page accepts the shared `audience` intent plus `observed_dates`, `unlock_at` and `lock_at`. `observed_dates` records `only_visible_to_overrides`, `visible_to_everyone`, the Page availability dates and every override row with its exact ID and one supported target (group, section or private student refs). The date-details collection is replaced as a whole, so unrelated rows and availability dates are preserved; an unknown or unmappable row holds the replacement. Canvas `204 No Content` is accepted without returned override IDs. Creation always starts unpublished: persist exact Page identity → apply the complete restriction → finish requested native module placement → publish last. A refused or uncertain audience stage leaves the Page unpublished with its ID saved and resumable. Audience and availability-date actions are separate from the content patch, so an audience-only update after a live body edit sends no body or title PUT. Pages have availability dates and no graded due date; `unlock_at`/`lock_at` omit-to-preserve and `null`-to-clear. Group Pages and Hub tier Pages reject this contract and keep their existing tag semantics. Explicit refresh returns a new Page update action carrying the live Page as an unchanged content baseline; the managed row is resolved by its exact saved student set because Canvas returns no override IDs, and a changed, missing or duplicated match holds. Pages have no submission evidence route, so refresh removals are not work-protected; manual rows, availability dates and newer teacher edits are preserved.
+
+Checks actually run (Go 1.27.1, `GOTOOLCHAIN=local`, Dev-local caches): focused `go test ./internal/workflow -run 'TestPageAudience' -count=1` passed; Page/Hub/audience regression `go test ./internal/workflow -run 'TestPage|TestHub|TestAudience|TestPushAssignmentDates' -count=1` passed; affected packages `go test ./internal/workflow ./internal/domain ./internal/mcpserver ./cmd/cse ./internal/localui -count=1` passed; `go vet ./...` passed; full `go test ./... -count=1` passed; fresh temporary CLI build at `C:/Users/adamb/AppData/Local/Temp/cse-slice3-f744ef81/cse.exe` passed `node scripts/check-mcp.mjs` (**39 tools**, compiled stdio, root binding, schema discovery, new Page example and existing document/QuizForge validation; no Canvas writes). Two existing Page tests were updated for the new date-details read: one accepts the exact-ID `date_details` request, and the pull baseline read is non-fatal so an unreadable collection does not fail a pull.
+
+Remaining evidence: no Canvas Live operation, real UserInstall/UserSync change, release or adoption was performed. Direct targeted/untargeted student access, module listing and actual student rendering remain pending. New Quiz authoring audiences (slice 4) and the integrated shared-module demonstration (slice 5) remain to be implemented.
+
 ## Pause checkpoint — 2026-10-19
 
 The user explicitly requested a pause and progress record because usage is running low. Implementation agents were stopped. **Do not continue automatically.** All work remains in Dev on branch `dev`; nothing was pushed, released, adopted into UserInstall/UserSync, or written to Canvas Live.
@@ -221,7 +231,8 @@ The agent was finishing schema guards, example/docs/capability updates, MCP smok
 ### Exact resume point
 
 1. ~~Finish and commit slice 2.~~ Done: slice 2 is committed; see its execution record.
-2. Proceed serially with slice 3 (native course Pages), then 4 (New Quizzes), then 5 (shared-module demonstration and final integrated checks). Do not mark the brief complete until all five slices are delivered.
+2. ~~Implement slice 3 (native course Pages).~~ Done: slice 3 is implemented and validated; see its execution record.
+3. Proceed serially with slice 4 (New Quizzes), then 5 (shared-module demonstration and final integrated checks). Do not mark the brief complete until all five slices are delivered.
 3. Go is not on PATH. Use `.tools/go1.27.1/go/bin/go.exe`, with `GOTOOLCHAIN=local`, `GOCACHE=<Dev>/.cache/go-build`, `GOMODCACHE=<Dev>/.cache/go-mod`. Node is available. Build temporary test binaries outside `dist/`; no release/adoption was requested.
 
 ### Page/quiz audit retained for the next slices
@@ -238,4 +249,4 @@ For coordination if this same chat resumes: `/root/audience_implementation` impl
 
 ### Post-pause continuation (2026-10-19)
 
-Slice 2 was finished and committed on `dev` after the pause. Slice 3 has not started; the Page/quiz audit above remains the starting point for it.
+Slice 2 was finished and committed on `dev` after the pause. Slice 3 (native course Pages) was then implemented and validated; see its execution record. Slice 4 (New Quizzes) is next; the Page/quiz audit above remains the starting point for it.

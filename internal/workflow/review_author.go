@@ -353,3 +353,50 @@ func reviewOverrideDate(d domain.OptionalDate) string {
 	}
 	return d.Value
 }
+
+// buildPageReview shows a course Page's content, audience and availability
+// dates. Group Pages and Hub tier Pages keep their existing review paths.
+func buildPageReview(path string) (ReviewModel, error) {
+	var d domain.PageDocument
+	body, err := workspace.ReadDocument(path, &d)
+	if err != nil {
+		return ReviewModel{}, err
+	}
+	if err = d.ValidateBody(body); err != nil {
+		return ReviewModel{}, err
+	}
+	html, err := render.TeachingHTML(body, d.BodyFormat)
+	if err != nil {
+		return ReviewModel{}, err
+	}
+	scope := "Course Page"
+	if d.GroupID > 0 {
+		scope = fmt.Sprintf("Group Page for group %d", d.GroupID)
+	}
+	card := ReviewCard{Ref: "page", Alias: d.Title, Operation: d.Operation, Facts: []ReviewFact{fact("Course", d.Course), fact("Scope", scope), fact("Published", fmt.Sprint(d.Published))}}
+	if d.ModuleID > 0 {
+		card.Facts = append(card.Facts, fact("Module", fmt.Sprintf("%d at position %d", d.ModuleID, d.ModulePosition)))
+	}
+	if d.Audience != nil {
+		card.Facts = append(card.Facts, fact("Audience", "Selected book clubs, individual access"))
+		addAudienceReview(&card, d.Audience)
+	}
+	if d.ObservedDates != nil {
+		card.Facts = append(card.Facts, fact("Availability", fmt.Sprintf("unlock %s; lock %s", reviewObservedDate(d.ObservedDates.UnlockAt), reviewObservedDate(d.ObservedDates.LockAt))))
+		if d.UnlockAt != nil || d.LockAt != nil {
+			card.Facts = append(card.Facts, fact("Requested availability", pageDatesSummary(&d)))
+		}
+		for _, row := range d.ObservedDates.Overrides {
+			card.Facts = append(card.Facts, fact(fmt.Sprintf("Preserved override %d", row.ID), fmt.Sprintf("group %d; section %d; students %s; unlock %s; lock %s", row.GroupID, row.CourseSectionID, strings.Join(row.StudentRefs, ", "), reviewObservedDate(row.UnlockAt), reviewObservedDate(row.LockAt))))
+		}
+	}
+	card.Frames = []ReviewFrame{{Label: "Page body", HTML: html}}
+	return ReviewModel{Kind: "Course Page", Title: d.Title, AllOrNothing: true, Action: "Continue to Canvas", Cards: []ReviewCard{card}}, nil
+}
+
+func reviewObservedDate(d *string) string {
+	if d == nil || *d == "" {
+		return "none"
+	}
+	return *d
+}

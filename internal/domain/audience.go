@@ -141,7 +141,7 @@ func validateAudienceRefresh(a *Audience) error {
 			}
 		}
 		if change.Operation != "create" {
-			if change.OverrideID <= 0 || ids[change.OverrideID] {
+			if change.OverrideID < 0 || ids[change.OverrideID] {
 				return fmt.Errorf("audience refresh requires unique exact owned override IDs")
 			}
 			ids[change.OverrideID] = true

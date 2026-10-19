@@ -4,6 +4,10 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Development notes
 
+### Course Page audiences from clubs (2026-10-19)
+
+- A course Page can carry the shared individual club audience. Push creates it unpublished, applies the complete date-details restriction, finishes requested module placement and publishes last; a refused or uncertain audience never publishes. Unrelated override rows and availability dates survive the collection replacement, `204` is accepted, and an audience-only update sends no stale body. Explicit refresh recomputes the managed student row while preserving manual rows and newer teacher edits. Local synthetic evidence only; Page/quiz student access observations remain separate.
+
 ### Explicit assignment audience refresh (2026-10-19)
 
 - Agents can prepare and review a current-club audience refresh through the saved assignment receipt or latest action. The returned assignment-dates path preserves exact owned rows, manual exceptions, date semantics and original create receipts. Current/history work and grades protect access; safe independent changes still proceed with accurate partial results. Pending/uncertain writes are retained without replay. Local synthetic evidence only; Page/quiz authoring integration and student access observations remain separate.
