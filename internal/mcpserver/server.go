@@ -357,7 +357,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "prepare_audience", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

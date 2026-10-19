@@ -81,15 +81,46 @@ type Assignment struct {
 }
 
 type AssignmentOverrideLive struct {
-	ID              int64   `json:"id"`
-	Title           string  `json:"title"`
-	GroupID         int64   `json:"group_id"`
-	StudentIDs      []int64 `json:"student_ids"`
-	CourseSectionID int64   `json:"course_section_id"`
-	DueAt           *string `json:"due_at"`
-	UnlockAt        *string `json:"unlock_at"`
-	LockAt          *string `json:"lock_at"`
+	CourseID           int64           `json:"course_id,omitempty"`
+	NoopID             json.RawMessage `json:"noop_id,omitempty"`
+	UnassignItem       *bool           `json:"unassign_item,omitempty"`
+	DueAtOverridden    *bool           `json:"due_at_overridden,omitempty"`
+	UnlockAtOverridden *bool           `json:"unlock_at_overridden,omitempty"`
+	LockAtOverridden   *bool           `json:"lock_at_overridden,omitempty"`
+	ID                 int64           `json:"id"`
+	Title              string          `json:"title"`
+	GroupID            int64           `json:"group_id"`
+	StudentIDs         []int64         `json:"student_ids"`
+	CourseSectionID    int64           `json:"course_section_id"`
+	DueAt              *string         `json:"due_at"`
+	UnlockAt           *string         `json:"unlock_at"`
+	LockAt             *string         `json:"lock_at"`
 }
+
+func (o *AssignmentOverrideLive) UnmarshalJSON(b []byte) error {
+	type plain AssignmentOverrideLive
+	var p plain
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(b, &fields); err != nil {
+		return err
+	}
+	*o = AssignmentOverrideLive(p)
+	for _, date := range []struct {
+		key  string
+		flag **bool
+	}{{"due_at", &o.DueAtOverridden}, {"unlock_at", &o.UnlockAtOverridden}, {"lock_at", &o.LockAtOverridden}} {
+		if *date.flag == nil {
+			_, present := fields[date.key]
+			v := present
+			*date.flag = &v
+		}
+	}
+	return nil
+}
+
 type AssignmentAllDateLive struct {
 	ID              int64   `json:"id"`
 	Base            bool    `json:"base"`

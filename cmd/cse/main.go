@@ -62,6 +62,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   upload-file COURSE FILE --access course|hidden|locked [--folder ID] [--receipt PATH] [--new-upload]
                                 Upload a course asset and save a reusable receipt
   pull-item COURSE TITLE|ID|LINK Pull actual assignment HTML for editing
+  prepare-audience COURSE FILE [--refresh] Prepare individual club audience without Canvas writes
   pull-assignment-dates COURSE ASSIGNMENT_ID Pull exact audience override baselines for editing
   pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
@@ -449,7 +450,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}

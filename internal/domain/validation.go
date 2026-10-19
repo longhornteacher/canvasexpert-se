@@ -87,6 +87,12 @@ func ValidateSnapshot(s AssignmentSnapshot) error {
 	return nil
 }
 func ValidateAssignment(d AssignmentDocument, body string) error {
+	if err := ValidateAudience(d.Audience); err != nil {
+		return err
+	}
+	if d.Audience != nil && (d.Operation != "create" || d.GroupCategoryID != 0 || d.GradeGroupStudentsIndividually != nil || len(d.Overrides) > 0 || (d.OnlyVisibleToOverrides != nil && !*d.OnlyVisibleToOverrides)) {
+		return fmt.Errorf("individual audience requires assignment create without native group settings or explicit overrides; use assignment-dates for audience updates")
+	}
 	if d.Schema != 1 || d.Kind != "assignment" {
 		return fmt.Errorf("expected schema: 1 and kind: assignment")
 	}
@@ -144,7 +150,7 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 		return fmt.Errorf("assignment-date audience changes use kind: assignment-dates")
 	}
 	if d.Operation == "create" {
-		if d.OnlyVisibleToOverrides != nil && *d.OnlyVisibleToOverrides && len(d.Overrides) == 0 {
+		if d.OnlyVisibleToOverrides != nil && *d.OnlyVisibleToOverrides && len(d.Overrides) == 0 && d.Audience == nil {
 			return fmt.Errorf("only_visible_to_overrides requires at least one requested override")
 		}
 		keys := map[string]bool{}
@@ -181,7 +187,7 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 			if d.GroupCategoryID > 0 && row.GroupID == 0 && len(row.StudentRefs) == 0 && row.CourseSectionID == 0 {
 				return fmt.Errorf("group assignment override requires exact target")
 			}
-			if !row.DueAt.Set && !row.UnlockAt.Set && !row.LockAt.Set {
+			if !row.DueAt.Set && !row.UnlockAt.Set && !row.LockAt.Set && len(row.StudentRefs) == 0 {
 				return fmt.Errorf("overrides[%d] requires at least one date", i)
 			}
 			for _, date := range []OptionalDate{row.DueAt, row.UnlockAt, row.LockAt} {

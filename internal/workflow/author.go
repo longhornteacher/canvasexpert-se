@@ -136,6 +136,17 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		report.Path, err = s.movePushed(path, doc.Course, doc.Title, doc.Created.AssignmentID)
 		return report, err
 	}
+	if doc.Audience != nil {
+		if e := s.checkAudience(ctx, course, doc.Audience, func() int64 {
+			if doc.Created != nil {
+				return doc.Created.AssignmentID
+			}
+			return 0
+		}()); e != nil {
+			report.Status, report.Message = "held", e.Error()
+			return report, nil
+		}
+	}
 	if doc.GroupCategoryID > 0 {
 		if _, err = s.groupCategory(ctx, course.ID, doc.GroupCategoryID); err != nil {
 			return report, fmt.Errorf("group assignment target: %w", err)
@@ -239,6 +250,16 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	live, err := GetAssignment(ctx, s.Client, course.ID, c.AssignmentID)
 	if err != nil {
 		return report, err
+	}
+	if doc.Audience != nil && !definite(c.Publication) {
+		if e := s.acceptedAudienceBaseline(doc.Audience, live); e != nil {
+			report.Status = "held"
+			report.Message = e.Error()
+			return report, nil
+		}
+	}
+	if live.ID != c.AssignmentID || live.CourseID != course.ID {
+		return report, fmt.Errorf("Canvas returned a different assignment/course identity; construction held")
 	}
 	// Edits the teacher made to the unfinished item (content, publication) are
 	// left alone; only the remaining construction steps continue.
@@ -370,6 +391,15 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	} else if doc.ModuleID == 0 {
 		c.Module = domain.ActionOutcome{Status: "not-requested"}
 	}
+	audienceComplete, audienceErr := s.applyAssignmentAudience(ctx, course, live, doc.Audience, save)
+	if audienceErr != nil {
+		return report, audienceErr
+	}
+	if !audienceComplete {
+		report.Status = "held"
+		report.Message = "Individual audience is incomplete; this item has not been published by this action"
+		return report, nil
+	}
 	complete, overrideErr := s.deliverCreateOverrides(ctx, course.ID, live, &doc, save)
 	if overrideErr != nil {
 		return report, overrideErr
@@ -380,6 +410,25 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		return report, nil
 	}
 	if !definite(c.Publication) {
+		if doc.Audience != nil && ambiguous(c.Publication) {
+			if live.Published == doc.Published {
+				c.Publication = domain.ActionOutcome{Status: "preserved", Message: "requested publication is currently satisfied"}
+				if err = save(); err != nil {
+					return report, err
+				}
+			} else {
+				report.Status = "held"
+				report.Message = "publication may have reached Canvas and was not replayed; current publication differs from the requested state"
+				return report, nil
+			}
+		}
+		if doc.Audience != nil {
+			if e := s.checkAudience(ctx, course, doc.Audience, c.AssignmentID); e != nil {
+				report.Status = "held"
+				report.Message = e.Error()
+				return report, nil
+			}
+		}
 		if live.Published == doc.Published || live.Published {
 			c.Publication = domain.ActionOutcome{Status: "preserved"}
 		} else {
@@ -388,15 +437,22 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 				return report, err
 			}
 			var published Assignment
-			err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d", course.ID, c.AssignmentID), map[string]any{"assignment": map[string]any{"published": doc.Published}}, &published)
+			if doc.Audience != nil {
+				err = s.Client.WriteAccepted(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d", course.ID, c.AssignmentID), map[string]any{"assignment": map[string]any{"published": doc.Published}}, nil)
+			} else {
+				err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d", course.ID, c.AssignmentID), map[string]any{"assignment": map[string]any{"published": doc.Published}}, &published)
+			}
 			if err != nil {
 				c.Publication = failedOutcome(err)
-			} else if published.ID != c.AssignmentID || published.Published != doc.Published {
+			} else if doc.Audience == nil && (published.ID != c.AssignmentID || published.Published != doc.Published) {
 				c.Publication = domain.ActionOutcome{Status: "uncertain", Message: "publication response did not confirm requested state"}
 			} else {
 				c.Publication = domain.ActionOutcome{Status: "succeeded"}
 			}
 		}
+	}
+	if doc.Audience != nil && doc.Audience.State != nil {
+		report.Message = strings.Join(doc.Audience.State.Exceptions, "; ")
 	}
 	c.Complete = definite(c.Assignment) && definite(c.Rubric) && definite(c.Module) && definite(c.Publication) && createOverridesComplete(doc, c)
 	if err = save(); err != nil {

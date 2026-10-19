@@ -4,6 +4,11 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Development notes
 
+### Individual book-club assignment audiences (2026-10-19)
+
+- Dev can prepare a dated private-ref audience from selected collaborative clubs and create or initially target an individual assignment. Review shows recipients and preserved manual exceptions; empty, incomplete or changed snapshots hold publication. Student-only audiences need no artificial date, accepted/uncertain override writes are retained, and ordinary assignment-date updates preserve all overridden date values. Explicit refresh and Page/quiz audience integration follow in later slices. Local synthetic evidence only; no Canvas Live access check is claimed.
+
+
 ### Parent dates and private extra-time evidence (2026-10-18)
 
 - Parent classification now preserves an explicit null student due date instead of falling back to the general assignment deadline. Completion/classification regressions cover null and empty dates, malformed dates, omitted-date fallback and individualized dates; the current-term/14-day reporting gate is unchanged.

@@ -14,13 +14,16 @@ type OptionalDate struct {
 }
 
 type AssignmentOverrideBaseline struct {
-	Title           string   `yaml:"title,omitempty"`
-	GroupID         int64    `yaml:"group_id,omitempty"`
-	StudentRefs     []string `yaml:"student_refs,omitempty"`
-	CourseSectionID int64    `yaml:"course_section_id,omitempty"`
-	DueAt           *string  `yaml:"due_at,omitempty"`
-	UnlockAt        *string  `yaml:"unlock_at,omitempty"`
-	LockAt          *string  `yaml:"lock_at,omitempty"`
+	DueAtOverridden    *bool    `yaml:"due_at_overridden,omitempty" json:"due_at_overridden,omitempty"`
+	UnlockAtOverridden *bool    `yaml:"unlock_at_overridden,omitempty" json:"unlock_at_overridden,omitempty"`
+	LockAtOverridden   *bool    `yaml:"lock_at_overridden,omitempty" json:"lock_at_overridden,omitempty"`
+	Title              string   `yaml:"title,omitempty"`
+	GroupID            int64    `yaml:"group_id,omitempty"`
+	StudentRefs        []string `yaml:"student_refs,omitempty"`
+	CourseSectionID    int64    `yaml:"course_section_id,omitempty"`
+	DueAt              *string  `yaml:"due_at,omitempty"`
+	UnlockAt           *string  `yaml:"unlock_at,omitempty"`
+	LockAt             *string  `yaml:"lock_at,omitempty"`
 }
 
 type AssignmentOverrideRow struct {
@@ -39,6 +42,7 @@ type AssignmentOverrideRow struct {
 }
 
 type AssignmentDatesDocument struct {
+	Audience                       *Audience                 `yaml:"audience,omitempty"`
 	Schema                         int                       `yaml:"schema"`
 	Kind                           string                    `yaml:"kind"`
 	Operation                      string                    `yaml:"operation"`
@@ -66,6 +70,19 @@ type AssignmentEffectiveDate struct {
 }
 
 func ValidateAssignmentDates(d AssignmentDatesDocument) error {
+	if err := ValidateAudience(d.Audience); err != nil {
+		return err
+	}
+	if d.Audience != nil {
+		if d.OnlyVisibleToOverrides != nil && !*d.OnlyVisibleToOverrides {
+			return fmt.Errorf("individual audience cannot request visibility to Everyone")
+		}
+		for _, row := range d.Rows {
+			if row.Operation != "update" || row.DueAt.Set || row.UnlockAt.Set || row.LockAt.Set {
+				return fmt.Errorf("prepare individual audience changes separately from explicit override edits")
+			}
+		}
+	}
 	if d.Schema != 1 || d.Kind != "assignment-dates" || d.Operation != "update" {
 		return fmt.Errorf("expected schema: 1, kind: assignment-dates, operation: update")
 	}
@@ -137,7 +154,7 @@ func ValidateAssignmentDates(d AssignmentDatesDocument) error {
 			if r.OverrideID == 0 && r.Outcome.ID > 0 {
 				return fmt.Errorf("overrides[%d] create outcome ID requires the matching saved override_id", i)
 			}
-			if !r.DueAt.Set && !r.UnlockAt.Set && !r.LockAt.Set {
+			if !r.DueAt.Set && !r.UnlockAt.Set && !r.LockAt.Set && len(r.StudentRefs) == 0 {
 				return fmt.Errorf("overrides[%d] create requires at least one date", i)
 			}
 		} else if r.OverrideID <= 0 || r.Observed == nil {

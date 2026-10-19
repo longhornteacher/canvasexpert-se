@@ -131,6 +131,8 @@ func BuildReview(root, path string) (ReviewModel, error) {
 	}
 	var m ReviewModel
 	switch kind {
+	case "assignment-dates":
+		m, e = buildAssignmentDatesReview(path)
 	case "assignment":
 		m, e = buildAssignmentReview(path)
 	case "quiz":
@@ -181,6 +183,13 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 	var nickname string
 	var courseID int64
 	switch kind {
+	case "assignment-dates":
+		var d domain.AssignmentDatesDocument
+		_, e = workspace.ReadDocument(path, &d)
+		if e == nil {
+			e = domain.ValidateAssignmentDates(d)
+		}
+		nickname, courseID = d.Course, d.CourseID
 	case "assignment":
 		var d domain.AssignmentDocument
 		_, e = workspace.ReadDocument(path, &d)

@@ -56,7 +56,10 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 38);
+  assert.equal(names.length, 39);
+  const audienceTool = discovered.result.tools.find(t => t.name === "prepare_audience");
+  assert.ok(audienceTool, "missing prepare_audience");
+  for (const field of ["course", "path", "refresh"]) assert.ok(audienceTool.inputSchema.properties[field], `prepare_audience must expose ${field}`);
   assert.ok(names.includes('list_external_resources'), 'missing list_external_resources');
   const externalResourcesTool = discovered.result.tools.find(t => t.name === 'list_external_resources');
   assert.ok(externalResourcesTool.inputSchema.properties.course, 'list_external_resources must require course');
@@ -158,6 +161,10 @@ try {
   const groupAssignment = (await readFile('engine-docs/examples/synthetic-group-assignment.md', 'utf8')).replace('course: ELA7', 'course: CS8');
   await call('write_draft', { path: 'courses/group-assignment.md', content: groupAssignment });
   await call('validate_document', { path: 'courses/group-assignment.md' });
+  const clubAudience = await readFile('engine-docs/examples/synthetic-individual-club-assignment.md', 'utf8');
+  await call('write_draft', { path: 'courses/individual-club-assignment.md', content: clubAudience });
+  await call('validate_document', { path: 'courses/individual-club-assignment.md' });
+  await call('prepare_audience', { course: '', path: 'courses/individual-club-assignment.md' }, true);
   const assignmentDates = await readFile('engine-docs/examples/synthetic-assignment-dates.md', 'utf8');
   await call('write_draft', { path: 'courses/assignment-dates.md', content: assignmentDates });
   await call('validate_document', { path: 'courses/assignment-dates.md' });

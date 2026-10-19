@@ -37,8 +37,8 @@ func TestPushAssignmentDatesTargetsExactOverrideAndNullClearsOnlyRequestedField(
 			if string(body.Override["due_at"]) != "null" {
 				t.Errorf("explicit null did not clear due date: %s", body.Override["due_at"])
 			}
-			if _, ok := body.Override["unlock_at"]; ok {
-				t.Error("omitted date should preserve live unlock_at")
+			if string(body.Override["unlock_at"]) != `"2026-10-10T12:00:00Z"` {
+				t.Error("unchanged overridden unlock date must be included to preserve it")
 			}
 			if _, ok := body.Override["lock_at"]; ok {
 				t.Error("omitted date should preserve live lock_at")

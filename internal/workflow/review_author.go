@@ -62,6 +62,7 @@ func buildAssignmentReview(path string) (ReviewModel, error) {
 			fact("Published", fmt.Sprint(doc.Published)),
 		},
 		Frames: []ReviewFrame{{Label: "Directions (HTML field)", HTML: directions}}}
+	addAudienceReview(&card, doc.Audience)
 	if doc.GroupCategoryID > 0 {
 		mode := "unknown"
 		if doc.GradeGroupStudentsIndividually != nil {
@@ -274,4 +275,62 @@ func answerKey(it qfItem) string {
 		parts = append(parts, fmt.Sprintf("%s %s %s %s", it.Evaluation.Mode, it.Evaluation.Value, it.Evaluation.Min, it.Evaluation.Max))
 	}
 	return strings.Join(parts, "\n")
+}
+
+func addAudienceReview(card *ReviewCard, a *domain.Audience) {
+	if a == nil {
+		return
+	}
+	card.Facts = append(card.Facts, fact("Work", "Each student submits and is graded individually"), fact("Audience policy", "Dated snapshot; later club membership changes require explicit preparation"))
+	if a.State == nil {
+		card.Hold = "Prepare the selected clubs before review"
+		return
+	}
+	st := a.State
+	card.Facts = append(card.Facts, fact("Selected clubs", strings.Join(st.Labels, "; ")), fact("Students", fmt.Sprintf("%d: %s", len(st.StudentRefs), strings.Join(st.StudentRefs, ", "))), fact("Observed", st.ObservedAt), fact("Preserved exceptions", strings.Join(st.Exceptions, "; ")), fact("Excluded", strings.Join(st.Exclusions, "; ")))
+	if !st.Complete {
+		card.Hold = strings.Join(st.Reasons, "; ")
+	}
+	if len(st.StudentRefs) == 0 {
+		card.Hold = "The selected clubs have no eligible members; keep this draft and prepare after members are added"
+	}
+}
+func buildAssignmentDatesReview(path string) (ReviewModel, error) {
+	var d domain.AssignmentDatesDocument
+	_, err := workspace.ReadDocument(path, &d)
+	if err != nil {
+		return ReviewModel{}, err
+	}
+	if err = domain.ValidateAssignmentDates(d); err != nil {
+		return ReviewModel{}, err
+	}
+	card := ReviewCard{Ref: "assignment-audience", Alias: fmt.Sprintf("Assignment %d", d.AssignmentID), Operation: "update-assignment-audience", Facts: []ReviewFact{fact("Course", d.Course), fact("Publication", "Preserves the existing publication setting")}}
+	visibility := "Preserve existing visibility"
+	if d.Audience != nil {
+		visibility = "Only override recipients, including preserved exceptions"
+	} else if d.OnlyVisibleToOverrides != nil {
+		if *d.OnlyVisibleToOverrides {
+			visibility = "Only override recipients"
+		} else {
+			visibility = "Everyone"
+		}
+	}
+	card.Facts = append(card.Facts, fact("Requested visibility", visibility))
+	addAudienceReview(&card, d.Audience)
+	for _, row := range d.Rows {
+		if row.Operation == "update" && !row.DueAt.Set && !row.UnlockAt.Set && !row.LockAt.Set {
+			continue
+		}
+		card.Facts = append(card.Facts, fact(row.Key, fmt.Sprintf("%s override %d; group %d; section %d; students %s; due %s; available %s; until %s", row.Operation, row.OverrideID, row.GroupID, row.CourseSectionID, strings.Join(row.StudentRefs, ", "), reviewOverrideDate(row.DueAt), reviewOverrideDate(row.UnlockAt), reviewOverrideDate(row.LockAt))))
+	}
+	return ReviewModel{Kind: "Assignment audience and dates", Title: card.Alias, AllOrNothing: true, Action: "Apply in Canvas", Cards: []ReviewCard{card}}, nil
+}
+func reviewOverrideDate(d domain.OptionalDate) string {
+	if !d.Set {
+		return "preserve"
+	}
+	if d.Null {
+		return "clear"
+	}
+	return d.Value
 }

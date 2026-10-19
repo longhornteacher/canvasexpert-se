@@ -20,6 +20,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+type PrepareAudienceInput struct {
+	Course  string `json:"course" jsonschema:"Configured course nickname"`
+	Path    string `json:"path" jsonschema:"Course-local assignment or assignment-dates draft"`
+	Refresh bool   `json:"refresh,omitempty" jsonschema:"Explicit refresh; initial support only until refresh is delivered"`
+}
+
 type QuizInput struct {
 	Course string `json:"course" jsonschema:"Configured course nickname"`
 	Path   string `json:"path" jsonschema:"Workspace-relative QuizForge JSON or envelope file under courses/"`
@@ -69,6 +75,21 @@ type EngineInfoInput struct {
 }
 
 func (s *Server) registerOperationTools(server *mcp.Server) {
+	addActionTool(server, "prepare_audience", "Prepare a dated individual audience from selected collaborative clubs into the draft. Reads Canvas and saves stable refs, completeness and ownership state; makes no Canvas writes. Prepare before assignment review. Membership changes require explicit preparation. Refresh is not available yet.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PrepareAudienceInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		path, err := s.coursePath(in.Path)
+		if err != nil {
+			return TextOutput{}, err
+		}
+		args := []string{"prepare-audience", in.Course, path}
+		if in.Refresh {
+			args = append(args, "--refresh")
+		}
+		return s.command(ctx, args...)
+	})
+
 	addReadTool(server, "list_external_resources", "Read collaboration and conference metadata for a configured course or exact collaborative group. Returns safe supplied links and known participant refs only; it does not create or open provider resources or read their contents.", func(ctx context.Context, _ *mcp.CallToolRequest, in ExternalResourcesInput) (TextOutput, error) {
 		if err := requireCourse(in.Course); err != nil {
 			return TextOutput{}, err

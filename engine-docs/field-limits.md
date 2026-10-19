@@ -43,3 +43,7 @@ CE-SE has no HTML allowlist of its own. Assignment creates and assignment Hub pa
 Render the exact Engine payload. Plain-text fields display as plain text, and the preview copies the display behavior recorded above rather than looking better than Canvas. HTML fields render in a sandbox with scripts off; markup not recorded as kept on that field is flagged "not verified." Make no claims about the student view or the quiz player unless the row records a Live view.
 
 The probe reports and payloads behind these verdicts (2026-10-10, CS8) are in the source repository's Git history.
+
+### Selected-club individual audiences (2026-10-19)
+
+Assignment create and initial assignment-dates updates support `audience.mode: individual`, `policy: snapshot` and one exact collaborative source set plus unique positive group IDs. The Engine expands selected clubs to active enrolled students with accepted membership, using the existing private identity store. Pending/invited/unresolved facts hold publication; known inactive/completed enrollments are excluded explicitly. Empty audiences are valid drafts. Student-only override creates may omit dates; no synthetic deadline is required. Initial audience updates preserve existing manual exceptions and current publication. Explicit refresh, course Page audiences and QuizForge audiences remain later slices. Dates-only override updates preserve all currently overridden values and their overridden/inherited presence, including explicit null.

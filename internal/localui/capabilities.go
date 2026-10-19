@@ -24,7 +24,7 @@ type capabilityGroup struct {
 
 // Keep this teacher-facing snapshot aligned with docs/engine-capabilities.md.
 // Recorded live evidence and local checks are different kinds of verification.
-const capabilitiesReviewed = "2026-10-18"
+const capabilitiesReviewed = "2026-10-19"
 
 var capabilityGroups = []capabilityGroup{
 	{
@@ -33,6 +33,7 @@ var capabilityGroups = []capabilityGroup{
 		Items: []capability{
 			{"Discover teacher courses and read modules", "Verified in Canvas Live."},
 			{"Collaborative group sets, clubs, and Pages", "Slices 01–03 have local checks for collaborative-only group discovery, exact course/set/group identity, flat Canvas REST request fields, saved creates, stable-ref membership operations including pending-request holds and accepted-write no-replay, and group Page routing, revision reads, editing-role mapping and body conflict preservation. No CE-SE Canvas group write or student access/editor check is recorded. Official Canvas documentation specifies group Page routes and members editing; that is API contract evidence, not deployed or student-view evidence."},
+			{"Individual assignments for selected book clubs", "Added in Dev, reviewed 2026-10-19: prepare-audience records a dated union of active student enrollments with accepted memberships in selected collaborative clubs. Assignment creation and initial assignment-dates application use student overrides with independent submissions, preserve manual exceptions, and hold empty, incomplete or changed snapshots before publication. Review shows the source, stable refs and preserved access. Accepted and uncertain writes are retained without replay. Focused synthetic checks only; Canvas Live direct access, shared-module and student views remain pending. Explicit refresh is the next implementation slice."},
 			{"Create assignments with directions, points, dates, and submission settings", "Creation and edits verified in Canvas Live."},
 			{"Publish assignments when requested", "Verified in Canvas Live. New assignments wait for requested rubric and module pieces to succeed before publication."},
 			{"Edit existing assignments while preserving unrelated content", "Verified in Canvas Live, including preservation of unsent edits when conflicts occur."},
