@@ -44,14 +44,15 @@ type Hub struct {
 	// loaded tracks the courses refreshed from Canvas during this hub session.
 	loaded map[int64]bool
 	// Test seams; nil means use the saved Canvas credential.
-	listCoursesFn    func(context.Context) ([]workflow.Course, string, error)
-	rosterFn         func(context.Context, int64) ([]workflow.Enrollment, string, error)
-	tagsFn           func(context.Context, int64) (map[int64][]string, string, error)
-	whoamiFn         func(context.Context) (string, error)
-	loadCredentialFn func() (platform.Credential, error)
-	savedOriginFn    func() string
-	forgetFn         func() error
-	pickFolderFn     func(context.Context) (string, error)
+	listCoursesFn     func(context.Context) ([]workflow.Course, string, error)
+	rosterFn          func(context.Context, int64) ([]workflow.Enrollment, string, error)
+	tagsFn            func(context.Context, int64) (map[int64][]string, string, error)
+	whoamiFn          func(context.Context) (string, error)
+	loadCredentialFn  func() (platform.Credential, error)
+	savedOriginFn     func() string
+	forgetFn          func() error
+	pickFolderFn      func(context.Context) (string, error)
+	desktopShortcutFn func(string) (string, error)
 	// canvasUser is the account name from the last successful connection test.
 	canvasUser                                              string
 	setupValidated                                          bool
@@ -114,7 +115,7 @@ func (h *Hub) headers(w http.ResponseWriter, r *http.Request) {
 		if len(p.Scripts) > 0 {
 			csp += "; script-src 'self'"
 		}
-		if p.Connect {
+		if p.Connect || hasAppearance(p) {
 			csp += "; connect-src 'self'"
 		}
 	}
@@ -155,6 +156,9 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Static scripts need no hub state and are served before page lookup.
+	if serveAppearance(w, r, h.root, h.origin, h.secret) {
+		return
+	}
 	if serveScript(w, r) {
 		return
 	}
@@ -185,7 +189,7 @@ func (h *Hub) quitHub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Hub closed</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Bye!</h1><p>The hub has shut down. You can close this tab.</p></main></html>")
+	_, _ = io.WriteString(w, "<!doctype html>"+appearanceHTML(h.root)+"<meta charset=\"utf-8\"><title>Hub closed</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Bye!</h1><p>The hub has shut down. You can close this tab.</p></main></html>")
 	h.quitOnce.Do(func() { close(h.quit) })
 }
 
@@ -267,7 +271,7 @@ func RunHubWithOptions(ctx context.Context, root, version string, output io.Writ
 	} else if exe, exeErr := os.Executable(); exeErr == nil {
 		hub.programDir = filepath.Dir(exe)
 	}
-	hub.setup = &setupHandler{origin: origin, secret: secret, ctx: ctx, validate: validateCredential, save: platform.SaveCredential, persistent: true, hub: true, done: make(chan struct{})}
+	hub.setup = &setupHandler{origin: origin, secret: secret, root: root, ctx: ctx, validate: validateCredential, save: platform.SaveCredential, persistent: true, hub: true, done: make(chan struct{})}
 	hub.setup.knownOrigin = hub.knownOrigin
 	wireSetupCallbacks(hub, version, output)
 	hub.root = root

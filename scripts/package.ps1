@@ -67,7 +67,17 @@ function Test-TemplatePathAllowed {
         $normalizedPath -eq 'cse.cmd' -or
         $normalizedPath -match '^\.claude/settings\.json$' -or
         $normalizedPath -match '^playbooks/[A-Za-z0-9._-]+\.md$' -or
-        $normalizedPath -match '^context/(courses|grading|teaching-profile|students|school-calendar|engine-notes)\.md$'
+        $normalizedPath -match '^context/(courses|grading|teaching-profile|students|school-calendar|engine-notes|parent-updates)\.md$'
+}
+
+# Playbooks, TEACHER.md and teacher-owned files (context/, Teacher_Override.md) are embedded in the
+# Engine, which lays them down with `cse playbooks update`. Leaving them out of the ZIP means unzipping a
+# new version over an existing UserInstall can never overwrite the teacher's setup or edited playbooks.
+function Test-TemplatePathEngineProvided {
+    param([Parameter(Mandatory)][string]$RelativePath)
+
+    $normalizedPath = $RelativePath.Replace('\', '/')
+    return $normalizedPath -match '^(playbooks|context)/' -or $normalizedPath -match '^(TEACHER|Teacher_Override)\.md$'
 }
 
 $studentNotesPath = Join-Path $templateRoot 'context/students.md'
@@ -145,6 +155,7 @@ try {
         if ($entry.PSIsContainer) { continue }
 
         $relativePath = $entry.FullName.Substring($sourcePrefix.Length).Replace('\', '/')
+        if (Test-TemplatePathEngineProvided -RelativePath $relativePath) { continue }
         if (-not (Test-TemplatePathAllowed -RelativePath $relativePath)) {
             throw "Template file is outside the package allowlist: $relativePath"
         }
@@ -216,8 +227,11 @@ try {
         if ($archiveFiles -notcontains 'engine/cse.exe' -or $archiveFiles -notcontains 'webui.cmd') {
             throw 'Archive is missing the bundled engine or webui.cmd.'
         }
-        if ($archiveFiles -notcontains 'context/courses.md') {
-            throw 'Archive is missing context/courses.md.'
+        if (@($archiveFiles | Where-Object { $_ -match '^(playbooks|context)/' -or $_ -match '^(TEACHER|Teacher_Override)\.md$' }).Count -gt 0) {
+            throw 'Archive contains Engine-provided playbooks or teacher-owned files; unzipping over a UserInstall could overwrite them.'
+        }
+        if ($archiveFiles -notcontains 'AGENTS.md') {
+            throw 'Archive is missing the AGENTS.md bootstrap.'
         }
         if (@($archiveFiles | Where-Object { $_ -match '(^|/)(\.cse|courses|scoring|pulled|cache)(/|$)' }).Count -gt 0) {
             throw 'Archive contains private runtime state or pulled course data.'

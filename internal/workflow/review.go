@@ -22,8 +22,18 @@ type ReviewModel struct {
 	// needs every card approved, and any revise sends the whole thing back.
 	AllOrNothing bool
 	Action       string // label of the all-or-nothing button; default "Create in Canvas"
-	Cards        []ReviewCard
+	// PostLabel replaces "Post approved"; Actions add buttons that run the same
+	// poster with their Value; Test adds a "Send a test to me" button.
+	PostLabel string
+	Actions   []ReviewAction
+	Test      bool
+	// Email switches the page wording from writing to Canvas to sending email.
+	Email bool
+	Cards []ReviewCard
 }
+
+// ReviewAction is one extra page button that approves-and-runs with its Value.
+type ReviewAction struct{ Value, Label string }
 
 // ReviewFact is one labelled setting shown on a card.
 type ReviewFact struct{ Label, Value string }
@@ -127,8 +137,12 @@ func BuildReview(root, path string) (ReviewModel, error) {
 		m, e = buildQuizReview(path)
 	case "results":
 		m, e = buildResultsReview(root, path)
+	case "group-results":
+		m, e = buildGroupResultsReview(root, path)
+	case "discussion":
+		m, e = buildDiscussionReview(path)
 	default:
-		return ReviewModel{}, fmt.Errorf("review supports results, new assignment and QuizForge quiz files, not %q", kind)
+		return ReviewModel{}, fmt.Errorf("review supports results, discussions, new assignments and QuizForge quiz files, not %q", kind)
 	}
 	if e != nil {
 		return m, e
@@ -183,8 +197,20 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 		var d domain.ResultsDocument
 		_, e = workspace.ReadDocument(path, &d)
 		courseID = d.Assignment.CourseID
+	case "group-results":
+		var d domain.GroupResultsDocument
+		_, e = workspace.ReadDocument(path, &d)
+		courseID = d.Assignment.CourseID
+	case "discussion":
+		var d domain.DiscussionDocument
+		body, readErr := workspace.ReadDocument(path, &d)
+		e = readErr
+		if e == nil {
+			e = d.ValidateBody(body)
+		}
+		nickname, courseID = d.Course, d.CourseID
 	default:
-		return "", fmt.Errorf("review supports assignments, results and QuizForge quiz files, not %q", kind)
+		return "", fmt.Errorf("review supports assignments, discussions, results and QuizForge quiz files, not %q", kind)
 	}
 	if e != nil {
 		return "", e
@@ -208,6 +234,78 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 		}
 	}
 	return kind, nil
+}
+
+func buildDiscussionReview(path string) (ReviewModel, error) {
+	var d domain.DiscussionDocument
+	body, err := workspace.ReadDocument(path, &d)
+	if err != nil {
+		return ReviewModel{}, err
+	}
+	if err = d.ValidateBody(body); err != nil {
+		return ReviewModel{}, err
+	}
+	html, err := render.TeachingHTML(body, d.BodyFormat)
+	if err != nil {
+		return ReviewModel{}, err
+	}
+	scope := "Course discussion"
+	if d.GroupCategoryID > 0 {
+		scope = fmt.Sprintf("Distributed discussion for group set %d", d.GroupCategoryID)
+	}
+	if d.GroupID > 0 {
+		scope = fmt.Sprintf("Direct group topic for group %d", d.GroupID)
+	}
+	operation := d.Operation
+	if d.IsAnnouncement != nil && *d.IsAnnouncement {
+		operation = "announcement · " + operation
+	}
+	m := ReviewModel{Kind: "Ungraded discussion", Title: d.Title, AllOrNothing: true, Action: "Continue to Canvas"}
+	if d.Assignment != nil {
+		m.Kind = "Graded discussion"
+	}
+	published := discussionBool(d.Published, false)
+	discussionType := d.DiscussionType
+	requireInitial := discussionBool(d.RequireInitialPost, false)
+	if d.Observed != nil {
+		if d.Published == nil {
+			published = d.Observed.Published
+		}
+		if discussionType == "" {
+			discussionType = d.Observed.DiscussionType
+		}
+		if d.RequireInitialPost == nil {
+			requireInitial = d.Observed.RequireInitialPost
+		}
+	}
+	facts := []ReviewFact{fact("Operation", operation), fact("Audience", scope), fact("Published", fmt.Sprint(published))}
+	if discussionType != "" {
+		facts = append(facts, fact("Discussion type", discussionType))
+	}
+	facts = append(facts, fact("Require initial post", fmt.Sprint(requireInitial)))
+	if d.DelayedPostAt != nil {
+		facts = append(facts, fact("Delayed post", *d.DelayedPostAt))
+	}
+	if d.LockAt != nil {
+		facts = append(facts, fact("Lock at", *d.LockAt))
+	}
+	if d.IsAnnouncement != nil && *d.IsAnnouncement {
+		facts = append(facts, fact("Explicit communication intent", d.AnnouncementIntent))
+	}
+	if a := d.Assignment; a != nil {
+		facts = append(facts, fact("Grading", "individual grade per student in the gradebook; each student is graded on their own posts"), fact("Points", a.Points.String()))
+		if a.DueAt != nil {
+			facts = append(facts, fact("Due", *a.DueAt))
+		}
+		if a.Rubric != nil {
+			facts = append(facts, fact("Rubric", fmt.Sprintf("%s (%d criteria, not used for grading)", a.Rubric.Title, len(a.Rubric.Criteria))))
+		}
+		if d.GroupCategoryID > 0 {
+			facts = append(facts, fact("Group set", "the group set is on the topic only; the assignment stays individual"))
+		}
+	}
+	m.Cards = []ReviewCard{{Ref: "discussion-" + fmt.Sprint(d.GroupID) + "-" + fmt.Sprint(d.GroupCategoryID), Alias: d.Title, Operation: "create or update discussion", Facts: facts, Frames: []ReviewFrame{{Label: "Topic body", HTML: html}}}}
+	return m, nil
 }
 
 func buildResultsReview(root, path string) (ReviewModel, error) {
@@ -265,15 +363,34 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 		case r.CommentOnly != nil:
 			c.Attempt = r.CommentOnly.Attempt.Attempt
 			feedback = r.CommentOnly.Feedback
+		case r.LateOnly != nil:
+			c.Attempt = r.LateOnly.Attempt.Attempt
+			c.Late = lateSummary(r.LateOnly.LateTiming)
+			c.LateBasis = r.LateOnly.LateTiming.Basis
+			c.Facts = append(c.Facts, timingReviewFacts(r.LateOnly.LateTiming)...)
+		}
+		if r.Grade != nil && r.Grade.LateTiming != nil {
+			c.Facts = append(c.Facts, timingReviewFacts(*r.Grade.LateTiming)...)
 		}
 		c.Submission = submissionText(works[r.StudentRef], c.Attempt)
+		if w, ok := works[r.StudentRef]; ok && w.DiscussionEvidence != nil {
+			var ev *domain.EvidenceSelection
+			if r.Grade != nil {
+				ev = r.Grade.Evidence
+			} else if r.CommentOnly != nil {
+				ev = r.CommentOnly.Evidence
+			}
+			if text := discussionEvidenceText(root, w, ev); text != "" {
+				c.Submission = text
+			}
+		}
 		if store != nil {
 			if st, e := store.Resolve(doc.Assignment.Instance, r.StudentRef); e == nil {
 				feedback = workspace.ReplaceStudentName(feedback, st)
 			}
 		}
 		if c.Hold == "" && r.Grade != nil && doc.Basis() != nil {
-			text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Header: r.Grade.Header})
+			text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Late: isLate(r.Grade.LateTiming), Header: r.Grade.Header})
 			if e != nil {
 				c.Hold = e.Error()
 			} else {
@@ -286,7 +403,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			if e != nil {
 				c.Hold = e.Error()
 			} else {
-				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: true, Header: r.CommentOnly.Header})
+				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, Header: r.CommentOnly.Header})
 				if e != nil {
 					c.Hold = e.Error()
 				} else {
@@ -352,4 +469,28 @@ func lateSummary(t domain.LateTiming) string {
 	}
 	h := t.SecondsLate / 3600
 	return fmt.Sprintf("late %dd %dh", h/24, h%24)
+}
+
+func timingReviewFacts(t domain.LateTiming) []ReviewFact {
+	facts := []ReviewFact{{Label: "Timing action", Value: "late policy status: " + t.Status}}
+	if t.Status == "late" {
+		facts = append(facts, ReviewFact{Label: "Seconds late", Value: fmt.Sprint(t.SecondsLate)})
+	}
+	if t.Observed != nil {
+		observed := "automatic or no explicit status"
+		if t.Observed.LatePolicyStatus != nil {
+			observed = *t.Observed.LatePolicyStatus
+		}
+		facts = append(facts, ReviewFact{Label: "Current Canvas timing", Value: fmt.Sprintf("status %s; late=%t; seconds=%d", observed, t.Observed.Late, t.Observed.SecondsLate)})
+	}
+	if t.SchoolTime != nil {
+		facts = append(facts,
+			ReviewFact{Label: "First genuine submission counted", Value: fmt.Sprintf("attempt %d at %s", t.SchoolTime.Attempt.Attempt, t.SchoolTime.SubmittedAt)},
+			ReviewFact{Label: "School-time deadline", Value: t.SchoolTime.Deadline},
+		)
+		if len(t.SchoolTime.SkippedDates) > 0 {
+			facts = append(facts, ReviewFact{Label: "Calendar days skipped", Value: strings.Join(t.SchoolTime.SkippedDates, ", ")})
+		}
+	}
+	return facts
 }

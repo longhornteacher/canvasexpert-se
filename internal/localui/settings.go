@@ -44,7 +44,7 @@ func init() {
 	}
 	register(
 		page{Path: "/settings", Methods: []string{http.MethodGet, http.MethodPost}, Template: "settings",
-			Scripts: []string{"canvas-health.js", "drafts.js"}, Connect: true, Nav: nav, Handle: (*Hub).settingsPageHandler},
+			Scripts: []string{"canvas-health.js", "drafts.js", "appearance.js"}, Connect: true, Nav: nav, Handle: (*Hub).settingsPageHandler},
 		page{Path: "/rules-location", Methods: []string{http.MethodPost}, Handle: (*Hub).saveRulesLocation},
 		page{Path: "/rules/browse", Methods: []string{http.MethodPost}, Unlocked: true, Handle: (*Hub).browseRules},
 		page{Path: "/rules/test", Methods: []string{http.MethodPost}, Unlocked: true, Handle: (*Hub).testRulesLocation},
@@ -63,7 +63,7 @@ func (h *Hub) settingsPageHandler(w http.ResponseWriter, r *http.Request) {
 // settingsPage gathers the Settings page data for one section.
 func (h *Hub) settingsPage(section string) settingsData {
 	data := settingsData{homeData: h.pageData(), SettingsSection: validSettingsSection(section)}
-	data.SettingsNav = template.HTML(hubNavFor("Settings", settingsNavLabel(data.SettingsSection)))
+	data.SettingsNav = template.HTML(hubNavFor("Settings", settingsNavLabel(data.SettingsSection), data.Appearance))
 	if h.root != "" {
 		data.Playbook = playbookRows(h.root)
 		if g, _, err := readGrading(h.root); err == nil {

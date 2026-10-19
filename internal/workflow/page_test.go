@@ -277,3 +277,169 @@ func TestPageKnownIDConfirmsUncertainCreateWithoutRepeatingWrites(t *testing.T) 
 		t.Fatalf("known create recovery %#v writes %d err %v", r, writes, e)
 	}
 }
+
+func TestGroupPageCreateUsesOnlyGroupRoutesAndPublishesAfterUnpublishedCreate(t *testing.T) {
+	var seen []string
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		seen = append(seen, r.Method+" "+r.URL.Path)
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/v1/groups/701":
+			json.NewEncoder(w).Encode(map[string]any{"id": 701, "course_id": 1, "group_category_id": 70, "context_type": "Course", "non_collaborative": false})
+		case "GET /api/v1/group_categories/70":
+			json.NewEncoder(w).Encode(map[string]any{"id": 70, "course_id": 1, "context_type": "Course", "non_collaborative": false})
+		case "POST /api/v1/groups/701/pages":
+			var payload struct {
+				Page map[string]any `json:"wiki_page"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			if payload.Page["published"] != false || payload.Page["editing_roles"] != "members" || payload.Page["body"] != "<p>Notebook</p>" {
+				t.Errorf("unexpected group Page payload: %#v", payload.Page)
+			}
+			json.NewEncoder(w).Encode(NativePage{PageID: 88, Slug: "evidence-notebook", Title: "Evidence notebook", Body: "<p>Notebook</p>"})
+		case "PUT /api/v1/groups/701/pages/page_id:88":
+			var payload struct {
+				Page map[string]any `json:"wiki_page"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			if len(payload.Page) != 1 || payload.Page["published"] != true {
+				t.Errorf("publication was not isolated: %#v", payload.Page)
+			}
+			json.NewEncoder(w).Encode(NativePage{PageID: 88, Slug: "evidence-notebook", Title: "Evidence notebook", Body: "<p>Notebook</p>", Published: true, EditingRoles: "members"})
+		default:
+			t.Errorf("unexpected group Page request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	})
+	d := pageDraft()
+	d.GroupID, d.Published, d.EditingRoles = 701, true, &[]string{"members"}
+	path := filepath.Join(s.Root, "courses", "TEST", "drafts", "notebook.md")
+	if err := workspace.WriteDocument(path, &d, "<p>Notebook</p>"); err != nil {
+		t.Fatal(err)
+	}
+	report, err := s.PushPage(context.Background(), path)
+	want := []string{"GET /api/v1/groups/701", "GET /api/v1/group_categories/70", "POST /api/v1/groups/701/pages", "PUT /api/v1/groups/701/pages/page_id:88"}
+	if err != nil || report.Status != "completed" || report.PageID != 88 || !strings.HasSuffix(report.URL, "/groups/701/pages/evidence-notebook") || strings.Join(seen, "|") != strings.Join(want, "|") {
+		t.Fatalf("group Page report=%+v requests=%v err=%v", report, seen, err)
+	}
+	var saved domain.PageDocument
+	if _, err = workspace.ReadDocument(path, &saved); err != nil || saved.Created.GroupID != 701 || saved.Created.Complete != true {
+		t.Fatalf("group identity was not persisted: %+v err=%v", saved.Created, err)
+	}
+}
+
+func TestGroupPageWrongCourseAndModuleAreRejectedBeforePageWrite(t *testing.T) {
+	for _, module := range []bool{false, true} {
+		t.Run(map[bool]string{false: "wrong-course-group", true: "module-placement"}[module], func(t *testing.T) {
+			writes := 0
+			s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.Method == "POST" || r.Method == "PUT" {
+					writes++
+				}
+				json.NewEncoder(w).Encode(map[string]any{"id": 701, "course_id": 2, "group_category_id": 70, "context_type": "Course", "non_collaborative": false})
+			})
+			d := pageDraft()
+			d.GroupID = 701
+			if module {
+				d.ModuleID = 8
+			}
+			path := filepath.Join(s.Root, "group-page.md")
+			if err := workspace.WriteDocument(path, &d, "<p>Notebook</p>"); err != nil {
+				if module && writes == 0 {
+					return
+				}
+				t.Fatal(err)
+			}
+			_, err := s.PushPage(context.Background(), path)
+			if writes != 0 {
+				t.Fatalf("incorrect scope reached a write: %d", writes)
+			}
+			if module && err == nil {
+				t.Fatal("group module placement passed offline validation")
+			}
+			if !module && err == nil {
+				t.Fatal("group from another course was accepted")
+			}
+		})
+	}
+}
+
+func TestGroupPagePullHistoryAndBodyConflictPreserveStudentWork(t *testing.T) {
+	live := NativePage{PageID: 89, Slug: "club-notebook", Title: "Notebook", Body: "<p>Starter</p>", EditingRoles: "teachers,members"}
+	var updateBody map[string]any
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/v1/groups/701":
+			json.NewEncoder(w).Encode(map[string]any{"id": 701, "course_id": 1, "group_category_id": 70, "context_type": "Course", "non_collaborative": false})
+		case "GET /api/v1/group_categories/70":
+			json.NewEncoder(w).Encode(map[string]any{"id": 70, "course_id": 1, "context_type": "Course", "non_collaborative": false})
+		case "GET /api/v1/groups/701/pages/club-notebook":
+			json.NewEncoder(w).Encode(live)
+		case "GET /api/v1/groups/701/pages/page_id:89":
+			json.NewEncoder(w).Encode(live)
+		case "GET /api/v1/groups/701/pages/page_id:89/revisions":
+			json.NewEncoder(w).Encode([]NativePageRevision{{RevisionID: 4, Latest: true, UpdatedAt: "2026-10-17T00:00:00Z"}})
+		case "GET /api/v1/groups/701/pages/page_id:89/revisions/4":
+			json.NewEncoder(w).Encode(NativePageRevision{RevisionID: 4, Latest: true, Body: "<p>Historical notebook</p>"})
+		case "PUT /api/v1/groups/701/pages/page_id:89":
+			var payload struct {
+				Page map[string]any `json:"wiki_page"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			updateBody = payload.Page
+			if b, ok := payload.Page["body"]; ok {
+				live.Body = b.(string)
+			}
+			if title, ok := payload.Page["title"]; ok {
+				live.Title = title.(string)
+			}
+			json.NewEncoder(w).Encode(live)
+		default:
+			t.Errorf("unexpected group Page request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	})
+	path, err := s.PullPageScoped(context.Background(), "TEST", s.Client.Origin()+"/groups/701/pages/club-notebook", 701)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d domain.PageDocument
+	body, err := workspace.ReadDocument(path, &d)
+	if err != nil || body != "<p>Starter</p>" || d.GroupID != 701 || d.Observed.GroupID != 701 || d.Observed.EditingRoles != "teachers,members" {
+		t.Fatalf("group pull lost scope/body/roles: %#v %q %v", d, body, err)
+	}
+	meta, err := s.PageHistory(context.Background(), "TEST", 89, 701, 0)
+	if err != nil || len(meta) != 1 || meta[0].RevisionID != 4 || meta[0].Body != "" {
+		t.Fatalf("revision metadata: %+v %v", meta, err)
+	}
+	selected, err := s.PageHistory(context.Background(), "TEST", 89, 701, 4)
+	if err != nil || len(selected) != 1 || selected[0].Body != "<p>Historical notebook</p>" {
+		t.Fatalf("selected revision: %+v %v", selected, err)
+	}
+	// A replacement drafted from the old baseline is held after a member edit.
+	unsent := "<p>Teacher's unsent replacement</p>"
+	if err = workspace.WriteDocument(path, &d, unsent); err != nil {
+		t.Fatal(err)
+	}
+	live.Body = "<p>Member contribution</p>"
+	r, err := s.PushPage(context.Background(), path)
+	after, _ := workspace.ReadDocument(path, &d)
+	if err != nil || r.Status != "held" || after != unsent || updateBody != nil || !strings.Contains(r.Message, "fresh version:") {
+		t.Fatalf("body conflict report=%+v body=%q update=%v err=%v", r, after, updateBody, err)
+	}
+	fresh := strings.Split(r.Message, "fresh version: ")[1]
+	freshBody, err := workspace.ReadDocument(fresh, &d)
+	if err != nil || freshBody != "<p>Member contribution</p>" {
+		t.Fatalf("fresh body=%q err=%v", freshBody, err)
+	}
+	d.Title = "Notebook log"
+	if err = workspace.WriteDocument(fresh, &d, freshBody); err != nil {
+		t.Fatal(err)
+	}
+	r, err = s.PushPage(context.Background(), fresh)
+	if err != nil || r.Status != "succeeded" || len(updateBody) != 1 || updateBody["title"] != "Notebook log" {
+		t.Fatalf("title-only update=%+v payload=%#v err=%v", r, updateBody, err)
+	}
+}

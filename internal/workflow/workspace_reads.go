@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,8 @@ type Service struct {
 	Config domain.CourseConfig
 	// Skip lists student refs post must leave untouched (review: not approved).
 	Skip map[string]bool
+	// privateGroupComments marks comments written for individual group results.
+	privateGroupComments bool
 }
 
 func (s *Service) Course(nickname string) (domain.Course, error) {
@@ -62,6 +65,14 @@ func Snapshot(a Assignment, origin string) (domain.AssignmentSnapshot, error) {
 	if a.GroupCategoryID != nil {
 		v.GroupCategoryID = *a.GroupCategoryID
 	}
+	v.GradeGroupStudentsIndividually = a.GradeGroupStudentsIndividually
+	v.DiscussionTopicID = a.DiscussionTopicID
+	if v.DiscussionTopicID == nil && a.DiscussionTopic != nil && a.DiscussionTopic.ID > 0 {
+		id := a.DiscussionTopic.ID
+		v.DiscussionTopicID = &id
+	}
+	v.HasSubAssignments = a.HasSubAssignments
+	v.Checkpoints = a.Checkpoints
 	if len(a.Rubric) > 0 {
 		r := domain.Rubric{ID: a.RubricSettings.ID, Title: a.RubricSettings.Title, FreeFormCriterionComments: a.RubricSettings.FreeForm}
 		if a.RubricAssociation != nil {
@@ -94,6 +105,14 @@ func Snapshot(a Assignment, origin string) (domain.AssignmentSnapshot, error) {
 	return v, nil
 }
 
+// TimingSnapshot captures assignment identity and timing-relevant mode fields
+// without requiring grading points or rubric data.
+func TimingSnapshot(a Assignment, origin string) (domain.AssignmentSnapshot, error) {
+	a.Points = json.Number("0")
+	a.Rubric = nil
+	return Snapshot(a, origin)
+}
+
 // PullItem writes a fresh file every time; an earlier unsent edit remains intact.
 func (s *Service) PullItem(ctx context.Context, nickname, query string) (string, error) {
 	course, err := s.Course(nickname)
@@ -114,7 +133,10 @@ func (s *Service) PullItem(ctx context.Context, nickname, query string) (string,
 	if err != nil {
 		return "", err
 	}
-	doc := domain.AssignmentDocument{Schema: 1, Kind: "assignment", Operation: "update", Course: nickname, Instance: s.Client.Origin(), CourseID: course.ID, AssignmentID: a.ID, Title: a.Name, Points: snapshot.Points, SubmissionTypes: a.SubmissionTypes, DueAt: a.DueAt, UnlockAt: a.UnlockAt, LockAt: a.LockAt, Published: a.Published, Rubric: snapshot.Rubric, Observed: &snapshot, Timezone: course.Timezone}
+	doc := domain.AssignmentDocument{Schema: 1, Kind: "assignment", Operation: "update", Course: nickname, Instance: s.Client.Origin(), CourseID: course.ID, AssignmentID: a.ID, Title: a.Name, Points: snapshot.Points, SubmissionTypes: a.SubmissionTypes, DueAt: a.DueAt, UnlockAt: a.UnlockAt, LockAt: a.LockAt, Published: a.Published, GroupCategoryID: snapshot.GroupCategoryID, GradeGroupStudentsIndividually: snapshot.GradeGroupStudentsIndividually, Rubric: snapshot.Rubric, Observed: &snapshot, Timezone: course.Timezone}
+	if snapshot.GroupCategoryID == 0 {
+		doc.GradeGroupStudentsIndividually = nil
+	}
 	name := fmt.Sprintf("%d-%s-%s.md", a.ID, Slug(a.Name), time.Now().UTC().Format("20060102T150405.000000000"))
 	path, err := workspace.ConstrainPath(s.Root, filepath.Join("courses", nickname, "pulled", name))
 	if err != nil {

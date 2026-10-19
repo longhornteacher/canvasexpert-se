@@ -1,0 +1,252 @@
+<style>
+  #ce-theme-preview .ce-window {
+    --ce-page: #f6f3ed;
+    --ce-surface: #fffdfa;
+    --ce-card: #ffffff;
+    --ce-ink: #263a39;
+    --ce-muted: #63716d;
+    --ce-line: #e4e4db;
+    --ce-accent: #216c65;
+    --ce-accent-soft: #eaf4ef;
+    --ce-nav: #eeeaf6;
+    --ce-nav-ink: #5d4d82;
+    --ce-peach: #faeee2;
+    --ce-radius: 14px;
+    --ce-shadow: 0 8px 30px #354c3910;
+    color-scheme: light;
+    background: var(--ce-page);
+    color: var(--ce-ink);
+    padding: 30px 25px 34px;
+    min-height: 635px;
+    font: 400 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  #ce-theme-preview .ce-window *, #ce-theme-preview .ce-window *::before, #ce-theme-preview .ce-window *::after { box-sizing: border-box; }
+  #ce-theme-preview .ce-sheet {
+    position: relative;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 22px 28px 25px;
+    border: 1px solid var(--ce-line);
+    border-radius: calc(var(--ce-radius) + 4px);
+    background: var(--ce-surface);
+    box-shadow: var(--ce-shadow);
+  }
+  #ce-theme-preview .ce-studio .ce-sheet::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 27px;
+    right: 27px;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    background: linear-gradient(90deg, #82b7a6 0% 48%, #c3b2db 48% 78%, #ecc8a6 78% 100%);
+  }
+  #ce-theme-preview .ce-topbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; border-bottom: 1px solid var(--ce-line); padding-bottom: 17px; margin-bottom: 23px; }
+  #ce-theme-preview .ce-brand { display: inline-flex; align-items: center; gap: 8px; color: var(--ce-ink); font-size: 19px; letter-spacing: -.65px; font-weight: 650; text-decoration: none; white-space: nowrap; }
+  #ce-theme-preview .ce-brand span { color: var(--ce-nav-ink); background: var(--ce-nav); border: 1px solid #e2dbef; border-radius: 6px; padding: 1px 6px; font-size: 12px; letter-spacing: .4px; font-weight: 550; }
+  #ce-theme-preview .ce-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  #ce-theme-preview .ce-nav a { color: var(--ce-muted); border: 1px solid transparent; text-decoration: none; padding: 6px 11px; font-size: 14px; border-radius: 8px; }
+  #ce-theme-preview .ce-nav a[aria-current="page"] { color: var(--ce-nav-ink); background: var(--ce-nav); border-color: #e2dbef; font-weight: 600; }
+  #ce-theme-preview .ce-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  #ce-theme-preview .ce-status-card { background: var(--ce-card); border: 1px solid var(--ce-line); border-radius: var(--ce-radius); padding: 19px 20px 17px; min-width: 0; box-shadow: 0 2px 7px #354c3905; }
+  #ce-theme-preview .ce-heading { display: flex; align-items: center; gap: 9px; margin: 0 0 14px; }
+  #ce-theme-preview .ce-heading h2 { color: var(--ce-ink); margin: 0; font-size: 17px; font-weight: 620; line-height: 1.3; letter-spacing: -.25px; }
+  #ce-theme-preview .ce-dot { width: 9px; height: 9px; border-radius: 50%; background: #5b9472; display: inline-block; flex: none; }
+  #ce-theme-preview .ce-state { font-weight: 620; color: var(--ce-accent); margin: 0 0 4px; font-size: 16px; }
+  #ce-theme-preview .ce-note { color: var(--ce-muted); margin: 0; font-size: 14px; max-width: 36ch; min-height: 42px; }
+  #ce-theme-preview .ce-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 16px; margin: 17px 0 0; }
+  #ce-theme-preview .ce-window a { text-underline-offset: 3px; }
+  #ce-theme-preview .ce-link { color: var(--ce-accent); font-size: 13px; font-weight: 500; }
+  #ce-theme-preview .ce-button { background: var(--ce-accent-soft); color: var(--ce-accent); border: 1px solid #cdded4; padding: 6px 13px; border-radius: 7px; font: 550 13px/1.5 system-ui, sans-serif; }
+  #ce-theme-preview .ce-button:hover { filter: brightness(.97); }
+  #ce-theme-preview .ce-hint { border-top: 1px solid var(--ce-line); padding-top: 11px; margin-top: 15px; font-size: 13px; color: var(--ce-muted); }
+  #ce-theme-preview .ce-hint summary { width: fit-content; }
+  #ce-theme-preview .ce-hint ol { padding-left: 19px; margin: 9px 0 0; }
+  #ce-theme-preview .ce-hint li { margin: 5px 0; }
+  #ce-theme-preview .ce-sync-link { color: var(--ce-muted); font-size: 13px; margin-top: 13px; display: inline-block; }
+  #ce-theme-preview .ce-course-section { margin: 27px 0 0; }
+  #ce-theme-preview .ce-section-head { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--ce-line); padding-bottom: 11px; }
+  #ce-theme-preview .ce-section-head h2 { color: var(--ce-ink); font-size: 17px; font-weight: 620; margin: 0; letter-spacing: -.25px; }
+  #ce-theme-preview .ce-count { color: #6b5945; background: var(--ce-peach); border-radius: 6px; padding: 1px 7px; font-size: 12px; font-weight: 550; }
+  #ce-theme-preview .ce-section-head > a { margin-left: auto; }
+  #ce-theme-preview .ce-courses { list-style: none; margin: 0; padding: 0; }
+  #ce-theme-preview .ce-courses li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; padding: 13px 3px; border-bottom: 1px solid var(--ce-line); }
+  #ce-theme-preview .ce-courses a { font-weight: 570; font-size: 14px; color: var(--ce-accent); text-decoration: none; }
+  #ce-theme-preview .ce-courses a:hover { text-decoration: underline; }
+  #ce-theme-preview .ce-course-id { color: var(--ce-muted); font-size: 12px; }
+  #ce-theme-preview .ce-footer { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; margin-top: 23px; padding: 12px 15px; background: var(--ce-accent-soft); border: 1px solid #dae7df; border-radius: 9px; }
+  #ce-theme-preview .ce-footer > span { color: var(--ce-muted); font-size: 13px; }
+  #ce-theme-preview .ce-footer a { color: var(--ce-accent); font-size: 13px; font-weight: 500; }
+  #ce-theme-preview .ce-preview-notice { min-height: 0; margin: 0; color: var(--ce-muted); font-size: 12px; }
+  #ce-theme-preview .ce-preview-notice:not(:empty) { margin: 10px 0 0; }
+  #ce-theme-preview .ce-bench {
+    --ce-page: #f3f4f2;
+    --ce-surface: #ffffff;
+    --ce-card: #ffffff;
+    --ce-ink: #242824;
+    --ce-muted: #646b65;
+    --ce-line: #d8ddd8;
+    --ce-accent: #3e6252;
+    --ce-accent-soft: #e4ece7;
+    --ce-nav: #e4ece7;
+    --ce-nav-ink: #242824;
+    --ce-peach: transparent;
+    --ce-radius: 7px;
+    --ce-shadow: none;
+  }
+  #ce-theme-preview .ce-bench .ce-sheet { border-radius: 10px; }
+  #ce-theme-preview .ce-bench .ce-brand { gap: 5px; }
+  #ce-theme-preview .ce-bench .ce-brand span { font-size: 19px; letter-spacing: -.65px; color: var(--ce-muted); font-weight: 450; border: none; background: transparent; padding: 0; }
+  #ce-theme-preview .ce-bench .ce-nav a { border-radius: 5px; }
+  #ce-theme-preview .ce-bench .ce-nav a[aria-current="page"] { border-color: var(--ce-line); }
+  #ce-theme-preview .ce-bench .ce-state { color: var(--ce-ink); }
+  #ce-theme-preview .ce-bench .ce-status-card { box-shadow: none; }
+  #ce-theme-preview .ce-bench .ce-button { border-color: #aeb7af; background: #fff; color: var(--ce-ink); border-radius: 5px; }
+  #ce-theme-preview .ce-bench .ce-count { font-size: 15px; color: var(--ce-muted); padding: 0; font-weight: 450; }
+  #ce-theme-preview .ce-bench .ce-footer { border: none; border-top: 1px solid var(--ce-line); border-radius: 0; background: transparent; padding: 12px 0 0; }
+  @media (max-width: 650px) {
+    #ce-theme-preview .ce-window { padding: 16px 12px 22px; min-height: 910px; }
+    #ce-theme-preview .ce-sheet { padding: 20px 17px; }
+    #ce-theme-preview .ce-topbar { gap: 14px; margin-bottom: 19px; }
+    #ce-theme-preview .ce-nav { width: 100%; gap: 0; }
+    #ce-theme-preview .ce-nav a { padding: 7px 9px; }
+    #ce-theme-preview .ce-grid { grid-template-columns: 1fr; gap: 14px; }
+    #ce-theme-preview .ce-status-card { padding: 16px; }
+    #ce-theme-preview .ce-note { min-height: 0; max-width: none; }
+    #ce-theme-preview .ce-course-section { margin-top: 22px; }
+  }
+  @media (pointer: coarse) {
+    #ce-theme-preview .ce-nav a, #ce-theme-preview .ce-link, #ce-theme-preview .ce-button, #ce-theme-preview .ce-hint summary, #ce-theme-preview .ce-sync-link { min-height: 44px; display: inline-flex; align-items: center; }
+    #ce-theme-preview .ce-actions { gap: 4px 12px; }
+  }
+</style>
+<div id="ce-theme-preview">
+  <div class="viz-carousel" aria-label="CanvasExpert theme concepts">
+    <section data-variant="Studio" aria-label="Studio theme">
+      <div class="ce-window ce-studio" id="ce-studio-window" aria-label="Studio appearance">
+        <main class="ce-sheet">
+          <header class="ce-topbar">
+            <a class="ce-brand cursor-interaction" href="#" data-preview-link>CanvasExpert <span>SE</span></a>
+            <nav class="ce-nav" aria-label="Studio main navigation">
+              <a href="#" aria-current="page" class="cursor-interaction" data-preview-link>Home</a>
+              <a href="#" class="cursor-interaction" data-preview-link>Courses</a>
+              <a href="#" class="cursor-interaction" data-preview-link>Students</a>
+              <a href="#" class="cursor-interaction" data-preview-link>Settings</a>
+            </nav>
+          </header>
+          <div class="ce-grid">
+            <section class="ce-status-card" aria-label="Canvas connection">
+              <div class="ce-heading"><span class="ce-dot" aria-hidden="true"></span><h2>Canvas</h2></div>
+              <p class="ce-state">Connected</p>
+              <p class="ce-note">Canvas is available. You're ready to work with your courses.</p>
+              <div class="ce-actions"><button type="button" class="ce-button cursor-interaction" data-preview-test>Test</button><a href="#" class="ce-link cursor-interaction" data-preview-link>Connection</a><a href="#" class="ce-link cursor-interaction" data-preview-link>Replace token</a></div>
+              <details class="ce-hint"><summary class="cursor-interaction">Get an Access token</summary><ol><li>Open Account → Settings in Canvas.</li><li>Under Approved Integrations, choose New Access Token.</li><li>Enter the token under Settings → Connections.</li></ol></details>
+            </section>
+            <section class="ce-status-card" aria-label="UserSync connection">
+              <div class="ce-heading"><span class="ce-dot" aria-hidden="true"></span><h2>UserSync</h2></div>
+              <p class="ce-state">Available</p>
+              <p class="ce-note">Your saved UserSync folder is available on this computer.</p>
+              <div class="ce-actions"><a href="#" class="ce-link cursor-interaction" data-preview-link>Choose UserSync folder</a><button type="button" class="ce-button cursor-interaction" data-preview-test>Test saved folder</button></div>
+              <a href="#" class="ce-sync-link cursor-interaction" data-preview-link>Teaching rules settings</a>
+            </section>
+          </div>
+          <section class="ce-course-section" aria-label="Active courses">
+            <div class="ce-section-head"><h2>Active courses</h2><span class="ce-count">3</span><a href="#" class="ce-link cursor-interaction" data-preview-link>Manage</a></div>
+            <ul class="ce-courses">
+              <li><a href="#" class="cursor-interaction" data-preview-link>CS8</a><span class="ce-course-id">Canvas course 1042</span></li>
+              <li><a href="#" class="cursor-interaction" data-preview-link>ELA7PAP</a><span class="ce-course-id">Canvas course 1043</span></li>
+              <li><a href="#" class="cursor-interaction" data-preview-link>ELA7</a><span class="ce-course-id">Canvas course 1044</span></li>
+            </ul>
+          </section>
+          <footer class="ce-footer"><span>Teaching app</span><a href="#" class="cursor-interaction" data-preview-link>Connect CE-SE to the app where you teach</a></footer>
+          <p class="ce-preview-notice" role="status" aria-live="polite"></p>
+        </main>
+      </div>
+    </section>
+    <section data-variant="Bench" aria-label="Bench theme comparison" hidden>
+      <div class="ce-window ce-bench">
+        <main class="ce-sheet">
+          <header class="ce-topbar">
+            <a class="ce-brand cursor-interaction" href="#" data-preview-link>CanvasExpert <span>SE</span></a>
+            <nav class="ce-nav" aria-label="Bench main navigation">
+              <a href="#" aria-current="page" class="cursor-interaction" data-preview-link>Home</a>
+              <a href="#" class="cursor-interaction" data-preview-link>Courses</a>
+              <a href="#" class="cursor-interaction" data-preview-link>Students</a>
+              <a href="#" class="cursor-interaction" data-preview-link>Settings</a>
+            </nav>
+          </header>
+          <div class="ce-grid">
+            <section class="ce-status-card" aria-label="Canvas connection">
+              <div class="ce-heading"><span class="ce-dot" aria-hidden="true"></span><h2>Canvas</h2></div>
+              <p class="ce-state">Connected</p>
+              <p class="ce-note">Canvas is available. You're ready to work with your courses.</p>
+              <div class="ce-actions"><button type="button" class="ce-button cursor-interaction" data-preview-test>Test</button><a href="#" class="ce-link cursor-interaction" data-preview-link>Connection</a><a href="#" class="ce-link cursor-interaction" data-preview-link>Replace token</a></div>
+              <details class="ce-hint"><summary class="cursor-interaction">Get an Access token</summary><ol><li>Open Account → Settings in Canvas.</li><li>Under Approved Integrations, choose New Access Token.</li><li>Enter the token under Settings → Connections.</li></ol></details>
+            </section>
+            <section class="ce-status-card" aria-label="UserSync connection">
+              <div class="ce-heading"><span class="ce-dot" aria-hidden="true"></span><h2>UserSync</h2></div>
+              <p class="ce-state">Available</p>
+              <p class="ce-note">Your saved UserSync folder is available on this computer.</p>
+              <div class="ce-actions"><a href="#" class="ce-link cursor-interaction" data-preview-link>Choose UserSync folder</a><button type="button" class="ce-button cursor-interaction" data-preview-test>Test saved folder</button></div>
+              <a href="#" class="ce-sync-link cursor-interaction" data-preview-link>Teaching rules settings</a>
+            </section>
+          </div>
+          <section class="ce-course-section" aria-label="Active courses">
+            <div class="ce-section-head"><h2>Active courses</h2><span class="ce-count">3</span><a href="#" class="ce-link cursor-interaction" data-preview-link>Manage</a></div>
+            <ul class="ce-courses">
+              <li><a href="#" class="cursor-interaction" data-preview-link>CS8</a><span class="ce-course-id">Canvas course 1042</span></li>
+              <li><a href="#" class="cursor-interaction" data-preview-link>ELA7PAP</a><span class="ce-course-id">Canvas course 1043</span></li>
+              <li><a href="#" class="cursor-interaction" data-preview-link>ELA7</a><span class="ce-course-id">Canvas course 1044</span></li>
+            </ul>
+          </section>
+          <footer class="ce-footer"><span>Teaching app</span><a href="#" class="cursor-interaction" data-preview-link>Connect CE-SE to the app where you teach</a></footer>
+          <p class="ce-preview-notice" role="status" aria-live="polite"></p>
+        </main>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+  (() => {
+    const root = document.getElementById('ce-theme-preview');
+    const studio = document.getElementById('ce-studio-window');
+    const palettes = { Teal: '#216c65', Indigo: '#56558c', Terracotta: '#92573f' };
+    const saved = window.openai?.widgetState?.modelContent;
+    const state = {
+      accent: Object.hasOwn(palettes, saved?.accent) ? saved.accent : 'Teal',
+      corners: Number.isFinite(saved?.corners) ? Math.min(20, Math.max(8, saved.corners)) : 14,
+      shadow: typeof saved?.shadow === 'boolean' ? saved.shadow : true
+    };
+    function render() {
+      studio.style.setProperty('--ce-accent', palettes[state.accent]);
+      studio.style.setProperty('--ce-accent-soft', 'color-mix(in srgb, ' + palettes[state.accent] + ' 8%, #fffdfa)');
+      studio.style.setProperty('--ce-radius', state.corners + 'px');
+      studio.style.setProperty('--ce-shadow', state.shadow ? '0 8px 30px #354c3910' : 'none');
+    }
+    function persist() {
+      if (window.openai?.setWidgetState) window.openai.setWidgetState({ modelContent: { ...state }, privateContent: null }).catch(() => {});
+    }
+    render();
+    root.querySelectorAll('[data-preview-link], [data-preview-test]').forEach(control => {
+      control.addEventListener('click', event => {
+        event.preventDefault();
+        const notice = control.closest('.ce-sheet').querySelector('.ce-preview-notice');
+        notice.textContent = 'Visual preview only. No connections or project files were changed.';
+      });
+    });
+    window.addEventListener('openai:set_globals', event => {
+      const next = event.detail?.globals?.widgetState?.modelContent;
+      if (!next) return;
+      if (Object.hasOwn(palettes, next.accent)) state.accent = next.accent;
+      if (Number.isFinite(next.corners)) state.corners = Math.min(20, Math.max(8, next.corners));
+      if (typeof next.shadow === 'boolean') state.shadow = next.shadow;
+      render();
+    });
+    if (globalThis.Tweak) {
+      const controls = new Tweak({ container: studio, onChange: () => { render(); persist(); } });
+      controls.addSelect(state, 'accent', { label: 'Accent', options: Object.keys(palettes), reference: '--ce-accent' });
+      controls.addSlider(state, 'corners', { label: 'Corner softness', min: 8, max: 20, step: 1, unit: 'px', reference: '--ce-radius' });
+      controls.addToggle(state, 'shadow', { label: 'Soft shadow', reference: '--ce-shadow' });
+    }
+  })();
+</script>

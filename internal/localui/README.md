@@ -8,7 +8,7 @@ A hub page is declared once, with `register(page{...})` in an `init` func in the
    - `Methods`: defaults to GET; other methods get 405 + `Allow`. Handlers still call `h.checkPost` for POSTs (origin and secret).
    - `Template`: `"foo"` parses `templates/foo.html` at init. Render with `h.render(w, 200, tmpl("foo"), data)`.
    - `Scripts`: the `assets/*.js` files the template loads. They must match the template's `<script src="/_cse/…">` tags exactly or init panics; they set CSP `script-src 'self'`.
-   - `Connect`: only for pages that poll Canvas health (`connect-src 'self'`, and a GET starts the health check).
+   - `Connect`: only for pages that poll Canvas health (a GET starts the health check). Pages loading `appearance.js` also receive `connect-src 'self'` for the local preference save, independently of Canvas health.
    - `Unlocked`: the handler runs without `h.mu` and must lock it around hub fields.
    - `Nav`: `navSlot{Primary, Label, Order, Href}`. An empty `Label` is the primary tab; otherwise a sub-tab of `Primary`. The template calls `{{nav "Primary" "Label"}}` to show it.
 2. Put page-specific data in the feature's own struct (embed `homeData` if it needs the shared status fields); do not add fields to `homeData`.
@@ -37,3 +37,5 @@ Delete the feature's `.go` file, its template, any script only it used, and its 
 Route table and method rules (`pages`), CSP script/connect sources (`headers`), primary and sub-navigation (`hubNavFor`), template parsing and script/template consistency (`register`).
 
 Shared pieces stay shared: `checkPost`, `render`, `redirect`, `needWorkspace`, `pageData`, the base CSS and `drafts.js`/`canvas-health.js`. Review pages (`review.go`) are one-shot servers with their own inline script and are not registered.
+
+Appearance is response-local data (`appearanceFor`), supplied by each page owner and applied on the document root before CSS paints. Active pages load the embedded `appearance.js` and save only `request_secret` and `mode` to `/_cse/appearance`; ordinary form handlers are never involved. Terminal pages embed the same CSS/root mode without a control or external scripts, preserving shutdown behavior. Standalone callers pass the resolved UserInstall explicitly; rootless compatibility calls follow the OS.

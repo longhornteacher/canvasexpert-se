@@ -1,15 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Connect your teaching assistant</title>
 <style>{{pageCSS}}</style>
 <main class="wide">
-{{nav "Settings" "Agent"}}
+{{nav "Settings" "Agent" .Appearance}}
 <h1>Connect your teaching assistant</h1>
 <p>CE-SE connects to every teaching app it finds on this PC and works with the files in <code>{{.Root}}</code>. Installed one later? Come back and connect again.</p>
 <p>Found on this PC: {{if .Found.CoworkConfigFound}}<b>Claude</b> {{end}}{{if .Found.WorkConfigFound}}<b>ChatGPT</b> {{end}}{{if .Found.AntigravityConfigFound}}<b>Antigravity</b>{{end}}{{if not (or .Found.CoworkConfigFound .Found.WorkConfigFound .Found.AntigravityConfigFound)}}no supported app yet{{end}}</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
+{{if .ShortcutWarning}}<p class="error">{{.ShortcutWarning}}</p>{{end}}{{if .ShortcutNotice}}<p class="ok">{{.ShortcutNotice}}</p>{{end}}
 {{if .Root}}<section class="card"><h2>Register an app</h2>
 <form method="post" action="/connect"><input type="hidden" name="request_secret" value="{{.Secret}}">
 <label for="client">Which app?</label><select id="client" name="client"><option value="auto" {{if or (eq .Client "") (eq .Client "auto")}}selected{{end}}>Every app found on this PC</option><option value="cowork" {{if eq .Client "cowork"}}selected{{end}}>Claude only</option><option value="work" {{if eq .Client "work"}}selected{{end}}>ChatGPT only</option><option value="antigravity" {{if eq .Client "antigravity"}}selected{{end}}>Antigravity only</option></select>
@@ -27,4 +28,5 @@
 <p>Your teaching preferences stay in UserInstall or your configured UserSync folder. You can add them progressively while working.</p>
 <a class="go" href="/settings?section=connections">Canvas, teacher rules and UserSync</a></details>
 </main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
 </html>

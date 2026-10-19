@@ -45,7 +45,9 @@ var pageFuncs = template.FuncMap{
 	"pageCSS":   func() template.CSS { return pageCSS },
 	"reviewCSS": func() template.CSS { return reviewCSS },
 	// nav arguments are internal route labels, never request data.
-	"nav": func(primary, secondary string) template.HTML { return template.HTML(hubNavFor(primary, secondary)) },
+	"nav": func(primary, secondary string, a appearanceData) template.HTML {
+		return template.HTML(hubNavFor(primary, secondary, a))
+	},
 	"inc": func(i int) int { return i + 1 },
 }
 

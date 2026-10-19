@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 )
 
 // Scaffold creates the starter workspace inside root from the template files
@@ -61,4 +62,35 @@ func Scaffold(root string, template fs.FS, base string) ([]string, error) {
 		return created, err
 	}
 	return created, firstErr
+}
+
+// BootstrapBundled prepares a freshly extracted UserInstall for its bundled
+// Engine. The ZIP carries no context/ or playbooks, so a folder holding
+// engine/<exe> and AGENTS.md but no context/courses.md gets the starter files
+// laid down here. Existing files are never touched.
+func BootstrapBundled(executable string, template fs.FS, base string) error {
+	programDir := filepath.Dir(executable)
+	if !strings.EqualFold(filepath.Base(programDir), "engine") {
+		return nil
+	}
+	installed := filepath.Dir(programDir)
+	if isRoot(installed) {
+		return nil
+	}
+	if info, err := os.Stat(filepath.Join(installed, "AGENTS.md")); err != nil || info.IsDir() {
+		return nil
+	}
+	// courses.md marks the root; write it first so teacher paths resolve.
+	body, err := fs.ReadFile(template, path.Join(base, "context", "courses.md"))
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(installed, "context"), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(installed, "context", "courses.md"), body, 0o644); err != nil {
+		return err
+	}
+	_, err = Scaffold(installed, template, base)
+	return err
 }

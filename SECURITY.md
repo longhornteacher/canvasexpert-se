@@ -27,4 +27,4 @@ Include the Engine version and revision, affected workflow, a minimal synthetic 
 
 ## Supported versions
 
-The current 1.0 beta line is the active development target. Older experimental builds have no promised security maintenance. Report issues against the latest beta where practical, while preserving your existing UserInstall and unsent work. See [the release policy](docs/releasing.md) for version identity and updates.
+The current 1.0 line is the active development target. Older beta and experimental builds have no promised security maintenance. Report issues against the latest release where practical, while preserving your existing UserInstall and unsent work. See [the release policy](docs/releasing.md) for version identity and updates.

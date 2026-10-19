@@ -1,30 +1,29 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CanvasExpert-SE students</title>
 <style>{{pageCSS}}</style>
 <main class="wide">
-{{if .Hub}}{{nav "Classroom" "Students"}}{{end}}
+{{if .Hub}}{{nav "Classroom" "Students" .Appearance}}{{else}}{{.Appearance.Control}}{{end}}
 <h1>Students</h1>
-<p>Manage aliases, monitoring, extra time, private notes, and contact details for your students. Differentiation tags come from Canvas.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 {{if .Hub}}{{if .Tabs}}<nav class="course-tabs" aria-label="Active courses">{{range .Tabs}}<a href="/students?course={{.ID}}" {{if .Selected}}aria-current="page"{{end}}>{{.Name}}</a>{{end}}</nav>
 <div class="row"><form method="post" action="/students/refresh"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="course" value="{{.CourseID}}"><button type="submit">Refresh from Canvas</button></form><span class="pill on">{{len .Rows}} students</span></div>
 <h2 class="grp">{{.CourseName}}</h2>{{if .UpdatedAt}}<p>Last pulled: {{.UpdatedAt}}</p>{{end}}
 {{else}}<p class="card">No active courses selected. <a href="/courses">Pick your active courses</a> and their students will be available here.</p>{{end}}{{end}}
 {{if .TagMessage}}<p class="error">{{.TagMessage}}</p>{{end}}
-{{if or .CourseID (not .Hub)}}<form action="/students" method="post"{{if .Hub}} data-draft-key="{{.DraftKey}}" data-draft-fields="alias_ monitored_ extra_time_ note_" data-clear-draft="{{.ClearDraft}}"{{end}}>
+{{if or .CourseID (not .Hub)}}<form action="/students" method="post"{{if .Hub}} data-draft-key="{{.DraftKey}}" data-draft-fields="alias_ goes_by_ monitored_ extra_time_ note_" data-clear-draft="{{.ClearDraft}}"{{end}}>
 <input type="hidden" name="request_secret" value="{{.Secret}}">{{if .Hub}}<input type="hidden" name="course" value="{{.CourseID}}">{{end}}
-<div class="table-scroll"><table class="students"><thead><tr><th>Student</th><th>Alias</th><th>Canvas tag</th><th>Monitored</th><th>Extra time</th>{{if .ContactsOn}}<th>Contact details</th>{{end}}{{if .NotesOn}}<th>Private notes</th>{{end}}</tr></thead><tbody>
-{{range .Rows}}<tr><td class="student-name">{{.Name}}<br><span class="ref" title="Stable student reference">{{.Ref}}</span></td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required aria-label="Alias for {{.Name}}"></td>
+<div class="table-scroll"><table class="students"><thead><tr><th scope="col" title="Student name from the Canvas roster." aria-description="Student name from the Canvas roster.">Student</th><th scope="col" title="Name used in agent packets when privacy aliases are enabled." aria-description="Name used in agent packets when privacy aliases are enabled.">Privacy Alias</th><th scope="col" title="First name used when addressing the student in feedback." aria-description="First name used when addressing the student in feedback.">Goes By</th><th scope="col" title="Differentiation tags managed in Canvas." aria-description="Differentiation tags managed in Canvas.">Canvas tag</th><th scope="col" title="Flags this student for teacher attention." aria-description="Flags this student for teacher attention.">Monitored</th><th scope="col" title="Tells the scoring agent to use an established extra-time rule; no allowance is implied and Canvas deadlines are unchanged." aria-description="Tells the scoring agent to use an established extra-time rule; no allowance is implied and Canvas deadlines are unchanged.">Extra time</th>{{if .ContactsOn}}<th scope="col" title="Private student and parent contact information and text/email preferences." aria-description="Private student and parent contact information and text/email preferences.">Contact details</th>{{end}}{{if .NotesOn}}<th scope="col" title="Private context included with pulled student work across courses; not copied into student-facing feedback." aria-description="Private context included with pulled student work across courses; not copied into student-facing feedback.">Private notes</th>{{end}}</tr></thead><tbody>
+{{range .Rows}}<tr><td class="student-name">{{.Name}}</td><td><input name="alias_{{.Ref}}" value="{{.Alias}}" maxlength="80" required aria-label="Privacy Alias for {{.Name}}"></td><td><input name="goes_by_{{.Ref}}" value="{{.FirstName}}" maxlength="80" required aria-label="Goes By for {{.Name}}"></td>
 <td>{{if $.TagMessage}}<span class="pill">Unavailable</span>{{else}}{{range .Tags}}<span class="pill diff-tag {{.Class}}">{{.Name}}</span>{{else}}<span class="pill">No tag</span>{{end}}{{end}}</td><td><input type="checkbox" name="monitored_{{.Ref}}" {{if .Monitored}}checked{{end}} aria-label="Monitored for {{.Name}}"></td><td><input type="checkbox" name="extra_time_{{.Ref}}" {{if .ExtraTime}}checked{{end}} aria-label="Extra time for {{.Name}}"></td>{{if $.ContactsOn}}<td><details class="student-contacts" data-contact-ref="{{.Ref}}"><summary>Contact details</summary><label>Student email<input type="email" name="student_email_{{.Ref}}" value="{{.Contacts.StudentEmail}}" autocomplete="off"></label><p>Student email has no opt-out.</p><div data-contact-rows>{{range contactRows .Ref .Contacts.Parents}}{{template "parent-contact" .}}{{end}}</div><button type="button" class="secondary" data-add-contact>Add parent contact</button><p>Contact details stay private. A channel needs a destination before it can be used.</p></details></td>{{end}}{{if $.NotesOn}}<td><details class="student-notes"><summary>Private notes for the agent</summary><textarea name="note_{{.Ref}}" rows="3" maxlength="8000" placeholder="Add private context for the agent" aria-label="Notes for {{.Name}}">{{.Note}}</textarea></details></td>{{end}}</tr>
-{{else}}<tr><td colspan="7">No students loaded{{if .Hub}} for this course yet. Choose Refresh from Canvas to bring in the class roster{{else}}. They appear here after you pull student work{{end}}.</td></tr>{{end}}</tbody></table></div>
-<p>Extra time is saved for later use; it does not change Canvas deadlines. Tags are managed in Canvas.{{if .NotesOn}} Private notes follow each student across courses and are given to the agent with their work. They are never shown to students.{{end}}</p>
+{{else}}<tr><td colspan="8">No students loaded{{if .Hub}} for this course yet. Choose Refresh from Canvas to bring in the class roster{{else}}. They appear here after you pull student work{{end}}.</td></tr>{{end}}</tbody></table></div>
 {{if .Rows}}<button type="submit">{{if .Hub}}Save students{{else}}Save &amp; close{{end}}</button>{{end}}
 </form>{{end}}
 <script src="/_cse/contacts.js" defer></script>{{if .Hub}}<script src="/_cse/drafts.js" defer></script>{{end}}
 </main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
 </html>
 
 {{define "parent-contact"}}

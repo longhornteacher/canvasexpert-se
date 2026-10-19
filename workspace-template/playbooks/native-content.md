@@ -1,5 +1,7 @@
 # Canvas-native curriculum authoring
 
+For a book-club or collaborative group unit, read `group-work.md` first for the workflow, supported scope and access limits. This playbook supplies the native Page, asset and module authoring details it references.
+
 Use this playbook to turn selected archived teaching material into Canvas Pages, activity Assignments, New Quizzes, Files and Modules. Read `context/courses.md`, the archive's provenance and conversion notes, and `cse help formats` first. The archive and its capture tools stay outside the Engine.
 
 ## Teaching preferences
@@ -16,9 +18,25 @@ Prepare static instructional content: headings, lists, tables, code, links and a
 
 1. Upload student assets with `cse upload-file`, selecting access explicitly. Keep the receipts and provenance beside the conversion drafts, with a local-to-Canvas asset map. An unpublished Page does not make its files private. Use actual returned file IDs and stable course links in authored HTML; do not save signed download URLs.
 2. Create `kind: page` documents and push them with `cse push`. Use `body_format: html` for tables, images and rich teaching bodies, or `markdown` for the Engine's small Markdown subset. Keep the returned Page ID, slug and URL in the document. To revise a Page, use `cse pull-page` and edit the pulled document. Preserve a held draft's unsent work and compare its fresh baseline before reapplying changes.
+
+For a club reading plan, evidence notebook or meeting log, use the exact configured course plus `group_id` from `cse groups COURSE --set SET_ID`; set `editing_roles: [members]` only when club members should edit (Canvas receives `members` as a role string). Group Pages cannot be placed in course modules. A starter can be as small as:
+
+```yaml
+schema: 1
+kind: page
+operation: create
+course: ELA7
+group_id: 701
+title: Evidence notebook
+body_format: html
+editing_roles: [members]
+published: true
+```
+
+Pull before each edit. If the body conflicts, keep the unsent draft and merge its requested change into a fresh pull; a title-only change leaves current student writing untouched. Never push the starter body again over a populated notebook. `cse page-history COURSE PAGE_ID --group GROUP_ID` reads history; a revision is not a complete record of who contributed or simultaneous editing.
 3. Create activities with the existing assignment contract, optionally `body_format: html`. Follow `authoring.md` and its review policy. Choose text entry, file submission, a rubric or teacher grading to suit the student product.
 4. Create assessments with `quizzes.md` and the supported QuizForge types. Matching and ordering interactions may become corresponding native questions when their semantics fit. Convert Classic source questions to supported New Quiz types; report or explicitly adapt unsupported questions rather than dropping them. Python work becomes a code/text/file submission with teacher assessment; copying its prompt does not replace vendor execution or hidden autograding. Written New Quiz responses are graded by the teacher in SpeedGrader.
-5. Assemble a `kind: module` document using verified existing Page, File, Assignment and SubHeader references. For a New Quiz use its returned assignment ID. Push the module after its children exist. An existing module receives only the requested additions and positions. Module publication does not publish its children.
+5. Assemble a `kind: module` document using verified existing Page, File, Assignment, native course Discussion and SubHeader references. For a New Quiz use its returned assignment ID. A group-specific Page or discussion uses an explicitly titled `ExternalUrl` with its exact Canvas URL; read `cse external-resources COURSE [--group ID]` for existing collaboration/conference metadata and teacher-selected links. External URLs must be stable HTTP(S) links without embedded credentials or signed temporary parameters. Push the module after its native children exist. An existing module receives only the requested additions and positions. Module publication does not publish its children or grant group membership: students can see a course module link and still lack access to the linked group resource. Metadata does not prove document contribution or meeting attendance, and the Engine does not provision external documents or conferences or read their content/recordings.
 
 Pages, files and modules have no new universal approval gate. Follow the teacher's requested scope; assignments and quizzes retain their existing review policy. A held or uncertain write needs the specific recovery described by the Engine. Do not erase a receipt or saved create record to make a rerun write again; use exact live IDs to resolve uncertainty. Continue independent content while an item is held and report which objects exist and what remains.
 

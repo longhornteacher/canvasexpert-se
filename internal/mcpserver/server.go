@@ -11,12 +11,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -34,6 +36,8 @@ type Server struct {
 	sessions          map[string]*reviewTask
 	newSessionCommand func([]string) *exec.Cmd
 	sessionReadyWait  time.Duration
+	pulls             map[string]*pullJob
+	run               func(context.Context, ...string) (TextOutput, error) // nil uses command; tests replace it
 }
 
 type TextOutput struct {
@@ -70,6 +74,23 @@ type WriteFileInput struct {
 type PullWorkInput struct {
 	Course     string `json:"course,omitempty" jsonschema:"Configured course nickname; omit to pull current courses"`
 	Assignment string `json:"assignment,omitempty" jsonschema:"Optional assignment title or ID"`
+	GroupID    *int64 `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID; requires course and assignment"`
+	Session    bool   `json:"session,omitempty" jsonschema:"Prepare this pull for a scoring session, including current-term discovery and timing-only evidence"`
+}
+
+type PrepareLateTimingInput struct {
+	Packet   string                               `json:"packet" jsonschema:"Workspace-relative packet or group-packet path under courses/"`
+	Students []workflow.LateTimingStudentDecision `json:"students,omitempty" jsonschema:"First-genuine choices for individual packet members"`
+	Groups   []workflow.LateTimingGroupDecision   `json:"groups,omitempty" jsonschema:"Per-member first-genuine choices for group-packet entries"`
+}
+
+type ParentReportInput struct {
+	Courses  []string `json:"courses" jsonschema:"Configured course nicknames; one email can cover several courses"`
+	Students []string `json:"students,omitempty" jsonschema:"Optional student refs; omit for every active student"`
+}
+
+type ParentReviewInput struct {
+	Folder string `json:"folder" jsonschema:"Workspace-relative parent-update run folder under courses/ holding report.json and drafts.json"`
 }
 
 type CourseQueryInput struct {
@@ -77,8 +98,50 @@ type CourseQueryInput struct {
 	Query  string `json:"query" jsonschema:"Assignment title or ID, or Page ID or Canvas link"`
 }
 
+type PageQueryInput struct {
+	Course  string `json:"course" jsonschema:"Configured course nickname"`
+	Query   string `json:"query" jsonschema:"Exact Page ID or Canvas Page link; preserve this field name"`
+	GroupID int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID for a group Page"`
+}
+
+type PageRevisionsInput struct {
+	Course     string `json:"course" jsonschema:"Configured course nickname"`
+	PageID     int64  `json:"page_id" jsonschema:"Exact numeric Canvas Page ID"`
+	GroupID    int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID"`
+	RevisionID int64  `json:"revision_id,omitempty" jsonschema:"Optional revision ID; selected revision includes its historical body"`
+}
+
+type DiscussionQueryInput struct {
+	Course  string `json:"course" jsonschema:"Configured course nickname"`
+	TopicID int64  `json:"topic_id" jsonschema:"Exact Canvas discussion topic ID"`
+	GroupID int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID for a direct group topic"`
+}
+
 type CourseInput struct {
 	Course string `json:"course" jsonschema:"Configured course nickname"`
+}
+
+type GroupSetsInput struct {
+	Course string `json:"course" jsonschema:"Configured course nickname"`
+}
+type GroupsInput struct {
+	Course         string `json:"course" jsonschema:"Configured course nickname"`
+	GroupSetID     int64  `json:"group_set_id,omitempty" jsonschema:"Optional exact collaborative group-set ID"`
+	GroupID        int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID"`
+	IncludeMembers bool   `json:"include_members,omitempty" jsonschema:"Return stable student refs and aliases for this exact group only"`
+}
+type PullGroupSetInput struct {
+	Course     string `json:"course" jsonschema:"Configured course nickname"`
+	GroupSetID int64  `json:"group_set_id" jsonschema:"Exact collaborative group-set ID"`
+}
+type PullGroupMembershipsInput struct {
+	Course          string `json:"course" jsonschema:"Configured course nickname"`
+	GroupCategoryID int64  `json:"group_category_id" jsonschema:"Exact collaborative group-set ID"`
+}
+
+type PullAssignmentDatesInput struct {
+	Course       string `json:"course" jsonschema:"Configured course nickname"`
+	AssignmentID int64  `json:"assignment_id" jsonschema:"Exact numeric Canvas assignment ID"`
 }
 
 type PathInput struct {
@@ -125,7 +188,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "help", in.Topic)
 	})
-	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Student identity is pseudonymized by the Engine; never access .cse.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
+	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Set session for current-term scoring discovery and timing-only evidence. Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
 		args := []string{"pull-work"}
 		if in.Course != "" {
 			args = append(args, in.Course)
@@ -136,16 +199,113 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 			}
 			args = append(args, in.Assignment)
 		}
-		return s.command(ctx, args...)
+		if in.GroupID != nil {
+			if *in.GroupID <= 0 || in.Course == "" || in.Assignment == "" {
+				return TextOutput{}, errors.New("positive group_id requires explicit course and assignment")
+			}
+			args = append(args, "--group", strconv.FormatInt(*in.GroupID, 10))
+		}
+		if in.Session {
+			args = append(args, "--session")
+		}
+		return s.longCommand(ctx, args...)
+	})
+	addActionTool(server, "prepare_late_timing", "Check first-genuine submission and deadline decisions against a pulled packet, compute school time from the active calendar when needed, and return proposed/unchanged/held actions. This only prepares a reviewable result; it never writes to Canvas.", false, func(_ context.Context, _ *mcp.CallToolRequest, in PrepareLateTimingInput) (TextOutput, error) {
+		var config domain.CourseConfig
+		if _, err := workspace.ReadTeacherDocument(s.root, "context/courses.md", &config); err != nil {
+			return TextOutput{}, err
+		}
+		prepared, err := (&workflow.Service{Root: s.root, Config: config}).PrepareLateTimingDecisions(workflow.LateTimingDecisionsDocument{Schema: 1, Kind: "late-timing-decisions", Packet: in.Packet, Students: in.Students, Groups: in.Groups})
+		if err != nil {
+			return TextOutput{}, err
+		}
+		encoded, err := json.MarshalIndent(prepared, "", "  ")
+		if err != nil {
+			return TextOutput{}, err
+		}
+		return TextOutput{Text: string(encoded)}, nil
+	})
+	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates (course score, missing work, correction candidates, due soon, grade history) into courses/<course>/parent-updates/<run>/report.json. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
+		return s.longCommand(ctx, append(append([]string{"parent-report"}, in.Courses...), in.Students...)...)
+	})
+	addActionTool(server, "start_parent_review", "Open the private page where the teacher reviews parent emails with their real recipients and sends them through Outlook. Returns only the loopback URL; call review_status afterward for counts and outcomes by student reference. This tool never sends and never exposes addresses.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
+		dir, err := s.coursePath(in.Folder)
+		if err != nil {
+			return TextOutput{}, err
+		}
+		return s.startSession(ctx, "review", []string{"parent-review", dir})
+	})
+	addActionTool(server, "print_student_reports", "Save one PDF of student reports from a parent-update run folder (report.json and drafts.json), one student per page, in the teacher's Downloads folder, and open it for printing. Every student gets a page. Returns the file path and count only; the PDF holds student names and is outside the workspace. Nothing is sent or written to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
+		dir, err := s.coursePath(in.Folder)
+		if err != nil {
+			return TextOutput{}, err
+		}
+		return s.command(ctx, "student-report", dir)
 	})
 	addReadTool(server, "list_modules", "List a configured course's Canvas modules through the CE-SE Engine.", func(ctx context.Context, _ *mcp.CallToolRequest, in CourseInput) (TextOutput, error) {
 		return s.command(ctx, "modules", in.Course)
 	})
+	addReadTool(server, "list_group_sets", "List collaborative group sets in a configured course. Differentiation tags are excluded.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupSetsInput) (TextOutput, error) {
+		return s.command(ctx, "groups", in.Course)
+	})
+	addReadTool(server, "list_groups", "List collaborative clubs. An exact group-set read includes stable-ref memberships and unassigned students; an exact group read includes memberships only when requested. Private names, logins and contact data are never returned.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupsInput) (TextOutput, error) {
+		args := []string{"groups", in.Course, "--groups"}
+		if in.GroupSetID > 0 {
+			args = append(args, "--set", strconv.FormatInt(in.GroupSetID, 10))
+		}
+		if in.GroupID > 0 {
+			flag := "--group"
+			if in.IncludeMembers {
+				flag = "--members"
+			}
+			args = append(args, flag, strconv.FormatInt(in.GroupID, 10))
+		}
+		return s.command(ctx, args...)
+	})
+	addActionTool(server, "pull_group_set", "Save an editable baseline for an exact collaborative group set under courses/.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullGroupSetInput) (TextOutput, error) {
+		return s.longCommand(ctx, "pull-group-set", in.Course, strconv.FormatInt(in.GroupSetID, 10))
+	})
+	addActionTool(server, "pull_group_memberships", "Save an exact group-set membership baseline with stable student refs, aliases, membership states and the unassigned roster. The returned path can be edited with explicit changes or allocate-unassigned and pushed through push_document.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullGroupMembershipsInput) (TextOutput, error) {
+		return s.longCommand(ctx, "pull-group-memberships", in.Course, strconv.FormatInt(in.GroupCategoryID, 10))
+	})
+	addActionTool(server, "pull_assignment_dates", "Pull the exact assignment override IDs, targets, date baselines and per-student effective dates into an editable assignment-dates document. Student targets appear only through existing private student refs.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullAssignmentDatesInput) (TextOutput, error) {
+		if in.AssignmentID <= 0 {
+			return TextOutput{}, errors.New("assignment_id must be positive")
+		}
+		return s.command(ctx, "pull-assignment-dates", in.Course, strconv.FormatInt(in.AssignmentID, 10))
+	})
 	addActionTool(server, "pull_assignment", "Pull an exact Canvas assignment and its edit baseline through the CE-SE Engine.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
 		return s.command(ctx, "pull-item", in.Course, in.Query)
 	})
-	addActionTool(server, "pull_page", "Pull an exact Canvas Page and its edit baseline through the CE-SE Engine.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
-		return s.command(ctx, "pull-page", in.Course, in.Query)
+	addActionTool(server, "pull_page", "Pull an exact Canvas Page and its edit baseline through the CE-SE Engine. Use group_id for a group Page; query remains the exact Page ID or link.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PageQueryInput) (TextOutput, error) {
+		args := []string{"pull-page", in.Course, in.Query}
+		if in.GroupID != 0 {
+			if in.GroupID < 0 {
+				return TextOutput{}, errors.New("group_id must be positive")
+			}
+			args = append(args, "--group", strconv.FormatInt(in.GroupID, 10))
+		}
+		return s.command(ctx, args...)
+	})
+	addActionTool(server, "pull_discussion", "Pull an exact course, distributed club, or direct group discussion. Saves topic.md plus an as-of discussion-packet with complete/partial entry coverage, stable-ref attribution, and attachment status. A long pull returns pending; call again with the same inputs to wait on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in DiscussionQueryInput) (TextOutput, error) {
+		args := []string{"pull-discussion", in.Course, strconv.FormatInt(in.TopicID, 10)}
+		if in.GroupID != 0 {
+			if in.GroupID < 0 {
+				return TextOutput{}, errors.New("group_id must be positive")
+			}
+			args = append(args, "--group", strconv.FormatInt(in.GroupID, 10))
+		}
+		return s.longCommand(ctx, args...)
+	})
+	addReadTool(server, "list_page_revisions", "Read revision metadata for an exact course or group Page. Set revision_id to also read that revision's historical body; this does not identify every contributor or simultaneous edits.", func(ctx context.Context, _ *mcp.CallToolRequest, in PageRevisionsInput) (TextOutput, error) {
+		args := []string{"page-history", in.Course, strconv.FormatInt(in.PageID, 10)}
+		if in.GroupID != 0 {
+			args = append(args, "--group", strconv.FormatInt(in.GroupID, 10))
+		}
+		if in.RevisionID != 0 {
+			args = append(args, "--revision", strconv.FormatInt(in.RevisionID, 10))
+		}
+		return s.command(ctx, args...)
 	})
 	addReadTool(server, "read_workspace_file", "Read a root .md/.txt teacher reference, workspace instruction, playbook, context file, or course work file through its active authority. Returns authority metadata and the file hash. Hidden folders, .cse, and Engine files are blocked.", func(_ context.Context, _ *mcp.CallToolRequest, in ReadFileInput) (TextOutput, error) {
 		path, err := s.readablePath(in.Path)
@@ -197,7 +357,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "list_courses", "list_modules", "pull_work", "pull_assignment", "pull_page", "start_review", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

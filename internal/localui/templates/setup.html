@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CanvasExpert-SE setup</title>
 <style>{{pageCSS}}</style>
 <main>
-{{if .Hub}}{{nav "Settings" "Connections"}}{{end}}
+{{if .Hub}}{{nav "Settings" "Connections" .Appearance}}{{else}}{{.Appearance.Control}}{{end}}
 <h1>Connect Canvas</h1>
 <p>CE-SE needs an Access token from your Canvas account to work with your courses. It is kept in Windows Credential Manager on this PC and never written to a file.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
@@ -15,4 +15,5 @@
 <label for="token">Access token</label><input id="token" name="token" type="password" required autocomplete="off" spellcheck="false">
 <button type="submit">Connect</button></form>
 </main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
 </html>

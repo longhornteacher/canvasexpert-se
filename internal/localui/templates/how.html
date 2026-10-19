@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>How it works</title>
 <style>{{pageCSS}}</style>
 <main class="wide">
-{{nav "Guide" "How it works"}}
+{{nav "Guide" "How it works" .Appearance}}
 <h1>How it works</h1><p><b>Dev</b> is where the product is developed and its download ZIP is built. Unzip the download into the local folder where you want to keep it: that folder is already <b>UserInstall</b>. Run directly there; setup connects apps and Canvas without copying the program into another folder. Optional <b>UserSync</b> holds reusable teacher setup; its provider carries those files between computers. These names describe each folder's role; you do not need to rename your folders.</p>
 <div class="cards">
 <div class="card"><h2>The Engine</h2><p>The machinery that lets an agent work with Canvas. It includes starter playbooks, carries no private teacher data, and is replaced when you install a new version.</p><p><span class="pill on">{{.Version}}</span></p><p><code>{{if .Program}}{{.Program}}{{else}}unknown{{end}}</code></p></div>
@@ -22,4 +22,5 @@
 <details class="card guide-topic"><summary>Ask the agent for work</summary><ol><li>Say <b>scoring session</b>: it pulls the work, then asks what to do.</li><li>Say <b>draft</b>: it saves scores and feedback but does not post.</li><li>For scores, new assignments, New Quizzes and assignment edits, the Engine opens a review page. Review the proposed work and approve it there before posting; say if you want to skip review.</li><li>After Canvas accepts a post, the agent reports completion in one line and stops without re-checking Canvas.</li><li>Say <b>score and post</b> to set what gets posted; the review page remains the approval step.</li></ol></details>
 </section>
 </main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
 </html>

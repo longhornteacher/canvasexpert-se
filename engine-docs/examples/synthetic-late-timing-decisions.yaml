@@ -1,0 +1,12 @@
+---
+schema: 1
+kind: late-timing-decisions
+packet: courses/CS8/work/20261018T120000Z/packet.yaml
+students:
+  - student_ref: s-ada
+    first_genuine:
+      attempt: 1
+      submitted_at: "2026-10-16T09:00:00-05:00"
+    accommodated_deadline: "2026-10-15T18:00:00-05:00"
+    accommodation_basis: "One extra school day in the teacher's documented plan; Canvas did not include this extension."
+---

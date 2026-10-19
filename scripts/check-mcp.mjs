@@ -56,7 +56,37 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 26);
+  assert.equal(names.length, 38);
+  assert.ok(names.includes('list_external_resources'), 'missing list_external_resources');
+  const externalResourcesTool = discovered.result.tools.find(t => t.name === 'list_external_resources');
+  assert.ok(externalResourcesTool.inputSchema.properties.course, 'list_external_resources must require course');
+  assert.ok(externalResourcesTool.inputSchema.properties.group_id, 'list_external_resources must expose optional group_id');
+  assert.ok(externalResourcesTool.inputSchema.properties.resource_type, 'list_external_resources must expose resource_type');
+  await call('list_external_resources', { course: 'CS8', resource_type: 'invalid' }, true);
+  for (const name of ['list_group_sets', 'list_groups', 'pull_group_set', 'pull_group_memberships']) assert.ok(names.includes(name), `missing ${name}`);
+  assert.ok(names.includes('pull_assignment_dates'), 'missing pull_assignment_dates');
+  const assignmentDatesTool = discovered.result.tools.find(t => t.name === 'pull_assignment_dates');
+  assert.ok(assignmentDatesTool.inputSchema.properties.assignment_id, 'pull_assignment_dates must require exact assignment_id');
+  for (const name of ['pull_page', 'list_page_revisions']) assert.ok(names.includes(name), `missing ${name}`);
+  assert.ok(names.includes('pull_discussion'), 'missing pull_discussion');
+  assert.ok(names.includes('pull_work'), 'missing pull_work');
+  assert.ok(names.includes('prepare_late_timing'), 'missing prepare_late_timing');
+  const prepareLateTool = discovered.result.tools.find(t => t.name === 'prepare_late_timing');
+  for (const field of ['packet', 'students', 'groups']) assert.ok(prepareLateTool.inputSchema.properties[field], `prepare_late_timing must expose ${field}`);
+  const pullWorkTool = discovered.result.tools.find(t => t.name === 'pull_work');
+  assert.ok(pullWorkTool.inputSchema.properties.group_id, 'pull_work must expose optional group_id');
+  assert.ok(pullWorkTool.inputSchema.properties.session, 'pull_work must expose scoring-session discovery');
+  assert.match(pullWorkTool.description, /group-packet\/group-work/);
+  await call('pull_work', { course: 'CS8', assignment: '10', group_id: 0 }, true);
+  await call('pull_work', { course: 'CS8', group_id: 60 }, true);
+  const discussionTool = discovered.result.tools.find(t => t.name === 'pull_discussion');
+  assert.ok(discussionTool.inputSchema.properties.topic_id, 'pull_discussion must expose topic_id');
+  assert.ok(discussionTool.inputSchema.properties.group_id, 'pull_discussion must expose optional group_id');
+  assert.match(discussionTool.description, /discussion-packet/);
+  assert.match(discussionTool.description, /pending/);
+  const pageTool = discovered.result.tools.find(t => t.name === 'pull_page');
+  assert.ok(pageTool.inputSchema.properties.query, 'pull_page must preserve the query input');
+  assert.ok(pageTool.inputSchema.properties.group_id, 'pull_page must expose optional group_id');
   const configured = JSON.parse(await call('list_courses'));
   assert.equal(configured.source, 'configured');
   assert.equal(configured.root, root);
@@ -66,6 +96,8 @@ try {
   assert.equal(configured.instance, origin);
   assert.deepEqual(configured.courses, []);
   await call('list_courses', { source: 'unknown' }, true);
+  await call('pull_page', { course: 'CS8', query: '7', group_id: -1 }, true);
+  await call('pull_discussion', { course: 'CS8', topic_id: 7, group_id: -1 }, true);
   assert.equal(await readFile(path.join(root, 'context/grading.md'), 'utf8'), 'Teacher-edited grading fixture.');
   assert.match(await call('read_workspace_file', { path: 'playbooks/setup.md' }), /source: canvas/);
   const coursesRead = await call('read_workspace_file', { path: 'context/courses.md' });
@@ -74,6 +106,19 @@ try {
   const updatedCourses = JSON.parse(await call('list_courses', { source: 'configured' }));
   assert.equal(updatedCourses.root, root);
   assert.deepEqual(updatedCourses.courses, [{ nickname: 'CS8', id: 11, current: true, timezone: 'America/Chicago' }, { nickname: 'OLD', id: 22, current: false }]);
+  await call('write_draft', { path: 'courses/mcp-late/packet.yaml', content: `---\nschema: 1\nkind: packet\ncourse: CS8\nassignment:\n  instance: ${origin}\n  course_id: 11\n  assignment_id: 20\n  title: MCP timing fixture\n  points: 10\n  submission_types: [online_text_entry]\nstudents: [courses/mcp-late/student.yaml]\n---\n` });
+  await call('write_draft', { path: 'courses/mcp-late/student.yaml', content: `---\nschema: 1\nkind: student-work\nstudent_ref: s-mcp\nalias: Student\nassignment_id: 20\nassignment_visible: true\ncurrent:\n  ref:\n    attempt: 1\n    submitted_at: "2026-10-18T10:00:00-05:00"\n  effective_due_at: "2026-10-19T10:00:00-05:00"\n  observed_timing:\n    status_known: true\n    late_policy_status: null\n    late_known: true\n    late: false\n    seconds_late_known: true\n    seconds_late: 0\n    custom_status_known: true\n    has_custom_status: false\n---\n` });
+  const preparedLate = JSON.parse(await call('prepare_late_timing', {
+    packet: 'courses/mcp-late/packet.yaml',
+    students: [{ student_ref: 's-mcp', first_genuine: { attempt: 1, submitted_at: '2026-10-18T10:00:00-05:00' } }],
+  }));
+  assert.equal(preparedLate.kind, 'late-timing-preparation');
+  assert.equal(preparedLate.students[0].student_ref, 's-mcp');
+  assert.equal(preparedLate.students[0].status, 'unchanged');
+  await call('write_draft', { path: 'courses/mcp-late/decisions.yaml', content: `---\nschema: 1\nkind: late-timing-decisions\npacket: courses/mcp-late/packet.yaml\nstudents:\n  - student_ref: s-mcp\n    first_genuine:\n      attempt: 1\n      submitted_at: "2026-10-18T10:00:00-05:00"\n---\n` });
+  const cliPreparedLate = spawnSync(installedEngine, ['--workspace', root, 'prepare-late-timing', 'courses/mcp-late/decisions.yaml'], { windowsHide: true, cwd: otherDirectory, encoding: 'utf8' });
+  assert.equal(cliPreparedLate.status, 0, cliPreparedLate.stderr);
+  assert.deepEqual(JSON.parse(cliPreparedLate.stdout), preparedLate, 'CLI and MCP preparation should agree without Canvas credentials');
   await call('engine_info');
   const syncRoot = await mkdtemp(path.join(tmpdir(), 'cse-rules-sync-'));
   const binding = JSON.parse(await call('engine_info', { operation: 'set-rules-location', sync_root: syncRoot }));
@@ -110,6 +155,18 @@ try {
   const assignment = (await readFile('engine-docs/examples/synthetic-assignment-create.md', 'utf8')).replace('course: DEMO', 'course: CS8');
   await call('write_draft', { path: 'courses/assignment.md', content: assignment });
   await call('validate_document', { path: 'courses/assignment.md' });
+  const groupAssignment = (await readFile('engine-docs/examples/synthetic-group-assignment.md', 'utf8')).replace('course: ELA7', 'course: CS8');
+  await call('write_draft', { path: 'courses/group-assignment.md', content: groupAssignment });
+  await call('validate_document', { path: 'courses/group-assignment.md' });
+  const assignmentDates = await readFile('engine-docs/examples/synthetic-assignment-dates.md', 'utf8');
+  await call('write_draft', { path: 'courses/assignment-dates.md', content: assignmentDates });
+  await call('validate_document', { path: 'courses/assignment-dates.md' });
+  const discussionPacket = await readFile('engine-docs/examples/synthetic-discussion-packet.yaml', 'utf8');
+  await call('write_draft', { path: 'courses/discussion-packet.yaml', content: discussionPacket });
+  await call('validate_document', { path: 'courses/discussion-packet.yaml' });
+  const discussionReply = await readFile('engine-docs/examples/synthetic-discussion-reply.md', 'utf8');
+  await call('write_draft', { path: 'courses/discussion-reply.md', content: discussionReply });
+  await call('validate_document', { path: 'courses/discussion-reply.md' });
   if (review) {
     const started = await call('start_review', { path: 'courses/assignment.md', course: 'CS8' }, false, true);
     assert.equal(started.state, 'pending', JSON.stringify(started));
@@ -143,7 +200,7 @@ try {
   assert.equal(unavailable.mode, 'sync');
   assert.match(unavailable.availability_error, /unavailable/);
   await call('read_workspace_file', { path: 'context/grading.md' }, true);
-  console.log(`PASS: 26 tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, references, discovery, path exclusions, guarded context, binary asset and QuizForge/document validation${review ? ', real local review and revision status' : ''}. No Canvas writes.`);
+  console.log(`PASS: ${names.length} tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, group/Page/discussion/external-resource discovery, references, path exclusions, guarded context, binary asset and QuizForge/document validation${review ? ', real local review and revision status' : ''}. No Canvas writes.`);
   console.log(`Synthetic fixture: ${root}`);
 } finally {
   child.stdin.end();

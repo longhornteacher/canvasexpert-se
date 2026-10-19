@@ -80,6 +80,10 @@ func (s *Service) BuildEditReview(ctx context.Context, path string) (ReviewModel
 			if doc.Published {
 				c.Facts = append(c.Facts, fact("Note", "Publishing makes the assignment visible to students."))
 			}
+		case "group_category_id":
+			c.Facts = []ReviewFact{fact("Now in Canvas", fmt.Sprint(cur.GroupCategoryID)), fact("After this edit", fmt.Sprint(doc.GroupCategoryID))}
+		case "grade_group_students_individually":
+			c.Facts = []ReviewFact{fact("Now in Canvas", optionalBool(cur.GradeGroupStudentsIndividually)), fact("After this edit", optionalBool(doc.GradeGroupStudentsIndividually))}
 		}
 		m.Cards = append(m.Cards, c)
 	}
@@ -97,5 +101,12 @@ func patchFields(patch map[string]any) []string {
 
 func fieldLabel(key string) string {
 	return map[string]string{"name": "Title", "description": "Directions", "points_possible": "Points", "submission_types": "Submission types",
-		"due_at": "Due date", "unlock_at": "Available from", "lock_at": "Available until", "published": "Published"}[key]
+		"due_at": "Due date", "unlock_at": "Available from", "lock_at": "Available until", "published": "Published", "group_category_id": "Collaborative group set", "grade_group_students_individually": "Grade members individually"}[key]
+}
+
+func optionalBool(value *bool) string {
+	if value == nil {
+		return "unknown"
+	}
+	return fmt.Sprint(*value)
 }

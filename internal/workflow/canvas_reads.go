@@ -3,6 +3,7 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"canvasexpertse/internal/canvas"
+	"canvasexpertse/internal/domain"
 )
 
 type Course struct {
@@ -39,33 +41,65 @@ type Criterion struct {
 	Range           bool        `json:"criterion_use_range"`
 }
 type Assignment struct {
-	ID              int64       `json:"id"`
-	CourseID        int64       `json:"course_id"`
-	Name            string      `json:"name"`
-	Description     string      `json:"description"`
-	Points          json.Number `json:"points_possible"`
-	SubmissionTypes []string    `json:"submission_types"`
-	Published       bool        `json:"published"`
-	DueAt           *string     `json:"due_at"`
-	UnlockAt        *string     `json:"unlock_at"`
-	LockAt          *string     `json:"lock_at"`
-	UpdatedAt       string      `json:"updated_at"`
-	CreatedAt       string      `json:"created_at"`
-	HTMLURL         string      `json:"html_url"`
-	GradingType     string      `json:"grading_type"`
-	GroupCategoryID *int64      `json:"group_category_id"`
-	Anonymous       bool        `json:"anonymous_grading"`
-	Moderated       bool        `json:"moderated_grading"`
-	QuizID          *int64      `json:"quiz_id"`
-	NewQuiz         bool        `json:"is_quiz_lti_assignment"`
-	Rubric          []Criterion `json:"rubric"`
-	RubricSettings  struct {
+	ID                             int64       `json:"id"`
+	CourseID                       int64       `json:"course_id"`
+	Name                           string      `json:"name"`
+	Description                    string      `json:"description"`
+	Points                         json.Number `json:"points_possible"`
+	SubmissionTypes                []string    `json:"submission_types"`
+	Published                      bool        `json:"published"`
+	DueAt                          *string     `json:"due_at"`
+	UnlockAt                       *string     `json:"unlock_at"`
+	LockAt                         *string     `json:"lock_at"`
+	UpdatedAt                      string      `json:"updated_at"`
+	CreatedAt                      string      `json:"created_at"`
+	HTMLURL                        string      `json:"html_url"`
+	GradingType                    string      `json:"grading_type"`
+	GroupCategoryID                *int64      `json:"group_category_id"`
+	GradeGroupStudentsIndividually *bool       `json:"grade_group_students_individually"`
+	DiscussionTopicID              *int64      `json:"discussion_topic_id"`
+	DiscussionTopic                *struct {
+		ID int64 `json:"id"`
+	} `json:"discussion_topic"`
+	HasSubAssignments      *bool                          `json:"has_sub_assignments"`
+	Checkpoints            *[]domain.AssignmentCheckpoint `json:"checkpoints"`
+	Overrides              []AssignmentOverrideLive       `json:"overrides"`
+	OnlyVisibleToOverrides *bool                          `json:"only_visible_to_overrides"`
+	AllDates               *[]AssignmentAllDateLive       `json:"all_dates"`
+	Anonymous              bool                           `json:"anonymous_grading"`
+	Moderated              bool                           `json:"moderated_grading"`
+	QuizID                 *int64                         `json:"quiz_id"`
+	NewQuiz                bool                           `json:"is_quiz_lti_assignment"`
+	Rubric                 []Criterion                    `json:"rubric"`
+	RubricSettings         struct {
 		ID       int64       `json:"id"`
 		Title    string      `json:"title"`
 		Points   json.Number `json:"points_possible"`
 		FreeForm bool        `json:"free_form_criterion_comments"`
 	} `json:"rubric_settings"`
 	RubricAssociation *RubricAssociation `json:"rubric_association"`
+}
+
+type AssignmentOverrideLive struct {
+	ID              int64   `json:"id"`
+	Title           string  `json:"title"`
+	GroupID         int64   `json:"group_id"`
+	StudentIDs      []int64 `json:"student_ids"`
+	CourseSectionID int64   `json:"course_section_id"`
+	DueAt           *string `json:"due_at"`
+	UnlockAt        *string `json:"unlock_at"`
+	LockAt          *string `json:"lock_at"`
+}
+type AssignmentAllDateLive struct {
+	ID              int64   `json:"id"`
+	Base            bool    `json:"base"`
+	UserID          int64   `json:"user_id"`
+	StudentID       int64   `json:"student_id"`
+	GroupID         int64   `json:"group_id"`
+	CourseSectionID int64   `json:"course_section_id"`
+	DueAt           *string `json:"due_at"`
+	UnlockAt        *string `json:"unlock_at"`
+	LockAt          *string `json:"lock_at"`
 }
 type RubricAssociation struct {
 	ID              int64  `json:"id"`
@@ -86,6 +120,9 @@ type Enrollment struct {
 	Type   string     `json:"type"`
 	State  string     `json:"enrollment_state"`
 	User   CanvasUser `json:"user"`
+	Grades *struct {
+		CurrentScore *json.Number `json:"current_score"`
+	} `json:"grades"`
 }
 
 func StudentEnrollments(ctx context.Context, c *canvas.Client, courseID int64) ([]Enrollment, error) {
@@ -118,6 +155,7 @@ type Submission struct {
 	SubmittedAt                   *string                `json:"submitted_at"`
 	GradedAt                      *string                `json:"graded_at"`
 	CachedDueDate                 *string                `json:"cached_due_date"`
+	CachedDueDatePresent          bool                   `json:"-"`
 	Type                          string                 `json:"submission_type"`
 	State                         string                 `json:"workflow_state"`
 	Score                         *json.Number           `json:"score"`
@@ -126,10 +164,18 @@ type Submission struct {
 	Excused                       bool                   `json:"excused"`
 	Missing                       bool                   `json:"missing"`
 	Late                          bool                   `json:"late"`
+	LateKnown                     bool                   `json:"-"`
 	LatePolicyStatus              *string                `json:"late_policy_status"`
+	LatePolicyStatusKnown         bool                   `json:"-"`
+	CustomGradeStatusID           json.RawMessage        `json:"custom_grade_status_id,omitempty"`
 	SecondsLate                   int64                  `json:"seconds_late"`
+	SecondsLateKnown              bool                   `json:"-"`
 	GradeMatchesCurrentSubmission *bool                  `json:"grade_matches_current_submission"`
 	AssignmentVisible             *bool                  `json:"assignment_visible"`
+	PostedAt                      *string                `json:"posted_at"`
+	PostedAtPresent               bool                   `json:"-"`
+	GroupID                       int64                  `json:"group_id"`
+	Group                         *SubmissionGroup       `json:"group"`
 	User                          CanvasUser             `json:"user"`
 	History                       []Submission           `json:"submission_history"`
 	Attachments                   []Attachment           `json:"attachments"`
@@ -145,6 +191,79 @@ type Submission struct {
 		Message   string `json:"message"`
 		CreatedAt string `json:"created_at"`
 	} `json:"discussion_entries"`
+}
+
+// UnmarshalJSON retains whether nullable effective-date and timing fields were
+// returned at all. Canvas omitting a field is different from returning null.
+func (s *Submission) UnmarshalJSON(data []byte) error {
+	type plain Submission
+	var decoded struct {
+		*plain
+		CachedDueDate    json.RawMessage `json:"cached_due_date"`
+		LatePolicyStatus json.RawMessage `json:"late_policy_status"`
+		Late             json.RawMessage `json:"late"`
+		SecondsLate      json.RawMessage `json:"seconds_late"`
+		PostedAt         json.RawMessage `json:"posted_at"`
+	}
+	*s = Submission{}
+	decoded.plain = (*plain)(s)
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	s.CachedDueDatePresent = len(decoded.CachedDueDate) > 0
+	if s.CachedDueDatePresent {
+		if bytes.Equal(bytes.TrimSpace(decoded.CachedDueDate), []byte("null")) {
+			s.CachedDueDate = nil
+		} else {
+			var value string
+			if err := json.Unmarshal(decoded.CachedDueDate, &value); err != nil {
+				return fmt.Errorf("cached_due_date must be a timestamp or null: %w", err)
+			}
+			s.CachedDueDate = &value
+		}
+	}
+	s.LatePolicyStatusKnown = len(decoded.LatePolicyStatus) > 0
+	if s.LatePolicyStatusKnown {
+		if bytes.Equal(bytes.TrimSpace(decoded.LatePolicyStatus), []byte("null")) {
+			s.LatePolicyStatus = nil
+		} else {
+			var value string
+			if err := json.Unmarshal(decoded.LatePolicyStatus, &value); err != nil {
+				return fmt.Errorf("late_policy_status must be a string or null: %w", err)
+			}
+			s.LatePolicyStatus = &value
+		}
+	}
+	s.LateKnown = len(decoded.Late) > 0
+	if s.LateKnown {
+		if err := json.Unmarshal(decoded.Late, &s.Late); err != nil {
+			return fmt.Errorf("late must be a boolean: %w", err)
+		}
+	}
+	s.SecondsLateKnown = len(decoded.SecondsLate) > 0
+	if s.SecondsLateKnown {
+		if err := json.Unmarshal(decoded.SecondsLate, &s.SecondsLate); err != nil {
+			return fmt.Errorf("seconds_late must be an integer: %w", err)
+		}
+	}
+	s.PostedAtPresent = len(decoded.PostedAt) > 0
+	if s.PostedAtPresent {
+		if bytes.Equal(bytes.TrimSpace(decoded.PostedAt), []byte("null")) {
+			s.PostedAt = nil
+		} else {
+			var value string
+			if err := json.Unmarshal(decoded.PostedAt, &value); err != nil {
+				return fmt.Errorf("posted_at must be a timestamp or null: %w", err)
+			}
+			s.PostedAt = &value
+		}
+	}
+	return nil
+}
+
+type SubmissionGroup struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 type RubricScore struct {
 	Points   *json.Number `json:"points"`
@@ -169,7 +288,7 @@ func Assignments(ctx context.Context, c *canvas.Client, courseID int64) ([]Assig
 }
 func GetAssignment(ctx context.Context, c *canvas.Client, courseID, id int64) (Assignment, error) {
 	var result Assignment
-	err := c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d?include[]=rubric_assessment", courseID, id), &result)
+	err := c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d?include[]=rubric_assessment&include[]=checkpoints&include[]=all_dates&include[]=overrides&include[]=discussion_topic", courseID, id), &result)
 	if err != nil {
 		return result, err
 	}
@@ -199,7 +318,7 @@ func GetAssignment(ctx context.Context, c *canvas.Client, courseID, id int64) (A
 	return result, nil
 }
 func Submissions(ctx context.Context, c *canvas.Client, courseID, id int64, detailed bool) ([]Submission, error) {
-	path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?per_page=100&include[]=user", courseID, id)
+	path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?per_page=100&include[]=user&include[]=visibility", courseID, id)
 	if detailed {
 		path += "&include[]=submission_history&include[]=submission_comments&include[]=rubric_assessment"
 	}
@@ -207,9 +326,21 @@ func Submissions(ctx context.Context, c *canvas.Client, courseID, id int64, deta
 	err := c.List(ctx, path, &result)
 	return result, err
 }
+func GroupSubmissions(ctx context.Context, c *canvas.Client, courseID, id int64) ([]Submission, error) {
+	path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?per_page=100&include[]=user&include[]=group&include[]=visibility&include[]=submission_history&include[]=submission_comments&include[]=rubric_assessment", courseID, id)
+	var result []Submission
+	err := c.List(ctx, path, &result)
+	return result, err
+}
+func GetGroupSubmission(ctx context.Context, c *canvas.Client, courseID, assignmentID, userID int64) (Submission, error) {
+	var result Submission
+	path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions/%d?include[]=user&include[]=group&include[]=visibility&include[]=submission_history&include[]=submission_comments&include[]=rubric_assessment", courseID, assignmentID, userID)
+	err := c.Get(ctx, path, &result)
+	return result, err
+}
 func GetSubmission(ctx context.Context, c *canvas.Client, courseID, id, userID int64) (Submission, error) {
 	var result Submission
-	err := c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions/%d?include[]=submission_history&include[]=submission_comments&include[]=rubric_assessment&include[]=user", courseID, id, userID), &result)
+	err := c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions/%d?include[]=submission_history&include[]=submission_comments&include[]=rubric_assessment&include[]=user&include[]=visibility", courseID, id, userID), &result)
 	return result, err
 }
 
@@ -304,9 +435,6 @@ func UnsupportedAssignment(a Assignment) string {
 	}
 	if a.Moderated {
 		return "moderated grading isn't supported yet"
-	}
-	if a.GroupCategoryID != nil && *a.GroupCategoryID != 0 {
-		return "group submissions aren't supported yet"
 	}
 	if a.QuizID != nil && !a.NewQuiz {
 		return "quizzes aren't supported yet"

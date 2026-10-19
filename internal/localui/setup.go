@@ -24,6 +24,7 @@ import (
 
 type setupHandler struct {
 	origin, secret string
+	root           string
 	initialOrigin  string
 	// knownOrigin, when set, supplies the pre-filled Canvas address afresh for
 	// each page instead of initialOrigin.
@@ -50,7 +51,7 @@ func init() {
 	register(
 		// Unlocked: validating a token is a slow network call; the setup handler has
 		// its own mutex and its hub callbacks lock h.mu around hub fields.
-		page{Path: "/setup", Methods: []string{http.MethodGet, http.MethodPost}, Template: "setup", Unlocked: true,
+		page{Path: "/setup", Methods: []string{http.MethodGet, http.MethodPost}, Template: "setup", Scripts: []string{"appearance.js"}, Unlocked: true,
 			Handle: func(h *Hub, w http.ResponseWriter, r *http.Request) { h.setup.ServeHTTP(w, r) }},
 		page{Path: "/setup/status", Handle: (*Hub).setupStatus},
 	)
@@ -140,9 +141,10 @@ func (h *setupHandler) pageNotice(w http.ResponseWriter, status int, message, no
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = tmpl("setup").Execute(w, struct {
+		Appearance                      appearanceData
 		Secret, Message, Notice, Origin string
 		Hub                             bool
-	}{h.secret, message, notice, origin, h.hub})
+	}{appearanceFor(h.root, h.secret), h.secret, message, notice, origin, h.hub})
 }
 
 func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -150,7 +152,20 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
-	if "http://"+r.Host != h.origin || r.URL.Path != "/setup" {
+	if h.root != "" {
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	}
+	if "http://"+r.Host != h.origin {
+		http.NotFound(w, r)
+		return
+	}
+	if serveAppearance(w, r, h.root, h.origin, h.secret) {
+		return
+	}
+	if serveScript(w, r) {
+		return
+	}
+	if r.URL.Path != "/setup" {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
@@ -241,7 +256,7 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	h.complete = true
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Canvas connected</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Canvas connection ready</h1><p>Your token is saved on this PC. Next, pick your courses or go back to your teaching app. You can close this page.</p></main></html>")
+	_, _ = io.WriteString(w, "<!doctype html>"+appearanceHTML(h.root)+"<meta charset=\"utf-8\"><title>Canvas connected</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Canvas connection ready</h1><p>Your token is saved on this PC. Next, pick your courses or go back to your teaching app. You can close this page.</p></main></html>")
 	close(h.done)
 }
 
@@ -253,6 +268,11 @@ func Setup(ctx context.Context, output io.Writer) error {
 
 // SetupForOrigin pre-fills only a public Canvas origin, never a stored token.
 func SetupForOrigin(ctx context.Context, output io.Writer, initialOrigin string) error {
+	return SetupForRoot(ctx, output, initialOrigin, "")
+}
+
+// SetupForRoot applies the appearance of the explicitly resolved UserInstall.
+func SetupForRoot(ctx context.Context, output io.Writer, initialOrigin, root string) error {
 	if err := platform.CredentialSelfTest(); err != nil {
 		return err
 	}
@@ -266,7 +286,7 @@ func SetupForOrigin(ctx context.Context, output io.Writer, initialOrigin string)
 		return errors.New("could not create the local setup form")
 	}
 	origin := "http://" + listener.Addr().String()
-	handler := &setupHandler{origin: origin, secret: hex.EncodeToString(nonce[:]), initialOrigin: initialOrigin, ctx: ctx, validate: validateCredential, save: platform.SaveCredential, done: make(chan struct{})}
+	handler := &setupHandler{origin: origin, secret: hex.EncodeToString(nonce[:]), initialOrigin: initialOrigin, root: root, ctx: ctx, validate: validateCredential, save: platform.SaveCredential, done: make(chan struct{})}
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()

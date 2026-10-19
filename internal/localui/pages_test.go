@@ -27,7 +27,7 @@ func TestRegisteredPagesDriveNavAndCSP(t *testing.T) {
 		if has := strings.Contains(csp, "script-src 'self'"); has != (len(p.Scripts) > 0) {
 			t.Errorf("%s: script-src %v, scripts %v", path, has, p.Scripts)
 		}
-		if has := strings.Contains(csp, "connect-src 'self'"); has != p.Connect {
+		if has := strings.Contains(csp, "connect-src 'self'"); has != (p.Connect || hasAppearance(p)) {
 			t.Errorf("%s: connect-src %v, Connect %v", path, has, p.Connect)
 		}
 	}

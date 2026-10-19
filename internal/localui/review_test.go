@@ -16,7 +16,7 @@ import (
 
 func reviewModelFixture() workflow.ReviewModel {
 	return workflow.ReviewModel{Kind: "Assignment scores", Title: "Essay", Cards: []workflow.ReviewCard{
-		{Ref: "s-a", Attempt: 1, Total: "9 / 10", Submission: "student response", Comment: "Assessment: 9 / 10\n\nNice <b>work</b>", TeacherNote: "private-note", Late: "late 1d 3h", LateBasis: "skipped Mon 10/12 holiday", Digest: "d1"},
+		{Ref: "s-a", Attempt: 1, Total: "9 / 10", Submission: "student response", Comment: "Assessment: 9 / 10\n\nNice <b>work</b>", TeacherNote: "private-note", Late: "late 1d 3h", LateBasis: "school-day accommodation", Facts: []workflow.ReviewFact{{Label: "Current Canvas timing", Value: "status automatic; late=false; seconds=0"}, {Label: "Proposed timing", Value: "late 3600 seconds"}}, Digest: "d1"},
 		{Ref: "s-b", Attempt: 1, Total: "5 / 10", Comment: "Needs more", Digest: "d2"},
 		{Ref: "s-c", Attempt: 1, Hold: "unreadable evidence", Digest: "d3"},
 	}}
@@ -51,7 +51,7 @@ func TestReviewPageShowsPlainTextAndMarksPrivateNotes(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/review", nil))
 	body := w.Body.String()
-	if w.Code != 200 || !strings.Contains(body, "Nice &lt;b&gt;work&lt;/b&gt;") || !strings.Contains(body, "Teacher only (not posted)") || !strings.Contains(body, "skipped Mon 10/12 holiday") || !strings.Contains(body, "Held, will not post: unreadable evidence") {
+	if w.Code != 200 || !strings.Contains(body, "Nice &lt;b&gt;work&lt;/b&gt;") || !strings.Contains(body, "Teacher only (not posted)") || !strings.Contains(body, "school-day accommodation") || !strings.Contains(body, "Current Canvas timing") || !strings.Contains(body, "Proposed timing") || !strings.Contains(body, "Held, will not post: unreadable evidence") {
 		t.Fatal(body)
 	}
 	if strings.Index(body, `<pre class="work">student response</pre>`) < 0 || strings.Index(body, `<pre class="work">student response</pre>`) > strings.Index(body, `Feedback to be posted`) {
@@ -180,5 +180,39 @@ func TestReviewReportsActualPostOutcomeAndSavedPath(t *testing.T) {
 				t.Fatalf("status %d: %+v", w.Code, h.outcome)
 			}
 		})
+	}
+}
+
+func TestReviewExtraActionAndTestButton(t *testing.T) {
+	model := reviewModelFixture()
+	model.PostLabel, model.Test = "Send approved emails", true
+	model.Actions = []workflow.ReviewAction{{Value: "drafts", Label: "Fill Outlook Drafts only"}}
+	var got string
+	tested := 0
+	h := &reviewHandler{origin: "http://127.0.0.1:1234", secret: "secret", path: filepath.Join(t.TempDir(), "results.md"), ctx: context.Background(), done: make(chan struct{}),
+		build: func() (workflow.ReviewModel, error) { return model, nil },
+		post: func(ctx context.Context, _ map[string]bool) (ReviewPostResult, error) {
+			got = ReviewActionFrom(ctx)
+			return ReviewPostResult{Status: "completed"}, nil
+		},
+		test: func(context.Context) (string, error) { tested++; return "Sent a test copy.", nil }}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/review", nil))
+	for _, want := range []string{"Send approved emails", "Fill Outlook Drafts only", "Send a test to me"} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Fatalf("page missing %q", want)
+		}
+	}
+	r := reviewForm(h, model.ReviewDigest(), "post", nil)
+	r.URL.Path = "/test"
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if tested != 1 || h.outcome != nil || !strings.Contains(w.Body.String(), "Sent a test copy.") {
+		t.Fatalf("test button must not finish the review: tested=%d outcome=%v", tested, h.outcome)
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, reviewForm(h, model.ReviewDigest(), "drafts", nil))
+	if got != "drafts" || h.outcome == nil {
+		t.Fatalf("extra action not passed to the poster: %q", got)
 	}
 }

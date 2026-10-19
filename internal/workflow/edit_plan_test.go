@@ -85,3 +85,28 @@ func TestAcademicHTMLComparison(t *testing.T) {
 		}
 	}
 }
+
+func TestSnapshotGroupModeAndDescriptiveMetadataCompatibility(t *testing.T) {
+	old := domain.AssignmentSnapshot{CourseID: 1, AssignmentID: 2, Points: domain.MustDecimal("10"), SubmissionTypes: []string{"online_text_entry"}}
+	live := old
+	individual := false
+	live.GradeGroupStudentsIndividually = &individual
+	if !SameSnapshot(old, live) || !SameGradingBasis(old, live) {
+		t.Fatal("old individual snapshot should accept Canvas false group mode")
+	}
+	group := live
+	group.GroupCategoryID = 50
+	unknownGroup := group
+	unknownGroup.GradeGroupStudentsIndividually = nil
+	if SameSnapshot(group, unknownGroup) || SameGradingBasis(group, unknownGroup) {
+		t.Fatal("missing mode on a group assignment must remain unknown")
+	}
+	metadata := live
+	topic, checkpointed := int64(91), true
+	metadata.DiscussionTopicID = &topic
+	metadata.HasSubAssignments = &checkpointed
+	metadata.Checkpoints = &[]domain.AssignmentCheckpoint{}
+	if !SameSnapshot(live, metadata) || !SameGradingBasis(live, metadata) {
+		t.Fatal("absent descriptive metadata must not invalidate an older individual snapshot")
+	}
+}

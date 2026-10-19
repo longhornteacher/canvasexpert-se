@@ -13,6 +13,7 @@ import (
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/doctor"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/outlook"
 	"canvasexpertse/internal/playbooks"
 	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
@@ -53,8 +54,14 @@ type CanvasGetInput struct {
 	Path string `json:"path" jsonschema:"Canvas API path beginning /api/v1/ or /api/quiz/v1/; include page/per_page query parameters to paginate"`
 }
 
+type ExternalResourcesInput struct {
+	Course       string `json:"course" jsonschema:"Configured course nickname"`
+	GroupID      int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group in this course"`
+	ResourceType string `json:"resource_type,omitempty" jsonschema:"collaborations, conferences, or all (default all)"`
+}
+
 type EngineInfoInput struct {
-	Operation      string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, rules-location, set-rules-location, playbooks-status, or replace-playbook"`
+	Operation      string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, or replace-playbook"`
 	SyncRoot       string `json:"sync_root,omitempty" jsonschema:"Explicit teacher-rules directory for set-rules-location; empty selects local UserInstall mode"`
 	Path           string `json:"path,omitempty" jsonschema:"Seed-managed workspace-relative file for replace-playbook"`
 	ExpectedSHA256 string `json:"expected_sha256,omitempty" jsonschema:"Current hash from playbooks-status, or missing when explicitly adding an absent file"`
@@ -62,14 +69,35 @@ type EngineInfoInput struct {
 }
 
 func (s *Server) registerOperationTools(server *mcp.Server) {
-	addActionTool(server, "push_document", "Create/resume or update an assignment, Page, or native module; attach a rubric using operation: attach-rubric. Uses the document's exact scope and existing Engine conflict/outcome checks. For assignment creation/edits use start_review by default; call directly when the teacher explicitly skips review or to resume a partly created item as its playbook permits. Pages/modules and rubric attachment use this tool directly. Report returned held/partial/uncertain outcomes honestly.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
+	addReadTool(server, "list_external_resources", "Read collaboration and conference metadata for a configured course or exact collaborative group. Returns safe supplied links and known participant refs only; it does not create or open provider resources or read their contents.", func(ctx context.Context, _ *mcp.CallToolRequest, in ExternalResourcesInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		resourceType := in.ResourceType
+		if resourceType == "" {
+			resourceType = "all"
+		}
+		if resourceType != "all" && resourceType != "collaborations" && resourceType != "conferences" {
+			return TextOutput{}, errors.New("resource_type must be collaborations, conferences, or all")
+		}
+		args := []string{"external-resources", in.Course}
+		if in.GroupID < 0 {
+			return TextOutput{}, errors.New("group_id cannot be negative")
+		}
+		if in.GroupID > 0 {
+			args = append(args, "--group", strconv.FormatInt(in.GroupID, 10))
+		}
+		args = append(args, "--type", resourceType)
+		return s.command(ctx, args...)
+	})
+	addActionTool(server, "push_document", "Create/resume or update an assignment, exact assignment-date override rows, Page, ungraded or linked-graded discussion/announcement, explicitly requested teacher discussion reply, native module, collaborative group-set or explicit group-membership plan. Assignment override rows use stable student refs, exact collaborative-group/section targets, row baselines and exact Canvas override endpoints; omitted dates are preserved and null clears. Membership writes use exact observed student refs, group IDs and per-row conflict checks. Discussion replies verify exact topic/parent scope and save accepted or uncertain outcomes without replay. Uses the document's exact scope and existing Engine conflict/outcome checks. For assignment creation/edits use start_review by default; call directly when the teacher explicitly skips review or to resume a partly created item as its playbook permits. Pages, discussions, replies, modules and group setup use this tool directly. Report returned held/partial/uncertain outcomes honestly.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
 		path, err := s.coursePath(in.Path)
 		if err != nil {
 			return TextOutput{}, err
 		}
 		return s.command(ctx, "push", path)
 	})
-	addActionTool(server, "post_results", "Post honest computed grades, rubric assessments, lateness timing, selected feedback, revise-feedback operations, or comment-only New Quiz feedback. New Quiz results can post only an attempt-scoped comment and never a grade, rubric, or late write. Default is start_review; direct posting requires the teacher to explicitly skip review for this task. Honors document scope and current attempt checks; report held or failed items from the Engine output.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
+	addActionTool(server, "post_results", "Post honest computed grades, rubric assessments, lateness timing, selected feedback, revise-feedback operations, or comment-only New Quiz feedback. A kind: group-results file posts one shared grade/rubric per ready club product plus whole-group and private comments, or per-student grades when Canvas grades individually; it holds any group or student whose audience, members, mode or attempt changed. New Quiz results can post only an attempt-scoped comment and never a grade, rubric, or late write. Default is start_review; direct posting requires the teacher to explicitly skip review for this task or a saved standing teacher preference to skip it. Honors document scope and current attempt checks; report held or failed items from the Engine output.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
 		path, err := s.coursePath(in.Path)
 		if err != nil {
 			return TextOutput{}, err
@@ -119,10 +147,18 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		return s.command(ctx, "api", in.Path)
 	})
-	addActionTool(server, "engine_info", "Read Engine build/version; run doctor with bounded authenticated read-only Canvas and same-UserInstall hub checks (or offline:true to skip network checks); inspect/set teacher-rules authority; or compare and explicitly replace one seed-managed playbook. Doctor reports categorized results and never returns Canvas identity, credentials, or raw responses, and does not inspect client settings. playbooks-status returns active-rule paths and hashes; replace-playbook requires path plus expected_sha256 (current hash or missing). Replacement archives the prior file and never replaces context preferences.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
+	addActionTool(server, "engine_info", "Read Engine build/version; run doctor with bounded authenticated read-only Canvas and same-UserInstall hub checks (or offline:true to skip network checks); inspect/set teacher-rules authority; outlook-status reports whether classic Outlook can send parent updates (a boolean and reason, never an address); or compare and explicitly replace one seed-managed playbook. Doctor reports categorized results and never returns Canvas identity, credentials, or raw responses, and does not inspect client settings. playbooks-status returns active-rule paths and hashes; replace-playbook requires path plus expected_sha256 (current hash or missing). Replacement archives the prior file and never replaces context preferences. update-playbooks adopts this Engine's seed on install/update: it replaces only playbooks still identical to the previous shipped copy, keeps teacher-edited ones (reported kept, for agent reconciliation against shipped/<version>/), and never touches context/ or Teacher_Override.md.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
 		op := in.Operation
 		if op == "" {
 			op = "version"
+		}
+		if op == "outlook-status" {
+			available, reason := outlook.Status()
+			b, err := json.Marshal(struct {
+				Available bool   `json:"outlook_available"`
+				Reason    string `json:"reason,omitempty"`
+			}{available, reason})
+			return TextOutput{Text: string(b)}, err
 		}
 		if op == "rules-location" {
 			location, err := workspace.GetRulesLocation(s.root)
@@ -179,8 +215,16 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 			}
 			return TextOutput{Text: in.Path + " replaced with this Engine's seed; previous copy archived under playbook-old."}, nil
 		}
+		if op == "update-playbooks" {
+			report, err := playbooks.Update(s.root, time.Now())
+			if err != nil {
+				return TextOutput{}, err
+			}
+			b, err := json.Marshal(report)
+			return TextOutput{Text: string(b)}, err
+		}
 		if op != "version" && op != "doctor" && op != "link" {
-			return TextOutput{}, errors.New("operation must be version, doctor, link, rules-location, set-rules-location, playbooks-status, or replace-playbook")
+			return TextOutput{}, errors.New("operation must be version, doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, or replace-playbook")
 		}
 		result, err := s.command(ctx, op)
 		if op == "version" {

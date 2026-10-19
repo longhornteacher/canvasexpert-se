@@ -13,6 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"gopkg.in/yaml.v3"
+
 	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/render"
@@ -30,6 +32,12 @@ type PullReport struct {
 	FetchRequests     int64
 	DiscoveryElapsed  time.Duration
 	FetchElapsed      time.Duration
+}
+
+// PullWorkOptions adds explicit scoring-session discovery behavior while
+// retaining the existing PullWork entry point and defaults.
+type PullWorkOptions struct {
+	Session bool
 }
 
 // PullAssignmentSummary reports observed discovery states and the resulting
@@ -55,7 +63,26 @@ type PullAssignmentSummary struct {
 // assignment pulls include all genuine supported submissions for reassessment.
 // Every pull has a distinct directory and never replaces prepared results.
 func (s *Service) PullWork(ctx context.Context, nickname, query string) (report PullReport, err error) {
-	return s.pullWork(ctx, nickname, query, nil)
+	return s.pullWork(ctx, nickname, query, nil, nil, PullWorkOptions{})
+}
+
+func (s *Service) PullWorkWithOptions(ctx context.Context, nickname, query string, options PullWorkOptions) (PullReport, error) {
+	return s.pullWork(ctx, nickname, query, nil, nil, options)
+}
+
+func (s *Service) PullWorkGroupWithOptions(ctx context.Context, nickname, query string, groupID int64, options PullWorkOptions) (PullReport, error) {
+	if nickname == "" || query == "" || groupID <= 0 {
+		return PullReport{}, fmt.Errorf("course, assignment, and positive group ID are required for a group-scoped pull")
+	}
+	return s.pullWork(ctx, nickname, query, nil, &groupID, options)
+}
+
+// PullWorkGroup scopes a pull to one exact collaborative group and assignment.
+func (s *Service) PullWorkGroup(ctx context.Context, nickname, query string, groupID int64) (PullReport, error) {
+	if nickname == "" || query == "" || groupID <= 0 {
+		return PullReport{}, fmt.Errorf("course, assignment, and positive group ID are required for a group-scoped pull")
+	}
+	return s.pullWork(ctx, nickname, query, nil, &groupID, PullWorkOptions{})
 }
 
 // PullBuiltinTestStudent is an explicit developer probe entry point. Ordinary
@@ -88,7 +115,7 @@ func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, a
 	}
 	probeElapsed := time.Since(start)
 	probeRequests := s.Client.Requests() - requests
-	report, e := s.pullWork(ctx, course.Nickname, fmt.Sprint(assignmentID), &user)
+	report, e := s.pullWork(ctx, course.Nickname, fmt.Sprint(assignmentID), &user, nil, PullWorkOptions{})
 	report.DiscoveryElapsed += probeElapsed
 	report.DiscoveryRequests += probeRequests
 	report.Elapsed = time.Since(start)
@@ -96,7 +123,7 @@ func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, a
 	return report, e
 }
 
-func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin *CanvasUser) (report PullReport, err error) {
+func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin *CanvasUser, groupFilter *int64, options PullWorkOptions) (report PullReport, err error) {
 	start := time.Now()
 	requests := s.Client.Requests()
 	defer func() { report.Elapsed = time.Since(start); report.Requests = s.Client.Requests() - requests }()
@@ -116,6 +143,9 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 	if query != "" && nickname == "" {
 		return report, fmt.Errorf("assignment scope requires a configured course")
 	}
+	if groupFilter != nil && (nickname == "" || query == "") {
+		return report, fmt.Errorf("group-scoped pulls require an explicit course and assignment")
+	}
 	var courses []domain.Course
 	if nickname != "" {
 		c, e := s.Course(nickname)
@@ -132,6 +162,24 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 	}
 	if len(courses) == 0 {
 		return report, fmt.Errorf("no current courses configured")
+	}
+	var currentPeriod *workspace.GradingPeriod
+	var schoolCalendar *workspace.SchoolCalendar
+	if options.Session && query == "" && builtin == nil {
+		calendar, e := workspace.ReadSchoolCalendar(s.Root)
+		if e != nil {
+			return report, fmt.Errorf("scoring-session discovery needs the active school calendar: %w", e)
+		}
+		period, e := calendar.CurrentPeriod(time.Now())
+		if e != nil {
+			return report, fmt.Errorf("scoring-session discovery needs one current grading period: %w", e)
+		}
+		currentPeriod, schoolCalendar = &period, &calendar
+	}
+	if options.Session && schoolCalendar == nil {
+		if calendar, e := workspace.ReadSchoolCalendar(s.Root); e == nil {
+			schoolCalendar = &calendar
+		}
 	}
 	students, err := workspace.OpenStudents(s.Root)
 	if err != nil {
@@ -201,6 +249,21 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			setPhase("discovery")
 			report.Assignments = append(report.Assignments, PullAssignmentSummary{Course: course.Nickname, AssignmentID: a.ID, Title: a.Name})
 			summary := &report.Assignments[len(report.Assignments)-1]
+			if groupFilter != nil && (a.GroupCategoryID == nil || *a.GroupCategoryID <= 0) {
+				return report, fmt.Errorf("assignment %d is not a collaborative group assignment", a.ID)
+			}
+			if builtin == nil && a.GroupCategoryID != nil && *a.GroupCategoryID > 0 {
+				paths, count, skipped, e := s.pullGroupAssignment(ctx, course, a, groupFilter, active, students, summary, query != "", options, currentPeriod, schoolCalendar)
+				if e != nil {
+					return report, e
+				}
+				report.Packets = append(report.Packets, paths...)
+				summary.Packets = append(summary.Packets, paths...)
+				report.Students += count
+				summary.Students += count
+				report.Skipped = append(report.Skipped, skipped...)
+				continue
+			}
 			if reason := unpullableAssignment(a); reason != "" {
 				summary.SkipReason = reason
 				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, reason))
@@ -218,6 +281,12 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				if !active[sub.UserID] {
 					summary.Inactive++
 					report.Skipped = append(report.Skipped, fmt.Sprintf("assignment %d: inactive/nonstudent enrollment skipped", a.ID))
+					continue
+				}
+				if currentPeriod != nil && !submissionDueInPeriod(sub, a, *currentPeriod, schoolCalendar.Timezone) {
+					if due, known := submissionEffectiveDue(sub, a); !known || due == "" {
+						report.Skipped = append(report.Skipped, fmt.Sprintf("assignment %d student %d: effective due date is unavailable; omitted from current-term session discovery", a.ID, sub.UserID))
+					}
 					continue
 				}
 				if sub.Late {
@@ -240,8 +309,15 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 					continue
 				}
 				if query == "" && liveHandled(sub) {
-					summary.Handled++
-					continue
+					ref := studentRefByCanvasID(students, s.Client.Origin(), sub.UserID)
+					if !options.Session || !s.sessionTimingCandidate(course.ID, a.ID, ref, sub) || a.NewQuiz {
+						summary.Handled++
+						continue
+					}
+					if s.completedTimingHint(a.ID, course.ID, ref, sub, a, schoolCalendar) {
+						summary.Handled++
+						continue
+					}
 				}
 				candidates = append(candidates, sub)
 			}
@@ -304,15 +380,41 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			if e = students.Save(); e != nil {
 				return report, e
 			}
+			var discussion *discussionAssignmentEvidence
+			if len(detailed) > 0 {
+				discussion = s.readAssignmentDiscussion(ctx, course, a, snapshot, relDir)
+			}
 			for i, sub := range detailed {
 				st := roster[i]
+				gradeHandled := liveHandled(sub)
 				if query == "" && s.completedHint(a.ID, st.Ref, sub, snapshot) {
+					gradeHandled = true
+				}
+				needsTiming := options.Session && !a.NewQuiz && s.sessionTimingCandidate(course.ID, a.ID, st.Ref, sub)
+				if query == "" && gradeHandled && !needsTiming {
 					summary.Handled++
 					continue
 				}
-				doc := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: st.Ref, Alias: st.Alias, AssignmentID: a.ID, Excused: sub.Excused, Monitored: st.Monitored}
+				if query == "" && gradeHandled && needsTiming && s.completedTimingHint(a.ID, course.ID, st.Ref, sub, a, schoolCalendar) {
+					summary.Handled++
+					continue
+				}
+				doc := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: st.Ref, Alias: st.Alias, AssignmentID: a.ID, AssignmentVisible: sub.AssignmentVisible, Excused: sub.Excused, Monitored: st.Monitored, ExtraTime: &st.ExtraTime}
+				if options.Session {
+					switch {
+					case gradeHandled && needsTiming:
+						doc.WorkPurpose = "late-only"
+					case needsTiming:
+						doc.WorkPurpose = "score-and-late"
+					default:
+						doc.WorkPurpose = "score"
+					}
+				}
 				if !s.Config.Aliases {
 					doc.Alias = st.Name
+				}
+				if discussion != nil {
+					doc.DiscussionEvidence = discussion.refFor(st.Ref)
 				}
 				doc.EnteredGradeKnown, doc.EnteredGrade, doc.EnteredGradeReason = s.enteredGrade(sub)
 				doc.ObservedEnteredScore = decimalPointer(sub.EnteredScore)
@@ -402,6 +504,85 @@ func unsupportedSubmission(s Submission) string {
 func liveHandled(s Submission) bool {
 	return s.State == "graded" && s.GradeMatchesCurrentSubmission != nil && *s.GradeMatchesCurrentSubmission
 }
+
+func timingCandidate(s Submission) bool {
+	// Explicit Canvas policy statuses and custom statuses already establish a
+	// teacher-owned outcome; elapsed seconds may still be present on `none`.
+	if hasCustomGradeStatus(s) || s.LatePolicyStatusKnown && s.LatePolicyStatus != nil && *s.LatePolicyStatus != "" && *s.LatePolicyStatus != "late" {
+		return false
+	}
+	if s.Late || s.SecondsLate > 0 {
+		return true
+	}
+	if s.LatePolicyStatusKnown && s.LatePolicyStatus != nil && *s.LatePolicyStatus == "late" {
+		return true
+	}
+	return false
+}
+
+func hasCustomGradeStatus(s Submission) bool {
+	raw := strings.TrimSpace(string(s.CustomGradeStatusID))
+	return raw != "" && raw != "null" && raw != `""` && raw != "0"
+}
+
+func observedTiming(s Submission) *domain.ObservedTiming {
+	if !s.LateKnown && !s.LatePolicyStatusKnown && !s.SecondsLateKnown && len(s.CustomGradeStatusID) == 0 {
+		return nil
+	}
+	var status *string
+	if s.LatePolicyStatus != nil {
+		v := *s.LatePolicyStatus
+		status = &v
+	}
+	return &domain.ObservedTiming{
+		StatusKnown:       s.LatePolicyStatusKnown,
+		LatePolicyStatus:  status,
+		LateKnown:         s.LateKnown,
+		Late:              s.Late,
+		SecondsLateKnown:  s.SecondsLateKnown,
+		SecondsLate:       s.SecondsLate,
+		CustomStatusKnown: len(s.CustomGradeStatusID) > 0,
+		HasCustomStatus:   hasCustomGradeStatus(s),
+	}
+}
+
+func submissionEffectiveDue(s Submission, a Assignment) (string, bool) {
+	if s.CachedDueDatePresent {
+		if s.CachedDueDate == nil {
+			return "", true // explicit null means this student's effective date is undated
+		}
+		return *s.CachedDueDate, true
+	}
+	if a.DueAt != nil {
+		return *a.DueAt, true
+	}
+	return "", false
+}
+
+func submissionDueInPeriod(s Submission, a Assignment, p workspace.GradingPeriod, timezone string) bool {
+	due, known := submissionEffectiveDue(s, a)
+	if !known || due == "" {
+		return false
+	}
+	instant, err := time.Parse(time.RFC3339Nano, due)
+	if err != nil {
+		return false
+	}
+	localDate := instant.In(mustLoadLocation(timezone)).Format("2006-01-02")
+	return localDate >= p.StartDate && localDate <= p.EndDate
+}
+
+func mustLoadLocation(timezone string) *time.Location {
+	loc, _ := time.LoadLocation(timezone)
+	return loc
+}
+
+func calendarTimezone(calendar *workspace.SchoolCalendar) string {
+	if calendar == nil {
+		return ""
+	}
+	return calendar.Timezone
+}
 func decimalPointer(n *json.Number) *domain.Decimal {
 	if n == nil {
 		return nil
@@ -436,6 +617,7 @@ func attemptRef(sub Submission) domain.AttemptRef {
 }
 func (s *Service) attemptWork(ctx context.Context, relDir, ref string, sub Submission) (domain.AttemptWork, error) {
 	w := domain.AttemptWork{Ref: attemptRef(sub), BodyHTML: sub.Body, ReadableText: render.HTMLText(sub.Body), Late: sub.Late}
+	w.ObservedTiming = observedTiming(sub)
 	if sub.CachedDueDate != nil {
 		w.EffectiveDueAt = *sub.CachedDueDate
 	}
@@ -573,6 +755,10 @@ func (s *Service) completedHint(id int64, ref string, sub Submission, snapshot d
 		if !strings.EqualFold(filepath.Ext(path), ".md") {
 			return nil
 		}
+		if groupResultsContainCompletedGrade(path, snapshot, id, ref, sub) {
+			matched = true
+			return filepath.SkipAll
+		}
 		var results domain.ResultsDocument
 		if _, e := workspace.ReadDocument(path, &results); e != nil {
 			return nil
@@ -582,7 +768,7 @@ func (s *Service) completedHint(id int64, ref string, sub Submission, snapshot d
 		}
 		for _, row := range results.Students {
 			g := row.Grade
-			if row.Operation == "grade" && row.StudentRef == ref && gradeComplete(g) && sameAttempt(g.Attempt, attemptRef(sub)) {
+			if row.Operation == "grade" && row.StudentRef == ref && academicGradeComplete(g) && sameAttempt(g.Attempt, attemptRef(sub)) {
 				matched = true
 				return filepath.SkipAll
 			}
@@ -590,6 +776,98 @@ func (s *Service) completedHint(id int64, ref string, sub Submission, snapshot d
 		return nil
 	})
 	return matched
+}
+
+// groupResultsContainCompletedGrade reads the future group-results shape
+// tolerantly: slice 10/11 may add group/action fields that this slice does not
+// own. Header structure, assignment identity, student ref, and exact attempt
+// still have to match before a completed result suppresses a pull.
+func groupResultsContainCompletedGrade(path string, snapshot domain.AssignmentSnapshot, assignmentID int64, studentRef string, sub Submission) bool {
+	var doc map[string]any
+	if _, err := workspace.ReadDocument(path, &doc); err != nil || yamlInt(doc["schema"]) != 1 || yamlString(doc["kind"]) != "group-results" {
+		return false
+	}
+	assignment := yamlMap(doc["assignment"])
+	if yamlString(assignment["instance"]) != snapshot.Instance || yamlInt64(assignment["course_id"]) != snapshot.CourseID || yamlInt64(assignment["assignment_id"]) != assignmentID {
+		return false
+	}
+	for _, rawGroup := range yamlSlice(doc["groups"]) {
+		group := yamlMap(rawGroup)
+		if yamlString(group["operation"]) == "grade" {
+			encoded, err := yaml.Marshal(group["grade"])
+			var grade domain.GroupGradeOperation
+			if err == nil && yaml.Unmarshal(encoded, &grade) == nil && definite(grade.Outcomes.Comment) && definite(grade.Outcomes.Rubric) && definite(grade.Outcomes.Grade) && containsString(yamlStrings(group["member_refs"]), studentRef) {
+				return true
+			}
+		}
+		for _, rawStudent := range yamlSlice(group["students"]) {
+			row := yamlMap(rawStudent)
+			if yamlString(row["operation"]) != "grade" || yamlString(row["student_ref"]) != studentRef {
+				continue
+			}
+			encoded, err := yaml.Marshal(row["grade"])
+			if err != nil {
+				continue
+			}
+			var grade domain.GradeOperation
+			if yaml.Unmarshal(encoded, &grade) == nil && academicGradeComplete(&grade) && sameAttempt(grade.Attempt, attemptRef(sub)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func yamlMap(value any) map[string]any {
+	switch m := value.(type) {
+	case map[string]any:
+		return m
+	default:
+		return nil
+	}
+}
+
+func yamlSlice(value any) []any {
+	if rows, ok := value.([]any); ok {
+		return rows
+	}
+	return nil
+}
+
+func yamlStrings(value any) []string {
+	rows := yamlSlice(value)
+	result := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if value, ok := row.(string); ok {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func yamlString(value any) string {
+	text, _ := value.(string)
+	return text
+}
+
+func yamlInt(value any) int { return int(yamlInt64(value)) }
+
+func yamlInt64(value any) int64 {
+	switch n := value.(type) {
+	case int:
+		return int64(n)
+	case int64:
+		return n
+	case uint64:
+		return int64(n)
+	case float64:
+		return int64(n)
+	case json.Number:
+		parsed, _ := n.Int64()
+		return parsed
+	default:
+		return 0
+	}
 }
 
 // fetchSubmissions reads each candidate's detailed submission concurrently

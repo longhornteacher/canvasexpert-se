@@ -15,13 +15,23 @@ import (
 )
 
 type NativePage struct {
-	PageID    int64  `json:"page_id"`
-	Slug      string `json:"url"`
-	HTMLURL   string `json:"html_url"`
-	Title     string `json:"title"`
-	Body      string `json:"body"`
-	Published bool   `json:"published"`
-	UpdatedAt string `json:"updated_at"`
+	PageID       int64  `json:"page_id"`
+	Slug         string `json:"url"`
+	HTMLURL      string `json:"html_url"`
+	Title        string `json:"title"`
+	Body         string `json:"body"`
+	Published    bool   `json:"published"`
+	UpdatedAt    string `json:"updated_at"`
+	EditingRoles string `json:"editing_roles"`
+}
+
+type NativePageRevision struct {
+	RevisionID int64  `json:"revision_id"`
+	UpdatedAt  string `json:"updated_at"`
+	Latest     bool   `json:"latest"`
+	URL        string `json:"url,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Body       string `json:"body,omitempty"`
 }
 
 type PagePushReport struct {
@@ -32,6 +42,59 @@ type PagePushReport struct {
 func nativePagePath(courseID, pageID int64) string {
 	// Canvas interprets a bare number as a slug first. Force the numeric ID.
 	return fmt.Sprintf("/api/v1/courses/%d/pages/page_id:%d", courseID, pageID)
+}
+
+func groupPagePath(groupID, pageID int64) string {
+	return fmt.Sprintf("/api/v1/groups/%d/pages/page_id:%d", groupID, pageID)
+}
+
+func pageBase(courseID, groupID int64) string {
+	if groupID > 0 {
+		return fmt.Sprintf("/api/v1/groups/%d/pages", groupID)
+	}
+	return fmt.Sprintf("/api/v1/courses/%d/pages", courseID)
+}
+
+func groupEditingRoles(roles *[]string) string {
+	if roles == nil {
+		return "teachers"
+	}
+	return normalizeEditingRoles(strings.Join(*roles, ","))
+}
+
+func normalizeEditingRoles(roles string) string {
+	set := map[string]bool{}
+	for _, role := range strings.Split(roles, ",") {
+		role = strings.TrimSpace(role)
+		if role != "" {
+			set[role] = true
+		}
+	}
+	ordered := []string{}
+	for _, role := range []string{"teachers", "members", "students", "public"} {
+		if set[role] {
+			ordered = append(ordered, role)
+		}
+	}
+	return strings.Join(ordered, ",")
+}
+
+func (s *Service) verifyPageGroup(ctx context.Context, nickname string, groupID int64) (domain.Course, error) {
+	course, err := s.Course(nickname)
+	if err != nil || groupID == 0 {
+		return course, err
+	}
+	var g canvasGroup
+	if err = s.Client.Get(ctx, fmt.Sprintf("/api/v1/groups/%d", groupID), &g); err != nil {
+		return course, err
+	}
+	if g.ID != groupID || g.ContextType != "Course" || g.CourseID != course.ID || g.GroupCategoryID <= 0 || nonCollaborative(g.NonCollaborative) {
+		return course, fmt.Errorf("group %d does not belong to this course as a collaborative group", groupID)
+	}
+	if _, err = s.groupCategory(ctx, course.ID, g.GroupCategoryID); err != nil {
+		return course, err
+	}
+	return course, nil
 }
 
 func (s *Service) pageURL(courseID int64, p NativePage) string {
@@ -53,7 +116,11 @@ func (s *Service) getPage(ctx context.Context, courseID, pageID int64) (NativePa
 
 // PullPage writes a fresh file and never replaces the teacher's unsent edits.
 func (s *Service) PullPage(ctx context.Context, nickname, query string) (string, error) {
-	course, e := s.Course(nickname)
+	return s.PullPageScoped(ctx, nickname, query, 0)
+}
+
+func (s *Service) PullPageScoped(ctx context.Context, nickname, query string, groupID int64) (string, error) {
+	course, e := s.verifyPageGroup(ctx, nickname, groupID)
 	if e != nil {
 		return "", e
 	}
@@ -66,6 +133,9 @@ func (s *Service) PullPage(ctx context.Context, nickname, query string) (string,
 			return "", fmt.Errorf("pull-page requires a positive page ID or a Page link in this Canvas origin/course")
 		}
 		prefix := fmt.Sprintf("/courses/%d/pages/", course.ID)
+		if groupID > 0 {
+			prefix = fmt.Sprintf("/groups/%d/pages/", groupID)
+		}
 		if !strings.HasPrefix(u.Path, prefix) {
 			return "", fmt.Errorf("Page link belongs to a different course")
 		}
@@ -76,7 +146,7 @@ func (s *Service) PullPage(ctx context.Context, nickname, query string) (string,
 		identifier = url.PathEscape(slug)
 	}
 	var p NativePage
-	if e = s.Client.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/pages/%s", course.ID, identifier), &p); e != nil {
+	if e = s.Client.Get(ctx, pageBase(course.ID, groupID)+"/"+identifier, &p); e != nil {
 		return "", e
 	}
 	if p.PageID <= 0 || p.Slug == "" {
@@ -85,17 +155,51 @@ func (s *Service) PullPage(ctx context.Context, nickname, query string) (string,
 	if strings.HasPrefix(identifier, "page_id:") && identifier != fmt.Sprintf("page_id:%d", p.PageID) {
 		return "", fmt.Errorf("Canvas returned a different Page ID")
 	}
-	return s.writePulledPage(course, p)
+	return s.writePulledPageScoped(course, p, groupID)
 }
 
 func (s *Service) writePulledPage(course domain.Course, p NativePage) (string, error) {
-	b := domain.PageSnapshot{Instance: s.Client.Origin(), CourseID: course.ID, PageID: p.PageID, Slug: p.Slug, URL: s.pageURL(course.ID, p), Title: p.Title, BodyHTML: p.Body, Published: p.Published, UpdatedAt: p.UpdatedAt}
-	d := domain.PageDocument{Schema: 1, Kind: "page", Operation: "update", Course: course.Nickname, Instance: b.Instance, CourseID: b.CourseID, PageID: b.PageID, Slug: b.Slug, URL: b.URL, Title: b.Title, BodyFormat: "html", Published: b.Published, Observed: &b}
+	return s.writePulledPageScoped(course, p, 0)
+}
+
+func (s *Service) writePulledPageScoped(course domain.Course, p NativePage, groupID int64) (string, error) {
+	pageURL := s.pageURL(course.ID, p)
+	if groupID > 0 {
+		pageURL = s.Client.Origin() + fmt.Sprintf("/groups/%d/pages/%s", groupID, url.PathEscape(p.Slug))
+	}
+	b := domain.PageSnapshot{Instance: s.Client.Origin(), CourseID: course.ID, GroupID: groupID, PageID: p.PageID, Slug: p.Slug, URL: pageURL, Title: p.Title, BodyHTML: p.Body, Published: p.Published, EditingRoles: p.EditingRoles, UpdatedAt: p.UpdatedAt}
+	d := domain.PageDocument{Schema: 1, Kind: "page", Operation: "update", Course: course.Nickname, Instance: b.Instance, CourseID: b.CourseID, GroupID: groupID, PageID: b.PageID, Slug: b.Slug, URL: b.URL, Title: b.Title, BodyFormat: "html", Published: b.Published, Observed: &b}
 	path, e := workspace.ConstrainPath(s.Root, filepath.Join("courses", course.Nickname, "pulled", fmt.Sprintf("page-%d-%s-%s.md", p.PageID, Slug(p.Title), time.Now().UTC().Format("20060102T150405.000000000"))))
 	if e != nil {
 		return "", e
 	}
 	return path, workspace.WriteDocument(path, &d, p.Body)
+}
+
+func (s *Service) PageHistory(ctx context.Context, nickname string, pageID, groupID, revisionID int64) ([]NativePageRevision, error) {
+	course, err := s.verifyPageGroup(ctx, nickname, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if pageID <= 0 || revisionID < 0 {
+		return nil, fmt.Errorf("page ID must be positive and revision ID cannot be negative")
+	}
+	base := pageBase(course.ID, groupID) + fmt.Sprintf("/page_id:%d/revisions", pageID)
+	if revisionID > 0 {
+		var revision NativePageRevision
+		if err = s.Client.Get(ctx, base+fmt.Sprintf("/%d", revisionID), &revision); err != nil {
+			return nil, err
+		}
+		if revision.RevisionID != revisionID {
+			return nil, fmt.Errorf("Canvas returned a different Page revision")
+		}
+		return []NativePageRevision{revision}, nil
+	}
+	var revisions []NativePageRevision
+	if err = s.Client.List(ctx, base, &revisions); err != nil {
+		return nil, err
+	}
+	return revisions, nil
 }
 
 func (s *Service) PushPage(ctx context.Context, path string) (report PagePushReport, err error) {
@@ -105,7 +209,7 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 	if err != nil {
 		return report, err
 	}
-	course, err := s.Course(d.Course)
+	course, err := s.verifyPageGroup(ctx, d.Course, d.GroupID)
 	if err != nil {
 		return report, err
 	}
@@ -124,11 +228,11 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 		return report, err
 	}
 	if d.Created == nil {
-		d.Created = &domain.PageCreated{IntendedHTML: html, IntendedTitle: d.Title, ModuleID: d.ModuleID, ModulePosition: d.ModulePosition}
+		d.Created = &domain.PageCreated{GroupID: d.GroupID, IntendedHTML: html, IntendedTitle: d.Title, ModuleID: d.ModuleID, ModulePosition: d.ModulePosition}
 	}
 	c := d.Created
 	defer func() { report.PageID, report.URL, report.ModuleItemID = c.PageID, c.URL, c.ModuleItemID }()
-	if c.IntendedHTML != html || c.IntendedTitle != d.Title || c.ModuleID != d.ModuleID || c.ModulePosition != d.ModulePosition {
+	if c.IntendedHTML != html || c.IntendedTitle != d.Title || c.GroupID != d.GroupID || c.ModuleID != d.ModuleID || c.ModulePosition != d.ModulePosition {
 		return report, fmt.Errorf("incomplete Page draft changed; recover the saved creation before editing it")
 	}
 	save := func() error { return workspace.WriteDocument(path, &d, body) }
@@ -137,7 +241,7 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 		return report, nil
 	}
 	// Verify the selected module in this course before creating a Page.
-	if d.ModuleID > 0 {
+	if d.GroupID == 0 && d.ModuleID > 0 {
 		var module struct {
 			ID int64 `json:"id"`
 		}
@@ -150,17 +254,18 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 	}
 	if c.PageID == 0 && ambiguous(c.Page) {
 		// An unclear create is resolved by looking for the Page by exact title.
-		if found, ok := s.findPageByTitle(ctx, course.ID, d.Title); ok {
+		if found, ok := s.findPageByTitle(ctx, course.ID, d.GroupID, d.Title); ok {
 			c.PageID, c.Slug = found.PageID, found.Slug
 		}
 	}
+	createdThisRun := false
 	if c.PageID == 0 {
 		c.Page = domain.ActionOutcome{Status: "pending"}
 		if err = save(); err != nil {
 			return report, err
 		}
 		var p NativePage
-		err = s.Client.Write(ctx, "POST", fmt.Sprintf("/api/v1/courses/%d/pages", course.ID), map[string]any{"wiki_page": map[string]any{"title": d.Title, "body": html, "published": false, "editing_roles": "teachers"}}, &p)
+		err = s.Client.Write(ctx, "POST", pageBase(course.ID, d.GroupID), map[string]any{"wiki_page": map[string]any{"title": d.Title, "body": html, "published": false, "editing_roles": groupEditingRoles(d.EditingRoles)}}, &p)
 		if p.PageID > 0 {
 			c.PageID, c.Slug, c.SavedHTML = p.PageID, p.Slug, p.Body
 			if p.Slug != "" {
@@ -173,7 +278,11 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 			c.Page = domain.ActionOutcome{Status: "uncertain", Message: "Page response lacks exact returned ID/slug; known ID retained for exact lookup"}
 		} else {
 			c.PageID, c.Slug, c.URL, c.SavedHTML = p.PageID, p.Slug, s.pageURL(course.ID, p), p.Body
+			if d.GroupID > 0 {
+				c.URL = s.Client.Origin() + fmt.Sprintf("/groups/%d/pages/%s", d.GroupID, url.PathEscape(p.Slug))
+			}
 			c.Page = domain.ActionOutcome{Status: "succeeded", ID: p.PageID}
+			createdThisRun = true
 		}
 		if e := save(); e != nil {
 			return report, fmt.Errorf("Page create outcome could not be persisted: %w", e)
@@ -183,12 +292,27 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 			return report, nil
 		}
 	}
-	p, err := s.getPage(ctx, course.ID, c.PageID)
-	if err != nil {
-		return report, err
+	var p NativePage
+	if createdThisRun {
+		p = NativePage{PageID: c.PageID, Slug: c.Slug, HTMLURL: c.URL, Title: d.Title, Body: c.SavedHTML, Published: false, EditingRoles: groupEditingRoles(d.EditingRoles)}
+	} else {
+		if d.GroupID == 0 {
+			p, err = s.getPage(ctx, course.ID, c.PageID)
+		} else {
+			err = s.Client.Get(ctx, groupPagePath(d.GroupID, c.PageID), &p)
+			if err == nil && (p.PageID != c.PageID || p.Slug == "") {
+				err = fmt.Errorf("Canvas group Page response did not confirm exact page identity")
+			}
+		}
+		if err != nil {
+			return report, err
+		}
 	}
 	if c.Slug == "" {
 		c.Slug, c.URL, c.SavedHTML = p.Slug, s.pageURL(course.ID, p), p.Body
+		if d.GroupID > 0 {
+			c.URL = s.Client.Origin() + fmt.Sprintf("/groups/%d/pages/%s", d.GroupID, url.PathEscape(p.Slug))
+		}
 		c.Page = domain.ActionOutcome{Status: "succeeded", ID: c.PageID}
 		if err = save(); err != nil {
 			return report, err
@@ -196,6 +320,9 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 	}
 	if !definite(c.Page) {
 		c.Slug, c.URL, c.SavedHTML = p.Slug, s.pageURL(course.ID, p), p.Body
+		if d.GroupID > 0 {
+			c.URL = s.Client.Origin() + fmt.Sprintf("/groups/%d/pages/%s", d.GroupID, url.PathEscape(p.Slug))
+		}
 		c.Page = domain.ActionOutcome{Status: "succeeded", ID: c.PageID, Message: "adopted the live Page by exact ID"}
 		if err = save(); err != nil {
 			return report, err
@@ -277,9 +404,15 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 	}
 	if !definite(c.Publication) {
 		// Read again after placement; never publish over a teacher's concurrent body edit.
-		p, err = s.getPage(ctx, course.ID, c.PageID)
-		if err != nil {
-			return report, err
+		if !createdThisRun {
+			if d.GroupID == 0 {
+				p, err = s.getPage(ctx, course.ID, c.PageID)
+			} else {
+				err = s.Client.Get(ctx, groupPagePath(d.GroupID, c.PageID), &p)
+			}
+			if err != nil {
+				return report, err
+			}
 		}
 		if p.Published == d.Published || p.Published {
 			c.Publication = domain.ActionOutcome{Status: "preserved"}
@@ -289,7 +422,7 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 				return report, err
 			}
 			var response NativePage
-			err = s.Client.Write(ctx, "PUT", nativePagePath(course.ID, c.PageID), map[string]any{"wiki_page": map[string]any{"published": d.Published}}, &response)
+			err = s.Client.Write(ctx, "PUT", pagePathFor(course.ID, d.GroupID, c.PageID), map[string]any{"wiki_page": map[string]any{"published": d.Published}}, &response)
 			if err != nil {
 				c.Publication = failedOutcome(err)
 			} else if response.PageID != c.PageID || response.Published != d.Published {
@@ -314,11 +447,18 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 	return report, nil
 }
 
-// findPageByTitle returns the one Page in the course whose title matches
-// exactly, so an unclear create can be adopted instead of repeated.
-func (s *Service) findPageByTitle(ctx context.Context, courseID int64, title string) (NativePage, bool) {
+func pagePathFor(courseID, groupID, pageID int64) string {
+	if groupID > 0 {
+		return groupPagePath(groupID, pageID)
+	}
+	return nativePagePath(courseID, pageID)
+}
+
+// findPageByTitle returns the one Page in the selected course or group whose
+// title matches exactly, so an unclear create can be adopted instead of repeated.
+func (s *Service) findPageByTitle(ctx context.Context, courseID, groupID int64, title string) (NativePage, bool) {
 	var pages []NativePage
-	if e := s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/pages?search_term=%s&per_page=100", courseID, url.QueryEscape(title)), &pages); e != nil {
+	if e := s.Client.List(ctx, pageBase(courseID, groupID)+"?search_term="+url.QueryEscape(title)+"&per_page=100", &pages); e != nil {
 		return NativePage{}, false
 	}
 	var match NativePage
@@ -364,6 +504,10 @@ func pagePatchMatches(p NativePage, title, html string, published bool, patch ma
 			if p.Published != published {
 				return false
 			}
+		case "editing_roles":
+			if normalizeEditingRoles(p.EditingRoles) != normalizeEditingRoles(patch["editing_roles"].(string)) {
+				return false
+			}
 		}
 	}
 	return true
@@ -390,7 +534,18 @@ func (s *Service) pushPageUpdate(ctx context.Context, path string, course domain
 	if d.Published != b.Published {
 		patch["published"] = d.Published
 	}
-	p, e := s.getPage(ctx, course.ID, d.PageID)
+	if d.EditingRoles != nil && groupEditingRoles(d.EditingRoles) != normalizeEditingRoles(b.EditingRoles) {
+		patch["editing_roles"] = groupEditingRoles(d.EditingRoles)
+	}
+	var p NativePage
+	if d.GroupID == 0 {
+		p, e = s.getPage(ctx, course.ID, d.PageID)
+	} else {
+		e = s.Client.Get(ctx, groupPagePath(d.GroupID, d.PageID), &p)
+		if e == nil && (p.PageID != d.PageID || p.Slug == "") {
+			e = fmt.Errorf("Canvas group Page response did not confirm exact page identity")
+		}
+	}
 	if e != nil {
 		return r, e
 	}
@@ -402,7 +557,7 @@ func (s *Service) pushPageUpdate(ctx context.Context, path string, course domain
 			r.Status = "completed"
 			return r, workspace.WriteDocument(path, d, body)
 		}
-		fresh, e := s.writePulledPage(course, p)
+		fresh, e := s.writePulledPageScoped(course, p, d.GroupID)
 		if e != nil {
 			return r, e
 		}
@@ -423,22 +578,25 @@ func (s *Service) pushPageUpdate(ctx context.Context, path string, course domain
 		return r, e
 	}
 	var response NativePage
-	e = s.Client.Write(ctx, "PUT", nativePagePath(course.ID, d.PageID), map[string]any{"wiki_page": patch}, &response)
+	e = s.Client.Write(ctx, "PUT", pagePathFor(course.ID, d.GroupID, d.PageID), map[string]any{"wiki_page": patch}, &response)
 	if e != nil {
 		d.UpdateOutcome = failedOutcome(e)
 	} else if response.PageID != d.PageID || response.Slug == "" {
 		d.UpdateOutcome = domain.ActionOutcome{Status: "uncertain", Message: "update response lacks exact Page identity"}
 	} else {
 		d.Slug, d.URL = response.Slug, s.pageURL(course.ID, response)
+		if d.GroupID > 0 {
+			d.URL = s.Client.Origin() + fmt.Sprintf("/groups/%d/pages/%s", d.GroupID, url.PathEscape(response.Slug))
+		}
 		r.URL = d.URL
-		if (patch["title"] != nil && response.Title != d.Title) || (patch["published"] != nil && response.Published != d.Published) {
+		if (patch["title"] != nil && response.Title != d.Title) || (patch["published"] != nil && response.Published != d.Published) || (patch["editing_roles"] != nil && normalizeEditingRoles(response.EditingRoles) != normalizeEditingRoles(patch["editing_roles"].(string))) {
 			d.UpdateOutcome = domain.ActionOutcome{Status: "uncertain", Message: "Page update response did not confirm targeted fields"}
 		} else {
 			d.UpdateOutcome = domain.ActionOutcome{Status: "succeeded", ID: d.PageID}
 			if patch["body"] != nil && response.Body != html {
 				d.UpdateOutcome.Message = "Canvas normalized the body; observed.body_html records actual saved HTML; verify it in Canvas"
 			}
-			d.Observed = &domain.PageSnapshot{Instance: d.Instance, CourseID: d.CourseID, PageID: d.PageID, Slug: response.Slug, URL: d.URL, Title: response.Title, BodyHTML: response.Body, Published: response.Published, UpdatedAt: response.UpdatedAt}
+			d.Observed = &domain.PageSnapshot{Instance: d.Instance, CourseID: d.CourseID, GroupID: d.GroupID, PageID: d.PageID, Slug: response.Slug, URL: d.URL, Title: response.Title, BodyHTML: response.Body, Published: response.Published, EditingRoles: response.EditingRoles, UpdatedAt: response.UpdatedAt}
 		}
 	}
 	if err := workspace.WriteDocument(path, d, body); err != nil {

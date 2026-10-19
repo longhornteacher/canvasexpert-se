@@ -40,6 +40,7 @@ type studentRow struct {
 }
 
 type studentsData struct {
+	Appearance                        appearanceData
 	Secret, Message, Notice           string
 	DraftKey                          string
 	ClearDraft                        bool
@@ -75,6 +76,7 @@ func (h *studentHandler) pageNotice(w http.ResponseWriter, status int, message, 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	data := h.data
+	data.Appearance = appearanceFor(h.notesRoot, h.secret)
 	data.Secret, data.Message, data.Notice, data.Hub = h.secret, message, notice, h.hub
 	if h.hub {
 		data.DraftKey = "students:" + h.secret
@@ -130,10 +132,13 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	csp := "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
-	csp += "; script-src 'self'"
+	csp += "; script-src 'self'; connect-src 'self'"
 	w.Header().Set("Content-Security-Policy", csp)
 	if "http://"+r.Host != h.origin {
 		http.NotFound(w, r)
+		return
+	}
+	if serveAppearance(w, r, h.notesRoot, h.origin, h.secret) {
 		return
 	}
 	if serveScript(w, r) {
@@ -247,6 +252,15 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.page(w, 400, "Aliases need 1–80 characters, without line breaks.")
 			return
 		}
+		if raw, sent := r.PostForm["goes_by_"+v.Ref]; sent {
+			name := strings.TrimSpace(raw[0])
+			if name == "" || len([]rune(name)) > 80 || strings.ContainsAny(raw[0], "\r\n\x00") {
+				h.store.Rows = before
+				h.page(w, 400, "Goes By names need 1-80 characters, without line breaks.")
+				return
+			}
+			v.FirstName = name
+		}
 		v.Alias = a
 		v.Monitored = r.PostForm.Get("monitored_"+v.Ref) == "on"
 		v.ExtraTime = r.PostForm.Get("extra_time_"+v.Ref) == "on"
@@ -285,7 +299,7 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	h.complete = true
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Students saved</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Saved</h1><p>Student settings saved. You can close this page.</p></main></html>")
+	_, _ = io.WriteString(w, "<!doctype html>"+appearanceHTML(h.notesRoot)+"<meta charset=\"utf-8\"><title>Students saved</title><style>"+string(pageCSS)+"</style><main class=\"done\"><h1>Saved</h1><p>Student settings saved. You can close this page.</p></main></html>")
 	close(h.done)
 }
 func Students(ctx context.Context, root string, output io.Writer) error {
@@ -332,7 +346,7 @@ func Students(ctx context.Context, root string, output io.Writer) error {
 
 func init() {
 	register(
-		page{Path: "/students", Methods: []string{http.MethodGet, http.MethodPost}, Template: "students", Scripts: []string{"drafts.js", "contacts.js"},
+		page{Path: "/students", Methods: []string{http.MethodGet, http.MethodPost}, Template: "students", Scripts: []string{"drafts.js", "contacts.js", "appearance.js"},
 			Nav:    []navSlot{{Primary: "Classroom", Label: "Students", Order: 22}},
 			Handle: (*Hub).studentsPage},
 		page{Path: "/students/refresh", Methods: []string{http.MethodPost}, Handle: (*Hub).refreshStudents},

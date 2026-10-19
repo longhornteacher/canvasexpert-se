@@ -158,6 +158,7 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 	for i, student := range store.Rows {
 		if student.UserID == 1 {
 			store.Rows[i].Monitored, store.Rows[i].ExtraTime = true, true
+			store.Rows[i].FirstName = "Annie"
 		}
 		byID[student.UserID] = store.Rows[i]
 	}
@@ -165,12 +166,21 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	form := url.Values{"request_secret": {"nonce"}, "course": {"22"}, "alias_" + byID[2].Ref: {"Edited Bo"}, "alias_" + byID[4].Ref: {byID[4].Alias}, "extra_time_" + byID[4].Ref: {"on"}}
+	form.Set("goes_by_"+byID[2].Ref, "  Bobby  ")
+	form.Set("goes_by_"+byID[1].Ref, "Wrong course")
 	for i := 0; i < 2; i++ {
 		w := hubPost(h, "/students", form, h.origin)
 		if w.Code != 200 || !strings.Contains(w.Body.String(), "Saved.") || !strings.Contains(w.Body.String(), `href="/students?course=22" aria-current="page"`) {
 			t.Fatalf("save failed or switched course: %d %s", w.Code, w.Body.String())
 		}
 	}
+	for _, invalid := range []string{"", strings.Repeat("x", 81), "Bo\n", "Bo\rName", "Bo\x00Name"} {
+		form.Set("goes_by_"+byID[2].Ref, invalid)
+		if w := hubPost(h, "/students", form, h.origin); w.Code != 400 {
+			t.Fatalf("invalid Goes By accepted: %q", invalid)
+		}
+	}
+	form.Set("goes_by_"+byID[2].Ref, "Bobby")
 	form.Set("alias_"+byID[4].Ref, byID[1].Alias)
 	if w := hubPost(h, "/students", form, h.origin); w.Code != 400 {
 		t.Fatal("accepted alias colliding with a student in another course")
@@ -182,11 +192,11 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 	for _, student := range store.Rows {
 		switch student.UserID {
 		case 1:
-			if !student.Monitored || !student.ExtraTime || student.Alias != byID[1].Alias {
+			if !student.Monitored || !student.ExtraTime || student.Alias != byID[1].Alias || student.FirstName != "Annie" {
 				t.Fatal("saving another course changed Ana's settings")
 			}
 		case 2:
-			if student.Alias != "Edited Bo" || student.Ref != byID[2].Ref {
+			if student.Alias != "Edited Bo" || student.Ref != byID[2].Ref || student.FirstName != "Bobby" {
 				t.Fatal("refresh changed alias or identity")
 			}
 		case 4:
@@ -221,7 +231,7 @@ func TestClassroomKeepsUnsavedEditsInCurrentTab(t *testing.T) {
 	if csp := students.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "script-src 'unsafe-inline'") {
 		t.Fatalf("student draft script is not confined by the page CSP: %s", csp)
 	}
-	for _, want := range []string{`data-draft-key="students:nonce"`, `name="alias_`, `name="note_`, `<details class="student-notes">`, `Refresh from Canvas`, `students`} {
+	for _, want := range []string{`data-draft-key="students:nonce"`, `name="alias_`, `name="goes_by_`, `data-draft-fields="alias_ goes_by_`, `name="note_`, `<details class="student-notes">`, `Refresh from Canvas`, `students`} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("student page missing %q", want)
 		}
@@ -231,8 +241,8 @@ func TestClassroomKeepsUnsavedEditsInCurrentTab(t *testing.T) {
 	}
 	coursesResponse := hubGet(h, "/courses")
 	courses := coursesResponse.Body.String()
-	if csp := coursesResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "connect-src") {
-		t.Fatalf("course draft CSP grants unnecessary access: %s", csp)
+	if csp := coursesResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || !strings.Contains(csp, "connect-src 'self'") || pages["/courses"].Connect {
+		t.Fatalf("course appearance needs local requests without Canvas health polling: %s", csp)
 	}
 	if !strings.Contains(courses, `data-draft-key="courses:nonce"`) || !strings.Contains(courses, `name="active_11"`) || !strings.Contains(courses, `name="nick_11"`) {
 		t.Fatal("course page does not expose draft-restorable controls")

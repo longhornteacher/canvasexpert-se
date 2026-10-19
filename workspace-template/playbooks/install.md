@@ -14,7 +14,7 @@ Finish the applicable steps: app connections prepared and remaining prompts expl
 
 ## How to talk to the teacher
 
-The teacher is a classroom teacher, not a developer. Be brisk and friendly, in the first person, one step at a time. Continue authorized setup yourself; wait only when you need a teacher choice, private form entry or app approval. Do not ask permission to continue after each routine step. Say what is coming before each step and say plainly when it is done. Never say MCP, extension, trust prompt, PAT, origin, UserInstall, Engine, registration or adapter. The one term they must meet is Canvas's own button label, **New Access Token**: explain it the first time. Do not give time estimates. Never ask for the token in chat; it goes only in the private form. Do not read out the technical checklist further down; say only what the teacher needs to do next. Ask for preferences, the school calendar and similar details later, when a task needs them, not during first setup.
+The teacher is a classroom teacher, not a developer. Be brisk and friendly, in the first person, one step at a time. Continue authorized setup yourself; wait only when you need a teacher choice, private form entry or app approval. Do not ask permission to continue after each routine step. Say what is coming before each step and say plainly when it is done. Never say MCP, extension, trust prompt, PAT, origin, UserInstall, Engine, registration or adapter. The one term they must meet is Canvas's own button label, **New Access Token**: explain it the first time. Do not give time estimates. Never ask for the token in chat; it goes only in the private form. Do not read out the technical checklist further down; say only what the teacher needs to do next. Ask about preferences and the school calendar only when the requested teaching task needs them; late-timing preparation and current-term parent reports use the saved school calendar. Do not make calendar setup a condition of unrelated work.
 
 The lines below are the script. Adapt the wording to the situation; keep the plain language.
 
@@ -30,7 +30,11 @@ Skip this opening if they have already told you what they want. If they only use
 
 > "Connecting now."
 
-Run the helper (see "Run the helper"); with no `--client` it connects every supported app it finds. Report what happened in the teacher's terms:
+Run the helper (see "Run the helper"); with no `--client` it connects every supported app it finds.
+
+The helper also creates the teacher's **CanvasExpert WebUI** desktop shortcut for this folder. When it reports success, tell the teacher they can use that shortcut to reopen CanvasExpert's settings and course/student pages. A shortcut warning does not block the rest of setup: explain it briefly and give `webui.cmd` in this folder as the fallback. Do not claim the shortcut exists when creation failed, and do not replace a shortcut pointing to another folder without the teacher choosing which folder to keep.
+
+Report app connection results in the teacher's terms:
 
 > "I found {Claude, ChatGPT, Antigravity} on your computer and prepared {it / them} to use CanvasExpert! CanvasExpert can also work in {the ones not found}, so if you ever install one, just come back here and I'll connect it too."
 
@@ -54,7 +58,7 @@ Do not ask anyone to close an app during an active CE-SE review. If nothing supp
 
 > "Now I need CanvasExpert to be able to see your courses. Canvas lets you make a private key for that. It's called an **access token**: a key that lets CanvasExpert access your courses and carry out the Canvas work you request. You can delete it in Canvas any time. It is saved in Windows Credential Manager on this computer and sent only to your Canvas site when making requests, never to the assistant in chat.
 >
-> **My safety promise:** Setting this up does not publish coursework or change grades. When we work, I follow the scope you request. Scores, new assignments and quizzes, and assignment edits normally go through a private review page; you can explicitly skip review for a task.
+> **My safety promise:** Setting this up does not publish coursework or change grades. When we work, I follow the scope you request. Scores, new assignments and quizzes, and assignment edits normally go through a private review page; you can skip review for one task, or tell me to always skip it.
 >
 > A form is opening in your browser."
 
@@ -116,6 +120,16 @@ Do not ask about visual style, grading scale or teaching philosophy now. Ask on 
 ## What you do behind the scenes
 
 Do not narrate this to the teacher.
+
+### Lay down or update the playbooks
+
+On every "set up", "install" or "update", run `.\cse.cmd playbooks update` (MCP: `engine_info` operation `update-playbooks`) before anything else. The ZIP carries only the Engine and a bootstrap `AGENTS.md`; this command lays down the playbooks, `TEACHER.md`, `Teacher_Override.md` and the `context/` starter files from the Engine, and on an update adopts the new versions without overriding the teacher. It keeps each shipped version under `shipped/<version>/` for comparison; those copies are inactive, never current rules.
+
+The report lists each file's state. `added`, `current`, `updated` and `teacher-owned` need nothing from you. For each `kept` file, reconcile it in the background: compare `shipped/<previous_shipped>/<path>` (when there is a previous version), the active file and `shipped/<current_shipped>/<path>`. Every difference between the active file and what shipped before is the teacher's choice; with no previous version, every difference is. Keep those choices, bring in new shipped improvements that don't conflict with them, and write the result to the active file. Where a new shipped default conflicts with a teacher choice, keep the teacher's. Never change `context/` or `Teacher_Override.md` during an update.
+
+Don't ask the teacher to merge anything. Tell them only what matters in plain words, for example "You're on the newest CanvasExpert; your settings and choices are unchanged." Mention a new teaching option only when it is worth their attention, in a sentence.
+
+To get a newer version for the teacher, download the versioned Windows ZIP from the latest [GitHub release](https://github.com/longhornteacher/canvasexpert-se/releases) (not GitHub's source-code ZIP) and extract it over this folder, then run the update above. It contains no playbooks or teacher files, so extracting over the folder can't overwrite the teacher's work. If `engine/cse.exe` is in use, ask the teacher to close the apps using CanvasExpert first, and never during an active review.
 
 ### Select the correct UserInstall
 

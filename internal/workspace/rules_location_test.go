@@ -394,3 +394,23 @@ func TestScaffoldRulesAddsOnlyMissingSharedSeeds(t *testing.T) {
 		t.Fatalf("overwrote customization: %q %v", b, err)
 	}
 }
+
+func TestRestoreSyncBootstrapAfterZipExtractedOverFolder(t *testing.T) {
+	root := makeRulesInstall(t)
+	syncRoot := t.TempDir()
+	if _, err := SetRulesLocation(root, syncRoot, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte("# CanvasExpert-SE standing instructions\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RestoreSyncBootstrap(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
+		b, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil || !strings.HasPrefix(string(b), "# CE-SE local agent bootstrap") || !strings.Contains(string(b), syncRoot) {
+			t.Fatalf("%s is not the UserSync pointer: %q %v", name, b, err)
+		}
+	}
+}

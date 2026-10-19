@@ -27,6 +27,21 @@ func TestResultsValidateWholeFile(t *testing.T) {
 		}
 	}
 }
+
+func TestLateOnlyDoesNotRequirePointsOrRubric(t *testing.T) {
+	d := validResults()
+	attempt := d.Students[0].Grade.Attempt
+	baseline := &ObservedTiming{StatusKnown: true, LateKnown: true, SecondsLateKnown: true}
+	d.Assignment.Title = ""
+	d.Assignment.Points = Decimal{}
+	d.Assignment.Rubric = nil
+	d.ScoringBasis = nil
+	d.Variants = []InterpretationVariant{{Key: "stale", Basis: "stale"}}
+	d.Students[0] = StudentResult{StudentRef: "student-a", Operation: "late-only", LateOnly: &LateOnlyOperation{Attempt: attempt, LateTiming: LateTiming{Status: "none", DueAt: "2026-10-08T12:00:00Z", Basis: "submitted before the due time", Observed: baseline}}}
+	if _, err := ValidateResults(&d); err != nil {
+		t.Fatalf("timing-only action incorrectly required scoring basis: %v", err)
+	}
+}
 func TestUnknownEvidenceHoldsOneStudentAndAssessmentIsFilled(t *testing.T) {
 	d := validResults()
 	second := d.Students[0]
@@ -75,8 +90,8 @@ func TestNewQuizResultsAreCommentOnly(t *testing.T) {
 	}
 	d.Assignment.NewQuiz = false
 	d.Students[0].Grade = nil
-	if _, err := ValidateResults(&d); err == nil || !strings.Contains(err.Error(), "New Quiz") {
-		t.Fatalf("ordinary assignment accepted comment-only mode: %v", err)
+	if _, err := ValidateResults(&d); err != nil {
+		t.Fatalf("ordinary assignment rejected a comment-only follow-up: %v", err)
 	}
 }
 func TestCreateOutcomesRemainConsistent(t *testing.T) {

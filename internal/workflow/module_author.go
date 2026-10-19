@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -51,12 +52,14 @@ type canvasModuleAssignment struct {
 }
 
 type canvasModuleItem struct {
-	ID        int64  `json:"id"`
-	Position  int    `json:"position"`
-	Type      string `json:"type"`
-	ContentID any    `json:"content_id"`
-	PageURL   string `json:"page_url"`
-	Title     string `json:"title"`
+	ID          int64  `json:"id"`
+	Position    int    `json:"position"`
+	Type        string `json:"type"`
+	ContentID   any    `json:"content_id"`
+	PageURL     string `json:"page_url"`
+	ExternalURL string `json:"external_url"`
+	NewTab      *bool  `json:"new_tab"`
+	Title       string `json:"title"`
 }
 
 // PushModule adds native Canvas module items from an authoring document. A
@@ -70,6 +73,9 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 	}
 	if d.Kind != "module" {
 		return ModulePushReport{}, fmt.Errorf("expected kind: module")
+	}
+	if err := d.Validate(); err != nil {
+		return ModulePushReport{}, err
 	}
 	course, err := s.Course(d.Course)
 	if err != nil {
@@ -189,13 +195,13 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 		if i < len(d.Created.Items) {
 			saved = &d.Created.Items[i]
 		} else {
-			d.Created.Items = append(d.Created.Items, domain.ModuleItemOutcome{Index: i, Type: item.Type, ContentID: item.ContentID, Title: item.Title, Position: item.Position})
+			d.Created.Items = append(d.Created.Items, domain.ModuleItemOutcome{Index: i, Type: item.Type, ContentID: item.ContentID, ExternalURL: item.ExternalURL, NewTab: item.NewTab, Title: item.Title, Position: item.Position})
 			saved = &d.Created.Items[i]
 			if err = save(); err != nil {
 				return report, err
 			}
 		}
-		if saved.Index != i || saved.Type != item.Type || saved.ContentID != item.ContentID || saved.Title != item.Title || saved.Position != item.Position {
+		if saved.Index != i || saved.Type != item.Type || saved.ContentID != item.ContentID || saved.ExternalURL != item.ExternalURL || !sameBoolPointer(saved.NewTab, item.NewTab) || saved.Title != item.Title || saved.Position != item.Position {
 			return report, fmt.Errorf("items[%d] changed after a prior push; create a new module document to preserve the recorded item identities", i)
 		}
 		if saved.Access != accessStates[i] {
@@ -248,8 +254,14 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 			return report, err
 		}
 		payload := map[string]any{"type": item.Type}
-		if item.Type == "SubHeader" {
+		if item.Type == "SubHeader" || item.Type == "ExternalUrl" {
 			payload["title"] = item.Title
+			if item.Type == "ExternalUrl" {
+				payload["external_url"] = item.ExternalURL
+				if item.NewTab != nil {
+					payload["new_tab"] = *item.NewTab
+				}
+			}
 		} else if item.Type == "Page" {
 			payload["page_url"] = resolvedRefs[i]
 		} else {
@@ -393,11 +405,70 @@ func (s *Service) verifyModuleReference(ctx context.Context, courseID int64, ite
 			return "", "", fmt.Errorf("assignment ID %d is not verified in this course", item.ContentID)
 		}
 		return strconv.FormatInt(item.ContentID, 10), fmt.Sprintf("published=%s, unlock_at=%s, lock_at=%s", stateBool(a.Published), optionalString(a.UnlockAt), optionalString(a.LockAt)), nil
+	case "Discussion":
+		var topic NativeDiscussion
+		err := s.Client.Get(ctx, discussionPath(courseID, 0, item.ContentID), &topic)
+		if err != nil {
+			return "", "", err
+		}
+		if topic.ID != item.ContentID {
+			return "", "", fmt.Errorf("discussion ID %d is not verified in this course", item.ContentID)
+		}
+		return strconv.FormatInt(item.ContentID, 10), fmt.Sprintf("published=%t", topic.Published), nil
+	case "ExternalUrl":
+		if err := s.verifySameCourseGroupURL(ctx, courseID, item.ExternalURL); err != nil {
+			return "", "", err
+		}
+		return item.ExternalURL, "teacher-selected link; provider access is not verified", nil
 	case "SubHeader":
 		return "", "", nil
 	default:
 		return "", "", fmt.Errorf("unsupported item type %q", item.Type)
 	}
+}
+
+func (s *Service) verifySameCourseGroupURL(ctx context.Context, courseID int64, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return err
+	}
+	origin, err := url.Parse(s.Client.Origin())
+	if err != nil || !strings.EqualFold(u.Scheme, origin.Scheme) || !strings.EqualFold(u.Host, origin.Host) {
+		return nil
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	for i := 0; i+1 < len(parts); i++ {
+		if parts[i] != "groups" {
+			continue
+		}
+		id, parseErr := strconv.ParseInt(parts[i+1], 10, 64)
+		if parseErr != nil || id <= 0 {
+			return fmt.Errorf("same-origin group link does not identify a valid Canvas group")
+		}
+		nickname := ""
+		for _, course := range s.Config.Courses {
+			if course.ID == courseID {
+				nickname = course.Nickname
+				break
+			}
+		}
+		if nickname == "" {
+			return fmt.Errorf("selected course is not configured")
+		}
+		groups, groupErr := s.ListGroups(ctx, nickname, 0, id, false)
+		if groupErr != nil || len(groups) != 1 || groups[0].ID != id {
+			return fmt.Errorf("same-origin group link targets a group outside the selected course")
+		}
+		return nil
+	}
+	return nil
+}
+
+func sameBoolPointer(a, b *bool) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 func optionalString(value *string) string {
@@ -432,6 +503,9 @@ func moduleItemMatches(live canvasModuleItem, spec domain.ModuleItem, resolved s
 	}
 	if spec.Type == "Page" {
 		return resolved != "" && (live.PageURL == resolved || contentString(live.ContentID) == resolved)
+	}
+	if spec.Type == "ExternalUrl" {
+		return live.ExternalURL == spec.ExternalURL
 	}
 	return contentString(live.ContentID) == strconv.FormatInt(spec.ContentID, 10)
 }

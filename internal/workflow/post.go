@@ -88,12 +88,34 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 	if liveAssignment.CourseID == 0 {
 		liveAssignment.CourseID = doc.Assignment.CourseID
 	}
-	liveBasis, err := Snapshot(liveAssignment, s.Client.Origin())
+	timingOnly := len(doc.Students) > 0
+	for _, row := range doc.Students {
+		if row.Operation != "late-only" {
+			timingOnly = false
+			break
+		}
+	}
+	var liveBasis domain.AssignmentSnapshot
+	if timingOnly {
+		liveBasis, err = TimingSnapshot(liveAssignment, s.Client.Origin())
+	} else {
+		liveBasis, err = Snapshot(liveAssignment, s.Client.Origin())
+	}
 	if err != nil {
 		return report, err
 	}
 	basisMatches := SameGradingBasis(doc.Assignment, liveBasis)
+	if liveBasis.Instance != doc.Assignment.Instance || liveBasis.CourseID != doc.Assignment.CourseID || liveBasis.AssignmentID != doc.Assignment.AssignmentID {
+		return report, fmt.Errorf("live assignment identity disagrees with requested target")
+	}
 	coupledRubric := liveBasis.Rubric != nil && liveBasis.Rubric.UseForGradingKnown && liveBasis.Rubric.UseForGrading
+	var guard *discussionGuard
+	for _, row := range doc.Students {
+		if row.Operation != "late-only" {
+			guard = s.newDiscussionGuard(ctx, doc, liveBasis)
+			break
+		}
+	}
 	save := func() error { return workspace.WriteDocument(path, &doc, body) }
 	for i := range doc.Students {
 		r := &doc.Students[i]
@@ -103,13 +125,7 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 			continue
 		}
 		if v.Hold != "" {
-			if r.Grade != nil {
-				holdGrade(r.Grade, v.Hold)
-			} else if r.CommentOnly != nil {
-				holdOutcome(&r.CommentOnly.Outcome, v.Hold)
-			} else if r.ReviseFeedback != nil {
-				holdOutcome(&r.ReviseFeedback.Outcome, v.Hold)
-			}
+			holdStudentResult(r, v.Hold)
 			if err = save(); err != nil {
 				return report, err
 			}
@@ -133,15 +149,32 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 			continue
 		}
 		source := sources[r.StudentRef]
+		if guard != nil && r.Operation != "late-only" {
+			if hold := guard.hold(s, *r, source); hold != "" {
+				holdStudentResult(r, hold)
+				if err = save(); err != nil {
+					return report, err
+				}
+				report.Students = append(report.Students, postReport(*r))
+				continue
+			}
+		}
+		if r.Operation == "late-only" {
+			if reason := lateTimingAssignmentHold(liveAssignment, false); reason != "" {
+				holdOutcome(&r.LateOnly.Outcome, reason)
+				err = save()
+			} else {
+				err = s.postLateTiming(ctx, doc.Assignment, source.student.UserID, r.LateOnly.Attempt, &r.LateOnly.LateTiming, &r.LateOnly.Outcome, save)
+			}
+			if err != nil {
+				return report, err
+			}
+			report.Students = append(report.Students, postReport(*r))
+			continue
+		}
 		live, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, source.student.UserID)
 		if e != nil {
-			if r.Grade != nil {
-				holdGrade(r.Grade, e.Error())
-			} else if r.CommentOnly != nil {
-				holdOutcome(&r.CommentOnly.Outcome, e.Error())
-			} else {
-				holdOutcome(&r.ReviseFeedback.Outcome, e.Error())
-			}
+			holdStudentResult(r, e.Error())
 			if err = save(); err != nil {
 				return report, err
 			}
@@ -154,8 +187,8 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		if r.Operation == "revise-feedback" {
 			err = s.postRevision(ctx, &doc, r, v, source, live, save)
 		} else if r.Operation == "comment-only" {
-			if !liveAssignment.NewQuiz {
-				return report, fmt.Errorf("live assignment is no longer a New Quiz")
+			if liveAssignment.NewQuiz != doc.Assignment.NewQuiz {
+				return report, fmt.Errorf("live assignment type changed between New Quiz and ordinary assignment")
 			}
 			err = s.postCommentOnly(ctx, &doc, r, v, source, live, save)
 		} else {
@@ -167,6 +200,30 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		report.Students = append(report.Students, postReport(*r))
 	}
 	return report, nil
+}
+
+func lateTimingAssignmentHold(a Assignment, allowGroup bool) string {
+	if a.Anonymous {
+		return "anonymous grading is unsupported for timing-only actions"
+	}
+	if a.Moderated {
+		return "moderated grading is unsupported for timing-only actions"
+	}
+	if !allowGroup && a.GroupCategoryID != nil && *a.GroupCategoryID != 0 {
+		return "group assignments require the group timing workflow"
+	}
+	if a.NewQuiz || a.QuizID != nil {
+		return "quizzes are unsupported for timing-only actions"
+	}
+	if (a.HasSubAssignments != nil && *a.HasSubAssignments) || (a.Checkpoints != nil && len(*a.Checkpoints) > 0) {
+		return "checkpoint assignments are unsupported for timing-only actions"
+	}
+	for _, kind := range a.SubmissionTypes {
+		if kind == "online_quiz" {
+			return "quizzes are unsupported for timing-only actions"
+		}
+	}
+	return ""
 }
 
 func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocument, row *domain.StudentResult, v domain.ValidatedStudent, source postSource, live Submission, save func() error) error {
@@ -182,7 +239,7 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 	if err != nil {
 		return err
 	}
-	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: true, Header: c.Header})
+	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: doc.Assignment.NewQuiz, Header: c.Header})
 	if err != nil {
 		return err
 	}
@@ -200,7 +257,7 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 	if err = save(); err != nil {
 		return err
 	}
-	err = s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"comment": map[string]any{"text_comment": text, "attempt": c.Attempt.Attempt}}, nil)
+	err = s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"comment": s.commentFields(text, c.Attempt.Attempt)}, nil)
 	if err != nil {
 		c.Outcome = failedOutcome(err)
 		c.Outcome.PostedText = text
@@ -213,6 +270,9 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 }
 
 func resultComplete(r domain.StudentResult) bool {
+	if r.Operation == "late-only" {
+		return r.LateOnly != nil && definite(r.LateOnly.Outcome)
+	}
 	if r.Operation == "grade" {
 		return gradeComplete(r.Grade)
 	}
@@ -244,6 +304,10 @@ func postReport(r domain.StudentResult) StudentPostReport {
 		p.Revision = r.CommentOnly.Outcome
 		p.Status = p.Revision.Status
 		p.Message = p.Revision.Message
+	} else if r.LateOnly != nil {
+		p.Outcomes.Late = r.LateOnly.Outcome
+		p.Status = r.LateOnly.Outcome.Status
+		p.Message = r.LateOnly.Outcome.Message
 	}
 	if resultComplete(r) {
 		p.Status = "completed"
@@ -266,6 +330,7 @@ func holdOutcome(o *domain.ActionOutcome, message string) {
 	}
 	o.Message = message
 }
+
 // sameAttempt identifies an attempt by its number alone. Canvas gives every
 // resubmission a new attempt number, and the same moment is reported with or
 // without milliseconds, so comparing timestamps only creates false "new
@@ -282,8 +347,13 @@ func (s *Service) postSources(doc domain.ResultsDocument) (map[string]postSource
 	if _, e = workspace.ReadDocument(packetPath, &packet); e != nil {
 		return nil, e
 	}
-	if !SameGradingBasis(packet.Assignment, doc.Assignment) {
-		return nil, fmt.Errorf("results grading basis differs from source packet")
+	if packet.Assignment.Instance != doc.Assignment.Instance || packet.Assignment.CourseID != doc.Assignment.CourseID || packet.Assignment.AssignmentID != doc.Assignment.AssignmentID {
+		return nil, fmt.Errorf("results target differs from source packet")
+	}
+	for _, row := range doc.Students {
+		if row.Operation != "late-only" && !SameGradingBasis(packet.Assignment, doc.Assignment) {
+			return nil, fmt.Errorf("results grading basis differs from source packet")
+		}
 	}
 	store, e := workspace.OpenStudents(s.Root)
 	if e != nil {
@@ -332,6 +402,13 @@ func (s *Service) postSources(doc domain.ResultsDocument) (map[string]postSource
 		} else if r.CommentOnly != nil {
 			if !sameAttempt(r.CommentOnly.Attempt, work.Current.Ref) {
 				return nil, fmt.Errorf("%s target attempt differs from pulled work", r.StudentRef)
+			}
+		} else if r.LateOnly != nil {
+			if !sameAttempt(r.LateOnly.Attempt, work.Current.Ref) {
+				return nil, fmt.Errorf("%s target attempt differs from pulled work", r.StudentRef)
+			}
+			if !timingMatchesBaselineFromWork(r.LateOnly.LateTiming.Observed, work.Current.ObservedTiming) {
+				return nil, fmt.Errorf("%s timing baseline differs from source packet", r.StudentRef)
 			}
 		} else {
 			rv := r.ReviseFeedback
@@ -504,7 +581,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		}
 	}
 	if !definite(g.Outcomes.Comment) {
-		text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student), Header: g.Header})
+		text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student), Late: isLate(g.LateTiming), Header: g.Header})
 		if e != nil {
 			return e
 		}
@@ -633,7 +710,7 @@ func (s *Service) addFeedback(ctx context.Context, doc domain.ResultsDocument, u
 		return err
 	}
 	var response Submission
-	err := s.Client.Write(ctx, "PUT", submissionPath(doc, userID), map[string]any{"comment": map[string]any{"text_comment": text, "attempt": attempt.Attempt}}, &response)
+	err := s.Client.Write(ctx, "PUT", submissionPath(doc, userID), map[string]any{"comment": s.commentFields(text, attempt.Attempt)}, &response)
 	if err != nil {
 		*out = failedOutcome(err)
 		out.PostedText = text
@@ -678,7 +755,7 @@ func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument,
 	text := workspace.ReplaceStudentName(r.Feedback, source.student)
 	if r.Assessment != nil {
 		var e error
-		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text, Header: r.Header})
+		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text, OmitAssessment: doc.Assignment.NewQuiz, Header: r.Header})
 		if e != nil {
 			return e
 		}
@@ -730,4 +807,18 @@ func ResultPaths(root string, packet domain.PacketDocument) ([]string, error) {
 		paths = append(paths, path)
 	}
 	return paths, nil
+}
+
+// isLate reports whether the agent's late timing marks the attempt late.
+func isLate(t *domain.LateTiming) bool { return t != nil && t.Status == "late" }
+
+// commentFields is an ordinary submission comment. While individual group
+// results are posting, group_comment is explicitly false so Canvas never copies
+// the private text to clubmates.
+func (s *Service) commentFields(text string, attempt int) map[string]any {
+	fields := map[string]any{"text_comment": text, "attempt": attempt}
+	if s.privateGroupComments {
+		fields["group_comment"] = false
+	}
+	return fields
 }

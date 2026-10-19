@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -23,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "push": {1, 1}, "pull-page": {2, 2}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-work": {0, 2}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -49,6 +50,13 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		file = p
 	}
 	quizReview := false
+	if cmd == "parent-review" || cmd == "student-report" {
+		p, e := documentPath(root, args[0])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		file = p
+	}
 	if cmd == "review" {
 		p, e := documentPath(root, args[0])
 		if e != nil {
@@ -78,16 +86,28 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 		kind := documentKind(b)
-		if cmd == "push" && kind != "assignment" && kind != "page" && kind != "module" {
-			return fail(inputError(fmt.Errorf("push supports assignment, page, or module documents")), progress)
+		if cmd == "push" && kind != "assignment" && kind != "assignment-dates" && kind != "page" && kind != "discussion" && kind != "discussion-reply" && kind != "module" && kind != "group-set" && kind != "group-memberships" {
+			return fail(inputError(fmt.Errorf("push supports assignment, assignment-dates, page, discussion/reply, module, group-set, or group-memberships documents")), progress)
 		}
-		if cmd == "post" && kind != "results" {
-			return fail(inputError(fmt.Errorf("post requires a results document")), progress)
+		if cmd == "post" && kind != "results" && kind != "group-results" {
+			return fail(inputError(fmt.Errorf("post requires a results or group-results document")), progress)
 		}
 	}
 	var config domain.CourseConfig
 	if _, e := workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
 		return fail(inputError(e), progress)
+	}
+	if cmd == "prepare-late-timing" {
+		prepared, e := (&workflow.Service{Root: root, Config: config}).PrepareLateTiming(args[0])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		encoded, e := json.MarshalIndent(prepared, "", "  ")
+		if e != nil {
+			return fail(e, progress)
+		}
+		fmt.Fprintln(out, string(encoded))
+		return 0
 	}
 	credential, e := platform.LoadCredential()
 	if e != nil {
@@ -111,6 +131,59 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	fmt.Fprintf(status, "%s…\n", cmd)
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	switch cmd {
+	case "groups":
+		setID, memberID, groupID, allGroups, err := parseGroupsArgs(args[1:])
+		if err != nil {
+			return fail(inputError(err), progress)
+		}
+		if setID == 0 && memberID == 0 && groupID == 0 && !allGroups {
+			sets, e := service.ListGroupSets(ctx, args[0])
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			b, _ := json.MarshalIndent(sets, "", "  ")
+			fmt.Fprintln(out, string(b))
+			return 0
+		}
+		if memberID > 0 {
+			groupID = memberID
+		}
+		if setID > 0 && memberID == 0 && groupID == 0 {
+			roster, e := service.ReadGroupRoster(ctx, args[0], setID)
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			b, _ := json.MarshalIndent(roster, "", "  ")
+			fmt.Fprintln(out, string(b))
+			return 0
+		}
+		groups, e := service.ListGroups(ctx, args[0], setID, groupID, memberID > 0)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, _ := json.MarshalIndent(groups, "", "  ")
+		fmt.Fprintln(out, string(b))
+		return 0
+	case "pull-group-set":
+		id, e := strconv.ParseInt(args[1], 10, 64)
+		if e != nil || id <= 0 {
+			return fail(inputError(fmt.Errorf("group-set ID must be a positive integer")), progress)
+		}
+		p, e := service.PullGroupSet(ctx, args[0], id)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, p)
+	case "pull-group-memberships":
+		id, e := strconv.ParseInt(args[1], 10, 64)
+		if e != nil || id <= 0 {
+			return fail(inputError(fmt.Errorf("group-set ID must be a positive integer")), progress)
+		}
+		p, e := service.PullGroupMemberships(ctx, args[0], id)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, p)
 	case "upload-file":
 		report, e := service.UploadCourseFile(ctx, args[0], uploadSource, uploadOptions)
 		fmt.Fprintf(out, "%s: %s\n", report.Status, report.Path)
@@ -133,11 +206,44 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return 3
 		}
 	case "pull-page":
-		p, e := service.PullPage(ctx, args[0], args[1])
+		groupID, err := parseOptionalPageGroup(args[2:])
+		if err != nil {
+			return fail(inputError(err), progress)
+		}
+		p, e := service.PullPageScoped(ctx, args[0], args[1], groupID)
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}
 		fmt.Fprintln(out, p)
+	case "pull-discussion":
+		groupID, err := parseOptionalPageGroup(args[2:])
+		if err != nil {
+			return fail(inputError(err), progress)
+		}
+		topicID, err := strconv.ParseInt(args[1], 10, 64)
+		if err != nil || topicID <= 0 {
+			return fail(inputError(fmt.Errorf("topic ID must be a positive integer")), progress)
+		}
+		p, e := service.PullDiscussion(ctx, args[0], topicID, groupID)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, p)
+	case "page-history":
+		pageID, err := strconv.ParseInt(args[1], 10, 64)
+		if err != nil || pageID <= 0 {
+			return fail(inputError(fmt.Errorf("page ID must be a positive integer")), progress)
+		}
+		groupID, revisionID, err := parsePageHistoryFlags(args[2:])
+		if err != nil {
+			return fail(inputError(err), progress)
+		}
+		revisions, e := service.PageHistory(ctx, args[0], pageID, groupID, revisionID)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, _ := json.MarshalIndent(revisions, "", "  ")
+		fmt.Fprintln(out, string(b))
 	case "quiz-points":
 		changes := map[int]domain.Decimal{}
 		for _, arg := range args[2:] {
@@ -194,15 +300,87 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			fmt.Fprintf(table, "%d\t%d\t%s\n", item.ID, item.Position, compact(item.Name))
 		}
 		_ = table.Flush()
+	case "external-resources":
+		groupID, resourceType, e := parseExternalResourceFlags(args[1:])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		report, e := service.ListExternalResources(ctx, args[0], groupID, resourceType)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, _ := json.MarshalIndent(report, "", "  ")
+		fmt.Fprintln(out, string(b))
 	case "pull-item":
 		p, e := service.PullItem(ctx, args[0], args[1])
 		if e != nil {
 			return fail(e, progress)
 		}
 		fmt.Fprintln(out, p)
+	case "pull-assignment-dates":
+		id, parseErr := strconv.ParseInt(args[1], 10, 64)
+		if parseErr != nil || id <= 0 {
+			return fail(inputError(fmt.Errorf("assignment ID must be positive")), progress)
+		}
+		report, e := service.PullAssignmentDates(ctx, args[0], id)
+		fmt.Fprintf(out, "%s: %d override rows, %s\n", report.Status, len(report.Rows), report.Path)
+		if report.Message != "" {
+			fmt.Fprintln(out, report.Message)
+		}
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		if report.Status != "completed" {
+			return 3
+		}
 	case "push":
 		b, _ := os.ReadFile(file)
-		if kind := documentKind(b); kind == "page" {
+		if kind := documentKind(b); kind == "assignment-dates" {
+			report, e := service.PushAssignmentDates(ctx, file)
+			fmt.Fprintf(out, "%s: %d override rows, %s\n", report.Status, len(report.Rows), report.Path)
+			if report.Message != "" {
+				fmt.Fprintln(out, report.Message)
+			}
+			for _, row := range report.Rows {
+				fmt.Fprintf(out, "%s: %s override %d %s\n", row.Key, row.Outcome.Status, row.OverrideID, row.Outcome.Message)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
+				return 3
+			}
+			return 0
+		} else if kind == "group-set" {
+			report, e := service.PushGroupSet(ctx, file)
+			fmt.Fprintf(out, "%s: group set %d, %s\n", report.Status, report.GroupCategoryID, report.Path)
+			for _, g := range report.Groups {
+				fmt.Fprintf(out, "%s: %s group %d %s\n", g.Key, g.Outcome.Status, g.GroupID, g.URL)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
+				return 3
+			}
+			return 0
+		} else if kind := documentKind(b); kind == "group-memberships" {
+			report, e := service.PushGroupMemberships(ctx, file)
+			fmt.Fprintf(out, "%s: %s\n", report.Status, report.Message)
+			for _, outcome := range report.Outcomes {
+				fmt.Fprintf(out, "%s: %s %s\n", outcome.StudentRef, outcome.Outcome.Status, outcome.Outcome.Message)
+			}
+			if report.Assigned != nil {
+				fmt.Fprintf(out, "assigned student refs: %s\n", strings.Join(report.Assigned, ", "))
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
+				return 3
+			}
+			return 0
+		} else if kind == "page" {
 			report, e := service.PushPage(ctx, file)
 			fmt.Fprintf(out, "%s: Page %d %s\n", report.Status, report.PageID, report.Path)
 			if report.URL != "" {
@@ -215,6 +393,35 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				return fail(workflowError(e), progress)
 			}
 			if report.Status != "completed" && report.Status != "succeeded" {
+				return 3
+			}
+			return 0
+		} else if kind == "discussion" {
+			report, e := service.PushDiscussion(ctx, file)
+			fmt.Fprintf(out, "%s: discussion %d %s\n", report.Status, report.TopicID, report.Path)
+			if report.URL != "" {
+				fmt.Fprintln(out, report.URL)
+			}
+			if report.Message != "" {
+				fmt.Fprintln(out, report.Message)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
+				return 3
+			}
+			return 0
+		} else if kind == "discussion-reply" {
+			report, e := service.PushDiscussionReply(ctx, file)
+			fmt.Fprintf(out, "%s: teacher reply on discussion %d %s\n", report.Status, report.TopicID, report.Path)
+			if report.Message != "" {
+				fmt.Fprintln(out, report.Message)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
 				return 3
 			}
 			return 0
@@ -274,15 +481,63 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}
+	case "parent-report":
+		courseList, refList := splitParentArgs(args)
+		path, packet, e := service.ParentReport(ctx, courseList, refList, time.Now())
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, path)
+		fmt.Fprintf(out, "%d students\n", len(packet.Students))
 	case "pull-work":
 		nickname, query := "", ""
-		if len(args) > 0 {
-			nickname = args[0]
+		var groupID int64
+		groupScoped, session := false, false
+		positionals := []string{}
+		for i := 0; i < len(args); i++ {
+			switch args[i] {
+			case "--session":
+				if session {
+					return fail(fmt.Errorf("--session may be supplied once"), progress)
+				}
+				session = true
+			case "--group":
+				if groupScoped || i+1 >= len(args) {
+					return fail(fmt.Errorf("--group requires one positive ID"), progress)
+				}
+				i++
+				parsed, parseErr := strconv.ParseInt(args[i], 10, 64)
+				if parseErr != nil || parsed <= 0 {
+					return fail(fmt.Errorf("group ID must be a positive integer"), progress)
+				}
+				groupID, groupScoped = parsed, true
+			default:
+				if strings.HasPrefix(args[i], "--") {
+					return fail(fmt.Errorf("unknown pull-work option %q", args[i]), progress)
+				}
+				positionals = append(positionals, args[i])
+			}
 		}
-		if len(args) > 1 {
-			query = args[1]
+		if len(positionals) > 2 {
+			return fail(fmt.Errorf("usage: pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session]"), progress)
 		}
-		report, e := service.PullWork(ctx, nickname, query)
+		if len(positionals) > 0 {
+			nickname = positionals[0]
+		}
+		if len(positionals) > 1 {
+			query = positionals[1]
+		}
+		if groupScoped && (nickname == "" || query == "") {
+			return fail(fmt.Errorf("--group requires explicit course and assignment"), progress)
+		}
+		var report workflow.PullReport
+		var e error
+		options := workflow.PullWorkOptions{Session: session}
+		if groupScoped {
+			report, e = service.PullWorkGroupWithOptions(ctx, nickname, query, groupID, options)
+		} else {
+			report, e = service.PullWorkWithOptions(ctx, nickname, query, options)
+		}
 		if len(report.Assignments) > 0 {
 			fmt.Fprintln(table, "Course\tAssignment\tTitle\tPulled\tLate\tMissing\tExcused\tInactive\tUnsupported\tHandled\tUnreadable attachments\tDetails")
 			for _, summary := range report.Assignments {
@@ -316,6 +571,41 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if e != nil {
 			return fail(e, progress)
 		}
+	case "student-report":
+		sheets, label, e := service.BuildStudentSheets(file)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		saved, e := localui.SaveStudentReports(ctx, sheets, label)
+		if saved != "" {
+			fmt.Fprintf(out, "Saved %d student reports, one per page: %s\n", len(sheets), saved)
+		}
+		if e != nil {
+			return fail(e, progress)
+		}
+	case "parent-review":
+		sender := workflow.OutlookSender{}
+		outcome, e := localui.ReviewWithTest(ctx, filepath.Join(file, "drafts.json"), func() (workflow.ReviewModel, error) {
+			return service.BuildParentReview(file)
+		}, func(ctx context.Context, skip map[string]bool) (localui.ReviewPostResult, error) {
+			status, summary, e := service.SendParentUpdates(ctx, file, skip, localui.ReviewActionFrom(ctx) == "drafts", sender)
+			return localui.ReviewPostResult{Status: status, Summary: summary, Path: filepath.Join(file, "outcomes.json")}, e
+		}, func(ctx context.Context) (string, error) {
+			return service.SendParentTest(file, sender)
+		}, progress, root)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		fmt.Fprintf(out, "Review finished. Outcome: %s\n", outcome.Status)
+		if outcome.PostSummary != "" {
+			fmt.Fprintln(out, "Delivery:", outcome.PostSummary)
+		}
+		encoded, _ := json.Marshal(struct {
+			Status string                   `json:"outcome"`
+			Path   string                   `json:"result_path,omitempty"`
+			Revise []localui.ReviewRevision `json:"revision_notes,omitempty"`
+		}{outcome.Status, outcome.Path, outcome.Revise})
+		fmt.Fprintf(out, "Review result: %s\n", encoded)
 	case "review":
 		outcome, e := localui.Review(ctx, file, func() (workflow.ReviewModel, error) {
 			if b, _ := os.ReadFile(file); documentKind(b) == "assignment" {
@@ -337,6 +627,42 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				report, e := service.Push(ctx, file)
 				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: %s %s", report.Status, report.URL, report.Message))}, e
 			}
+			if b, _ := os.ReadFile(file); documentKind(b) == "discussion" {
+				report, e := service.PushDiscussion(ctx, file)
+				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: discussion %d %s", report.Status, report.TopicID, report.Message))}, e
+			}
+			if fileKind(file) == "group-results" {
+				service.Skip = skip
+				report, e := service.PostGroupResults(ctx, file)
+				failed := 0
+				for _, r := range report.Groups {
+					if !r.SharedDone && !skip[workflow.GroupCardRef(r.GroupID)] {
+						failed++
+					}
+					for _, st := range r.Students {
+						if st.Status != "completed" && !skip[workflow.GroupStudentRef(r.GroupID, st.StudentRef)] {
+							failed++
+						}
+					}
+					for ref, outcome := range r.Private {
+						if outcome.Status != "succeeded" && outcome.Status != "preserved" && outcome.Status != "not-requested" && !skip[workflow.GroupPrivateRef(r.GroupID, ref)] {
+							failed++
+						}
+					}
+				}
+				summary := fmt.Sprintf("%d approved group action(s) did not fully complete; run cse post output or rerun review", failed)
+				if failed == 0 {
+					summary = "all approved group actions completed"
+				}
+				status := "completed"
+				if failed > 0 || e != nil {
+					status = "partial"
+				}
+				return localui.ReviewPostResult{Status: status, Summary: summary, Path: report.Path}, e
+			}
+			if fileKind(file) != "results" {
+				return localui.ReviewPostResult{}, fmt.Errorf("review cannot post a %q document", fileKind(file))
+			}
 			service.Skip = skip
 			report, e := service.Post(ctx, file)
 			failed := 0
@@ -354,7 +680,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				status = "partial"
 			}
 			return localui.ReviewPostResult{Status: status, Summary: summary, Path: report.Path}, e
-		}, progress)
+		}, progress, root)
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
@@ -376,6 +702,34 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		encoded, _ := json.Marshal(outcome)
 		fmt.Fprintf(out, "Review result: %s\n", encoded)
 	case "post":
+		if fileKind(file) == "group-results" {
+			report, e := service.PostGroupResults(ctx, file)
+			partial := false
+			fmt.Fprintln(table, "Group\tOperation\tStatus\tRubric\tGrade\tShared comment\tLate\tPrivate comments\tDetails")
+			for _, r := range report.Groups {
+				private := []string{}
+				for ref, o := range r.Private {
+					private = append(private, ref+"="+o.Status)
+				}
+				sort.Strings(private)
+				fmt.Fprintf(table, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GroupID, r.Operation, r.Status, r.Outcomes.Rubric.Status, r.Outcomes.Grade.Status, r.Outcomes.Comment.Status, r.Outcomes.Late.Status, strings.Join(private, " "), compact(r.Message))
+				for _, st := range r.Students {
+					fmt.Fprintf(table, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t\t%s\n", r.GroupID, st.StudentRef, st.Status, st.Outcomes.Rubric.Status, st.Outcomes.Grade.Status, st.Outcomes.Comment.Status, st.Outcomes.Late.Status, compact(st.Message))
+				}
+				if r.Status != "completed" {
+					partial = true
+				}
+			}
+			_ = table.Flush()
+			fmt.Fprintln(out, "Results:", report.Path)
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if partial {
+				return 3
+			}
+			return 0
+		}
 		report, e := service.Post(ctx, file)
 		partial := false
 		fmt.Fprintln(table, "Student ref\tOperation\tStatus\tRubric\tGrade\tComment\tLate\tDetails")
@@ -400,6 +754,115 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	}
 	return 0
 }
+
+func parseGroupsArgs(args []string) (int64, int64, int64, bool, error) {
+	var setID, memberID int64
+	var groupID int64
+	var allGroups bool
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--groups" {
+			allGroups = true
+			continue
+		}
+		if i+1 >= len(args) {
+			return 0, 0, 0, false, fmt.Errorf("%s requires an ID", args[i])
+		}
+		id, e := strconv.ParseInt(args[i+1], 10, 64)
+		if e != nil || id <= 0 {
+			return 0, 0, 0, false, fmt.Errorf("%s requires a positive integer ID", args[i])
+		}
+		switch args[i] {
+		case "--set":
+			if setID != 0 {
+				return 0, 0, 0, false, fmt.Errorf("--set may be supplied once")
+			}
+			setID = id
+		case "--members":
+			if memberID != 0 {
+				return 0, 0, 0, false, fmt.Errorf("--members may be supplied once")
+			}
+			memberID = id
+		case "--group":
+			groupID = id
+		default:
+			return 0, 0, 0, false, fmt.Errorf("unknown groups option %q", args[i])
+		}
+		i++
+	}
+	return setID, memberID, groupID, allGroups, nil
+}
+
+func parseOptionalPageGroup(args []string) (int64, error) {
+	if len(args) == 0 {
+		return 0, nil
+	}
+	if len(args) != 2 || args[0] != "--group" {
+		return 0, fmt.Errorf("use --group ID")
+	}
+	id, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("--group requires a positive integer ID")
+	}
+	return id, nil
+}
+
+func parseExternalResourceFlags(args []string) (int64, string, error) {
+	groupID, resourceType := int64(0), "all"
+	typeSet := false
+	for i := 0; i < len(args); i += 2 {
+		if i+1 >= len(args) {
+			return 0, "", fmt.Errorf("%s requires a value", args[i])
+		}
+		switch args[i] {
+		case "--group":
+			id, err := strconv.ParseInt(args[i+1], 10, 64)
+			if err != nil || id <= 0 || groupID != 0 {
+				return 0, "", fmt.Errorf("--group requires one positive integer ID")
+			}
+			groupID = id
+		case "--type":
+			if typeSet {
+				return 0, "", fmt.Errorf("--type may be supplied once")
+			}
+			typeSet = true
+			resourceType = args[i+1]
+		default:
+			return 0, "", fmt.Errorf("unknown external-resources option %q", args[i])
+		}
+	}
+	if resourceType != "all" && resourceType != "collaborations" && resourceType != "conferences" {
+		return 0, "", fmt.Errorf("--type must be collaborations, conferences, or all")
+	}
+	return groupID, resourceType, nil
+}
+
+func parsePageHistoryFlags(args []string) (groupID, revisionID int64, err error) {
+	for i := 0; i < len(args); i += 2 {
+		if i+1 >= len(args) {
+			return 0, 0, fmt.Errorf("%s requires a positive integer ID", args[i])
+		}
+		id, e := strconv.ParseInt(args[i+1], 10, 64)
+		if e != nil || id <= 0 {
+			return 0, 0, fmt.Errorf("%s requires a positive integer ID", args[i])
+		}
+		switch args[i] {
+		case "--group":
+			if groupID != 0 {
+				return 0, 0, fmt.Errorf("--group may be supplied once")
+			}
+			groupID = id
+		case "--revision":
+			if revisionID != 0 {
+				return 0, 0, fmt.Errorf("--revision may be supplied once")
+			}
+			revisionID = id
+		default:
+			return 0, 0, fmt.Errorf("unknown page-history option %q", args[i])
+		}
+	}
+	return groupID, revisionID, nil
+}
+
 func compact(s string) string { return strings.Join(strings.Fields(s), " ") }
 func workflowError(e error) error {
 	var ce *canvas.Error
@@ -475,3 +938,16 @@ func statusWriter(progress io.Writer) io.Writer {
 	}
 	return progress
 }
+
+// splitParentArgs separates course nicknames from student refs: refs are the
+// Engine's s-prefixed identifiers; everything before the first one is a course.
+func splitParentArgs(args []string) (courses, refs []string) {
+	for i, a := range args {
+		if strings.HasPrefix(a, "s-") && i > 0 {
+			return args[:i], args[i:]
+		}
+	}
+	return args, nil
+}
+
+func fileKind(path string) string { b, _ := os.ReadFile(path); return documentKind(b) }

@@ -85,6 +85,9 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	if err != nil {
 		return report, err
 	}
+	if err = domain.ValidateAssignment(doc, body); err != nil {
+		return report, err
+	}
 	defer func() {
 		report.Resources = doc.Created
 		report.UpdateOutcome = doc.UpdateOutcome
@@ -132,6 +135,11 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		report.Message = "already created; use pull-item for future edits"
 		report.Path, err = s.movePushed(path, doc.Course, doc.Title, doc.Created.AssignmentID)
 		return report, err
+	}
+	if doc.GroupCategoryID > 0 {
+		if _, err = s.groupCategory(ctx, course.ID, doc.GroupCategoryID); err != nil {
+			return report, fmt.Errorf("group assignment target: %w", err)
+		}
 	}
 	resumingModule := doc.Created != nil && definite(doc.Created.Module) && doc.ModuleID > 0
 	bound := body
@@ -362,6 +370,15 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	} else if doc.ModuleID == 0 {
 		c.Module = domain.ActionOutcome{Status: "not-requested"}
 	}
+	complete, overrideErr := s.deliverCreateOverrides(ctx, course.ID, live, &doc, save)
+	if overrideErr != nil {
+		return report, overrideErr
+	}
+	if !complete {
+		report.Status = "partial"
+		report.Message = "requested assignment audience or date overrides are incomplete; assignment remains unpublished"
+		return report, nil
+	}
 	if !definite(c.Publication) {
 		if live.Published == doc.Published || live.Published {
 			c.Publication = domain.ActionOutcome{Status: "preserved"}
@@ -381,7 +398,7 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 			}
 		}
 	}
-	c.Complete = definite(c.Assignment) && definite(c.Rubric) && definite(c.Module) && definite(c.Publication)
+	c.Complete = definite(c.Assignment) && definite(c.Rubric) && definite(c.Module) && definite(c.Publication) && createOverridesComplete(doc, c)
 	if err = save(); err != nil {
 		return report, err
 	}
@@ -426,14 +443,27 @@ func (s *Service) movePushed(path, course, title string, id int64) (string, erro
 }
 
 func createFields(d domain.AssignmentDocument, html string) map[string]any {
-	return map[string]any{"name": d.Title, "description": html, "points_possible": d.Points, "grading_type": "points", "submission_types": d.SubmissionTypes, "due_at": d.DueAt, "unlock_at": d.UnlockAt, "lock_at": d.LockAt, "published": false}
+	fields := map[string]any{"name": d.Title, "description": html, "points_possible": d.Points, "grading_type": "points", "submission_types": d.SubmissionTypes, "due_at": d.DueAt, "unlock_at": d.UnlockAt, "lock_at": d.LockAt, "published": false}
+	if d.GroupCategoryID > 0 {
+		fields["group_category_id"] = d.GroupCategoryID
+		fields["grade_group_students_individually"] = *d.GradeGroupStudentsIndividually
+	}
+	return fields
 }
 func sameCreateCore(a Assignment, d domain.AssignmentDocument, html string) bool {
 	if d.Created != nil && d.Created.SavedHTML != "" {
 		html = d.Created.SavedHTML // Canvas's confirmed normalization, persisted on create.
 	}
 	p, e := domain.ParseDecimal(a.Points.String())
-	return e == nil && p.Cmp(d.Points) == 0 && a.Name == d.Title && academicHTML(a.Description) == academicHTML(html) && a.GradingType == "points" && !a.Anonymous && !a.Moderated && (a.GroupCategoryID == nil || *a.GroupCategoryID == 0) && reflect.DeepEqual(a.SubmissionTypes, d.SubmissionTypes) && sameDate(a.DueAt, d.DueAt) && sameDate(a.UnlockAt, d.UnlockAt) && sameDate(a.LockAt, d.LockAt)
+	groupID := int64(0)
+	if a.GroupCategoryID != nil {
+		groupID = *a.GroupCategoryID
+	}
+	modeMatches := true
+	if d.GroupCategoryID > 0 {
+		modeMatches = sameOptionalBool(a.GradeGroupStudentsIndividually, d.GradeGroupStudentsIndividually)
+	}
+	return e == nil && p.Cmp(d.Points) == 0 && a.Name == d.Title && academicHTML(a.Description) == academicHTML(html) && a.GradingType == "points" && !a.Anonymous && !a.Moderated && groupID == d.GroupCategoryID && modeMatches && reflect.DeepEqual(a.SubmissionTypes, d.SubmissionTypes) && sameDate(a.DueAt, d.DueAt) && sameDate(a.UnlockAt, d.UnlockAt) && sameDate(a.LockAt, d.LockAt)
 }
 func sameDate(a, b *string) bool {
 	if a == nil || *a == "" {
@@ -511,6 +541,7 @@ func rubricCreateFields(r domain.Rubric, assignmentID int64) map[string]any {
 	}
 	return map[string]any{"rubric": map[string]any{"title": r.Title, "free_form_criterion_comments": r.FreeFormCriterionComments, "skip_updating_points_possible": true, "criteria": criteria}, "rubric_association": map[string]any{"association_id": assignmentID, "association_type": "Assignment", "use_for_grading": false, "purpose": "grading"}}
 }
+
 var errNoCreateFound = fmt.Errorf("no matching recent assignment exists")
 
 func (s *Service) recoverCreate(ctx context.Context, courseID int64, d domain.AssignmentDocument, html string) (Assignment, error) {
@@ -527,7 +558,18 @@ func (s *Service) recoverCreate(ctx context.Context, courseID int64, d domain.As
 	matches := []Assignment{}
 	for _, a := range all {
 		created, e := time.Parse(time.RFC3339Nano, a.CreatedAt)
-		if e == nil && !created.Before(started.Add(-time.Hour)) && !created.After(started.Add(time.Hour)) && sameCreateCore(a, d, html) && !a.Published {
+		if e != nil || created.Before(started.Add(-time.Hour)) || created.After(started.Add(time.Hour)) {
+			continue
+		}
+		if d.GroupCategoryID > 0 {
+			// Index responses may omit assignment grading mode; recover against the
+			// exact assignment representation before deciding whether it matches.
+			a, e = GetAssignment(ctx, s.Client, courseID, a.ID)
+			if e != nil {
+				return Assignment{}, e
+			}
+		}
+		if sameCreateCore(a, d, html) && !a.Published {
 			matches = append(matches, a)
 		}
 	}
@@ -555,6 +597,11 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 	if err != nil {
 		return report, err
 	}
+	if d.GroupCategoryID > 0 {
+		if _, err = s.groupCategory(ctx, d.CourseID, d.GroupCategoryID); err != nil {
+			return report, fmt.Errorf("group assignment target: %w", err)
+		}
+	}
 	a, err := GetAssignment(ctx, s.Client, d.CourseID, d.AssignmentID)
 	if err != nil {
 		return report, err
@@ -579,6 +626,12 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 		intended.UnlockAt = d.UnlockAt
 		intended.LockAt = d.LockAt
 		intended.Published = d.Published
+		if _, ok := patch["group_category_id"]; ok {
+			intended.GroupCategoryID = d.GroupCategoryID
+		}
+		if _, ok := patch["grade_group_students_individually"]; ok {
+			intended.GradeGroupStudentsIndividually = d.GradeGroupStudentsIndividually
+		}
 		if (d.UpdateOutcome.Status == "pending" || d.UpdateOutcome.Status == "uncertain") && sameEditFields(intended, compare, patch) {
 			d.UpdateOutcome = domain.ActionOutcome{Status: "succeeded", Message: "intended live state recovered"}
 			if err = workspace.WriteDocument(path, d, body); err != nil {
@@ -595,7 +648,33 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 		report.Message = "live assignment changed; unsent edit preserved; fresh version: " + fresh
 		return report, nil
 	}
+	structuralChange := false
+	if _, ok := patch["group_category_id"]; ok {
+		structuralChange = true
+	}
+	if _, ok := patch["grade_group_students_individually"]; ok {
+		structuralChange = true
+	}
+	structuralHeld := false
+	if structuralChange {
+		// Do not change collaboration or assessment audience after students have
+		// submitted. A one-row bounded read is sufficient to detect any work.
+		var submissions []Submission
+		if err = s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?per_page=1", d.CourseID, d.AssignmentID), &submissions); err != nil {
+			return report, fmt.Errorf("could not verify whether submissions exist before changing group structure: %w", err)
+		}
+		if len(submissions) > 0 {
+			delete(patch, "group_category_id")
+			delete(patch, "grade_group_students_individually")
+			structuralHeld = true
+			report.Message = "group set or grading mode change held because submissions exist; change it in Canvas/SpeedGrader. Other requested assignment edits can still be applied."
+		}
+	}
 	if len(patch) == 0 {
+		if structuralHeld {
+			report.Status = "held"
+			return report, nil
+		}
 		d.UpdateOutcome = domain.ActionOutcome{Status: "preserved"}
 		report.Status = "completed"
 		return report, workspace.WriteDocument(path, d, body)
@@ -622,6 +701,10 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 	}
 	report.Status = d.UpdateOutcome.Status
 	report.Message = d.UpdateOutcome.Message
+	if structuralHeld && d.UpdateOutcome.Status == "succeeded" {
+		report.Status = "partial"
+		report.Message = "other assignment edits completed; group set or grading mode change held because submissions exist. Change it in Canvas/SpeedGrader, then pull again before editing further."
+	}
 	return report, nil
 }
 func editPatchMatches(a Assignment, d domain.AssignmentDocument, html string, patch map[string]any) bool {
@@ -658,6 +741,18 @@ func editPatchMatches(a Assignment, d domain.AssignmentDocument, html string, pa
 			}
 		case "published":
 			if a.Published != d.Published {
+				return false
+			}
+		case "group_category_id":
+			id := int64(0)
+			if a.GroupCategoryID != nil {
+				id = *a.GroupCategoryID
+			}
+			if id != d.GroupCategoryID {
+				return false
+			}
+		case "grade_group_students_individually":
+			if !sameOptionalBool(a.GradeGroupStudentsIndividually, d.GradeGroupStudentsIndividually) {
 				return false
 			}
 		default:

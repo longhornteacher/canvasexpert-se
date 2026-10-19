@@ -95,9 +95,31 @@ func TestWorkRegistrationPreservesAndRepeatsWithoutCLI(t *testing.T) {
 	if args[1] != root {
 		t.Fatalf("path with spaces changed: %v", args)
 	}
+	if got := servers["canvasexpert-se"].(map[string]any)["tool_timeout_sec"]; got != int64(900) {
+		t.Fatalf("tool timeout = %v, want 900", got)
+	}
 	again, err := registerWork(root, exe, path, false)
 	if err != nil || again.State != "settings-already-saved" || again.BackupPath != "" {
 		t.Fatalf("repeat install: %+v %v", again, err)
+	}
+}
+
+func TestWorkRegistrationAddsTimeoutToOlderEntry(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "UserInstall")
+	exe := filepath.Join(root, "engine", "cse.exe")
+	path := filepath.Join(t.TempDir(), "config.toml")
+	older, _ := toml.Marshal(map[string]any{"mcp_servers": map[string]any{"canvasexpert-se": map[string]any{"command": exe, "args": []any{"--workspace", root, "mcp"}, "enabled_tools": []any{"pull_work"}}}})
+	os.WriteFile(path, older, 0600)
+	result, err := registerWork(root, exe, path, false)
+	if err != nil || result.State != "settings-saved" {
+		t.Fatalf("older entry not upgraded: %+v %v", result, err)
+	}
+	data, _ := os.ReadFile(path)
+	var cfg map[string]any
+	toml.Unmarshal(data, &cfg)
+	entry := cfg["mcp_servers"].(map[string]any)["canvasexpert-se"].(map[string]any)
+	if entry["tool_timeout_sec"] != int64(900) || entry["enabled_tools"] == nil {
+		t.Fatalf("entry = %v", entry)
 	}
 }
 

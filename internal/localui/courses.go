@@ -22,6 +22,7 @@ type courseRow struct {
 }
 
 type coursesData struct {
+	Appearance              appearanceData
 	Secret, Message, Notice string
 	DraftKey                string
 	ClearDraft              bool
@@ -30,7 +31,7 @@ type coursesData struct {
 
 func init() {
 	register(
-		page{Path: "/courses", Methods: []string{http.MethodGet, http.MethodPost}, Template: "courses", Scripts: []string{"drafts.js"},
+		page{Path: "/courses", Methods: []string{http.MethodGet, http.MethodPost}, Template: "courses", Scripts: []string{"drafts.js", "appearance.js"},
 			Nav:    []navSlot{{Primary: "Classroom", Order: 20}, {Primary: "Classroom", Label: "Courses", Order: 21}},
 			Handle: (*Hub).coursesPage},
 	)
@@ -79,7 +80,7 @@ func (h *Hub) coursesPage(w http.ResponseWriter, r *http.Request) {
 			rows = append(rows, courseRow{ID: c.ID, Name: c.Nickname, Nick: c.Nickname, Active: c.Current})
 		}
 	}
-	h.render(w, 200, tmpl("courses"), coursesData{Secret: h.secret, Message: message, Notice: notice, DraftKey: "courses:" + h.secret, ClearDraft: r.URL.Query().Get("saved") == "1", Rows: rows})
+	h.render(w, 200, tmpl("courses"), coursesData{Appearance: appearanceFor(h.root, h.secret), Secret: h.secret, Message: message, Notice: notice, DraftKey: "courses:" + h.secret, ClearDraft: r.URL.Query().Get("saved") == "1", Rows: rows})
 }
 
 func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
