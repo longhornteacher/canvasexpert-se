@@ -22,6 +22,7 @@ Read `engine_reference` formats and examples (CLI `help formats` / `help example
 - Put `stimulus_id` on every item attached to a stimulus, including items inside a STIMULUS..STIMULUS_END span.
 - Keep HTML to what `help fields` records as kept; the Engine sends it unfiltered. Show code as `<pre><code>...</code></pre>` (colored as Python; add `class="language-html"` or similar to leave it uncolored). Put TEKS codes in `metadata.teks`.
 - Quiz settings (time limit, attempts, due date, publication, module) go in `metadata.canvas`.
+- For a quiz only selected book clubs should see, add `metadata.canvas.audience` with `mode: individual`, `policy: snapshot` and the exact `source` set/club IDs, then run `prepare_audience` before review or push. The quiz stays one gradebook column and each student answers independently; the clubs are only the audience. See `group-work.md`'s quiz instructions.
 - For one attempt, omit `allowed_attempts` and multiple-attempt settings. For two or more set `allow_multiple_attempts: true` and the desired `allowed_attempts`; omit the limit or use `"unlimited"` for unlimited attempts.
 - TF uses a boolean `answer`. Feedback goes in root `rationales`, keyed by `item_id`; MC/MA entries contain `choices` with matching choice `id` and `rationale` (and may also carry a top-level `rationale` as general feedback for the whole question), while TF and other auto-scored entries contain `rationale`. Never put `rationale` inside an item or its choices. Write the explanation in green as `TEACHER.md` shows (`<p style="color: #2e7d32;"><strong>Why this is correct:</strong> ...</p>`).
 - Written items: `ESSAY` takes optional `word_limit_min`/`word_limit_max`; `FILEUPLOAD` takes optional `accepted_formats`. Write a `rubric_hint` for each ECR/SCR as private guidance for later rubric authoring and scoring. It is not sent to Canvas and does not automatically create a rubric; put anything students must see in `prompt`.
@@ -32,7 +33,7 @@ Run `validate_quiz` on the saved draft before review; it checks item shape and s
 
 Run `.\cse.cmd review <quiz-file> <course>`; when the teacher clicks Create, the Engine pushes the quiz. With review skipped, run `.\cse.cmd push-quiz <course> <quiz-file>`. The quiz stays unpublished unless `metadata.canvas.published` is true.
 
-The Engine records the quiz ID in `<quiz-file>.cse.json`. If it reports `partial`, fix the named problem and rerun the same file; it adds only the missing items. If it refuses because a quiz with that title exists, ask the teacher whether it is an unfinished earlier push (resume it) or a different quiz (rename this one).
+The Engine records the quiz ID in `<quiz-file>.cse.json`. If it reports `partial`, fix the named problem and rerun the same file; it adds only the missing items. If it refuses because a quiz with that title exists, ask the teacher whether it is an unfinished earlier push (resume it) or a different quiz (rename this one). For a club-restricted quiz, a refused or uncertain audience leaves the quiz unpublished; report that plainly and resume the same file, which repeats only unfinished steps.
 
 ## Change question points
 

@@ -171,8 +171,11 @@ func (s *Service) PrepareAudience(ctx context.Context, nickname, path string, re
 		if e != nil {
 			return nil, e
 		}
-		if kind == "page" {
+		switch kind {
+		case "page":
 			return s.preparePageAudienceRefresh(ctx, course, constrained)
+		case "quiz":
+			return s.prepareQuizAudienceRefresh(ctx, course, constrained)
 		}
 		return s.prepareAssignmentAudienceRefresh(ctx, course, constrained)
 	}
@@ -232,8 +235,25 @@ func (s *Service) PrepareAudience(ctx context.Context, nickname, path string, re
 			return nil, fmt.Errorf("draft requires an audience intent")
 		}
 		return s.preparePageAudience(ctx, course, &d, func() error { return workspace.WriteDocument(constrained, &d, body) })
+	case "quiz":
+		q, e := ReadQuizForge(constrained)
+		if e != nil {
+			return nil, e
+		}
+		set, e := q.settings()
+		if e != nil {
+			return nil, e
+		}
+		if set.Audience == nil {
+			return nil, fmt.Errorf("draft requires an audience intent")
+		}
+		rec := readSidecar(constrained)
+		if rec.Instance != "" && (rec.Instance != s.Client.Origin() || rec.CourseID != 0 && rec.CourseID != course.ID) {
+			return nil, fmt.Errorf("saved quiz sidecar belongs to a different Canvas/course")
+		}
+		return s.prepareQuizAudience(ctx, course, constrained, set.Audience, rec.AssignmentID)
 	default:
-		return nil, fmt.Errorf("audience preparation supports assignments, assignment-dates and course Pages")
+		return nil, fmt.Errorf("audience preparation supports assignments, assignment-dates, course Pages and quizzes")
 	}
 	if a == nil {
 		return nil, fmt.Errorf("draft requires an audience intent")

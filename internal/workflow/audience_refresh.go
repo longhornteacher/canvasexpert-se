@@ -66,8 +66,35 @@ func (s *Service) refreshDocument(course domain.Course, path string) (*domain.Au
 			return nil, 0, nil, fmt.Errorf("refresh requires a saved Page identity")
 		}
 		return d.Audience, target, func() error { return workspace.WriteDocument(path, &d, body) }, nil
+	case "quiz":
+		q, e := ReadQuizForge(path)
+		if e != nil {
+			return nil, 0, nil, e
+		}
+		set, e := q.settings()
+		if e != nil {
+			return nil, 0, nil, e
+		}
+		rec := readSidecar(path)
+		if rec.AssignmentID <= 0 {
+			return nil, 0, nil, fmt.Errorf("refresh requires a saved quiz assignment identity")
+		}
+		if rec.Instance != "" && (rec.Instance != s.Client.Origin() || rec.CourseID != 0 && rec.CourseID != course.ID) {
+			return nil, 0, nil, fmt.Errorf("saved quiz sidecar belongs to a different Canvas/course")
+		}
+		a := rec.Audience
+		if a == nil {
+			a = set.Audience
+		}
+		if a == nil {
+			return nil, 0, nil, fmt.Errorf("refresh requires a previously prepared quiz audience")
+		}
+		return a, rec.AssignmentID, func() error {
+			rec.Audience = a
+			return writeSidecar(path, rec)
+		}, nil
 	}
-	return nil, 0, nil, fmt.Errorf("refresh requires an assignment receipt, assignment-dates audience or course Page")
+	return nil, 0, nil, fmt.Errorf("refresh requires an assignment receipt, assignment-dates audience, course Page or quiz")
 }
 
 func (s *Service) prepareAssignmentAudienceRefresh(ctx context.Context, course domain.Course, path string) (*domain.AudienceState, error) {

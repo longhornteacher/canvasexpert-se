@@ -141,6 +141,10 @@ func buildQuizReview(path string) (ReviewModel, error) {
 	for _, t := range q.Tiers {
 		head.Facts = append(head.Facts, fact("Hub tier "+t.Label, "page for Canvas tag "+t.Tag))
 	}
+	if set.Audience != nil {
+		head.Facts = append(head.Facts, fact("Audience", "Selected book clubs, individual attempts"))
+		addAudienceReview(&head, set.Audience)
+	}
 	m.Cards = append(m.Cards, head)
 	var total float64
 	for i, it := range q.preparedItems() {

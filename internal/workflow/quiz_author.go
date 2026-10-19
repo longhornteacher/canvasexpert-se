@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"canvasexpertse/internal/canvas"
+	"canvasexpertse/internal/domain"
 )
 
 // QuizSettings come from the QuizForge file's metadata.canvas object. Unknown
@@ -36,6 +37,10 @@ type QuizSettings struct {
 	PostToSIS            *bool  `json:"post_to_sis"`
 	Published            bool   `json:"published"`
 	ModuleID             int64  `json:"module_id"`
+	// Audience restricts the quiz's associated assignment to selected club
+	// members who work individually. Source IDs never become native group
+	// settings. Engine-managed state lives in the sidecar, not this file.
+	Audience *domain.Audience `json:"audience,omitempty"`
 }
 
 func (q QuizForge) settings() (s QuizSettings, err error) {
@@ -62,6 +67,9 @@ func (q QuizForge) settings() (s QuizSettings, err error) {
 		if s.ScoreToKeep != "" && s.ScoreToKeep != "highest" && s.ScoreToKeep != "latest" && s.ScoreToKeep != "average" && s.ScoreToKeep != "first" {
 			return s, fmt.Errorf("metadata.canvas.score_to_keep must be highest, latest, average or first")
 		}
+	}
+	if e := domain.ValidateAudience(s.Audience); e != nil {
+		return s, fmt.Errorf("metadata.canvas.audience: %w", e)
 	}
 	return s, nil
 }
@@ -151,16 +159,37 @@ type QuizPushReport struct {
 	Published    bool
 	Message      string
 	Hub          string // hub tier pages, tags, and teacher actions
+	Audience     string // applied individual club audience, when requested
 	Path         string // existing sidecar containing the created quiz ID and resume data
 	Warnings     []string
 }
 
 // quizSidecar is the resume record beside the quiz file. A New Quiz records its
-// ID as assignment_id.
+// ID as assignment_id. Older sidecars without the newer fields remain usable.
 type quizSidecar struct {
 	AssignmentID int64 `json:"assignment_id,omitempty"`
 	// TierPages records hub pages as soon as each exists, so a rerun never duplicates them.
 	TierPages []TierPage `json:"tier_pages,omitempty"`
+	// Instance and CourseID bind the saved quiz to one Canvas/course so a
+	// copied sidecar cannot target a different deployment.
+	Instance string `json:"instance,omitempty"`
+	CourseID int64  `json:"course_id,omitempty"`
+	// Audience is the Engine-managed individual audience for the quiz's
+	// associated assignment. It is never read from the QuizForge file.
+	Audience *domain.Audience `json:"audience,omitempty"`
+	// Stages records accepted restricted-quiz work so a resume repeats only
+	// unfinished stages. Absent for ordinary quizzes.
+	Stages *quizStages `json:"stages,omitempty"`
+}
+
+// quizStages records the accepted stages of a restricted quiz. Each outcome is
+// definite only after Canvas accepted that stage.
+type quizStages struct {
+	Items       domain.ActionOutcome `json:"items,omitempty"`
+	Settings    domain.ActionOutcome `json:"settings,omitempty"`
+	Audience    domain.ActionOutcome `json:"audience,omitempty"`
+	Module      domain.ActionOutcome `json:"module,omitempty"`
+	Publication domain.ActionOutcome `json:"publication,omitempty"`
 }
 
 func writeSidecar(path string, rec quizSidecar) error {
@@ -202,6 +231,24 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 	report.ItemsTotal = len(items)
 	base := fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes", course.ID)
 	rec := readSidecar(path)
+	restricted := set.Audience != nil || rec.Audience != nil
+	if rec.Instance != "" && (rec.Instance != s.Client.Origin() || rec.CourseID != 0 && rec.CourseID != course.ID) {
+		return report, fmt.Errorf("saved quiz sidecar belongs to a different Canvas/course; it was not reused")
+	}
+	if restricted {
+		if rec.Instance == "" {
+			rec.Instance, rec.CourseID = s.Client.Origin(), course.ID
+		}
+		if rec.Stages == nil {
+			rec.Stages = &quizStages{}
+		}
+		if rec.Audience == nil {
+			rec.Audience = set.Audience
+		}
+		if err := writeSidecar(path, rec); err != nil {
+			return report, err
+		}
+	}
 	id, existing := rec.AssignmentID, 0
 	if id == 0 {
 		var quizzes []struct {
@@ -265,13 +312,25 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 	report.URL = fmt.Sprintf("%s/courses/%d/assignments/%d", s.Client.Origin(), course.ID, id)
 	report.ItemsAdded = existing
 	labels := q.scoredIDs()
-	for i := existing; i < len(items); i++ {
+	// A restricted quiz resumes only unfinished stages; accepted items are
+	// never re-posted.
+	itemsAccepted := restricted && rec.Stages != nil && definite(rec.Stages.Items)
+	if itemsAccepted {
+		report.ItemsAdded = len(items)
+	}
+	for i := existing; i < len(items) && !itemsAccepted; i++ {
 		if e = s.Client.Write(ctx, "POST", fmt.Sprintf("%s/%d/items", base, id), items[i], nil); e != nil {
 			report.Status = "partial"
 			report.Message = fmt.Sprintf("item %d of %d (%s) was not added; rerun the same file to continue this quiz", i+1, len(items), labels[i])
 			return report, e
 		}
 		report.ItemsAdded++
+	}
+	if restricted && rec.Stages != nil && !definite(rec.Stages.Items) {
+		rec.Stages.Items = domain.ActionOutcome{Status: "succeeded"}
+		if e = writeSidecar(path, rec); e != nil {
+			return report, e
+		}
 	}
 	if len(q.Tiers) > 0 {
 		// Pages are verified again and published only when the quiz itself publishes.
@@ -283,9 +342,12 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 			return report, e
 		}
 	}
-	if e = s.finishQuiz(ctx, course.ID, id, set, &report); e != nil {
+	if complete, e := s.finishQuiz(ctx, course, id, set, &report, path); e != nil {
 		report.Status = "partial"
 		return report, e
+	} else if !complete {
+		report.Status = "partial"
+		return report, nil
 	}
 	report.Status = "completed"
 	return report, nil
@@ -303,9 +365,28 @@ func (q QuizForge) scoredIDs() []string {
 	return out
 }
 
-// finishQuiz applies assignment-level settings and module placement once the
-// items are safe. Each step is idempotent, so a rerun repeats it harmlessly.
-func (s *Service) finishQuiz(ctx context.Context, courseID, id int64, set QuizSettings, report *QuizPushReport) error {
+// finishQuiz applies assignment-level settings, the individual audience and
+// module placement once the items are safe. Each step is idempotent, so a rerun
+// repeats it harmlessly. A restricted quiz records accepted stages in the
+// sidecar and resumes only unfinished work. It reports whether every requested
+// stage is complete; an incomplete audience leaves the quiz unpublished.
+func (s *Service) finishQuiz(ctx context.Context, course domain.Course, id int64, set QuizSettings, report *QuizPushReport, path string) (bool, error) {
+	courseID := course.ID
+	rec := readSidecar(path)
+	restricted := set.Audience != nil || rec.Audience != nil
+	var stages *quizStages
+	if restricted {
+		if rec.Stages == nil {
+			rec.Stages = &quizStages{}
+		}
+		stages = rec.Stages
+	}
+	save := func() error {
+		if stages != nil {
+			rec.Stages = stages
+		}
+		return writeSidecar(path, rec)
+	}
 	fields := map[string]any{}
 	for k, v := range map[string]string{"due_at": set.DueAt, "unlock_at": set.UnlockAt, "lock_at": set.LockAt, "assignment_group_id": set.AssignmentGroupID} {
 		if v != "" {
@@ -315,45 +396,86 @@ func (s *Service) finishQuiz(ctx context.Context, courseID, id int64, set QuizSe
 	if set.PostToSIS != nil {
 		fields["post_to_sis"] = *set.PostToSIS
 	}
-	if len(fields) > 0 {
+	settingsDone := stages != nil && definite(stages.Settings)
+	if len(fields) > 0 && !settingsDone {
 		var a Assignment
 		if e := s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d", courseID, id), map[string]any{"assignment": fields}, &a); e != nil {
 			report.Message = "items are in, but assignment settings (dates, group) were not applied; rerun the same file"
-			return e
+			return false, e
 		}
 		report.Published = a.Published
 	}
+	if stages != nil && !definite(stages.Settings) {
+		stages.Settings = domain.ActionOutcome{Status: "succeeded"}
+		if e := save(); e != nil {
+			return false, e
+		}
+	}
 	if set.ModuleID > 0 {
-		var mods []struct {
-			ContentID int64  `json:"content_id"`
-			Type      string `json:"type"`
-		}
-		path := fmt.Sprintf("/api/v1/courses/%d/modules/%d/items", courseID, set.ModuleID)
-		if e := s.Client.List(ctx, path+"?per_page=100", &mods); e != nil {
-			report.Message = "items are in, but module placement could not be checked; rerun the same file"
-			return e
-		}
-		placed := false
-		for _, m := range mods {
-			if m.Type == "Assignment" && m.ContentID == id {
-				placed = true
-				break
+		moduleDone := stages != nil && definite(stages.Module)
+		if !moduleDone {
+			var mods []struct {
+				ContentID int64  `json:"content_id"`
+				Type      string `json:"type"`
+			}
+			path := fmt.Sprintf("/api/v1/courses/%d/modules/%d/items", courseID, set.ModuleID)
+			if e := s.Client.List(ctx, path+"?per_page=100", &mods); e != nil {
+				report.Message = "items are in, but module placement could not be checked; rerun the same file"
+				return false, e
+			}
+			placed := false
+			for _, m := range mods {
+				if m.Type == "Assignment" && m.ContentID == id {
+					placed = true
+					break
+				}
+			}
+			if !placed {
+				if e := s.Client.Write(ctx, "POST", path, map[string]any{"module_item": map[string]any{"type": "Assignment", "content_id": id}}, nil); e != nil {
+					report.Message = "items are in, but module placement failed; rerun the same file"
+					return false, e
+				}
 			}
 		}
-		if !placed {
-			if e := s.Client.Write(ctx, "POST", path, map[string]any{"module_item": map[string]any{"type": "Assignment", "content_id": id}}, nil); e != nil {
-				report.Message = "items are in, but module placement failed; rerun the same file"
-				return e
+		if stages != nil && !definite(stages.Module) {
+			stages.Module = domain.ActionOutcome{Status: "succeeded"}
+			if e := save(); e != nil {
+				return false, e
 			}
 		}
 	}
-	if set.Published {
+	// Restrict the associated assignment before publication. A failed or
+	// uncertain audience stage must never publish the quiz.
+	if restricted {
+		// The prepared state lives in the sidecar; the document carries intent only.
+		audience := rec.Audience
+		if audience == nil {
+			audience = set.Audience
+		}
+		complete, e := s.applyQuizAudience(ctx, course, path, audience, id, stages)
+		if e != nil {
+			report.Message = "items are in, but the individual audience was not applied; the quiz remains unpublished"
+			return false, e
+		}
+		if !complete {
+			report.Message = "items are in, but the individual audience is incomplete; the quiz remains unpublished"
+			return false, nil
+		}
+		report.Audience = quizAudienceSummary(audience)
+	}
+	if set.Published && (stages == nil || !definite(stages.Publication)) {
 		var a Assignment
 		if e := s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d", courseID, id), map[string]any{"assignment": map[string]any{"published": true}}, &a); e != nil {
 			report.Message = "items and requested module placement are in, but publication failed; rerun the same file"
-			return e
+			return false, e
 		}
 		report.Published = a.Published
+		if stages != nil {
+			stages.Publication = domain.ActionOutcome{Status: "succeeded"}
+			if e := save(); e != nil {
+				return false, e
+			}
+		}
 	}
-	return nil
+	return true, nil
 }

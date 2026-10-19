@@ -4,6 +4,10 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Development notes
 
+### New Quiz audiences from clubs (2026-10-19)
+
+- A QuizForge file can carry the shared individual club audience in `metadata.canvas.audience`. The restriction targets the quiz's exact associated assignment, so the quiz stays one gradebook column and each student answers independently; a quiz whose assignment is native group work is refused. Push creates the quiz, adds items, applies settings and module placement, applies the audience and publishes last, so a refused or uncertain audience never publishes. The sidecar records accepted stages and a resume repeats only unfinished work; a sidecar bound to another Canvas or course is refused, and older sidecars keep working. Audience-only refresh returns an `assignment-dates` action and sends no quiz, item or settings write, while New Quiz attempts and grades protect removals. Local synthetic evidence only; Canvas Live club-audience quiz and student-view observations remain separate.
+
 ### Course Page audiences from clubs (2026-10-19)
 
 - A course Page can carry the shared individual club audience. Push creates it unpublished, applies the complete date-details restriction, finishes requested module placement and publishes last; a refused or uncertain audience never publishes. Unrelated override rows and availability dates survive the collection replacement, `204` is accepted, and an audience-only update sends no stale body. Explicit refresh recomputes the managed student row while preserving manual rows and newer teacher edits. Local synthetic evidence only; Page/quiz student access observations remain separate.
