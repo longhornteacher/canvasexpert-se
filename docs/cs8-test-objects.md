@@ -10,6 +10,8 @@ Published objects can be visible to enrolled students; clean those up first.
 | New Quiz 3698128 "All Question Types Sampler (CS)" | Unpublished; left for teacher preview | Quiz push, 2026-10-09 |
 | New Quiz 3698178, assignment 3698180 | Unpublished `[CSE FIELD PROBE]` | Field API probe, 2026-10-10 |
 | New Quizzes 3698182, 3698183 | Unpublished `[CSE FIELD PROBE]`; 3698183 is the optional Build/Preview check in `handoffs/retired/NEW-QUIZ-SCORING-PROBE.md` | Written-item probe, 2026-10-10 |
+| Page 2270237 "[CSE REPLACE DISPOSABLE] 20261020T170428Z" | Unpublished | replace-text live check, 2026-10-20. Delete in Canvas |
+| Assignment 3705822 "[CSE REPLACE DISPOSABLE] 20261020T170428Z" | Unpublished, no submissions, 10 points, counts toward final grade if published | replace-text live check, 2026-10-20. Delete in Canvas |
 | Assignment 3704059 "[CSE 0.1b DISPOSABLE] 20261018T190938Z" | Published, but `only_visible_to_overrides` is true with one override (393538) for the built-in Test Student only; has a Test Student submission (late timing check); Canvas refused unpublish | Dev probe late-timing test, 2026-10-18. Delete in Canvas |
 
 On 2026-10-17 assignments 3698077-3698082 and 3698181 were no longer found (already deleted); their rubrics may remain. The 2026-10-17 live check used disposable assignments 3703744 and 3703757, each visible only to the Test Student, and deleted both afterward.
