@@ -58,6 +58,23 @@ type discussionEntry struct {
 	Replies        []discussionEntry      `json:"replies"`
 }
 
+// Canvas entry-list fallback responses call their embedded preview
+// recent_replies; full-view responses use replies. Keep both through the same
+// merge and pagination path, including nested previews.
+func (e *discussionEntry) UnmarshalJSON(data []byte) error {
+	type entry discussionEntry
+	var raw struct {
+		entry
+		RecentReplies []discussionEntry `json:"recent_replies"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*e = discussionEntry(raw.entry)
+	e.Replies = mergeDiscussionEntries(raw.RecentReplies, e.Replies)
+	return nil
+}
+
 type discussionView struct {
 	View       json.RawMessage   `json:"view"`
 	NewEntries []discussionEntry `json:"new_entries"`

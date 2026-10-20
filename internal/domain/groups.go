@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"bytes"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -24,6 +25,38 @@ type GroupSetDocument struct {
 	Observed        *GroupSetSnapshot `yaml:"observed,omitempty"`
 	Created         *GroupSetCreated  `yaml:"created,omitempty"`
 	UpdateOutcome   ActionOutcome     `yaml:"update_outcome,omitempty"`
+}
+
+// yaml.v3 skips a field's UnmarshalYAML method for an explicit null. Preserve
+// that requested clear on the containing document, while retaining strict
+// field validation for the entire group-set draft.
+func (d *GroupSetDocument) UnmarshalYAML(n *yaml.Node) error {
+	type plain GroupSetDocument
+	data, err := yaml.Marshal(n)
+	if err != nil {
+		return err
+	}
+	var decoded plain
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	*d = GroupSetDocument(decoded)
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i+1].Tag != "!!null" {
+			continue
+		}
+		switch n.Content[i].Value {
+		case "self_signup":
+			d.SelfSignup = OptionalString{Set: true, Null: true}
+		case "group_limit":
+			d.GroupLimit = OptionalInt{Set: true, Null: true}
+		case "auto_leader":
+			d.AutoLeader = OptionalString{Set: true, Null: true}
+		}
+	}
+	return nil
 }
 
 type OptionalString struct {

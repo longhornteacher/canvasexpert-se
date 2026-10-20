@@ -235,6 +235,23 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 		holdOutcome(&c.Outcome, "new submission attempt since pull; pull-work for this student")
 		return save()
 	}
+	if definite(c.Outcome) {
+		return nil
+	}
+	if ambiguous(c.Outcome) {
+		// Reconcile the original attempted text, even if local feedback has
+		// changed. An absent comment cannot establish that a PUT failed.
+		if c.Outcome.PostedText != "" {
+			for _, existing := range commentsForAttempt(live, c.Attempt.Attempt) {
+				if existing.Comment == c.Outcome.PostedText {
+					c.Outcome.Status, c.Outcome.Message = "preserved", "exact original comment text is present on the intended attempt"
+					return save()
+				}
+			}
+		}
+		c.Outcome.Status, c.Outcome.Message = "uncertain", "comment completion remains uncertain; inspect Canvas before repeating it"
+		return save()
+	}
 	computed, err := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, c.Components, doc.Assignment.Points)
 	if err != nil {
 		return err
@@ -472,8 +489,14 @@ func rubricMatches(sub Submission, a domain.Assessment) bool {
 }
 func ambiguous(o domain.ActionOutcome) bool { return o.Status == "pending" || o.Status == "uncertain" }
 
-func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, row *domain.StudentResult, v domain.ValidatedStudent, source postSource, live Submission, coupledRubric bool, save func() error) error {
+func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, row *domain.StudentResult, v domain.ValidatedStudent, source postSource, live Submission, coupledRubric bool, save func() error, beforeNumeric ...func() string) error {
 	g := row.Grade
+	checkNumeric := func() string {
+		if len(beforeNumeric) > 0 {
+			return beforeNumeric[0]()
+		}
+		return ""
+	}
 	if reason := unsupportedSubmission(live); reason != "" {
 		holdGrade(g, reason)
 		return save()
@@ -519,6 +542,10 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 	// which can replace the computed assessment when their scales differ.
 	// Confirm the honest rubric first, then post the computed grade separately.
 	if coupledRubric && !definite(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Grade) {
+		if hold := checkNumeric(); hold != "" {
+			holdGrade(g, hold)
+			return save()
+		}
 		g.Outcomes.Rubric = domain.ActionOutcome{Status: "pending"}
 		g.Outcomes.Grade = domain.ActionOutcome{}
 		if err := save(); err != nil {
@@ -537,6 +564,10 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		}
 	}
 	if !noCanvasRubric && !coupledRubric && !ambiguous(g.Outcomes.Rubric) && !ambiguous(g.Outcomes.Grade) && (!definite(g.Outcomes.Rubric) || !definite(g.Outcomes.Grade)) {
+		if hold := checkNumeric(); hold != "" {
+			holdGrade(g, hold)
+			return save()
+		}
 		g.Outcomes.Rubric = domain.ActionOutcome{Status: "pending"}
 		g.Outcomes.Grade = domain.ActionOutcome{Status: "pending"}
 		if err := save(); err != nil {
@@ -556,6 +587,10 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		}
 	}
 	if (noCanvasRubric || (coupledRubric && definite(g.Outcomes.Rubric))) && !definite(g.Outcomes.Grade) && !ambiguous(g.Outcomes.Grade) {
+		if hold := checkNumeric(); hold != "" {
+			holdGrade(g, hold)
+			return save()
+		}
 		fresh, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, source.student.UserID)
 		if e != nil {
 			g.Outcomes.Grade = domain.ActionOutcome{Status: "held", Message: e.Error()}

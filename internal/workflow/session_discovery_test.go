@@ -165,6 +165,66 @@ func TestCompletedTimingHintSkipsAcceptedNoneAfterCanvasKeepsElapsedSeconds(t *t
 		timing := decoded.Students[0].LateOnly.LateTiming
 		t.Fatalf("matching accepted none result should prevent a second session pull despite elapsed seconds: read=%v timing=%+v source=%v still=%v sub=%+v", readErr, timing, timingSourcePresent(timing, sub), timingStillMatches(timing, due, sub, nil), sub)
 	}
+	for _, name := range []string{"results.yaml", "results.yml", "results.txt", "results.json", "results"} {
+		next := filepath.Join(service.Root, "drafts", name)
+		if err := os.MkdirAll(filepath.Dir(next), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(resultPath, next); err != nil {
+			t.Fatal(err)
+		}
+		resultPath = next
+		if !service.sessionTimingCandidate(2, 10, "stu_a", sub) || !service.completedTimingHint(10, 2, "stu_a", sub, assignment, nil) {
+			t.Fatalf("accepted none provenance/reconsideration disappeared from %s", name)
+		}
+	}
+}
+
+func TestPrepareLateTimingFindsAcceptedLateProvenanceOutsideCourses(t *testing.T) {
+	status, submitted := "late", "2026-09-10T16:00:00Z"
+	baseline := &domain.ObservedTiming{StatusKnown: true, LatePolicyStatus: &status, LateKnown: true, Late: true, SecondsLateKnown: true, SecondsLate: 3600}
+	s, decisionPath, _ := studentTimingFixture(t, baseline, false)
+	if err := workspace.WriteTeacherDocument(s.Root, "context/school-calendar.md", workspace.SchoolCalendar{Schema: 1, Timezone: "America/Chicago", StartDate: "2026-08-01", EndDate: "2027-05-31"}, "Synthetic calendar"); err != nil {
+		t.Fatal(err)
+	}
+	var work domain.StudentWorkDocument
+	workPath := filepath.Join(s.Root, "courses", "TEST", "unit", "student-work.md")
+	if _, err := workspace.ReadDocument(workPath, &work); err != nil {
+		t.Fatal(err)
+	}
+	work.Current.Ref.SubmittedAt = submitted
+	if err := workspace.WriteDocument(workPath, &work, ""); err != nil {
+		t.Fatal(err)
+	}
+	var decisions LateTimingDecisionsDocument
+	if _, err := workspace.ReadDocument(filepath.Join(s.Root, filepath.FromSlash(decisionPath)), &decisions); err != nil {
+		t.Fatal(err)
+	}
+	decisions.Students[0].FirstGenuine = work.Current.Ref
+	if err := workspace.WriteDocument(filepath.Join(s.Root, filepath.FromSlash(decisionPath)), &decisions, ""); err != nil {
+		t.Fatal(err)
+	}
+	var packet domain.PacketDocument
+	if _, err := workspace.ReadDocument(filepath.Join(s.Root, filepath.FromSlash(decisions.Packet)), &packet); err != nil {
+		t.Fatal(err)
+	}
+	timing := domain.LateTiming{Status: "late", SecondsLate: 3600, DueAt: work.Current.EffectiveDueAt, Basis: "Confirmed first genuine submission", Observed: baseline, SchoolTime: &domain.SchoolTimeProvenance{Attempt: work.Current.Ref, SubmittedAt: submitted, Deadline: work.Current.EffectiveDueAt, Status: "late", SecondsLate: 3600}}
+	accepted := domain.ResultsDocument{Schema: 1, Kind: "results", Packet: decisions.Packet, Assignment: packet.Assignment, Students: []domain.StudentResult{{StudentRef: work.StudentRef, Operation: "late-only", LateOnly: &domain.LateOnlyOperation{Attempt: work.Current.Ref, LateTiming: timing, Outcome: domain.ActionOutcome{Status: "succeeded"}}}}}
+	if err := workspace.WriteDocument(filepath.Join(s.Root, "drafts", "accepted.yml"), &accepted, ""); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := s.PrepareLateTiming(decisionPath)
+	if err != nil || len(prepared.Students) != 1 || prepared.Students[0].Status != "unchanged" || prepared.Students[0].Timing == nil {
+		t.Fatalf("accepted late provenance lost: %+v err=%v", prepared, err)
+	}
+	accepted.Assignment.CourseID++
+	if err := workspace.WriteDocument(filepath.Join(s.Root, "drafts", "accepted.yml"), &accepted, ""); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err = s.PrepareLateTiming(decisionPath)
+	if err != nil || prepared.Students[0].Status != "held" {
+		t.Fatalf("unrelated course authorized teacher-owned late status: %+v err=%v", prepared, err)
+	}
 }
 
 func TestAcademicGradeCompletionIgnoresLateOutcome(t *testing.T) {

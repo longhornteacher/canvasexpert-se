@@ -118,15 +118,21 @@ func (s *Service) postLateTiming(ctx context.Context, assignment domain.Assignme
 		outcome.Message = "late timing completion remains uncertain; different live timing is not proof of failure"
 		return save()
 	}
+	return s.writeLateTiming(ctx, assignment, userID, target, outcome, save)
+}
+
+// Callers have checked the full action audience and timing evidence. Shared
+// actions must reconcile all members before reaching this single-route write.
+func (s *Service) writeLateTiming(ctx context.Context, assignment domain.AssignmentSnapshot, userID int64, target *domain.LateTiming, outcome *domain.ActionOutcome, save func() error) error {
 	*outcome = domain.ActionOutcome{Status: "pending"}
-	if e = save(); e != nil {
+	if e := save(); e != nil {
 		return e
 	}
 	fields := map[string]any{"late_policy_status": target.Status}
 	if target.Status == "late" {
 		fields["seconds_late_override"] = target.SecondsLate
 	}
-	e = s.Client.WriteAccepted(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions/%d", assignment.CourseID, assignment.AssignmentID, userID), map[string]any{"submission": fields}, nil)
+	e := s.Client.WriteAccepted(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions/%d", assignment.CourseID, assignment.AssignmentID, userID), map[string]any{"submission": fields}, nil)
 	if e != nil {
 		*outcome = failedOutcome(e)
 	} else {

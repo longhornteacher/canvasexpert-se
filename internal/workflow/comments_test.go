@@ -145,7 +145,7 @@ func TestNewQuizCommentOnlyWritesOnlyAttemptScopedComment(t *testing.T) {
 	if err := s.postCommentOnly(context.Background(), doc, row, validated, source, live, func() error { return nil }); err != nil {
 		t.Fatal(err)
 	}
-	if writes != 1 || row.CommentOnly.Outcome.Status != "preserved" || reads != 0 {
+	if writes != 1 || row.CommentOnly.Outcome.Status != "succeeded" || reads != 0 {
 		t.Fatalf("exact current-attempt duplicate was not preserved: writes=%d reads=%d outcome=%#v", writes, reads, row.CommentOnly.Outcome)
 	}
 }

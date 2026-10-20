@@ -2,9 +2,7 @@ package workflow
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"canvasexpertse/internal/domain"
@@ -32,10 +30,7 @@ func (s *Service) completedTimingHint(assignmentID, courseID int64, studentRef s
 		return false
 	}
 	matched := false
-	_ = filepath.WalkDir(filepath.Join(s.Root, "courses"), func(path string, d os.DirEntry, err error) error {
-		if err != nil || d == nil || d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".md") {
-			return nil
-		}
+	_ = walkResultFiles(s.Root, func(path string) error {
 		var results domain.ResultsDocument
 		if _, err := workspace.ReadDocument(path, &results); err == nil && results.Schema == 1 && results.Kind == "results" && results.Assignment.Instance == s.Client.Origin() && results.Assignment.CourseID == courseID && results.Assignment.AssignmentID == assignmentID {
 			for _, row := range results.Students {

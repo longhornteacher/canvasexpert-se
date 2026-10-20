@@ -771,6 +771,19 @@ func (s *Service) postGroupLateOnly(ctx context.Context, doc *domain.GroupResult
 		holdOutcome(&row.LateOnly.Outcome, hold)
 		return save()
 	}
+	allMatch := true
+	for _, ref := range row.MemberRefs {
+		allMatch = allMatch && timingMatches(live.subs[ref], *target)
+	}
+	if allMatch {
+		row.LateOnly.Outcome = domain.ActionOutcome{Status: "preserved", Message: "requested lateness timing is present for every reviewed member"}
+		return save()
+	}
+	if ambiguous(row.LateOnly.Outcome) {
+		row.LateOnly.Outcome.Status = "uncertain"
+		row.LateOnly.Outcome.Message = "shared timing completion remains uncertain; requested timing is not present for every reviewed member"
+		return save()
+	}
 	representative := row.Representative
 	if representative == "" {
 		representative = chooseRepresentative(*row)
@@ -784,7 +797,7 @@ func (s *Service) postGroupLateOnly(ctx context.Context, doc *domain.GroupResult
 	if provenance, ok := row.LateOnly.MemberSchoolTime[representative]; ok {
 		target.SchoolTime = &provenance
 	}
-	return s.postLateTiming(ctx, doc.Assignment, src.students[representative].UserID, domain.AttemptRef{Attempt: src.members[representative].Attempt}, target, &row.LateOnly.Outcome, save)
+	return s.writeLateTiming(ctx, doc.Assignment, src.students[representative].UserID, target, &row.LateOnly.Outcome, save)
 }
 
 func sameKeys(a, b map[string]bool) bool {
@@ -1372,7 +1385,23 @@ func (s *Service) postGroupIndividual(ctx context.Context, doc *domain.GroupResu
 		} else if r.CommentOnly != nil {
 			err = s.postCommentOnly(ctx, tmp, r, vs, source, probe.subs[r.StudentRef], save)
 		} else {
-			err = s.postGrade(ctx, tmp, r, vs, source, probe.subs[r.StudentRef], coupled, save)
+			err = s.postGrade(ctx, tmp, r, vs, source, probe.subs[r.StudentRef], coupled, save, func() string {
+				live, e := GetAssignment(ctx, s.Client, a.CourseID, a.AssignmentID)
+				if e != nil {
+					return "assignment could not be re-read: " + e.Error()
+				}
+				if live.CourseID == 0 {
+					live.CourseID = a.CourseID
+				}
+				basis, e := Snapshot(live, s.Client.Origin())
+				if e != nil {
+					return e.Error()
+				}
+				if !SameGradingBasis(a, basis) {
+					return "assignment, rubric or group grading mode changed; pull-work for reassessment"
+				}
+				return s.checkGroupMember(ctx, a, *row, src, r.StudentRef, &groupLive{subs: map[string]Submission{}})
+			})
 		}
 		if err != nil {
 			return err

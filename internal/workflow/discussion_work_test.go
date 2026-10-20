@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 )
 
 type discussionEnv struct {
+	server     *httptest.Server
 	s          *Service
 	mu         sync.Mutex
 	puts       []groupPut
@@ -31,7 +33,7 @@ func newDiscussionEnv(t *testing.T) (*discussionEnv, domain.PacketDocument, stri
 	env := &discussionEnv{updatedAt: map[int64]string{501: "2026-10-10T10:00:00Z", 502: "2026-10-10T11:00:00Z"}}
 	a := fixtureAssignment()
 	a.SubmissionTypes = []string{"discussion_topic"}
-	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+	s, server := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		write := func(v any) { _ = json.NewEncoder(w).Encode(v) }
 		sub := func(user int64) map[string]any {
@@ -85,7 +87,7 @@ func newDiscussionEnv(t *testing.T) (*discussionEnv, domain.PacketDocument, stri
 			http.NotFound(w, r)
 		}
 	})
-	env.s = s
+	env.s, env.server = s, server
 	report, err := s.PullWork(context.Background(), "TEST", "10")
 	if err != nil || len(report.Packets) != 1 || report.Students != 2 {
 		t.Fatalf("pull report=%+v err=%v", report, err)

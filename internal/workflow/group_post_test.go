@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 )
 
 type groupPostEnv struct {
+	server   *httptest.Server
 	s        *Service
 	results  string
 	doc      domain.GroupResultsDocument
@@ -63,7 +65,7 @@ func newGroupEnv(t *testing.T, coupled, individual bool) *groupPostEnv {
 		use := true
 		a.RubricAssociation.UseForGrading = &use
 	}
-	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+	s, server := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		write := func(v any) { _ = json.NewEncoder(w).Encode(v) }
 		sub := func(user int64) map[string]any {
@@ -120,7 +122,7 @@ func newGroupEnv(t *testing.T, coupled, individual bool) *groupPostEnv {
 			http.NotFound(w, r)
 		}
 	})
-	env.s = s
+	env.s, env.server = s, server
 	s.Skip = map[string]bool{}
 	store, _ := workspace.OpenStudents(s.Root)
 	for id := int64(10); id <= 13; id++ {

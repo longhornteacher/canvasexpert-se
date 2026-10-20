@@ -4,7 +4,10 @@ A handoff is bounded execution work for an agent session. It should say whether 
 
 Current development authority lives in the root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`; build instructions and dated observations live under `docs/`.
 
-The [book-group audience brief](active/BOOK-GROUP-AUDIENCES.md) is **paused at the user's request on 2026-10-19**. Slice 1 is committed as `8f71b23`; slice 2 has core implementation and passing focused checks in the working tree, with final integration validation/commit still pending. Slices 3-5 have not started. Its pause checkpoint records exact files, evidence, review fixes and where to resume. The preserved [source handoff](CSSE_Book_Group_Audiences_Codex_Brief.md) remains unchanged. No Canvas Live, UserInstall/UserSync, release or adoption changes were made.
+The active [book-group audience brief](active/BOOK-GROUP-AUDIENCES.md) records all five slices implemented, validated and committed in Dev: individual assignment audiences and refresh, course Page audiences, New Quiz audiences, and the integrated shared-module unit. Its original pause checkpoint is retained as history and superseded by the dated execution records. The preserved [source handoff](CSSE_Book_Group_Audiences_Codex_Brief.md) remains unchanged. Canvas Live access, student views and UserInstall/UserSync adoption remain separate observations; no release or adoption is claimed by this Dev work.
+
+The [group, timing and parent-report fixes](retired/REVIEW-REGRESSION-FIXES.md) are complete and reviewed in Dev: all nine Engine findings have fixes and normal-suite regressions, and group-work guidance/evidence records are reconciled. Full tests, vet, diff checks and the compiled 38-tool MCP smoke passed before the audience integration. Distribution and UserInstall/UserSync adoption were not part of this work.
+
 
 The [calendar/scoring delivery follow-up](retired/CALENDAR-SCORING-DELIVERY.md) is complete: the user requested the Git merge and local update, the beta ZIP was built and adopted in UserInstall, effective UserSync playbooks updated, and teacher context/overrides were preserved. The existing 1.0 adapter still needs a reconnect; pending Canvas/client/family observations remain in the capability record and are not prerequisites for ordinary supported use.
 

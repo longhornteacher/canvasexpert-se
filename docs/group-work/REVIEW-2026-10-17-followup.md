@@ -90,3 +90,15 @@ Correction: update the introductory scope, planning and authoring guidance, and 
 3. Authoring checks/patches and consistent seed/capability guidance (5–7).
 
 Use focused regressions for the demonstrated failures and retain existing scope, privacy, arithmetic and review selection checks. These corrections do not require another live probe, Tier C work, a new recovery framework or a broad migration.
+
+## Resolution — 2026-10-19
+
+Implemented in Dev under the review-regression fix handoff. The original findings above remain the failure evidence; they no longer describe the corrected implementation. All nine Engine defects across the two reviews now have tracked ordinary-suite regressions in `internal/workflow/review_regression_test.go`, with filename/provenance controls in `session_discovery_test.go` and existing posting, discussion, privacy and authoring tests retained.
+
+- Each individual group numeric/rubric stage renews mode, basis and target evidence; a mid-coupled-mode switch retains the accepted rubric and holds all later numeric writes.
+- Fallback `recent_replies` is normalized through the existing reader. Missing-response assessments require complete relevant stored and fresh sources; independent complete clubs continue.
+- Uncertain comment-only recovery checks the original saved text on the intended attempt without another PUT. Shared late-only reconciliation requires every renewed member; mixed states stay uncertain. A new shared action still sends one route write when the representative alone already matches; prepared school-time/member provenance is tested through posting.
+- Parent feedback follows explicit null posting state independently of numeric fields, preserving awaiting-grading inventory and corrections availability. Content-based local result discovery includes YAML/YML/text/JSON-named and extensionless files outside `courses/`, with exact identity/attempt checks and private/link exclusions.
+- Placeholder-only submissions permit group structural edits; genuine work on a later page still holds structure while other edits proceed. Group-set patches contain only requested baseline differences and retain explicit null clears. Seed scope, readiness, review-card instructions and per-slice evidence are reconciled with the recorded CS8 check.
+
+All nine original probes failed against the pre-fix source after moving to current tracked fixtures, then passed after the fixes. Final combined verification is recorded in the [completed fix handoff](../../handoffs/retired/REVIEW-REGRESSION-FIXES.md). These are local implementation results, with no new Canvas Live requests, teacher-folder updates, family delivery or distribution. Pre-write checks reduce the race without claiming atomicity; pending student/client/Canvas observations remain pending.

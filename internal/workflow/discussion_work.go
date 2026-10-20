@@ -81,28 +81,80 @@ func (e *discussionAssignmentEvidence) refFor(studentRef string) *domain.Discuss
 		ref.Status, ref.Reasons = "unavailable", []string{e.failure}
 		return ref
 	}
-	ref.Status = e.packet.Status
-	for _, src := range e.packet.Sources {
-		if src.Status != "complete" {
-			ref.Reasons = append(ref.Reasons, fmt.Sprintf("%s %d topic %d: %s", src.ContextType, src.ContextID, src.TopicID, src.Reason))
-		}
-	}
 	own := []domain.DiscussionEntry{}
 	for _, entry := range e.packet.Entries {
-		if entry.AuthorKind == "unknown" {
-			ref.Status = "partial"
-		}
 		if entry.StudentRef == studentRef {
 			own = append(own, entry)
 			ref.EntryRefs = append(ref.EntryRefs, domain.DiscussionEntryRef(entry))
 		}
 	}
-	if ref.Status == "partial" && len(ref.Reasons) == 0 {
-		ref.Reasons = []string{"some entries have authors that could not be matched to a student"}
-	}
+	ref.Status, ref.Reasons = discussionCoverage(e.packet, discussionRelevantSources(e.packet, studentRef, nil))
 	sort.Strings(ref.EntryRefs)
 	ref.Digest = domain.DiscussionEvidenceDigest(own)
 	return ref
+}
+
+func discussionSourceKey(kind string, contextID, topicID int64) string {
+	return fmt.Sprintf("%s:%d:%d", kind, contextID, topicID)
+}
+
+// A student's attributed posts identify the conversation(s) they assessed.
+// Without that attribution, all observed sources remain relevant: absence must
+// never be inferred by choosing an arbitrary club. Cited context adds its source.
+func discussionRelevantSources(p domain.DiscussionPacket, studentRef string, contextRefs []string) map[string]bool {
+	keys := map[string]bool{}
+	hasOwn := false
+	cited := map[string]bool{}
+	for _, ref := range contextRefs {
+		cited[ref] = true
+	}
+	for _, entry := range p.Entries {
+		if entry.StudentRef == studentRef {
+			hasOwn = true
+		}
+		if entry.StudentRef == studentRef || cited[domain.DiscussionEntryRef(entry)] {
+			keys[discussionSourceKey(entry.ContextType, entry.ContextID, entry.TopicID)] = true
+		}
+	}
+	if !hasOwn {
+		for _, source := range p.Sources {
+			keys[discussionSourceKey(source.ContextType, source.ContextID, source.TopicID)] = true
+		}
+	}
+	return keys
+}
+
+func discussionCoverage(p domain.DiscussionPacket, keys map[string]bool) (string, []string) {
+	status, reasons := "complete", []string{}
+	if len(keys) == 0 {
+		return "partial", []string{"conversation source coverage could not be established"}
+	}
+	seen := map[string]bool{}
+	for _, source := range p.Sources {
+		key := discussionSourceKey(source.ContextType, source.ContextID, source.TopicID)
+		if !keys[key] {
+			continue
+		}
+		seen[key] = true
+		if source.Status != "complete" {
+			status = "partial"
+			reasons = append(reasons, fmt.Sprintf("%s %d topic %d: %s", source.ContextType, source.ContextID, source.TopicID, source.Reason))
+		}
+	}
+	for key := range keys {
+		if !seen[key] {
+			status = "partial"
+			reasons = append(reasons, "conversation source is unavailable: "+key)
+		}
+	}
+	for _, entry := range p.Entries {
+		if keys[discussionSourceKey(entry.ContextType, entry.ContextID, entry.TopicID)] && entry.AuthorKind == "unknown" {
+			status = "partial"
+			reasons = append(reasons, "some relevant entries have authors that could not be matched to a student")
+			break
+		}
+	}
+	return status, reasons
 }
 
 // discussionGuard holds the pre-write checks for a graded discussion: the
@@ -114,6 +166,7 @@ type discussionGuard struct {
 	liveErr    string
 	liveOwn    map[string][]domain.DiscussionEntry
 	liveByRef  map[string]domain.DiscussionEntry
+	livePacket domain.DiscussionPacket
 	stored     map[string]domain.DiscussionPacket
 }
 
@@ -171,6 +224,7 @@ func (s *Service) newDiscussionGuard(ctx context.Context, doc domain.ResultsDocu
 		g.liveErr = "the conversation could not be re-read: " + err.Error()
 		return g
 	}
+	g.livePacket = packet
 	g.liveOwn, g.liveByRef = map[string][]domain.DiscussionEntry{}, map[string]domain.DiscussionEntry{}
 	for _, entry := range packet.Entries {
 		g.liveByRef[domain.DiscussionEntryRef(entry)] = entry
@@ -206,15 +260,23 @@ func (g *discussionGuard) hold(s *Service, r domain.StudentResult, src postSourc
 	if ev == nil || ev.Digest != work.Digest {
 		return "the result's evidence does not match the pulled discussion work; pull-work again"
 	}
-	if work.Status != "complete" {
-		for _, c := range components {
-			if c.Evidence == "missing" {
-				return "discussion coverage was partial, so missing work cannot be established; score unknown evidence as unknown"
-			}
-		}
-	}
 	if g.liveErr != "" {
 		return g.liveErr
+	}
+	for _, c := range components {
+		if c.Evidence != "missing" {
+			continue
+		}
+		packet, err := g.storedPacket(s, work.Packet)
+		if err != nil {
+			return "the pulled discussion packet could not be read: " + err.Error()
+		}
+		keys := discussionRelevantSources(packet, r.StudentRef, ev.ContextRefs)
+		pulled, _ := discussionCoverage(packet, keys)
+		fresh, _ := discussionCoverage(g.livePacket, keys)
+		if pulled != "complete" || fresh != "complete" {
+			return "discussion coverage was partial at pull or post, so missing work cannot be established; score unknown evidence as unknown"
+		}
 	}
 	if domain.DiscussionEvidenceDigest(g.liveOwn[r.StudentRef]) != work.Digest {
 		return "this student's discussion posts changed since the pull; pull-work again"
