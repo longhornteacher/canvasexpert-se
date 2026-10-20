@@ -4,6 +4,13 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Development notes
 
+### Group, timing and parent-report regression fixes (2026-10-19)
+
+- Individual group grade/rubric writes renew live mode, basis and student evidence at each numeric action, preserving accepted stages when later actions are held. Discussion fallback retains `recent_replies`; missing-response scoring requires complete relevant evidence at pull and post while independent club conversations continue.
+- Comment-only recovery retains the exact original attempted text and never blindly repeats uncertain writes. Shared late-only recovery checks every reviewed member; fresh full-audience timing still uses one representative write. Timing and academic discovery recognize accepted local result contents regardless of extension or ordinary local folder, with exact identity/attempt checks and private/link exclusions.
+- Parent packets withhold comments for explicit null posting timestamps even without numeric grades, retaining awaiting-grading inventory and legitimate correction availability. Placeholder-only submission records permit structural group edits; genuine later-page work still holds structure. Group-set updates send only changed fields and preserve explicit clears.
+- All nine review failures now have tracked normal-suite regressions, including prepared school-time/member provenance. Group-work guidance and capability records match delivered graded discussions, individual review cards and the recorded CS8 live scope. These are local fixes; no new Canvas Live requests, UserInstall/UserSync adoption, family delivery or distribution is claimed.
+
 ### Parent dates and private extra-time evidence (2026-10-18)
 
 - Parent classification now preserves an explicit null student due date instead of falling back to the general assignment deadline. Completion/classification regressions cover null and empty dates, malformed dates, omitted-date fallback and individualized dates; the current-term/14-day reporting gate is unchanged.

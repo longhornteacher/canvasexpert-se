@@ -563,7 +563,8 @@ func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, version
 		}
 		currentGrade := decimalPointer(current)
 		recordedZero := currentGrade != nil && currentGrade.Sign() == 0
-		gradeNotReleased := sub.PostedAtPresent && sub.PostedAt == nil && (sub.Score != nil || sub.EnteredScore != nil || sub.GradedAt != nil)
+		feedbackWithheld := sub.PostedAtPresent && sub.PostedAt == nil
+		gradeNotReleased := feedbackWithheld && (sub.Score != nil || sub.EnteredScore != nil || sub.GradedAt != nil)
 		inWindow := !due.Before(recentStart) && !due.After(now)
 
 		if inWindow && a.GradingType != "not_graded" && !gradeNotReleased {
@@ -619,7 +620,7 @@ func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, version
 		if inWindow && item.Basis == "" && a.GradingType != "not_graded" && !gradeNotReleased {
 			c := ParentCorrection{ParentReportItem: item, CorrectionDeadline: correctionDeadline(*due, loc).Format(time.RFC3339)}
 			for _, cm := range sub.Comments {
-				if cm.AuthorID == sub.UserID || strings.TrimSpace(cm.Comment) == "" {
+				if feedbackWithheld || cm.AuthorID == sub.UserID || strings.TrimSpace(cm.Comment) == "" {
 					continue
 				}
 				text := cm.Comment

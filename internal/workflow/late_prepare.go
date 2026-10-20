@@ -479,10 +479,7 @@ func (s *Service) prepareGroupTiming(work domain.GroupWorkDocument, group LateTi
 
 func (s *Service) acceptedTimingOrigin(courseID, assignmentID int64, studentRef string, current, source domain.AttemptRef, observed domain.ObservedTiming) bool {
 	accepted := false
-	_ = filepath.WalkDir(filepath.Join(s.Root, "courses"), func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil || entry == nil || entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".md") {
-			return nil
-		}
+	_ = walkResultFiles(s.Root, func(path string) error {
 		var results domain.ResultsDocument
 		if _, err := workspace.ReadDocument(path, &results); err == nil && results.Schema == 1 && results.Kind == "results" && results.Assignment.Instance == s.Config.Instance && results.Assignment.CourseID == courseID && results.Assignment.AssignmentID == assignmentID {
 			for _, row := range results.Students {
@@ -546,10 +543,7 @@ func (s *Service) acceptedTimingOrigin(courseID, assignmentID int64, studentRef 
 
 func (s *Service) acceptedTimingRecordExists(courseID, assignmentID int64, studentRef string, current domain.AttemptRef) bool {
 	found := false
-	_ = filepath.WalkDir(filepath.Join(s.Root, "courses"), func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil || entry == nil || entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".md") {
-			return nil
-		}
+	_ = walkResultFiles(s.Root, func(path string) error {
 		var results domain.ResultsDocument
 		if _, err := workspace.ReadDocument(path, &results); err == nil && results.Schema == 1 && results.Kind == "results" && results.Assignment.Instance == s.Config.Instance && results.Assignment.CourseID == courseID && results.Assignment.AssignmentID == assignmentID {
 			for _, row := range results.Students {

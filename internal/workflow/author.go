@@ -658,16 +658,21 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 	structuralHeld := false
 	if structuralChange {
 		// Do not change collaboration or assessment audience after students have
-		// submitted. A one-row bounded read is sufficient to detect any work.
+		// submitted. Canvas also returns unsubmitted placeholder rows; inspect
+		// genuine submission evidence across all pages, not the row count.
 		var submissions []Submission
-		if err = s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?per_page=1", d.CourseID, d.AssignmentID), &submissions); err != nil {
+		if err = s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?per_page=100", d.CourseID, d.AssignmentID), &submissions); err != nil {
 			return report, fmt.Errorf("could not verify whether submissions exist before changing group structure: %w", err)
 		}
-		if len(submissions) > 0 {
+		for _, submission := range submissions {
+			if submission.Attempt <= 0 || submission.SubmittedAt == nil || *submission.SubmittedAt == "" {
+				continue
+			}
 			delete(patch, "group_category_id")
 			delete(patch, "grade_group_students_individually")
 			structuralHeld = true
 			report.Message = "group set or grading mode change held because submissions exist; change it in Canvas/SpeedGrader. Other requested assignment edits can still be applied."
+			break
 		}
 	}
 	if len(patch) == 0 {

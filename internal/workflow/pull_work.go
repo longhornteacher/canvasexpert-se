@@ -745,17 +745,8 @@ func (s *Service) completedHint(id int64, ref string, sub Submission, snapshot d
 	matched := false
 	// Post accepts results anywhere in the workspace. Completion follows the
 	// assignment/student/attempt identity, not the author's folder choice.
-	_ = filepath.WalkDir(s.Root, func(path string, d os.DirEntry, e error) error {
-		if e != nil || d == nil {
-			return nil
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if !strings.EqualFold(filepath.Ext(path), ".md") {
-			return nil
-		}
-		if groupResultsContainCompletedGrade(path, snapshot, id, ref, sub) {
+	_ = walkResultFiles(s.Root, func(path string) error {
+		if groupResultsContainCompletedGrade(s.Root, path, snapshot, id, ref, sub) {
 			matched = true
 			return filepath.SkipAll
 		}
@@ -778,11 +769,10 @@ func (s *Service) completedHint(id int64, ref string, sub Submission, snapshot d
 	return matched
 }
 
-// groupResultsContainCompletedGrade reads the future group-results shape
-// tolerantly: slice 10/11 may add group/action fields that this slice does not
-// own. Header structure, assignment identity, student ref, and exact attempt
-// still have to match before a completed result suppresses a pull.
-func groupResultsContainCompletedGrade(path string, snapshot domain.AssignmentSnapshot, assignmentID int64, studentRef string, sub Submission) bool {
+// groupResultsContainCompletedGrade reads academic completion independently
+// of unrelated group actions. Header identity, student ref and exact packet
+// attempt must match before a completed result suppresses a pull.
+func groupResultsContainCompletedGrade(root, path string, snapshot domain.AssignmentSnapshot, assignmentID int64, studentRef string, sub Submission) bool {
 	var doc map[string]any
 	if _, err := workspace.ReadDocument(path, &doc); err != nil || yamlInt(doc["schema"]) != 1 || yamlString(doc["kind"]) != "group-results" {
 		return false
@@ -796,7 +786,7 @@ func groupResultsContainCompletedGrade(path string, snapshot domain.AssignmentSn
 		if yamlString(group["operation"]) == "grade" {
 			encoded, err := yaml.Marshal(group["grade"])
 			var grade domain.GroupGradeOperation
-			if err == nil && yaml.Unmarshal(encoded, &grade) == nil && definite(grade.Outcomes.Comment) && definite(grade.Outcomes.Rubric) && definite(grade.Outcomes.Grade) && containsString(yamlStrings(group["member_refs"]), studentRef) {
+			if err == nil && yaml.Unmarshal(encoded, &grade) == nil && definite(grade.Outcomes.Comment) && definite(grade.Outcomes.Rubric) && definite(grade.Outcomes.Grade) && containsString(yamlStrings(group["member_refs"]), studentRef) && groupResultCurrentAttempt(root, yamlString(doc["packet"]), yamlInt64(group["group_id"]), studentRef, attemptRef(sub)) {
 				return true
 			}
 		}

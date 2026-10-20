@@ -295,14 +295,14 @@ func (s *Service) PushGroupSet(ctx context.Context, path string) (report GroupSe
 	report.GroupCategoryID = set.ID
 	if doc.Operation == "update" {
 		b := doc.Observed
-		changed := false
+		fields := map[string]any{}
 		if strings.TrimSpace(doc.Name) != "" && doc.Name != b.Name {
 			if set.Name != b.Name {
 				report.Status = "held"
 				report.Message = "group-set name changed in Canvas; the draft and baseline were preserved"
 				return report, nil
 			}
-			changed = true
+			fields["name"] = doc.Name
 		}
 		if doc.SelfSignup.Set && requestedSignup(doc.SelfSignup, b.SelfSignup) != b.SelfSignup {
 			if signup(set.SelfSignup) != b.SelfSignup {
@@ -310,7 +310,7 @@ func (s *Service) PushGroupSet(ctx context.Context, path string) (report GroupSe
 				report.Message = "self sign-up changed in Canvas; the draft and baseline were preserved"
 				return report, nil
 			}
-			changed = true
+			fields["self_signup"] = apiSignup(doc.SelfSignup, b.SelfSignup)
 		}
 		if doc.GroupLimit.Set && !sameOptionalLimit(doc.GroupLimit, b.GroupLimit) {
 			if !sameLimit(b.GroupLimit, set.GroupLimit) {
@@ -318,7 +318,7 @@ func (s *Service) PushGroupSet(ctx context.Context, path string) (report GroupSe
 				report.Message = "group limit changed in Canvas; the draft and baseline were preserved"
 				return report, nil
 			}
-			changed = true
+			fields["group_limit"] = apiInt(doc.GroupLimit)
 		}
 		if doc.AutoLeader.Set && requestedLeader(doc.AutoLeader, b.AutoLeader) != b.AutoLeader {
 			if leader(set.AutoLeader) != b.AutoLeader {
@@ -326,22 +326,9 @@ func (s *Service) PushGroupSet(ctx context.Context, path string) (report GroupSe
 				report.Message = "automatic leader setting changed in Canvas; the draft and baseline were preserved"
 				return report, nil
 			}
-			changed = true
+			fields["auto_leader"] = apiLeader(doc.AutoLeader, b.AutoLeader)
 		}
-		if changed {
-			fields := map[string]any{}
-			if strings.TrimSpace(doc.Name) != "" {
-				fields["name"] = doc.Name
-			}
-			if doc.SelfSignup.Set {
-				fields["self_signup"] = apiSignup(doc.SelfSignup, b.SelfSignup)
-			}
-			if doc.GroupLimit.Set {
-				fields["group_limit"] = apiInt(doc.GroupLimit)
-			}
-			if doc.AutoLeader.Set {
-				fields["auto_leader"] = apiLeader(doc.AutoLeader, b.AutoLeader)
-			}
+		if len(fields) > 0 {
 			if err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/group_categories/%d", set.ID), fields, nil); err != nil {
 				report.Status = failedOutcome(err).Status
 				report.Message = err.Error()
