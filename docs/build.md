@@ -1,6 +1,6 @@
 # Build and package CanvasExpert-SE
 
-**Dev** is this development checkout (code, starter templates, generated `dist/`); **UserInstall** is the extracted local CE-SE folder a teacher actually uses, and the internal `workspace` term refers to UserInstall during teacher work. Develop in Dev and do teacher work in UserInstall; optional UserSync is explained in [ARCHITECTURE.md](../ARCHITECTURE.md).
+**Dev** is this development checkout (code, starter templates, generated `dist/`); **UserInstall** is the extracted local CE-SE folder a teacher actually uses, and the internal `workspace` term refers to UserInstall during teacher work. Develop in Dev and do teacher work in UserInstall; optional UserSync is explained in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Requirements
 
@@ -52,7 +52,7 @@ A successful build or ZIP inspection verifies the local build and package, not e
 
 Ordinary setup creates a **CanvasExpert WebUI** shortcut on the current user's Windows desktop, pointing to the extracted UserInstall's `webui.cmd`. Shortcut creation is independent of app registration and Canvas connection; a failure reports the launcher fallback and does not stop the rest of setup. Repeated setup reuses the shortcut for the same UserInstall and preserves any same-named shortcut targeting another folder.
 
-`webui.cmd` (also `.\scripts\webui.ps1` or `cse ui`) starts the local WebUI. The development launcher rebuilds through the same producer first when any Go source, `go.mod`/`go.sum`, `VERSION`, the workspace template, `engine-docs` or a WebUI template/asset (HTML, CSS, JS) is newer than `dist/cse.exe`, using `.tools/go1.27.1` if present. A source-development launch without a root explains `cse --workspace PATH ui`; the PowerShell launcher also accepts `-Workspace PATH` or `CSE_WORKSPACE`.
+In Dev, `scripts\webui.cmd` (also `.\scripts\webui.ps1` or `cse ui`) starts the local WebUI. The development launcher rebuilds through the same producer first when any Go source, `go.mod`/`go.sum`, `VERSION`, the workspace template, `engine-docs` or a WebUI template/asset (HTML, CSS, JS) is newer than `dist/cse.exe`, using `.tools/go1.27.1` if present. A source-development launch without a root explains `cse --workspace PATH ui`; the PowerShell launcher also accepts `-Workspace PATH` or `CSE_WORKSPACE`.
 
 ## Where else to look
 
@@ -61,4 +61,4 @@ Ordinary setup creates a **CanvasExpert WebUI** shortcut on the current user's W
 - [mcp-adapter.md](mcp-adapter.md): MCP adapter tools, client registration and the install journey.
 - [../internal/localui/README.md](../internal/localui/README.md): how WebUI pages are declared and secured.
 - `internal/localui/capabilities.go` and [engine-capabilities.md](engine-capabilities.md): the Capabilities page status data; keep them aligned.
-- [../ARCHITECTURE.md](../ARCHITECTURE.md): UserSync and shared teacher rules.
+- [ARCHITECTURE.md](ARCHITECTURE.md): UserSync and shared teacher rules.

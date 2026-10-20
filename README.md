@@ -6,7 +6,7 @@ CanvasExpert-SE (CE-SE) helps teachers draft assignments and New Quizzes, organi
 
 **Published release: 1.0 (`1.0.0`) · Source: 1.1 beta 1 (`1.1.0-beta.1`, the Groups update) · Windows 11 · MIT**
 
-[Get started](#get-started) · [Changelog](CHANGELOG.md) · [Release policy](docs/releasing.md) · [Contribute](CONTRIBUTING.md)
+[Get started](#get-started) · [Changelog](CHANGELOG.md) · [Release policy](docs/releasing.md) · [Contribute](.github/CONTRIBUTING.md)
 
 The download links below install the published 1.0 release. The source on `main` and `dev` is 1.1 beta 1, which adds book-club group work, parent reports and school-calendar late timing; it is not yet a published release.
 
@@ -60,7 +60,7 @@ The agent supplies educational judgment. The Engine supplies mechanics, not a cu
 
 “Draft” saves local work and does not authorize Canvas writes. Scores, new assignments, new quizzes and assignment edits use the teacher review page by default. You can explicitly skip review for a particular task. Native Pages, uploads, Modules and rubric attachments follow the requested scope directly; they do not share that review gate. Parent emails are sent only from their own review page.
 
-Ordinary assignment grading posts the honest computed assessment, including when it is below an existing entered grade. Canvas calculates late point penalties. Missing or unreadable evidence is reported specifically, while independent work continues. See [scoring rules](SCORING-RULES.md) and the current [teacher playbooks](workspace-template/playbooks/) for details.
+Ordinary assignment grading posts the honest computed assessment, including when it is below an existing entered grade. Canvas calculates late point penalties. Missing or unreadable evidence is reported specifically, while independent work continues. See [scoring rules](docs/SCORING-RULES.md) and the current [teacher playbooks](workspace-template/playbooks/) for details.
 
 ## Data and privacy
 
@@ -69,7 +69,7 @@ Ordinary assignment grading posts the honest computed assessment, including when
 - Evidence and teaching context the agent reads are sent into your selected AI provider's session. Submissions, attachments, teacher notes and read-only API responses can still contain names or other identifying information. CE-SE does **not** make all data anonymous.
 - Optional UserSync shares reusable teacher setup through a cloud provider you choose, including course selections, student aliases/settings/notes and private roster/contact records. Pulled work, drafts and grading/planning sessions remain local. CE-SE does not synchronize files itself.
 
-Use a school-approved AI client and follow your school's student-data and Canvas access policies. The project does not claim district approval or student-data compliance certification. It is not affiliated with or endorsed by Instructure, OpenAI or Anthropic. The maintainers collect no data from CE-SE users; see the [privacy policy](PRIVACY.md).
+Use a school-approved AI client and follow your school's student-data and Canvas access policies. The project does not claim district approval or student-data compliance certification. It is not affiliated with or endorsed by Instructure, OpenAI or Anthropic. The maintainers collect no data from CE-SE users; see the [privacy policy](docs/PRIVACY.md).
 
 ## How it fits together
 
@@ -83,10 +83,10 @@ Your chosen agent + current teaching playbooks/context
                      Canvas Live
 ```
 
-**Dev** is this development checkout. **UserInstall** is the extracted runnable folder containing the Engine and the teacher's actual files. **UserSync** is an optional authoritative location for shared teaching rules and preferences. Teachers need only UserInstall; development happens in Dev. The [architecture](ARCHITECTURE.md) explains the boundaries.
+**Dev** is this development checkout. **UserInstall** is the extracted runnable folder containing the Engine and the teacher's actual files. **UserSync** is an optional authoritative location for shared teaching rules and preferences. Teachers need only UserInstall; development happens in Dev. The [architecture](docs/ARCHITECTURE.md) explains the boundaries.
 
 ## Contribute
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md), the [build guide](docs/build.md) and [development notes](docs/development-notes.md). Focused bug reports, documentation improvements and practical teacher workflows are welcome. Keep student information, credentials and private teacher files out of issues and pull requests.
+Start with [CONTRIBUTING.md](.github/CONTRIBUTING.md), the [build guide](docs/build.md) and [development notes](docs/development-notes.md). Focused bug reports, documentation improvements and practical teacher workflows are welcome. Keep student information, credentials and private teacher files out of issues and pull requests.
 
-Read the [changelog](CHANGELOG.md), [security reporting guidance](SECURITY.md), [privacy policy](PRIVACY.md) and [MIT license](LICENSE).
+Read the [changelog](CHANGELOG.md), [security reporting guidance](.github/SECURITY.md), [privacy policy](docs/PRIVACY.md) and [MIT license](LICENSE).

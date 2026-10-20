@@ -2,7 +2,7 @@
 
 Date: 2026-10-19. Status: Tier A and B slices 01-03, 05a/05b, 06-11, 16 and the book-club playbook are implemented in Dev. The CS8 dev Engine check on 2026-10-17 exercised the specific paths recorded below; the October 19 regression fixes have local evidence only. Tier C remains frozen until requested. These documents are coding handoffs for Dev and do not authorize Canvas Live experiments, classroom writes or UserInstall changes.
 
-Read [shared contracts](contracts.md), then the assigned slice. Follow [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../ARCHITECTURE.md), and [SCORING-RULES.md](../../SCORING-RULES.md). Each slice includes its CLI/MCP surface, document changes, integration work, consequential checks, and acceptance scenarios. Proposed contracts are implemented only where the status table says so.
+Read [shared contracts](contracts.md), then the assigned slice. Follow [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), and [SCORING-RULES.md](../SCORING-RULES.md). Each slice includes its CLI/MCP surface, document changes, integration work, consequential checks, and acceptance scenarios. Proposed contracts are implemented only where the status table says so.
 
 ## Implementation status
 

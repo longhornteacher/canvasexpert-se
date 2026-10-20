@@ -1,6 +1,6 @@
 # Security and data handling
 
-CanvasExpert-SE is an independent, locally installed tool. It uses a teacher's Canvas access and the AI client the teacher chooses. An open-source license is permission to use the code; it does not establish school approval or certification for handling student records. The plain-language [privacy policy](PRIVACY.md) summarizes the same data flows for teachers and schools.
+CanvasExpert-SE is an independent, locally installed tool. It uses a teacher's Canvas access and the AI client the teacher chooses. An open-source license is permission to use the code; it does not establish school approval or certification for handling student records. The plain-language [privacy policy](../docs/PRIVACY.md) summarizes the same data flows for teachers and schools.
 
 ## What goes where
 
@@ -27,4 +27,4 @@ Include the Engine version and revision, affected workflow, a minimal synthetic 
 
 ## Supported versions
 
-The current 1.0 line is the active development target. Older beta and experimental builds have no promised security maintenance. Report issues against the latest release where practical, while preserving your existing UserInstall and unsent work. See [the release policy](docs/releasing.md) for version identity and updates.
+The current 1.0 line is the active development target. Older beta and experimental builds have no promised security maintenance. Report issues against the latest release where practical, while preserving your existing UserInstall and unsent work. See [the release policy](../docs/releasing.md) for version identity and updates.

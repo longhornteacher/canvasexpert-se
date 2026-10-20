@@ -6,7 +6,7 @@ Distribution is **Dev → ZIP → UserInstall**, with optional **UserInstall ↔
 
 Use the folder names **Dev**, **UserInstall**, and **UserSync** consistently. **Dev** is this development checkout: code, starter templates, contracts and build tools. **UserInstall** is the local runnable CE-SE folder: Engine, the teacher's actual playbooks/context, drafts, pulled work and private runtime data. **UserSync** is optional teacher/agent cloud storage (OneDrive/Google Drive), independent of UserInstall; CE-SE does not automatically synchronize them. Choose the folder by task: develop in Dev, do teacher work in UserInstall, regardless of which agent app is used. The internal `workspace` term and MCP workspace tools refer to UserInstall during teacher work.
 
-Configured UserSync is the shared authority for reusable teacher setup across PCs (rules/preferences, course selections, student aliases/settings/notes and private contacts); each UserInstall accesses it directly and the provider synchronizes files. The unconfigured default stays one folder. The shared/local boundary and preservation rules are in [ARCHITECTURE.md](ARCHITECTURE.md). Grading/planning session files stay in UserInstall. Local fixtures verify routing; actual provider delivery and client adoption remain pending observation.
+Configured UserSync is the shared authority for reusable teacher setup across PCs (rules/preferences, course selections, student aliases/settings/notes and private contacts); each UserInstall accesses it directly and the provider synchronizes files. The unconfigured default stays one folder. The shared/local boundary and preservation rules are in [ARCHITECTURE.md](docs/ARCHITECTURE.md). Grading/planning session files stay in UserInstall. Local fixtures verify routing; actual provider delivery and client adoption remain pending observation.
 
 Optimize for the teacher completing the requested task with little friction. Use existing packages and direct implementations; add defenses for concrete supported workflows or consequential demonstrated failures. Keep validation at useful boundaries and tests proportionate to changed behavior. Do not add coverage quotas, certification rituals, universal operation frameworks, or speculative migrations.
 
@@ -16,7 +16,7 @@ Preserve teacher intent and unsent work. Canvas Live is authoritative. Check cou
 
 CE-SE has two parts: the **Engine** (Go code in `cmd/`, `internal/`: Canvas access, identity, exact math, safe writes) and the **playbooks and context** (all judgment; `workspace-template/` is their seed embedded in the Engine, and the Engine's own contract docs, such as the format reference, live with the Engine). Put judgment in the playbooks, not the Engine.
 
-Read [ARCHITECTURE.md](ARCHITECTURE.md) and [SCORING-RULES.md](SCORING-RULES.md). The shipped workspace AGENTS.md is for teacher sessions; the old 0.1b brief is historical.
+Read [ARCHITECTURE.md](docs/ARCHITECTURE.md) and [SCORING-RULES.md](docs/SCORING-RULES.md). The shipped workspace AGENTS.md is for teacher sessions; the old 0.1b brief is historical.
 
 New Quizzes, including written-response items, are open for authoring, use and scoring within current supported limits. Written-work scoring uses the Engine's scoped pull and comment-only review/post path; the teacher enters item points in SpeedGrader. Keep evidence limits honest without treating pending live checks as a blanket prohibition or a prerequisite for ordinary teacher use.
 

@@ -1,6 +1,6 @@
 # Development notes
 
-Practical notes for working in this checkout. Authority stays with the root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`.
+Practical notes for working in this checkout. Authority stays with the root `AGENTS.md`, `docs/ARCHITECTURE.md` and `docs/SCORING-RULES.md`.
 
 This checkout is **Dev**. **UserInstall** is the local runnable CE-SE folder and the teacher's actual files. **UserSync** is optional teacher/agent cloud storage, independent of UserInstall; CE-SE does not automatically synchronize them. Development agents use Dev for product work and UserInstall for teacher tasks. MCP workspace paths refer to UserInstall.
 
@@ -11,7 +11,7 @@ This checkout is **Dev**. **UserInstall** is the local runnable CE-SE folder and
 
 ## Briefs, builds and scratch files
 
-- Bounded work briefs go in `handoffs/active/` and move to `handoffs/retired/` with a banner when done. Durable rules belong in `AGENTS.md`, `ARCHITECTURE.md` or these notes, not in a brief.
+- Bounded work briefs go in `handoffs/active/` and move to `handoffs/retired/` with a banner when done. Durable rules belong in `AGENTS.md`, `docs/ARCHITECTURE.md` or these notes, not in a brief.
 - Scratch binaries and extracted packages live in task-owned temporary directories and are deleted afterward. Only the canonical packaging path produces the current teacher download; other builds are not delivered. The build contract is in [build.md](build.md).
 - Historical hashes, build identities and dated observations stay in retired records and [engine-capabilities.md](engine-capabilities.md), not in this guide.
 

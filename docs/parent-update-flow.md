@@ -2,7 +2,7 @@
 
 Updated 2026-10-18 · Current-term due inventory implemented locally; existing Outlook evidence remains limited to NEWSPEEDY; Band is dropped
 
-Purpose: preserve the current parent-report contract and the evidence behind it. Read alongside [ARCHITECTURE.md](../ARCHITECTURE.md) and [SCORING-RULES.md](../SCORING-RULES.md). Sections explicitly marked historical record earlier design choices; the current playbook and rules below govern fresh reports.
+Purpose: preserve the current parent-report contract and the evidence behind it. Read alongside [ARCHITECTURE.md](ARCHITECTURE.md) and [SCORING-RULES.md](SCORING-RULES.md). Sections explicitly marked historical record earlier design choices; the current playbook and rules below govern fresh reports.
 
 ## Settled direction
 

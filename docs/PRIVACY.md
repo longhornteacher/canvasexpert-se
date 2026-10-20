@@ -4,7 +4,7 @@ Effective 2026-10-20 · applies to CanvasExpert-SE 1.1 and later
 
 CanvasExpert-SE (CE-SE) is free, open-source software that a teacher downloads and runs on their own Windows computer. It is not a hosted service. **The maintainers do not operate servers for CE-SE and do not receive, collect, store or sell any data from people who use it.** CE-SE has no accounts, analytics, telemetry, advertising, crash reporting or automatic update checks.
 
-This policy explains where information goes when a teacher uses CE-SE. [SECURITY.md](SECURITY.md) has the technical details.
+This policy explains where information goes when a teacher uses CE-SE. [SECURITY.md](../.github/SECURITY.md) has the technical details.
 
 ## Who is responsible for what
 
@@ -40,7 +40,7 @@ CE-SE is a tool for teachers, not students. Students do not use it, and it colle
 
 ## Reporting a privacy problem
 
-If CE-SE exposes data it shouldn't, report it privately as described in [SECURITY.md](SECURITY.md#reporting-a-vulnerability). Do not include PATs, student records or screenshots of real student data in a public issue.
+If CE-SE exposes data it shouldn't, report it privately as described in [SECURITY.md](../.github/SECURITY.md#reporting-a-vulnerability). Do not include PATs, student records or screenshots of real student data in a public issue.
 
 ## Changes
 

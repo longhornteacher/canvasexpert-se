@@ -6,7 +6,7 @@ labels: ""
 assignees: ""
 ---
 
-<!-- Do not include tokens, student records, private notes or whole client configurations. Security issues: see SECURITY.md. -->
+<!-- Do not include tokens, student records, private notes or whole client configurations. Security issues: see .github/SECURITY.md. -->
 
 ## What happened?
 

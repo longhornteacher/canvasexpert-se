@@ -1,6 +1,6 @@
 # Engine capability record
 
-The WebUI **Capabilities** page (`/capabilities`, data in [`internal/localui/capabilities.go`](../internal/localui/capabilities.go)) is the status view; this file is the evidence behind it, and future scope is in [ARCHITECTURE.md](../ARCHITECTURE.md). Update the page and this file together, with the review date. Last reviewed: **2026-10-19**.
+The WebUI **Capabilities** page (`/capabilities`, data in [`internal/localui/capabilities.go`](../internal/localui/capabilities.go)) is the status view; this file is the evidence behind it, and future scope is in [ARCHITECTURE.md](ARCHITECTURE.md). Update the page and this file together, with the review date. Last reviewed: **2026-10-19**.
 
 The page's lights describe recorded evidence, not real-time Canvas health. Green means recorded checks within each feature's stated scope; it does not establish every client or student workflow. Yellow includes implemented features awaiting validation as well as partial support. Pending evidence alone does not prevent ordinary supported use. Keep three kinds of evidence distinct and never present one as another:
 

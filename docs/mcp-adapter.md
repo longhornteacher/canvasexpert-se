@@ -53,7 +53,7 @@ Begin by reading `AGENTS.md` with `read_workspace_file`, then the relevant playb
 
 Teacher setup does not add anything to PATH. Work/Codex and Antigravity registrations store an absolute path to UserInstall's `engine/cse.exe`; the Cowork extension launches its bundled thin launcher, which invokes that same absolute Engine path. `cse.cmd` and `webui.cmd` resolve the Engine relative to themselves. Use an explicit launcher path (or `engine/cse.exe`) from the agent's shell. No Go, Node, PowerShell or separate agent CLI is needed for these packaged routes. If UserInstall moves, reconnect apps to the new path; PATH changes will not repair a stale registration.
 
-The Dev checkout has separate build tooling requiring Go, PowerShell and Git. Its unshipped `register-cse.cmd` convenience helper now calls the selected UserInstall's Engine directly. Browser opening and folder selection use native Windows APIs; the Explorer fallback resolves Windows' directory through the OS rather than searching PATH. The legacy `program.txt` launcher fallback is a per-machine pointer, not a PATH entry, and is unnecessary for a complete extracted package.
+The Dev checkout has separate build tooling requiring Go, PowerShell and Git. Its unshipped `scripts/register-cse.cmd` convenience helper now calls the selected UserInstall's Engine directly. Browser opening and folder selection use native Windows APIs; the Explorer fallback resolves Windows' directory through the OS rather than searching PATH. The legacy `program.txt` launcher fallback is a per-machine pointer, not a PATH entry, and is unnecessary for a complete extracted package.
 
 ### Shared rules location (UserSync)
 

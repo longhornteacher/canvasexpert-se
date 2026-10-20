@@ -4,7 +4,7 @@ Prepared 2026-10-19 against Dev branch `dev`, revision `56109c6`. **Slices 1-5 a
 
 Source requirements: [original book-group audience handoff](../CSSE_Book_Group_Audiences_Codex_Brief.md). That supplied file is preserved unchanged. This brief supplies the execution sequence and code audit; it does not turn the source's request to implement into authorization to implement during this planning session.
 
-Read root [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../ARCHITECTURE.md), [SCORING-RULES.md](../../SCORING-RULES.md), the [group-work contracts](../../docs/group-work/contracts.md), and the assigned slice below. This is an extension of the delivered group-work features, separate from the frozen Tier C features.
+Read root [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), [SCORING-RULES.md](../../docs/SCORING-RULES.md), the [group-work contracts](../../docs/group-work/contracts.md), and the assigned slice below. This is an extension of the delivered group-work features, separate from the frozen Tier C features.
 
 ## Result and scope
 
