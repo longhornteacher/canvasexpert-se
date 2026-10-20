@@ -196,3 +196,28 @@ Order of work: validate; create the quiz; add every item; apply assignment setti
 The module is a navigation list and carries no audience; each child keeps its own restriction. Push the resources before the module so every native reference already exists. An existing module keeps its unrelated entries and gains one native entry per resource in the requested order; a New Quiz entry uses its associated assignment ID. A restricted course Page is an ordinary native `Page` entry, not a group `ExternalUrl`.
 
 Membership changes are refreshed per resource with `prepare_audience {course, path, refresh: true}`. Assignment and quiz removals are work-protected; Page removals are not, because Pages have no submission evidence route. Report the three results together and never recreate a resource to refresh access.
+
+## Family Contact runs
+
+Free-form email uses `courses/<first course>/family-contact/<run>/contact.json` with local `assets/`; the Engine writes `audience.json` and reuses schema-2 `outcomes.json` keyed by `student_ref`. These session files stay in UserInstall. Grade updates retain `report.json` and `drafts.json` and all existing inventory/privacy rules; do not mix the run kinds or include grade fields in free-form contact.
+
+```json
+{
+  "title": "Book clubs",
+  "messages": [{
+    "key": "ghost",
+    "audience": {"groups": [{"course": "ELA7", "group_set": 501, "name": "Ghost"}]},
+    "subject": "Book clubs: {{student_name}}",
+    "body": "{{student_name}} is reading **Ghost**.\n\n![Cover](assets/ghost.jpg)",
+    "attachments": ["assets/schedule.pdf"]
+  }]
+}
+```
+
+Required top-level fields are `title` and `messages`. Optional `recipients: "parents_only"` excludes the student. Each message requires a unique `key`, `audience`, `subject` and `body`; optional `format: "html"` selects sanitized HTML instead of default Markdown, and `attachments` lists local paths. An audience unions configured `courses: ["ELA7"]`, `groups: [{course, group_set, id or name}]` and `student_refs: ["stable-ref"]`. Group-set/group IDs are numeric; names ignore case and whitespace. A student selected into multiple messages is a blocking conflict, including across courses. Empty groups and unmatched students are reported; unmatched students are skipped.
+
+Use only `{{student_name}}` (the recipient's own name) and `{{group_name}}` (when selected through a group). Unknown placeholders are reported. The saved `sign_off` from active `context/parent-updates.md` is appended unless present at the end. No names, contact addresses or Canvas user IDs belong in agent-written files or returned audience data. The Engine resolves names and To/CC privately. Normally student email is To, enabled parent emails are CC, and parents become To when student email is absent. An enabled parent email is required to deliver.
+
+Image references and attachments must stay under the run's `assets/`; the complete message has a conservative 20 MiB limit including base64 attachment overhead. Active content and remote loads are neutralized; remote images are reported and never fetched. Ordinary links remain usable. Save intended images locally, then reference them in Markdown or HTML. Outlook receives CID-linked inline attachments and ordinary file attachments.
+
+Run `cse family-contact-prepare RUN_FOLDER` / MCP `prepare_family_contact {folder}` before review. The Engine resolves live Canvas audiences, saves a contact/membership digest and returns pseudonymized rows, per-message counts, warnings and blocking problems; refreshing never clears outcomes. Use the existing `cse parent-review RUN_FOLDER` / `start_parent_review {folder}` and present its private URL. Only the teacher's page can Send or fill Outlook Drafts, with per-student skips. `review_status` remains unchanged. Changed contact content or membership requires preparation and review again; changed assets require a fresh review. Accepted sends are never replayed; uncertain sends are held. Free-form runs have no self-test send. See [the audit and full contract](../docs/family-contact-flow.md).

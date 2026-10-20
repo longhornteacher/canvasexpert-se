@@ -90,7 +90,11 @@ type ParentReportInput struct {
 }
 
 type ParentReviewInput struct {
-	Folder string `json:"folder" jsonschema:"Workspace-relative parent-update run folder under courses/ holding report.json and drafts.json"`
+	Folder string `json:"folder" jsonschema:"Workspace-relative run folder under courses/ holding report.json and drafts.json for grade updates, or contact.json and prepared audience.json for family contact"`
+}
+
+type FamilyContactInput struct {
+	Folder string `json:"folder" jsonschema:"Workspace-relative family-contact run folder under courses/ holding contact.json and local assets/"`
 }
 
 type CourseQueryInput struct {
@@ -228,7 +232,14 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates (course score, missing work, correction candidates, due soon, grade history) into courses/<course>/parent-updates/<run>/report.json. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
 		return s.longCommand(ctx, append(append([]string{"parent-report"}, in.Courses...), in.Students...)...)
 	})
-	addActionTool(server, "start_parent_review", "Open the private page where the teacher reviews parent emails with their real recipients and sends them through Outlook. Returns only the loopback URL; call review_status afterward for counts and outcomes by student reference. This tool never sends and never exposes addresses.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
+	addActionTool(server, "prepare_family_contact", "Resolve a free-form contact.json audience against current Canvas courses and collaborative groups. Save audience.json and return pseudonymized recipients, message counts, warnings and blocking conflicts. Refreshing preserves outcomes. No email is sent and no addresses or Canvas user IDs are returned.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in FamilyContactInput) (TextOutput, error) {
+		dir, err := s.coursePath(in.Folder)
+		if err != nil {
+			return TextOutput{}, err
+		}
+		return s.longCommand(ctx, "family-contact-prepare", dir)
+	})
+	addActionTool(server, "start_parent_review", "Open the private page where the teacher reviews grade-update or free-form family-contact emails with their real recipients and chooses Send or Drafts only through Outlook. Family contact requires prepare_family_contact first. Returns only the loopback URL; call review_status afterward for counts and outcomes by student reference. This tool never sends and never exposes addresses.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
 		dir, err := s.coursePath(in.Folder)
 		if err != nil {
 			return TextOutput{}, err
@@ -357,7 +368,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "prepare_audience", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

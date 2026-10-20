@@ -2,13 +2,13 @@
 
 **A teacher-directed AI assistant for Canvas, with a portable local Engine.**
 
-CanvasExpert-SE (CE-SE) helps teachers draft assignments and New Quizzes, organize course content, assess student work and prepare feedback. Your chosen agent follows editable teaching playbooks and your preferences; the Engine handles Canvas access, student/attempt identity, exact score arithmetic and supported writes.
+CanvasExpert-SE (CE-SE) helps teachers draft assignments and New Quizzes, organize course content, assess student work, prepare feedback and contact families. Your chosen agent follows editable teaching playbooks and your preferences; the Engine handles Canvas access, student/attempt identity, exact score arithmetic and supported writes.
 
 **Published release: 1.0 (`1.0.0`) · Source: 1.1 beta 1 (`1.1.0-beta.1`, the Groups update) · Windows 11 · MIT**
 
 [Get started](#get-started) · [Changelog](CHANGELOG.md) · [Release policy](docs/releasing.md) · [Contribute](.github/CONTRIBUTING.md)
 
-The download links below install the published 1.0 release. The source on `main` and `dev` is 1.1 beta 1, which adds book-club group work, parent reports and school-calendar late timing; it is not yet a published release.
+The download links below install the published 1.0 release. The source on `main` and `dev` is 1.1 beta 1, which adds book-club group work, Family Contact emails, parent reports and school-calendar late timing; it is not yet a published release.
 
 This is an independent open-source project. The teacher-first installation mechanics have local fixture and package checks; the complete fresh-user Cowork/Work installation and teaching example still need a destination-client pilot. See the [capability record](docs/engine-capabilities.md) for the distinction between Canvas Live evidence, local tests and pending human validation.
 
@@ -51,6 +51,7 @@ Use the [Setup guide](workspace-template/README.md) for the shipped folder and t
 | Course content | Author native Pages, upload assets with explicit access and assemble Modules. |
 | Book clubs and group work *(1.1 beta)* | Create group sets and clubs, manage memberships, build shared club Pages and discussions, and restrict individual assignments, Pages and New Quizzes to selected clubs in one shared unit module. Grade a shared group product (one grade for the group, or individual grades) and individual discussion contributions. Peer critique, group calendars, group files and Inbox messages are not included. See [group work](docs/group-work/README.md). |
 | Parent updates *(1.1 beta)* | Prepare current-period progress reports from Canvas (missing work, recent grades, what's due soon), review them, then email parents through classic Outlook or print student sheets. |
+| Family Contact *(1.1 beta)* | Draft activity notices, reminders and book-club messages for courses, groups or selected students. Review each version and its recipients, then send or save Outlook drafts with inline images and file attachments. Requires local classic Outlook with a configured profile. See [Family Contact](docs/family-contact-flow.md). |
 | Teaching context | Keep teaching priorities, standards, feedback voice, calendar and student notes in editable files; onboarding grows as you work. |
 | Local hub | Configure Canvas and courses, manage teacher preferences, review gated writes and inspect capability evidence. |
 
@@ -58,7 +59,7 @@ The agent supplies educational judgment. The Engine supplies mechanics, not a cu
 
 ## You control the work
 
-“Draft” saves local work and does not authorize Canvas writes. Scores, new assignments, new quizzes and assignment edits use the teacher review page by default. You can explicitly skip review for a particular task. Native Pages, uploads, Modules and rubric attachments follow the requested scope directly; they do not share that review gate. Parent emails are sent only from their own review page.
+“Draft” saves local work and does not authorize Canvas writes. Scores, new assignments, new quizzes and assignment edits use the teacher review page by default. You can explicitly skip review for a particular task. Native Pages, uploads, Modules and rubric attachments follow the requested scope directly; they do not share that review gate. Family emails, including grade updates, are sent only when the teacher clicks Send on the private review page; Drafts only saves them in Outlook.
 
 Ordinary assignment grading posts the honest computed assessment, including when it is below an existing entered grade. Canvas calculates late point penalties. Missing or unreadable evidence is reported specifically, while independent work continues. See [scoring rules](docs/SCORING-RULES.md) and the current [teacher playbooks](workspace-template/playbooks/) for details.
 
@@ -68,6 +69,7 @@ Ordinary assignment grading posts the honest computed assessment, including when
 - Pulled student work, drafts and operational state stay in your local UserInstall. The active setup location (UserInstall or UserSync) holds the private student identity map and uses pseudonyms in ordinary work pulls; agents are instructed not to read the private `.cse/` directory.
 - Evidence and teaching context the agent reads are sent into your selected AI provider's session. Submissions, attachments, teacher notes and read-only API responses can still contain names or other identifying information. CE-SE does **not** make all data anonymous.
 - Optional UserSync shares reusable teacher setup through a cloud provider you choose, including course selections, student aliases/settings/notes and private roster/contact records. Pulled work, drafts and grading/planning sessions remain local. CE-SE does not synchronize files itself.
+- Family Contact resolves names and email addresses inside the Engine and shows To/CC only on the teacher's private review page. Agent-facing audience files use student references and aliases. Outlook manages any saved email drafts and sent messages in its configured mailbox.
 
 Use a school-approved AI client and follow your school's student-data and Canvas access policies. The project does not claim district approval or student-data compliance certification. It is not affiliated with or endorsed by Instructure, OpenAI or Anthropic. The maintainers collect no data from CE-SE users; see the [privacy policy](docs/PRIVACY.md).
 

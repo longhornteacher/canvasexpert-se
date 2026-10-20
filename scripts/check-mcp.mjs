@@ -56,7 +56,9 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 39);
+  assert.equal(names.length, 40);
+  const familyContactTool = discovered.result.tools.find(t => t.name === 'prepare_family_contact');
+  assert.ok(familyContactTool?.inputSchema.properties.folder, 'prepare_family_contact must expose folder');
   const audienceTool = discovered.result.tools.find(t => t.name === "prepare_audience");
   assert.ok(audienceTool, "missing prepare_audience");
   for (const field of ["course", "path", "refresh"]) assert.ok(audienceTool.inputSchema.properties[field], `prepare_audience must expose ${field}`);

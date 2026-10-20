@@ -16,6 +16,8 @@ Preserve teacher intent and unsent work. Canvas Live is authoritative. Check cou
 
 CE-SE has two parts: the **Engine** (Go code in `cmd/`, `internal/`: Canvas access, identity, exact math, safe writes) and the **playbooks and context** (all judgment; `workspace-template/` is their seed embedded in the Engine, and the Engine's own contract docs, such as the format reference, live with the Engine). Put judgment in the playbooks, not the Engine.
 
+Family emails about activities and reminders use the shared Family Contact flow ([contract](docs/family-contact-flow.md), seed `playbooks/family-contact.md`); book-club variants also use `family-contact-book-clubs.md`. Grade updates and printable reports retain the unchanged `parent-updates.md` playbook and grade-report guarantees. Teacher sends occur only through the private review page; developing this flow does not authorize real-family sends.
+
 Read [ARCHITECTURE.md](docs/ARCHITECTURE.md) and [SCORING-RULES.md](docs/SCORING-RULES.md). The shipped workspace AGENTS.md is for teacher sessions; the old 0.1b brief is historical.
 
 New Quizzes, including written-response items, are open for authoring, use and scoring within current supported limits. Written-work scoring uses the Engine's scoped pull and comment-only review/post path; the teacher enters item points in SpeedGrader. Keep evidence limits honest without treating pending live checks as a blanket prohibition or a prerequisite for ordinary teacher use.

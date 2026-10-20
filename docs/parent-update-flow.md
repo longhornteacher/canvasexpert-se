@@ -4,6 +4,8 @@ Updated 2026-10-18 · Current-term due inventory implemented locally; existing O
 
 Purpose: preserve the current parent-report contract and the evidence behind it. Read alongside [ARCHITECTURE.md](ARCHITECTURE.md) and [SCORING-RULES.md](SCORING-RULES.md). Sections explicitly marked historical record earlier design choices; the current playbook and rules below govern fresh reports.
 
+Reviewed 2026-10-20: [Family Contact](family-contact-flow.md) extends the same private review, recipient routing and Outlook delivery for free-form class messages. This document and `playbooks/parent-updates.md` continue to govern grade-update runs unchanged. Free-form `contact.json` runs contain no grade report and do not weaken complete-inventory, calendar, grade-privacy or skip guarantees here.
+
 ## Settled direction
 
 **Communicate more with fewer words. Lead with actionable items.**

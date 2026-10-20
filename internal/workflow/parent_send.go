@@ -76,12 +76,19 @@ func saveParentOutcomes(dir string, o ParentOutcomes) error {
 // enabled parent addresses; an update with none is held. Addresses never leave
 // this process except through Outlook and the teacher's own review page.
 func parentRecipients(root string, st workspace.Student) (to, cc []string, parents int, err error) {
+	return familyRecipients(root, st, false)
+}
+
+func familyRecipients(root string, st workspace.Student, parentsOnly bool) (to, cc []string, parents int, err error) {
 	contacts, err := workspace.OpenContacts(root)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 	c := contacts.Students[workspace.ContactKey(st)]
 	student := strings.TrimSpace(c.StudentEmail)
+	if parentsOnly {
+		student = ""
+	}
 	for _, p := range c.Parents {
 		addr := strings.TrimSpace(p.Email)
 		if !p.EmailEnabled || addr == "" {
@@ -106,6 +113,9 @@ func (s *Service) parentStudent(store *workspace.StudentStore, ref string) (work
 // BuildParentReview shows each rendered email with its real To line. Only the
 // teacher's browser sees addresses.
 func (s *Service) BuildParentReview(dir string) (ReviewModel, error) {
+	if isFamilyContact(dir) {
+		return s.buildFamilyReview(dir)
+	}
 	run, e := LoadParentRun(s.Root, dir)
 	if e != nil {
 		return ReviewModel{}, e
@@ -170,10 +180,38 @@ func withDigest(c ReviewCard) ReviewCard { c.Digest = digestOf(c); return c }
 // enabled parents in Cc. skip lists refs the teacher did not approve. A student
 // already sent (or possibly sent) is never repeated.
 func (s *Service) SendParentUpdates(ctx context.Context, dir string, skip map[string]bool, draftsOnly bool, sender MailSender) (string, string, error) {
+	if isFamilyContact(dir) {
+		return s.sendFamilyContact(ctx, dir, skip, draftsOnly, sender)
+	}
 	run, e := LoadParentRun(s.Root, dir)
 	if e != nil {
 		return "held", "", e
 	}
+	tasks := make([]familyMailTask, 0, len(run.Drafts.Students))
+	for _, sd := range run.Drafts.Students {
+		tasks = append(tasks, familyMailTask{Ref: sd.Ref, Send: sd.Decision == "send", Render: func(st workspace.Student) (outlook.Message, error) {
+			r := run.Render(sd, st)
+			return outlook.Message{Subject: r.Subject, HTMLBody: r.HTML}, nil
+		}})
+	}
+	return s.deliverFamilyMail(ctx, dir, tasks, false, skip, draftsOnly, sender)
+}
+
+// familyMailTask supplies content to the shared private recipient/send loop.
+type familyMailTask struct {
+	Ref    string
+	Send   bool
+	Render func(workspace.Student) (outlook.Message, error)
+}
+
+func (s *Service) deliverFamilyMail(ctx context.Context, dir string, tasks []familyMailTask, parentsOnly bool, skip map[string]bool, draftsOnly bool, sender MailSender) (string, string, error) {
+	// Two open review pages must not submit the same run concurrently.
+	lock, e := os.OpenFile(filepath.Join(dir, ".delivery.lock"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if e != nil {
+		return "held", "", fmt.Errorf("this run is already delivering, or was interrupted; check Outlook and outcomes.json before removing .delivery.lock")
+	}
+	defer os.Remove(lock.Name())
+	defer lock.Close()
 	store, e := workspace.OpenStudents(s.Root)
 	if e != nil {
 		return "held", "", e
@@ -184,27 +222,8 @@ func (s *Service) SendParentUpdates(ctx context.Context, dir string, skip map[st
 	}
 	var sent, drafted, failed, uncertain int
 	var reasons []string
-	for _, sd := range run.Drafts.Students {
-		if sd.Decision != "send" || skip[sd.Ref] {
-			continue
-		}
-		if ctx.Err() != nil {
-			return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), ctx.Err()
-		}
-		st, e := s.parentStudent(store, sd.Ref)
-		if e != nil {
-			failed++
-			reasons = append(reasons, sd.Ref+": "+e.Error())
-			continue
-		}
-		to, cc, parents, e := parentRecipients(s.Root, st)
-		if e != nil {
-			return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), e
-		}
-		if parents == 0 {
-			continue
-		}
-		switch out.Students[sd.Ref].State {
+	for _, task := range tasks {
+		switch out.Students[task.Ref].State {
 		case "sent", "uncertain":
 			continue
 		case "drafted":
@@ -212,8 +231,43 @@ func (s *Service) SendParentUpdates(ctx context.Context, dir string, skip map[st
 				continue
 			}
 		}
-		r := run.Render(sd, st)
-		msg := outlook.Message{To: to, Cc: cc, Subject: r.Subject, HTMLBody: r.HTML}
+		if !task.Send || skip[task.Ref] {
+			// Keep accepted draft records as well as accepted/uncertain sends.
+			if out.Students[task.Ref].State != "drafted" {
+				out.Students[task.Ref] = ParentDelivery{State: "skipped", At: time.Now().UTC().Format(time.RFC3339)}
+				if e := saveParentOutcomes(dir, out); e != nil {
+					return "partial", "Could not save skipped outcomes.", e
+				}
+			}
+			continue
+		}
+		if ctx.Err() != nil {
+			return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), ctx.Err()
+		}
+		st, e := s.parentStudent(store, task.Ref)
+		if e != nil {
+			failed++
+			reasons = append(reasons, task.Ref+": student reference could not be resolved")
+			continue
+		}
+		to, cc, parents, e := familyRecipients(s.Root, st, parentsOnly)
+		if e != nil {
+			return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), e
+		}
+		if parents == 0 {
+			continue
+		}
+		msg, e := task.Render(st)
+		if e != nil {
+			return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), e
+		}
+		msg.To, msg.Cc = to, cc
+		// Persist the hold before calling Outlook. A process exit or a failed
+		// outcome save after acceptance must never turn into a blind replay.
+		out.Students[task.Ref] = ParentDelivery{State: "uncertain", At: time.Now().UTC().Format(time.RFC3339), Reason: "Delivery started; check Outlook if interrupted."}
+		if e = saveParentOutcomes(dir, out); e != nil {
+			return "held", "No further email was attempted.", e
+		}
 		var outcome outlook.Outcome
 		var err error
 		if draftsOnly {
@@ -227,10 +281,10 @@ func (s *Service) SendParentUpdates(ctx context.Context, dir string, skip map[st
 		}
 		d := ParentDelivery{State: string(outcome), At: time.Now().UTC().Format(time.RFC3339)}
 		if err != nil {
-			d.Reason = err.Error()
-			reasons = append(reasons, sd.Ref+": "+err.Error())
+			d.Reason = "Outlook could not complete this email. Check Outlook; uncertain deliveries are held."
+			reasons = append(reasons, task.Ref+": "+d.Reason)
 		}
-		out.Students[sd.Ref] = d
+		out.Students[task.Ref] = d
 		if e := saveParentOutcomes(dir, out); e != nil {
 			return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), e
 		}
@@ -280,6 +334,9 @@ func summarizeParent(sent, drafted, failed, uncertain int, reasons []string) str
 // SendParentTest sends the first draft email to the teacher's own address so the
 // rendering and the Outlook route can be checked before real families get mail.
 func (s *Service) SendParentTest(dir string, sender MailSender) (string, error) {
+	if isFamilyContact(dir) {
+		return "", fmt.Errorf("use Drafts only to inspect a family-contact message; sending is available only through the teacher's Send button")
+	}
 	run, e := LoadParentRun(s.Root, dir)
 	if e != nil {
 		return "", e

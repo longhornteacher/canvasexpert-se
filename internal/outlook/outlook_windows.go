@@ -130,6 +130,24 @@ func compose(app *ole.IDispatch, m Message) (*ole.IDispatch, error) {
 	if err != nil {
 		return fail(err)
 	}
+	if len(m.Attachments) > 0 {
+		// Outlook requires a saved item before reliably changing Attachments.
+		// This is always this newly created item, never an existing saved draft.
+		if _, err := oleutil.CallMethod(item, "Save"); err != nil {
+			return fail(err)
+		}
+		av, err := oleutil.GetProperty(item, "Attachments")
+		if err != nil {
+			return fail(err)
+		}
+		attachments := av.ToIDispatch()
+		defer attachments.Release()
+		for _, a := range m.Attachments {
+			if err := addAttachment(attachments, a); err != nil {
+				return fail(err)
+			}
+		}
+	}
 	// Every recipient must resolve before anything is sent.
 	recv, err := oleutil.GetProperty(item, "Recipients")
 	if err != nil {
@@ -145,6 +163,43 @@ func compose(app *ole.IDispatch, m Message) (*ole.IDispatch, error) {
 		return fail(errors.New("a recipient address did not resolve"))
 	}
 	return item, nil
+}
+
+func addAttachment(attachments *ole.IDispatch, a Attachment) error {
+	// Omit Position: zero hides an attachment in Outlook. Inline images are
+	// hidden explicitly by their CID metadata; ordinary files stay visible.
+	v, err := oleutil.CallMethod(attachments, "Add", a.Path, 1) // olByValue
+	if err != nil {
+		return attachmentFailure("add a local attachment", err)
+	}
+	attachment := v.ToIDispatch()
+	defer attachment.Release()
+	if a.ContentID == "" && a.ContentType == "" {
+		return nil
+	}
+	pv, err := oleutil.GetProperty(attachment, "PropertyAccessor")
+	if err != nil {
+		return attachmentFailure("access attachment properties", err)
+	}
+	accessor := pv.ToIDispatch()
+	defer accessor.Release()
+	properties := attachmentProperties(a)
+	for _, property := range properties {
+		if _, err := oleutil.CallMethod(accessor, "SetProperty", property.Schema, property.Value); err != nil {
+			return attachmentFailure("set attachment property "+strings.TrimPrefix(property.Schema, "http://schemas.microsoft.com/mapi/proptag/"), err)
+		}
+	}
+	return nil
+}
+
+// Keep diagnostic stages and COM codes useful without returning Outlook's raw
+// error text, which can include a private local path or recipient address.
+func attachmentFailure(stage string, err error) error {
+	var comError *ole.OleError
+	if errors.As(err, &comError) {
+		return fmt.Errorf("Outlook could not %s (COM 0x%08X)", stage, comError.Code())
+	}
+	return fmt.Errorf("Outlook could not %s", stage)
 }
 
 // Send creates a fresh MailItem and sends it. An error after the Send call

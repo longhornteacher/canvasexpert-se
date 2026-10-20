@@ -1,6 +1,6 @@
 # CanvasExpert-SE
 
-**1.0 · `1.0.0` · Windows 11**
+**1.1 beta 1 · `1.1.0-beta.1` · Windows 11**
 
 This folder is your local CanvasExpert-SE **UserInstall**. An AI agent (Claude or ChatGPT, for example) does the work here: scoring student work and creating or editing Canvas assignments and quizzes. Review is the default for scoring, new assignments, new quizzes and assignment edits; you can explicitly skip it for a task.
 
@@ -38,6 +38,12 @@ Code/Codex use Dev to develop CE-SE and UserInstall for teacher work. Your Claud
 New program versions add missing starter files at their active location but never replace your existing rules. To get the newest version of a playbook, use "Your playbooks and context" in the hub's Settings; the replaced version is archived. Context preferences are protected from automatic replacement.
 
 New Quizzes support regular authoring, use and written-response scoring, including essays and file uploads. CE-SE provides criterion scores and feedback in a submission comment; you enter written-item points in SpeedGrader. Ask your agent to follow the current quiz and scoring playbooks for the limits.
+
+## Contact families
+
+Ask the assistant to draft an activity notice, reminder or book-club update for a class, group or selected students. The family-contact playbook supports a different version for each book, images in the email body, links and file attachments. Grade updates and printable student reports use the parent-updates playbook.
+
+You review each message and its actual To/CC addresses on a private page, can skip students, and choose Send or Drafts only. The assistant never sees the addresses or sends email itself. Delivery uses local classic Outlook with a configured profile; it works on any computer where Outlook connects. Saved email drafts live in Outlook, while CE-SE's run files and delivery records stay in UserInstall.
 
 ## Keep this folder on your computer
 

@@ -4,6 +4,11 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Development notes
 
+### Family Contact (2026-10-20)
+
+- The existing private family review and Outlook delivery accept general class messages alongside unchanged grade updates. `prepare_family_contact` resolves course, group and stable-ref audiences for `contact.json`; the teacher reviews each version and recipient, then sends or fills Outlook Drafts. Markdown/HTML messages support local inline images and attachments, optional parents-only routing and the saved closing. Duplicate/stale audiences hold sending; accepted and uncertain outcomes retain their no-replay protections.
+- General and book-club family-contact playbooks keep message choices in teacher guidance. Local fixtures establish Engine behavior. A 2026-10-20 classic Outlook check saved a synthetic draft with verified CID HTML/MIME, a visibly rendered inline image and a visible ordinary file attachment; no Send was called or real-family data used. Local classic Outlook with a configured profile is the machine requirement. The Outlook attachment Position argument was removed so ordinary files remain visible. Cloud synchronization and installed-client adoption remain unobserved.
+
 ### Group, timing and parent-report regression fixes (2026-10-19)
 
 - Individual group grade/rubric writes renew live mode, basis and student evidence at each numeric action, preserving accepted stages when later actions are held. Discussion fallback retains `recent_replies`; missing-response scoring requires complete relevant evidence at pull and post while independent club conversations continue.

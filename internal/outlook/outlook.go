@@ -2,16 +2,31 @@
 // automation). Each call creates a fresh MailItem; saved drafts are never sent.
 package outlook
 
-import "errors"
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// Attachment is a local file copied into a fresh mail item. ContentID marks an
+// inline image referenced by cid: in HTMLBody; an empty ID means a regular file.
+type Attachment struct {
+	Path        string
+	Name        string
+	ContentID   string
+	ContentType string
+}
 
 // Message is one outgoing email. To holds one or more recipient addresses; Cc
 // is optional.
 type Message struct {
-	To       []string
-	Cc       []string
-	Subject  string
-	HTMLBody string
-	TextBody string
+	To          []string
+	Cc          []string
+	Subject     string
+	HTMLBody    string
+	TextBody    string
+	Attachments []Attachment
 }
 
 // Outcome states whether Outlook accepted the message.
@@ -36,6 +51,19 @@ func validate(m Message) error {
 	}
 	if m.HTMLBody == "" && m.TextBody == "" {
 		return errors.New("message has no body")
+	}
+	seen := map[string]bool{}
+	for _, a := range m.Attachments {
+		info, err := os.Stat(a.Path)
+		if err != nil || !info.Mode().IsRegular() || !filepath.IsAbs(a.Path) {
+			return errors.New("message attachment is unavailable")
+		}
+		if strings.ContainsAny(a.ContentID, "<>\r\n\" ") || (a.ContentID != "" && seen[a.ContentID]) {
+			return errors.New("message has an invalid or duplicate inline attachment ID")
+		}
+		if a.ContentID != "" {
+			seen[a.ContentID] = true
+		}
 	}
 	return nil
 }

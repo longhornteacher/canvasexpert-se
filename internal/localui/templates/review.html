@@ -3,11 +3,11 @@
 <title>{{if .Email}}Review before sending{{else}}Review before writing to Canvas{{end}}</title><style>{{reviewCSS}}</style>
 <form method="post" action="/submit">
 <header>{{.Appearance.Control}}<h1>{{if .Email}}Review before sending{{else}}Review before posting{{end}}</h1><div class="sub">{{.Kind}} &middot; {{.Title}}</div>
-{{if .Notice}}<p class="sub"><b>Preview limits:</b> {{.Notice}}</p>{{end}}
-<p class="intro">Everything below is approved by default. Revise an item to send it back to the agent with a note. {{if .Email}}Nothing has been sent yet. Each email goes only to the parent addresses shown on its card.{{else}}Nothing has been written to Canvas yet. Teacher-only information is marked and is never posted.{{end}} {{if .Email}}{{else if not .AllOrNothing}}Text is shown as plain text, the way it will be written.{{else}}This is created as one piece: every item must be approved, and any revision sends the whole piece back.{{end}}</p>
+{{if .Notice}}<p class="sub"><b>{{if .Email}}Review notes:{{else}}Preview limits:{{end}}</b> {{.Notice}}</p>{{end}}
+<p class="intro">Everything below is approved by default. Revise an item to send it back to the agent with a note. {{if .Email}}Each email goes to the To and Cc addresses shown on its card. Choose Skip to leave a student out of this batch.{{else}}Nothing has been written to Canvas yet. Teacher-only information is marked and is never posted.{{end}} {{if .Email}}{{else if not .AllOrNothing}}Text is shown as plain text, the way it will be written.{{else}}This is created as one piece: every item must be approved, and any revision sends the whole piece back.{{end}}</p>
 {{if .Message}}<div class="review-error" role="alert">{{.Message}}</div>{{end}}</header>
 <input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="token" value="{{.Token}}">
-<main>{{range .Cards}}<section class="review-card {{if .Hold}}held{{else if eq .Status "revise"}}revise{{end}}{{if .Done}} done{{end}}" data-i="{{.Index}}" data-held="{{if or .Hold .Done}}1{{end}}">
+<main>{{range .Frames}}<section class="message-preview"><h2>{{.Label}}</h2><iframe sandbox srcdoc="{{.HTML}}" title="{{.Label}}"></iframe>{{if .Files}}<p><b>Files attached:</b> {{range .Files}}<span>{{.}}</span> {{end}}</p>{{end}}</section>{{end}}{{range .Cards}}<section class="review-card {{if .Hold}}held{{else if eq .Status "revise"}}revise{{end}}{{if .Done}} done{{end}}" data-i="{{.Index}}" data-held="{{if or .Hold .Done}}1{{end}}">
 <input type="hidden" name="ref_{{.Index}}" value="{{.Ref}}">
 <div class="top"><span class="ref">{{if .Alias}}{{.Alias}} &middot; {{end}}{{.Ref}}</span>{{if .Attempt}}<span>Attempt {{.Attempt}}</span>{{end}}{{if .Total}}<span class="total">Proposed: {{.Total}}</span>{{end}}
 {{if .Late}}<span class="tag warn">{{.Late}}</span>{{end}}{{if .Done}}<span class="tag">Already {{if $.Email}}sent{{else}}posted{{end}}</span>{{else if .Hold}}<span class="tag bad">Held</span>{{else}}<span class="tag">Ready for review</span>{{end}}{{if .ChangedSinceRv}}<span class="tag warn">Changed since revision request</span>{{end}}</div>
@@ -22,7 +22,8 @@
 {{if .TeacherNote}}<div class="private"><b>Teacher only</b><br>{{.TeacherNote}}</div>{{end}}</div>{{end}}
 {{if .TeacherNote}}<div class="private"><b>Teacher only (not posted)</b><br>{{.TeacherNote}}</div>{{end}}
 {{if .LateBasis}}<div class="private"><b>Lateness, teacher only (not posted)</b><br>{{.LateBasis}}</div>{{end}}
-{{if and (not .Hold) (not .Done)}}<div class="choice"><label><input type="radio" name="status_{{.Index}}" value="approved"{{if ne .Status "revise"}} checked{{end}}> Approved</label>
+{{if and (not .Hold) (not .Done)}}<div class="choice"><label><input type="radio" name="status_{{.Index}}" value="approved"{{if eq .Status "approved"}} checked{{end}}> Approved</label>
+{{if $.Email}}<label><input type="radio" name="status_{{.Index}}" value="skip"{{if eq .Status "skip"}} checked{{end}}> Skip</label>{{end}}
 <label><input type="radio" name="status_{{.Index}}" value="revise"{{if eq .Status "revise"}} checked{{end}}> Revise</label></div>
 <textarea name="note_{{.Index}}" placeholder="What should the agent change?">{{.Note}}</textarea>{{end}}
 </section>{{end}}</main>
@@ -32,7 +33,7 @@
 </form><script>
 (function(){function upd(){var a=0,r=0,h=0;document.querySelectorAll('.review-card').forEach(function(c){
 if(c.dataset.held){h++;return}var s=c.querySelector('input[type=radio]:checked');
-if(s&&s.value==='revise'){r++;c.classList.add('revise')}else{a++;c.classList.remove('revise')}});
+if(s&&s.value==='revise'){r++;c.classList.add('revise')}else if(s&&s.value==='skip'){c.classList.remove('revise')}else{a++;c.classList.remove('revise')}});
 document.getElementById('postbtn').disabled=((r>0||h>0)&&{{if .AllOrNothing}}true{{else}}false{{end}});document.getElementById('summary').textContent=({{if .AllOrNothing}}h>0?'held: see the red item; nothing can be written':r>0?r+' item(s) need revision; writing is off':'Everything approved: go ahead'{{else}}'{{if .Email}}Send{{else}}Post{{end}} '+a+' approved, '+h+' held, '+r+' revised'{{end}})}
 document.addEventListener('change',upd);upd()})();
 </script>{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}

@@ -29,7 +29,11 @@ type ReviewModel struct {
 	Test      bool
 	// Email switches the page wording from writing to Canvas to sending email.
 	Email bool
-	Cards []ReviewCard
+	// Frames are shared message previews above the per-student recipient cards.
+	Frames []ReviewFrame
+	// ContentDigest binds nonvisual bytes such as email file attachments.
+	ContentDigest string
+	Cards         []ReviewCard
 }
 
 // ReviewAction is one extra page button that approves-and-runs with its Value.
@@ -39,7 +43,10 @@ type ReviewAction struct{ Value, Label string }
 type ReviewFact struct{ Label, Value string }
 
 // ReviewFrame is an HTML field shown the way Canvas keeps it: sandboxed, no scripts, no page styling.
-type ReviewFrame struct{ Label, HTML string }
+type ReviewFrame struct {
+	Label, HTML string
+	Files       []string // local attachment names shown privately, without paths
+}
 
 // ReviewCard is one student. Digest changes whenever anything shown changes.
 type ReviewCard struct {
@@ -110,6 +117,12 @@ func SaveReviewState(results string, st ReviewState) error {
 // ReviewDigest identifies the whole rendered page so Post can refuse a file that changed after render.
 func (m ReviewModel) ReviewDigest() string {
 	h := sha256.New()
+	shared, _ := json.Marshal(struct {
+		Title, Notice string
+		Frames        []ReviewFrame
+	}{m.Title, m.Notice, m.Frames})
+	h.Write(shared)
+	h.Write([]byte(m.ContentDigest))
 	for _, c := range m.Cards {
 		h.Write([]byte(c.Ref + c.Digest))
 	}

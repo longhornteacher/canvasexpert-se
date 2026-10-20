@@ -26,6 +26,8 @@ Read [shared contracts](contracts.md), then the assigned slice. Follow [AGENTS.m
 
 The delivered Tier A/B product establishes clubs and memberships, shared Pages, ungraded and graded course/distributed discussions, explicit announcements/replies and module links; authors group assignments and scoped dates/audiences; pulls source-linked shared products; posts shared or individual group assessments with separate feedback audiences; and individually assesses written discussion evidence. Ordinary individual assignments and New Quizzes continue through their existing paths. Recorded CS8 evidence and pending observations are scoped above; Tier C remains frozen.
 
+Book-club emails to families use the separate [Family Contact flow](../family-contact-flow.md), including per-book versions, inline covers and attached reading schedules. They use the teacher's private Outlook review page and do not require the frozen Tier C Canvas Inbox feature. The corresponding seed guidance is `playbooks/family-contact-book-clubs.md`.
+
 ## Slice map, tiers and dependencies
 
 Tiers say how the work is scheduled. **A** and **B** are scheduled. **C** is built only when the teacher asks for that capability; nothing in A or B depends on it.

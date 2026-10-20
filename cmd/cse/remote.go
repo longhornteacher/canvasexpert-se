@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -50,7 +50,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		file = p
 	}
 	quizReview := false
-	if cmd == "parent-review" || cmd == "student-report" {
+	if cmd == "parent-review" || cmd == "family-contact-prepare" || cmd == "student-report" {
 		p, e := documentPath(root, args[0])
 		if e != nil {
 			return fail(inputError(e), progress)
@@ -585,6 +585,16 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if e != nil {
 			return fail(e, progress)
 		}
+	case "family-contact-prepare":
+		audience, e := service.PrepareFamilyContact(ctx, file)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		encoded, e := json.MarshalIndent(audience, "", "  ")
+		if e != nil {
+			return fail(e, progress)
+		}
+		fmt.Fprintln(out, string(encoded))
 	case "student-report":
 		sheets, label, e := service.BuildStudentSheets(file)
 		if e != nil {
@@ -599,7 +609,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 	case "parent-review":
 		sender := workflow.OutlookSender{}
-		outcome, e := localui.ReviewWithTest(ctx, filepath.Join(file, "drafts.json"), func() (workflow.ReviewModel, error) {
+		outcome, e := localui.ReviewWithTest(ctx, workflow.ParentReviewSource(file), func() (workflow.ReviewModel, error) {
 			return service.BuildParentReview(file)
 		}, func(ctx context.Context, skip map[string]bool) (localui.ReviewPostResult, error) {
 			status, summary, e := service.SendParentUpdates(ctx, file, skip, localui.ReviewActionFrom(ctx) == "drafts", sender)

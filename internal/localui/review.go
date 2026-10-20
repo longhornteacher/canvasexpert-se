@@ -65,6 +65,7 @@ type reviewView struct {
 	PostLabel             string
 	Actions               []workflow.ReviewAction
 	Test                  bool
+	Frames                []workflow.ReviewFrame
 }
 type reviewCardView struct {
 	workflow.ReviewCard
@@ -102,7 +103,7 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 	if err != nil {
 		return reviewView{}, err
 	}
-	v := reviewView{Appearance: appearanceFor(h.root, h.secret), Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, PostLabel: model.PostLabel, Actions: model.Actions, Test: model.Test && h.test != nil, Email: model.Email, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
+	v := reviewView{Appearance: appearanceFor(h.root, h.secret), Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, PostLabel: model.PostLabel, Actions: model.Actions, Test: model.Test && h.test != nil, Email: model.Email, Frames: model.Frames, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
 	for i, c := range model.Cards {
 		cv := reviewCardView{ReviewCard: c, Index: i, Status: "approved"}
 		for _, l := range c.Lines {
@@ -110,9 +111,9 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 			cv.Lines = append(cv.Lines, lv)
 		}
 		cv.ReviewCard.Lines = nil
-		if item, ok := state.Items[c.Ref]; ok && item.Status == "revise" {
+		if item, ok := state.Items[c.Ref]; ok && (item.Status == "revise" || model.Email && item.Status == "skip") {
 			if item.Digest == c.Digest {
-				cv.Status, cv.Note = "revise", item.Note
+				cv.Status, cv.Note = item.Status, item.Note
 			} else {
 				cv.ChangedSinceRv = true
 			}
@@ -128,7 +129,7 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 			v.Held++
 		case c.Done:
 			v.Done++
-		case cv.Status != "revise":
+		case cv.Status != "revise" && cv.Status != "skip":
 			v.Approved++
 		}
 		v.Cards = append(v.Cards, cv)
@@ -157,7 +158,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; frame-src about:")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; frame-src about:")
 	if "http://"+r.Host != h.origin {
 		h.reviewError(w, http.StatusNotFound, "Review page not found", "This temporary review link is not available.")
 		return
@@ -252,6 +253,9 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			skip[c.Ref] = true
 		case c.Done:
 			skip[c.Ref] = true
+		case model.Email && r.PostForm.Get("status_"+strconv.Itoa(i)) == "skip":
+			skip[c.Ref] = true
+			state.Items[c.Ref] = workflow.ReviewItem{Status: "skip", Digest: c.Digest}
 		case r.PostForm.Get("status_"+strconv.Itoa(i)) == "revise":
 			note := strings.TrimSpace(r.PostForm.Get("note_" + strconv.Itoa(i)))
 			out.Revise = append(out.Revise, ReviewRevision{Ref: c.Ref, Note: note})
@@ -272,7 +276,7 @@ func (h *reviewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, a := range model.Actions {
 		extra = extra || a.Value == action
 	}
-	if (action == "post" || extra) && len(out.Approved) > 0 {
+	if (action == "post" || extra) && (len(out.Approved) > 0 || model.Email && len(skip) > 0) {
 		ctx, cancel := context.WithTimeout(h.ctx, 10*time.Minute)
 		defer cancel()
 		if extra {
