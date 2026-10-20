@@ -2,6 +2,8 @@ package workflow
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -180,6 +182,16 @@ type quizSidecar struct {
 	// Stages records accepted restricted-quiz work so a resume repeats only
 	// unfinished stages. Absent for ordinary quizzes.
 	Stages *quizStages `json:"stages,omitempty"`
+	// Media records each accepted hot-spot image upload by item id, saved before
+	// the item is posted, so a rerun reuses the image instead of uploading again.
+	Media map[string]quizMedia `json:"media,omitempty"`
+}
+
+// quizMedia holds an unsigned image URL and the hash of the uploaded bytes; an
+// edited image file is uploaded again.
+type quizMedia struct {
+	SHA256   string `json:"sha256"`
+	ImageURL string `json:"image_url"`
 }
 
 // quizStages records the accepted stages of a restricted quiz. Each outcome is
@@ -318,7 +330,15 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 	if itemsAccepted {
 		report.ItemsAdded = len(items)
 	}
+	prepared := q.preparedItems()
 	for i := existing; i < len(items) && !itemsAccepted; i++ {
+		if prepared[i].Type == "HOTSPOT" {
+			if e = s.attachHotspotImage(ctx, course.ID, id, path, &rec, prepared[i], items[i]); e != nil {
+				report.Status = "partial"
+				report.Message = fmt.Sprintf("item %d of %d (%s) was not added because its image was not uploaded; rerun the same file to continue this quiz", i+1, len(items), labels[i])
+				return report, e
+			}
+		}
 		if e = s.Client.Write(ctx, "POST", fmt.Sprintf("%s/%d/items", base, id), items[i], nil); e != nil {
 			report.Status = "partial"
 			report.Message = fmt.Sprintf("item %d of %d (%s) was not added; rerun the same file to continue this quiz", i+1, len(items), labels[i])
@@ -351,6 +371,36 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 	}
 	report.Status = "completed"
 	return report, nil
+}
+
+// attachHotspotImage uploads the item's image once and sets image_url on its
+// payload. An accepted upload is recorded in the sidecar before the item is
+// posted. Signed URLs are never stored or reported.
+func (s *Service) attachHotspotImage(ctx context.Context, courseID, quizID int64, path string, rec *quizSidecar, it qfItem, payload map[string]any) error {
+	data, e := os.ReadFile(it.imagePath)
+	if e != nil {
+		return fmt.Errorf("image file %q cannot be read", it.Image)
+	}
+	sum := sha256.Sum256(data)
+	hash := hex.EncodeToString(sum[:])
+	m, ok := rec.Media[it.ID]
+	if !ok || m.SHA256 != hash || m.ImageURL == "" {
+		url, e := s.Client.UploadQuizMedia(ctx, courseID, quizID, data)
+		if e != nil {
+			return e
+		}
+		if rec.Media == nil {
+			rec.Media = map[string]quizMedia{}
+		}
+		m = quizMedia{SHA256: hash, ImageURL: url}
+		rec.Media[it.ID] = m
+		if e = writeSidecar(path, *rec); e != nil {
+			return fmt.Errorf("image for %s was uploaded but could not be recorded beside the quiz file: %v", it.ID, e)
+		}
+	}
+	entry := payload["item"].(map[string]any)["entry"].(map[string]any)
+	entry["interaction_data"].(map[string]any)["image_url"] = m.ImageURL
+	return nil
 }
 
 func (q QuizForge) scoredIDs() []string {
