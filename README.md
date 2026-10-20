@@ -64,7 +64,7 @@ Ordinary assignment grading posts the honest computed assessment, including when
 - Evidence and teaching context the agent reads are sent into your selected AI provider's session. Submissions, attachments, teacher notes and read-only API responses can still contain names or other identifying information. CE-SE does **not** make all data anonymous.
 - Optional UserSync shares reusable teacher setup through a cloud provider you choose, including course selections, student aliases/settings/notes and private roster/contact records. Pulled work, drafts and grading/planning sessions remain local. CE-SE does not synchronize files itself.
 
-Use a school-approved AI client and follow your school's student-data and Canvas access policies. The project does not claim district approval or student-data compliance certification. It is not affiliated with or endorsed by Instructure, OpenAI or Anthropic.
+Use a school-approved AI client and follow your school's student-data and Canvas access policies. The project does not claim district approval or student-data compliance certification. It is not affiliated with or endorsed by Instructure, OpenAI or Anthropic. The maintainers collect no data from CE-SE users; see the [privacy policy](PRIVACY.md).
 
 ## How it fits together
 
@@ -84,4 +84,4 @@ Your chosen agent + current teaching playbooks/context
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md), the [build guide](docs/build.md) and [development notes](docs/development-notes.md). Focused bug reports, documentation improvements and practical teacher workflows are welcome. Keep student information, credentials and private teacher files out of issues and pull requests.
 
-Read the [changelog](CHANGELOG.md), [security reporting guidance](SECURITY.md) and [MIT license](LICENSE).
+Read the [changelog](CHANGELOG.md), [security reporting guidance](SECURITY.md), [privacy policy](PRIVACY.md) and [MIT license](LICENSE).

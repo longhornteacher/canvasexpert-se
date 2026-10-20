@@ -1,6 +1,6 @@
 # Security and data handling
 
-CanvasExpert-SE is an independent, locally installed tool. It uses a teacher's Canvas access and the AI client the teacher chooses. An open-source license is permission to use the code; it does not establish school approval or certification for handling student records.
+CanvasExpert-SE is an independent, locally installed tool. It uses a teacher's Canvas access and the AI client the teacher chooses. An open-source license is permission to use the code; it does not establish school approval or certification for handling student records. The plain-language [privacy policy](PRIVACY.md) summarizes the same data flows for teachers and schools.
 
 ## What goes where
 
