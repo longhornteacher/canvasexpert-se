@@ -12,6 +12,12 @@ If several assignments match, choose from the returned candidates with the teach
 
 Then `.\cse.cmd review <pulled-file>` (or, when review is skipped, `.\cse.cmd push <pulled-file>`). The review page reads Canvas at that moment and shows, for each changed field, what is in Canvas now and what it becomes. If Canvas changed those fields since your pull, it says so in red and nothing can be applied: pull again and reapply the edit to the new version. `push` rechecks the same way and keeps your unsent edit when it holds.
 
+## Small text corrections
+
+For a small fix to directions, such as a wrong date, a typo or one changed sentence, use `replace_text` (CLI `.\cse.cmd replace-text <course> assignment <assignment-id> --find "<exact text>" --replace "<new text>"`) instead of rewriting the directions. It reads Canvas at that moment, applies only your exact replacements to a fresh pulled file and changes nothing else. Copy each find text from a fresh pull, because Canvas stores HTML (`&amp;`, `&nbsp;`, tags). Each find must match exactly one place; include enough surrounding words, or set `all` only when the teacher wants every occurrence changed. Several pairs apply in order, and nothing is saved unless all of them match. If you pulled earlier, pass its `observed.updated_at` as `expect_updated_at` so a change made since then holds instead of being edited over.
+
+Leave `push` off: the returned file goes to the review page like any edit (`start_review`), or to `push_document` when the teacher skipped review. A held result explains why (no match, several matches, changed baseline) and names the fresh pull, so nothing is written. Use the full pull-edit-push path below for larger rewrites or other fields.
+
 ## Attach a rubric
 
 Use this when the teacher wants a new rubric on an assignment or New Quiz that has none (for a quiz, typically its ECR/SCR written items). Pull it, confirm the pulled `observed` has no rubric, change only `operation` to `attach-rubric`, and add `rubric` with `use_for_grading: false` and its criteria, maxima, descriptions and any ratings. Use local keys for the new criteria and ratings; Canvas assigns real IDs. Then `push` the file; rubric attachments don't go through the review page, but if the rubric design is an open question, show it in a preview first.
