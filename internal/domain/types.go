@@ -151,6 +151,7 @@ type AssignmentOverrideOutcome struct {
 	Outcome    ActionOutcome `yaml:"outcome,omitempty"`
 }
 type AssignmentDocument struct {
+	Audience                       *Audience               `yaml:"audience,omitempty"`
 	Schema                         int                     `yaml:"schema"`
 	Kind                           string                  `yaml:"kind"`
 	Operation                      string                  `yaml:"operation"`

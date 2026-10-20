@@ -56,7 +56,10 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 38);
+  assert.equal(names.length, 39);
+  const audienceTool = discovered.result.tools.find(t => t.name === "prepare_audience");
+  assert.ok(audienceTool, "missing prepare_audience");
+  for (const field of ["course", "path", "refresh"]) assert.ok(audienceTool.inputSchema.properties[field], `prepare_audience must expose ${field}`);
   assert.ok(names.includes('list_external_resources'), 'missing list_external_resources');
   const externalResourcesTool = discovered.result.tools.find(t => t.name === 'list_external_resources');
   assert.ok(externalResourcesTool.inputSchema.properties.course, 'list_external_resources must require course');
@@ -158,6 +161,28 @@ try {
   const groupAssignment = (await readFile('engine-docs/examples/synthetic-group-assignment.md', 'utf8')).replace('course: ELA7', 'course: CS8');
   await call('write_draft', { path: 'courses/group-assignment.md', content: groupAssignment });
   await call('validate_document', { path: 'courses/group-assignment.md' });
+  const clubRefresh = await readFile('engine-docs/examples/synthetic-individual-club-refresh.md', 'utf8');
+  await call('write_draft', { path: 'courses/individual-club-refresh.md', content: clubRefresh });
+  await call('validate_document', { path: 'courses/individual-club-refresh.md' });
+  const clubPage = await readFile('engine-docs/examples/synthetic-individual-club-page.md', 'utf8');
+  await call('write_draft', { path: 'courses/individual-club-page.md', content: clubPage });
+  await call('validate_document', { path: 'courses/individual-club-page.md' });
+  const clubQuiz = await readFile('engine-docs/examples/synthetic-individual-club-quiz.md', 'utf8');
+  await call('write_draft', { path: 'courses/individual-club-quiz.md', content: clubQuiz });
+  await call('validate_quiz', { path: 'courses/individual-club-quiz.md' });
+  // The integrated book-club unit example embeds one QuizForge block; validate it
+  // and confirm the example still documents all three resource kinds.
+  const unitExample = await readFile('engine-docs/examples/synthetic-book-club-unit.md', 'utf8');
+  for (const kind of ['kind: page', 'kind: assignment', '<QUIZFORGE_JSON>', 'prepare-audience']) {
+    assert.ok(unitExample.includes(kind), `book-club unit example must document ${kind}`);
+  }
+  const unitQuiz = unitExample.slice(unitExample.indexOf('<QUIZFORGE_JSON>'), unitExample.indexOf('</QUIZFORGE_JSON>') + '</QUIZFORGE_JSON>'.length);
+  await call('write_draft', { path: 'courses/book-club-unit-quiz.txt', content: unitQuiz });
+  await call('validate_quiz', { path: 'courses/book-club-unit-quiz.txt' });
+  const clubAudience = await readFile('engine-docs/examples/synthetic-individual-club-assignment.md', 'utf8');
+  await call('write_draft', { path: 'courses/individual-club-assignment.md', content: clubAudience });
+  await call('validate_document', { path: 'courses/individual-club-assignment.md' });
+  await call('prepare_audience', { course: '', path: 'courses/individual-club-assignment.md' }, true);
   const assignmentDates = await readFile('engine-docs/examples/synthetic-assignment-dates.md', 'utf8');
   await call('write_draft', { path: 'courses/assignment-dates.md', content: assignmentDates });
   await call('validate_document', { path: 'courses/assignment-dates.md' });

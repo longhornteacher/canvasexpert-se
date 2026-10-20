@@ -11,6 +11,27 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 - Parent packets withhold comments for explicit null posting timestamps even without numeric grades, retaining awaiting-grading inventory and legitimate correction availability. Placeholder-only submission records permit structural group edits; genuine later-page work still holds structure. Group-set updates send only changed fields and preserve explicit clears.
 - All nine review failures now have tracked normal-suite regressions, including prepared school-time/member provenance. Group-work guidance and capability records match delivered graded discussions, individual review cards and the recorded CS8 live scope. These are local fixes; no new Canvas Live requests, UserInstall/UserSync adoption, family delivery or distribution is claimed.
 
+### Club units in a shared module (2026-10-19)
+
+- One club audience can produce a course Page, an individual assignment and a New Quiz, each prepared, reviewed and pushed on its own so a held resource never blocks the others. Each resource is created unpublished, restricted to the selected clubs, placed in the requested existing module and published last. The module is a navigation list and carries no audience; each child keeps its own restriction, and an existing module keeps its unrelated entries while gaining one native entry per resource in the requested order. Membership refresh is per resource: assignment and quiz removals are work-protected, Page removals are not. Local synthetic evidence only; Canvas Live module-list, direct-access and student-rendering observations remain separate.
+
+### New Quiz audiences from clubs (2026-10-19)
+
+- A QuizForge file can carry the shared individual club audience in `metadata.canvas.audience`. The restriction targets the quiz's exact associated assignment, so the quiz stays one gradebook column and each student answers independently; a quiz whose assignment is native group work is refused. Push creates the quiz, adds items, applies settings and module placement, applies the audience and publishes last, so a refused or uncertain audience never publishes. The sidecar records accepted stages and a resume repeats only unfinished work; a sidecar bound to another Canvas or course is refused, and older sidecars keep working. Audience-only refresh returns an `assignment-dates` action and sends no quiz, item or settings write, while New Quiz attempts and grades protect removals. Local synthetic evidence only; Canvas Live club-audience quiz and student-view observations remain separate.
+
+### Course Page audiences from clubs (2026-10-19)
+
+- A course Page can carry the shared individual club audience. Push creates it unpublished, applies the complete date-details restriction, finishes requested module placement and publishes last; a refused or uncertain audience never publishes. Unrelated override rows and availability dates survive the collection replacement, `204` is accepted, and an audience-only update sends no stale body. Explicit refresh recomputes the managed student row while preserving manual rows and newer teacher edits. Local synthetic evidence only; Page/quiz student access observations remain separate.
+
+### Explicit assignment audience refresh (2026-10-19)
+
+- Agents can prepare and review a current-club audience refresh through the saved assignment receipt or latest action. The returned assignment-dates path preserves exact owned rows, manual exceptions, date semantics and original create receipts. Current/history work and grades protect access; safe independent changes still proceed with accurate partial results. Pending/uncertain writes are retained without replay. Local synthetic evidence only; Page/quiz authoring integration and student access observations remain separate.
+
+
+### Individual book-club assignment audiences (2026-10-19)
+
+- Dev can prepare a dated private-ref audience from selected collaborative clubs and create or initially target an individual assignment. Review shows recipients and preserved manual exceptions; empty, incomplete or changed snapshots hold publication. Student-only audiences need no artificial date, accepted/uncertain override writes are retained, and ordinary assignment-date updates preserve all overridden date values. Explicit refresh, course Page audiences and New Quiz audiences are delivered in the entries above. Local synthetic evidence only; no Canvas Live access check is claimed.
+
 ### Parent dates and private extra-time evidence (2026-10-18)
 
 - Parent classification now preserves an explicit null student due date instead of falling back to the general assignment deadline. Completion/classification regressions cover null and empty dates, malformed dates, omitted-date fallback and individualized dates; the current-term/14-day reporting gate is unchanged.

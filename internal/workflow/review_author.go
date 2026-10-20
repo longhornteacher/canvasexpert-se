@@ -62,6 +62,7 @@ func buildAssignmentReview(path string) (ReviewModel, error) {
 			fact("Published", fmt.Sprint(doc.Published)),
 		},
 		Frames: []ReviewFrame{{Label: "Directions (HTML field)", HTML: directions}}}
+	addAudienceReview(&card, doc.Audience)
 	if doc.GroupCategoryID > 0 {
 		mode := "unknown"
 		if doc.GradeGroupStudentsIndividually != nil {
@@ -139,6 +140,10 @@ func buildQuizReview(path string) (ReviewModel, error) {
 	}
 	for _, t := range q.Tiers {
 		head.Facts = append(head.Facts, fact("Hub tier "+t.Label, "page for Canvas tag "+t.Tag))
+	}
+	if set.Audience != nil {
+		head.Facts = append(head.Facts, fact("Audience", "Selected book clubs, individual attempts"))
+		addAudienceReview(&head, set.Audience)
 	}
 	m.Cards = append(m.Cards, head)
 	var total float64
@@ -274,4 +279,128 @@ func answerKey(it qfItem) string {
 		parts = append(parts, fmt.Sprintf("%s %s %s %s", it.Evaluation.Mode, it.Evaluation.Value, it.Evaluation.Min, it.Evaluation.Max))
 	}
 	return strings.Join(parts, "\n")
+}
+
+func addAudienceReview(card *ReviewCard, a *domain.Audience) {
+	if a == nil {
+		return
+	}
+	card.Facts = append(card.Facts, fact("Work", "Each student submits and is graded individually"), fact("Audience policy", "Dated snapshot; later club membership changes require explicit preparation"))
+	if a.State == nil {
+		card.Hold = "Prepare the selected clubs before review"
+		return
+	}
+	st := a.State
+	card.Facts = append(card.Facts, fact("Selected clubs", strings.Join(st.Labels, "; ")), fact("Students", fmt.Sprintf("%d: %s", len(st.StudentRefs), strings.Join(st.StudentRefs, ", "))), fact("Observed", st.ObservedAt), fact("Preserved exceptions", strings.Join(st.Exceptions, "; ")), fact("Excluded", strings.Join(st.Exclusions, "; ")))
+	if st.Refresh != nil {
+		plan := st.Refresh
+		card.Facts = append(card.Facts, fact("Add", strings.Join(plan.Add, ", ")), fact("Remove", strings.Join(plan.Remove, ", ")), fact("Retain", strings.Join(plan.Retain, ", ")), fact("Applied managed students", strings.Join(st.AppliedRefs, ", ")))
+		for _, hold := range plan.Protected {
+			label := "Protected access"
+			if hold.Authorized {
+				label = "Teacher-authorized removal"
+			}
+			card.Facts = append(card.Facts, fact(label, hold.StudentRef+": "+hold.Reason))
+		}
+		for _, hold := range plan.Unknown {
+			card.Facts = append(card.Facts, fact("Unknown; preserve access", hold.StudentRef+": "+hold.Reason))
+		}
+		for _, change := range plan.Changes {
+			if change.Outcome.Message != "" {
+				card.Facts = append(card.Facts, fact(fmt.Sprintf("Override %d %s", change.OverrideID, change.Operation), change.Outcome.Message))
+			}
+		}
+	}
+	if !st.Complete {
+		card.Hold = strings.Join(st.Reasons, "; ")
+	}
+	if len(st.StudentRefs) == 0 && st.Refresh == nil {
+		card.Hold = "The selected clubs have no eligible members; keep this draft and prepare after members are added"
+	}
+}
+func buildAssignmentDatesReview(path string) (ReviewModel, error) {
+	var d domain.AssignmentDatesDocument
+	_, err := workspace.ReadDocument(path, &d)
+	if err != nil {
+		return ReviewModel{}, err
+	}
+	if err = domain.ValidateAssignmentDates(d); err != nil {
+		return ReviewModel{}, err
+	}
+	card := ReviewCard{Ref: "assignment-audience", Alias: fmt.Sprintf("Assignment %d", d.AssignmentID), Operation: "update-assignment-audience", Facts: []ReviewFact{fact("Course", d.Course), fact("Publication", "Preserves the existing publication setting")}}
+	visibility := "Preserve existing visibility"
+	if d.Audience != nil {
+		visibility = "Only override recipients, including preserved exceptions"
+	} else if d.OnlyVisibleToOverrides != nil {
+		if *d.OnlyVisibleToOverrides {
+			visibility = "Only override recipients"
+		} else {
+			visibility = "Everyone"
+		}
+	}
+	card.Facts = append(card.Facts, fact("Requested visibility", visibility))
+	addAudienceReview(&card, d.Audience)
+	for _, row := range d.Rows {
+		if row.Operation == "update" && !row.DueAt.Set && !row.UnlockAt.Set && !row.LockAt.Set {
+			continue
+		}
+		card.Facts = append(card.Facts, fact(row.Key, fmt.Sprintf("%s override %d; group %d; section %d; students %s; due %s; available %s; until %s", row.Operation, row.OverrideID, row.GroupID, row.CourseSectionID, strings.Join(row.StudentRefs, ", "), reviewOverrideDate(row.DueAt), reviewOverrideDate(row.UnlockAt), reviewOverrideDate(row.LockAt))))
+	}
+	return ReviewModel{Kind: "Assignment audience and dates", Title: card.Alias, AllOrNothing: true, Action: "Apply in Canvas", Cards: []ReviewCard{card}}, nil
+}
+func reviewOverrideDate(d domain.OptionalDate) string {
+	if !d.Set {
+		return "preserve"
+	}
+	if d.Null {
+		return "clear"
+	}
+	return d.Value
+}
+
+// buildPageReview shows a course Page's content, audience and availability
+// dates. Group Pages and Hub tier Pages keep their existing review paths.
+func buildPageReview(path string) (ReviewModel, error) {
+	var d domain.PageDocument
+	body, err := workspace.ReadDocument(path, &d)
+	if err != nil {
+		return ReviewModel{}, err
+	}
+	if err = d.ValidateBody(body); err != nil {
+		return ReviewModel{}, err
+	}
+	html, err := render.TeachingHTML(body, d.BodyFormat)
+	if err != nil {
+		return ReviewModel{}, err
+	}
+	scope := "Course Page"
+	if d.GroupID > 0 {
+		scope = fmt.Sprintf("Group Page for group %d", d.GroupID)
+	}
+	card := ReviewCard{Ref: "page", Alias: d.Title, Operation: d.Operation, Facts: []ReviewFact{fact("Course", d.Course), fact("Scope", scope), fact("Published", fmt.Sprint(d.Published))}}
+	if d.ModuleID > 0 {
+		card.Facts = append(card.Facts, fact("Module", fmt.Sprintf("%d at position %d", d.ModuleID, d.ModulePosition)))
+	}
+	if d.Audience != nil {
+		card.Facts = append(card.Facts, fact("Audience", "Selected book clubs, individual access"))
+		addAudienceReview(&card, d.Audience)
+	}
+	if d.ObservedDates != nil {
+		card.Facts = append(card.Facts, fact("Availability", fmt.Sprintf("unlock %s; lock %s", reviewObservedDate(d.ObservedDates.UnlockAt), reviewObservedDate(d.ObservedDates.LockAt))))
+		if d.UnlockAt != nil || d.LockAt != nil {
+			card.Facts = append(card.Facts, fact("Requested availability", pageDatesSummary(&d)))
+		}
+		for _, row := range d.ObservedDates.Overrides {
+			card.Facts = append(card.Facts, fact(fmt.Sprintf("Preserved override %d", row.ID), fmt.Sprintf("group %d; section %d; students %s; unlock %s; lock %s", row.GroupID, row.CourseSectionID, strings.Join(row.StudentRefs, ", "), reviewObservedDate(row.UnlockAt), reviewObservedDate(row.LockAt))))
+		}
+	}
+	card.Frames = []ReviewFrame{{Label: "Page body", HTML: html}}
+	return ReviewModel{Kind: "Course Page", Title: d.Title, AllOrNothing: true, Action: "Continue to Canvas", Cards: []ReviewCard{card}}, nil
+}
+
+func reviewObservedDate(d *string) string {
+	if d == nil || *d == "" {
+		return "none"
+	}
+	return *d
 }

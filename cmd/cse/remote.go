@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -131,6 +131,20 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	fmt.Fprintf(status, "%s…\n", cmd)
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	switch cmd {
+	case "prepare-audience":
+		if len(args) == 3 && args[2] != "--refresh" {
+			return fail(inputError(fmt.Errorf("expected optional --refresh")), progress)
+		}
+		p, e := documentPath(root, args[1])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		state, e := service.PrepareAudience(ctx, args[0], p, len(args) == 3)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, _ := json.MarshalIndent(state, "", "  ")
+		fmt.Fprintln(out, string(b))
 	case "groups":
 		setID, memberID, groupID, allGroups, err := parseGroupsArgs(args[1:])
 		if err != nil {
@@ -626,6 +640,14 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			if b, _ := os.ReadFile(file); documentKind(b) == "assignment" {
 				report, e := service.Push(ctx, file)
 				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: %s %s", report.Status, report.URL, report.Message))}, e
+			}
+			if fileKind(file) == "assignment-dates" {
+				report, e := service.PushAssignmentDates(ctx, file)
+				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: report.Message}, e
+			}
+			if fileKind(file) == "page" {
+				report, e := service.PushPage(ctx, file)
+				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: Page %d %s %s", report.Status, report.PageID, report.URL, report.Message))}, e
 			}
 			if b, _ := os.ReadFile(file); documentKind(b) == "discussion" {
 				report, e := service.PushDiscussion(ctx, file)

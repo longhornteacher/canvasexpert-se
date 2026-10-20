@@ -95,6 +95,10 @@ func TestPagePullUpdatePatchesOnlyRequestedFieldsAndKeepsReturnedSlug(t *testing
 	p := NativePage{PageID: 7, Slug: "lesson", Title: "Lesson", Body: "<p>Exact &amp; original.</p>"}
 	var patches []map[string]any
 	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/courses/1/pages/page_id:7/date_details" {
+			json.NewEncoder(w).Encode(map[string]any{"id": 7, "only_visible_to_overrides": false, "visible_to_everyone": true, "overrides": []any{}})
+			return
+		}
 		if r.URL.Path != "/api/v1/courses/1/pages/page_id:7" {
 			t.Errorf("Page must use forced exact ID: %s", r.URL.Path)
 		}

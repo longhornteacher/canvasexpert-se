@@ -4,7 +4,10 @@ A handoff is bounded execution work for an agent session. It should say whether 
 
 Current development authority lives in the root `AGENTS.md`, `ARCHITECTURE.md` and `SCORING-RULES.md`; build instructions and dated observations live under `docs/`.
 
-`active/` has no remaining handoffs. The [group, timing and parent-report fixes](retired/REVIEW-REGRESSION-FIXES.md) are complete and reviewed in Dev: all nine Engine findings have fixes and normal-suite regressions, and group-work guidance/evidence records are reconciled. Full tests, vet, diff checks and the compiled 38-tool MCP smoke passed. Distribution and UserInstall/UserSync adoption were not part of this work.
+The active [book-group audience brief](active/BOOK-GROUP-AUDIENCES.md) records all five slices implemented, validated and committed in Dev: individual assignment audiences and refresh, course Page audiences, New Quiz audiences, and the integrated shared-module unit. Its original pause checkpoint is retained as history and superseded by the dated execution records. The preserved [source handoff](CSSE_Book_Group_Audiences_Codex_Brief.md) remains unchanged. Canvas Live access, student views and UserInstall/UserSync adoption remain separate observations; no release or adoption is claimed by this Dev work.
+
+The [group, timing and parent-report fixes](retired/REVIEW-REGRESSION-FIXES.md) are complete and reviewed in Dev: all nine Engine findings have fixes and normal-suite regressions, and group-work guidance/evidence records are reconciled. Full tests, vet, diff checks and the compiled 38-tool MCP smoke passed before the audience integration. Distribution and UserInstall/UserSync adoption were not part of this work.
+
 
 The [calendar/scoring delivery follow-up](retired/CALENDAR-SCORING-DELIVERY.md) is complete: the user requested the Git merge and local update, the beta ZIP was built and adopted in UserInstall, effective UserSync playbooks updated, and teacher context/overrides were preserved. The existing 1.0 adapter still needs a reconnect; pending Canvas/client/family observations remain in the capability record and are not prerequisites for ordinary supported use.
 

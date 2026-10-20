@@ -65,7 +65,7 @@ func (s *Service) PullAssignmentDates(ctx context.Context, nickname string, assi
 		}
 	}
 	for _, live := range a.Overrides {
-		row := domain.AssignmentOverrideRow{Key: fmt.Sprintf("override-%d", live.ID), Operation: "update", OverrideID: live.ID, Title: live.Title, GroupID: live.GroupID, CourseSectionID: live.CourseSectionID, Observed: &domain.AssignmentOverrideBaseline{Title: live.Title, GroupID: live.GroupID, CourseSectionID: live.CourseSectionID, DueAt: live.DueAt, UnlockAt: live.UnlockAt, LockAt: live.LockAt}}
+		row := domain.AssignmentOverrideRow{Key: fmt.Sprintf("override-%d", live.ID), Operation: "update", OverrideID: live.ID, Title: live.Title, GroupID: live.GroupID, CourseSectionID: live.CourseSectionID, Observed: &domain.AssignmentOverrideBaseline{Title: live.Title, GroupID: live.GroupID, CourseSectionID: live.CourseSectionID, DueAt: live.DueAt, UnlockAt: live.UnlockAt, LockAt: live.LockAt, DueAtOverridden: live.DueAtOverridden, UnlockAtOverridden: live.UnlockAtOverridden, LockAtOverridden: live.LockAtOverridden}}
 		if len(live.StudentIDs) > 0 {
 			if strings.TrimSpace(live.Title) == "" {
 				partial = true
@@ -154,7 +154,29 @@ func (s *Service) PushAssignmentDates(ctx context.Context, path string) (report 
 		return report, err
 	}
 	save := func() error { return workspace.WriteDocument(path, &doc, "") }
-	if doc.Rows == nil {
+	if doc.Audience != nil {
+		complete, e := s.applyAssignmentAudience(ctx, course, assignment, doc.Audience, save)
+		if e != nil {
+			return report, e
+		}
+		if !complete {
+			report.Status = "held"
+			report.Message = "Individual audience needs attention; existing access is preserved"
+			if doc.Audience.State != nil && doc.Audience.State.Refresh != nil {
+				report.Status = "partial"
+				report.Message = audienceRefreshSummary(doc.Audience.State)
+			}
+			return report, nil
+		}
+		report.Status = "completed"
+		report.Rows = doc.Rows
+		report.Message = strings.Join(doc.Audience.State.Exceptions, "; ")
+		if doc.Audience.State.Refresh != nil {
+			report.Message = appendMessage(audienceRefreshSummary(doc.Audience.State), report.Message)
+		}
+		return report, save()
+	}
+	if doc.Rows == nil && doc.Audience == nil {
 		return report, fmt.Errorf("assignment-dates overrides rows are required")
 	}
 	for i := range doc.Rows {
@@ -219,6 +241,9 @@ func (s *Service) PushAssignmentDates(ctx context.Context, path string) (report 
 				if row.CourseSectionID > 0 {
 					fields["course_section_id"] = row.CourseSectionID
 				}
+			}
+			if row.Operation == "update" {
+				preserveOverrideDates(fields, live)
 			}
 			putOverrideDate(fields, "due_at", row.DueAt)
 			putOverrideDate(fields, "unlock_at", row.UnlockAt)
@@ -513,7 +538,25 @@ func resolveOverrideTarget(ctx context.Context, s *Service, courseID int64, assi
 	return ids, nil
 }
 
+func preserveOverrideDates(fields map[string]any, live AssignmentOverrideLive) {
+	for _, d := range []struct {
+		key   string
+		flag  *bool
+		value *string
+	}{{"due_at", live.DueAtOverridden, live.DueAt}, {"unlock_at", live.UnlockAtOverridden, live.UnlockAt}, {"lock_at", live.LockAtOverridden, live.LockAt}} {
+		if d.flag != nil && *d.flag {
+			if d.value == nil {
+				fields[d.key] = nil
+			} else {
+				fields[d.key] = *d.value
+			}
+		}
+	}
+}
 func overrideMatchesBaseline(live AssignmentOverrideLive, base domain.AssignmentOverrideBaseline, store *workspace.StudentStore, origin string) bool {
+	if (base.DueAtOverridden != nil && (live.DueAtOverridden == nil || *base.DueAtOverridden != *live.DueAtOverridden)) || (base.UnlockAtOverridden != nil && (live.UnlockAtOverridden == nil || *base.UnlockAtOverridden != *live.UnlockAtOverridden)) || (base.LockAtOverridden != nil && (live.LockAtOverridden == nil || *base.LockAtOverridden != *live.LockAtOverridden)) {
+		return false
+	}
 	if live.GroupID != base.GroupID || live.CourseSectionID != base.CourseSectionID || live.Title != base.Title || !sameDate(live.DueAt, base.DueAt) || !sameDate(live.UnlockAt, base.UnlockAt) || !sameDate(live.LockAt, base.LockAt) {
 		return false
 	}

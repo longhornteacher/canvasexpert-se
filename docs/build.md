@@ -4,7 +4,7 @@
 
 ## Requirements
 
-The source build targets a portable Windows 11 executable. It needs the exact Go version declared in `go.mod` (currently Go 1.27.1) and PowerShell. The scripts do not install a toolchain, modify `PATH`, or change persistent environment settings. Teachers need neither: the packaged executable and native UserSync folder chooser run without Go, PowerShell, a separately installed .NET runtime, PATH changes or admin access.
+The source build targets a portable Windows 11 executable. It needs the exact Go version declared in `go.mod` (currently Go 1.27.1) and PowerShell. `scripts/build.ps1` and `scripts/webui.ps1` find that version or install it single-user into `.tools/` (checksum-verified from go.dev; no admin rights, no `PATH` or persistent environment changes). `package.ps1` and `compile.ps1` do not install anything. Teachers need neither: the packaged executable and native UserSync folder chooser run without Go, PowerShell, a separately installed .NET runtime, PATH changes or admin access.
 
 ## The one producer
 
