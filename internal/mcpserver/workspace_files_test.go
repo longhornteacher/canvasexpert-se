@@ -120,6 +120,20 @@ func TestBarePlaybookNameFallsBackToPlaybooks(t *testing.T) {
 	}
 }
 
+func TestShippedIsReadableButNotWritableThroughReadablePath(t *testing.T) {
+	s := &Server{root: t.TempDir()}
+	dir := filepath.Join(s.root, "shipped", "v1", "playbooks")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "score.md"), []byte("old"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.readablePath("shipped/v1/playbooks/score.md"); err != nil {
+		t.Fatalf("shipped read refused: %v", err)
+	}
+}
+
 func TestWorkspaceRootReferences(t *testing.T) {
 	s := &Server{root: t.TempDir()}
 	refs := []string{"README.txt", "Creation Taste.txt", "CS8 WeeklyPractice_BuildGuide.md"}

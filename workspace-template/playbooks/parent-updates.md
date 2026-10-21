@@ -2,7 +2,7 @@
 
 The judgment calls are yours: what counts as a correction and the wording, within the teacher's sending preferences. The Engine reads Canvas, resolves Missing/0 status and skip eligibility, computes dates and scores, renders the email, looks up parent addresses and sends. You never see an address and never send anything: the teacher reviews every email on a private page and clicks Send there. Background and current rules live in `docs/parent-update-flow.md` in Dev; the teacher does not need that.
 
-Read `AGENTS.md` and `context/parent-updates.md` first. Its grade-portal and tutoring fields start blank. The first time the teacher sends updates, ask once for their grade portal's name and sign-in address and any tutoring sign-up link, and save them there (`skyward_url`, `grade_portal_name`, `bobcat_hour_url`, `bobcat_hour_label`, `bobcat_hour_text`; the key names are historical). Blank fields are fine: the email leaves out what's missing.
+Read `AGENTS.md` and `context/parent-updates.md` first. Its grade-portal and tutoring fields start blank. The first time the teacher sends updates, ask once for their grade portal's name and sign-in address and any tutoring sign-up link, and save them there (`skyward_url`, `grade_portal_name`, `bobcat_hour_url`, `bobcat_hour_label`, `bobcat_hour_text`; the key names are historical). Blank fields are fine: a blank tutoring section is left out and the portal name falls back to a default. Also ask once how the teacher wants emails signed and save it as `sign_off`; without it, emails go out unsigned.
 
 ## Steps
 
@@ -16,7 +16,7 @@ Read `AGENTS.md` and `context/parent-updates.md` first. Its grade-portal and tut
 ## Send, skip or flag
 
 - **Skip** when the Engine's student-level `skip_eligible` is true. This means every included course meets `skip_score` (90 by default) with no Missing/0, or there was no required work due in the report window. The no-work reason is `No required work was due in this report window.` Corrections, Due Soon and links never justify an email by themselves.
-- **Flag** (not skip, not send) when a course score is unavailable, a remaining `flags` entry says data is incomplete, or another unresolved problem needs teacher review. Say why in `reason`; the teacher decides. A positive teacher-entered grade with stale missing status or no Canvas submission is already resolved by the Engine and is not grounds for a hold.
+- **Flag** (not skip, not send) only when `skip_eligible` is false and a course score is unavailable, a remaining `flags` entry says data is incomplete, or another unresolved problem needs teacher review. Say why in `reason`; the teacher decides. A positive teacher-entered grade with stale missing status or no Canvas submission is already resolved by the Engine and is not grounds for a hold.
 - Otherwise **send**.
 - The skip decision uses Canvas scores. The school's grade portal is the official grade; it is only linked.
 

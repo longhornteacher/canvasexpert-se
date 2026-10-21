@@ -47,6 +47,9 @@ func (s *Server) registerWorkspaceTools(server *mcp.Server) {
 		if strings.EqualFold(firstComponent(in.Path), "courses") {
 			return TextOutput{}, errors.New("use write_draft or write_asset for courses files")
 		}
+		if strings.EqualFold(firstComponent(in.Path), "shipped") {
+			return TextOutput{}, errors.New("shipped/ holds read-only reference copies of the shipped playbooks")
+		}
 		if len(in.Content) > maxWorkspaceFile {
 			return TextOutput{}, fmt.Errorf("file exceeds the %d-byte write limit", maxWorkspaceFile)
 		}
@@ -188,10 +191,10 @@ func (s *Server) readablePath(relative string) (string, error) {
 		return "", err
 	}
 	first := firstComponent(relative)
-	if !strings.EqualFold(first, "context") && !strings.EqualFold(first, "playbooks") && !strings.EqualFold(first, "courses") {
+	if !strings.EqualFold(first, "context") && !strings.EqualFold(first, "playbooks") && !strings.EqualFold(first, "courses") && !strings.EqualFold(first, "shipped") {
 		ext := strings.ToLower(filepath.Ext(relative))
 		if strings.ContainsAny(relative, "/\\") || (ext != ".md" && ext != ".txt") {
-			return "", errors.New("access is limited to root .md/.txt references, context/, playbooks/, and courses/")
+			return "", errors.New("access is limited to root .md/.txt references, context/, playbooks/, courses/, and read-only shipped/")
 		}
 		if info, err := os.Stat(p); err == nil && !info.Mode().IsRegular() {
 			return "", errors.New("root reference must be a regular text file")
