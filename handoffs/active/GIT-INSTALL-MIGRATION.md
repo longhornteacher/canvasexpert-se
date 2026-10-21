@@ -60,6 +60,12 @@ Prepared 2026-10-21 against Dev branch `dev`, revision `415d1ef`; decisions reco
 - **`README.md`, `setup.md`, `docs/releasing.md`, `docs/build.md`, `docs/playbook-ownership-and-updates.md`:** describe the git route; keep the ZIP as a fallback.
 - **`Teacher_Override.md`:** gains a short note that this is where edits to shipped behavior go, because the playbooks themselves reset on update.
 
+## Status
+
+- **Step 1, release tooling: built and verified locally** (2026-10-21): `scripts/package-userinstall.ps1`, `scripts/get-engine.cmd`, `scripts/userinstall.gitignore`, documented in `docs/releasing.md`. Verified against a throwaway repo on PowerShell 7 and 5.1: clone of the `userinstall` branch, stage and install of the Engine, a tampered hash refused (exit 3, live Engine untouched), a download failure (exit 5), install over an existing Engine, replacing a running `cse.exe`, a fast-forward pull, ZIP contents (tree plus engine, no teacher files), and first-run seeding of `context/` in both the clone (git stays clean) and the extracted ZIP. Not verified: a real GitHub download, a district PC, or the release (non-dev) compile path.
+- **Deviation from the plan above:** the manifest is `engine/manifest.txt` (`key=value`), not JSON, because `get-engine.cmd` has to parse it in batch.
+- **Open for step 2:** `package.ps1`'s own ZIP is still separate; retire it once this ZIP is accepted.
+
 ## Suggested order
 1. **Release tooling:** manifest, engine asset, flattened-branch generation, `get-engine.cmd`, ZIP built from the same tree. Verify locally against a throwaway bare repo.
 2. **Engine:** git-install detection, no-op update path, sync routing change, `version`/`engine_info` fields, tests.

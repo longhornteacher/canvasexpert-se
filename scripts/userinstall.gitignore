@@ -1,0 +1,14 @@
+# Teacher and runtime data: never tracked, never touched by a pull.
+/context/
+/courses/
+/Teacher_Override.md
+/.cse/
+/.claude/settings.local.json
+/playbook-old/
+/shipped/
+*.cse.json
+
+# The Engine is downloaded by get-engine.cmd; only its manifest and notices are tracked.
+/engine/*
+!/engine/manifest.txt
+!/engine/THIRD_PARTY_NOTICES.md
