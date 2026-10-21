@@ -564,6 +564,10 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			}
 		}
 		for _, p := range report.Packets {
+			// results files name the packet by its workspace-relative path
+			if rel, e := filepath.Rel(root, p); e == nil && !strings.HasPrefix(rel, "..") {
+				p = filepath.ToSlash(rel)
+			}
 			fmt.Fprintln(out, p)
 		}
 		fmt.Fprintf(out, "%d students in %d packets\n", report.Students, len(report.Packets))

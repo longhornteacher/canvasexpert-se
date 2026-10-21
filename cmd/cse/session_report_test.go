@@ -23,6 +23,9 @@ func TestSessionReportCollapsesZeroCountsAndExplainsAttention(t *testing.T) {
 			t.Errorf("report lacks %q: %s", want, text)
 		}
 	}
+	if strings.Contains(text, "Canvas count differs") {
+		t.Fatalf("pulled plus comment-posted students add up to Canvas's count: %s", text)
+	}
 	if strings.Contains(text, "Finished") {
 		t.Fatal("zero-count assignment was expanded into a row")
 	}

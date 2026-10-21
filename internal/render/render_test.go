@@ -28,7 +28,7 @@ func TestRenderFeedbackShowsAssessmentScoresThenConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Overall: 4.67/20\nCriterion scores:\n- Response 1: Evidence 3/4; Reasoning 4/6\n- Response 2: Evidence 0/4; Reasoning 0/6\n\n" + feedback
+	want := "Overall: 4.67/20\nCriterion scores:\n- Response 1:\n  - Evidence 3/4\n  - Reasoning 4/6\n- Response 2:\n  - Evidence 0/4\n  - Reasoning 0/6\n\n" + feedback
 	if got != want {
 		t.Fatalf("unexpected rendering\n got: %s\nwant: %s", got, want)
 	}

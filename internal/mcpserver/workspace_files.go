@@ -195,6 +195,13 @@ func (s *Server) readablePath(relative string) (string, error) {
 		}
 		if info, err := os.Stat(p); err == nil && !info.Mode().IsRegular() {
 			return "", errors.New("root reference must be a regular text file")
+		} else if os.IsNotExist(err) && ext == ".md" {
+			// Playbooks refer to one another by bare name.
+			if fallback, ferr := s.safePath("playbooks/" + relative); ferr == nil {
+				if finfo, serr := os.Stat(fallback); serr == nil && finfo.Mode().IsRegular() {
+					return fallback, nil
+				}
+			}
 		} else if err != nil && !os.IsNotExist(err) {
 			return "", err
 		}

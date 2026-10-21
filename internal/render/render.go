@@ -81,18 +81,23 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		for _, criterionScore := range score.Criteria {
 			byID[criterionScore.CriterionID] = criterionScore
 		}
-		fmt.Fprintf(&out, "\n- %s: ", component.Label)
-		printed := 0
+		var lines []string
 		for _, rubricCriterion := range in.Rubric.Criteria {
 			if in.Interpretation.Mapping == "direct" && !contains(component.CriterionIDs, rubricCriterion.ID) {
 				continue
 			}
-			if printed > 0 {
-				out.WriteString("; ")
-			}
 			cs := byID[rubricCriterion.ID]
-			fmt.Fprintf(&out, "%s %s/%s", rubricCriterion.Description, shortNumber(cs.Points), shortNumber(rubricCriterion.Points))
-			printed++
+			lines = append(lines, fmt.Sprintf("%s %s/%s", rubricCriterion.Description, shortNumber(cs.Points), shortNumber(rubricCriterion.Points)))
+		}
+		// One criterion stays on the item's line; several each get their own
+		// indented line so long criterion names stay readable.
+		if len(lines) > 1 {
+			fmt.Fprintf(&out, "\n- %s:", component.Label)
+			for _, line := range lines {
+				fmt.Fprintf(&out, "\n  - %s", line)
+			}
+		} else {
+			fmt.Fprintf(&out, "\n- %s: %s", component.Label, strings.Join(lines, ""))
 		}
 	}
 	out.WriteString("\n\n")

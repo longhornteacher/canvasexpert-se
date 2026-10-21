@@ -202,6 +202,9 @@ func (s *Service) PostGroupResults(ctx context.Context, path string) (report Gro
 	requests := s.Client.Requests()
 	report.Path = path
 	defer func() { report.Elapsed = time.Since(start); report.Requests = s.Client.Requests() - requests }()
+	if err = FillResultsAssignment(s.Root, path); err != nil {
+		return report, err
+	}
 	var doc domain.GroupResultsDocument
 	body, err := workspace.ReadDocument(path, &doc)
 	if err != nil {

@@ -471,6 +471,9 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		p, e := documentPath(root, args[0])
 		if e == nil {
+			e = workflow.FillResultsAssignment(root, p)
+		}
+		if e == nil {
 			e = validateDocument(p, root)
 		}
 		if e != nil {

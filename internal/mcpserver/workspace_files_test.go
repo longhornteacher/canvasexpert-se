@@ -100,6 +100,26 @@ func TestWorkspaceToolsRoundTrip(t *testing.T) {
 	call("read_workspace_asset", map[string]any{"path": ".cse/private.bin"}, true)
 }
 
+func TestBarePlaybookNameFallsBackToPlaybooks(t *testing.T) {
+	s := &Server{root: t.TempDir()}
+	if err := os.MkdirAll(filepath.Join(s.root, "playbooks"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.root, "playbooks", "group-work.md"), []byte("playbook"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.readablePath("group-work.md")
+	if err != nil || filepath.Base(filepath.Dir(p)) != "playbooks" {
+		t.Fatalf("bare playbook name not resolved: %q %v", p, err)
+	}
+	if err := os.WriteFile(filepath.Join(s.root, "group-work.md"), []byte("root"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ = s.readablePath("group-work.md"); filepath.Base(filepath.Dir(p)) == "playbooks" {
+		t.Fatalf("root file should win over the playbooks fallback: %q", p)
+	}
+}
+
 func TestWorkspaceRootReferences(t *testing.T) {
 	s := &Server{root: t.TempDir()}
 	refs := []string{"README.txt", "Creation Taste.txt", "CS8 WeeklyPractice_BuildGuide.md"}

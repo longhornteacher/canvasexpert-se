@@ -52,7 +52,7 @@ func printSessionReport(out io.Writer, assignments []workflow.PullAssignmentSumm
 				details = append(details, fmt.Sprintf("%s: %d", reason.label, reason.count))
 			}
 		}
-		if a.NeedsGradingCount != nil && *a.NeedsGradingCount != a.Students {
+		if a.NeedsGradingCount != nil && *a.NeedsGradingCount != a.Students+a.CommentOnlyCompleted {
 			details = append(details, "Canvas count differs from pulled count")
 		}
 		fmt.Fprintf(table, "%s\t%d\t%s\t%s\t%s\t%s\t%d\t%d\t%s\n", compact(a.Course), a.AssignmentID, compact(a.Title), compact(group), compact(a.DueState), count, a.Students, a.TimingCandidates, compact(strings.Join(details, "; ")))

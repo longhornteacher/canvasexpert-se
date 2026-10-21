@@ -34,6 +34,9 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 	requests := s.Client.Requests()
 	report.Path = path
 	defer func() { report.Elapsed = time.Since(start); report.Requests = s.Client.Requests() - requests }()
+	if err = FillResultsAssignment(s.Root, path); err != nil {
+		return report, err
+	}
 	var doc domain.ResultsDocument
 	body, err := workspace.ReadDocument(path, &doc)
 	if err != nil {
@@ -369,7 +372,7 @@ func (s *Service) postSources(doc domain.ResultsDocument) (map[string]postSource
 	}
 	for _, row := range doc.Students {
 		if row.Operation != "late-only" && !SameGradingBasis(packet.Assignment, doc.Assignment) {
-			return nil, fmt.Errorf("results grading basis differs from source packet")
+			return nil, fmt.Errorf("results grading basis differs from source packet in %s", strings.Join(GradingBasisDiff(packet.Assignment, doc.Assignment), ", "))
 		}
 	}
 	store, e := workspace.OpenStudents(s.Root)

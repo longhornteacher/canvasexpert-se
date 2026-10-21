@@ -138,6 +138,9 @@ func digestOf(c ReviewCard) string {
 
 // BuildReview renders a results file without credentials or any Canvas call.
 func BuildReview(root, path string) (ReviewModel, error) {
+	if e := FillResultsAssignment(root, path); e != nil {
+		return ReviewModel{}, e
+	}
 	kind, e := ReviewInputKind(path)
 	if e != nil {
 		return ReviewModel{}, e
@@ -193,6 +196,9 @@ func ReviewInputKind(path string) (string, error) {
 func ValidateReviewInput(root, path, course string) (string, error) {
 	kind, e := ReviewInputKind(path)
 	if e != nil {
+		return "", e
+	}
+	if e = FillResultsAssignment(root, path); e != nil {
 		return "", e
 	}
 	var nickname string

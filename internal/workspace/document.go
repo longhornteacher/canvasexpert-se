@@ -118,6 +118,64 @@ func DocumentKind(b []byte) (string, error) {
 	return "", fmt.Errorf("kind is required")
 }
 
+// HeaderScalar returns a top-level string value from the YAML header without
+// validating the rest of the document.
+func HeaderScalar(b []byte, key string) (string, bool, error) {
+	_, _, node, e := documentHeader(b)
+	if e != nil {
+		return "", false, e
+	}
+	m := node.Content[0].Content
+	for i := 0; i < len(m); i += 2 {
+		if m[i].Value == key && m[i+1].Kind == yaml.ScalarNode {
+			return m[i+1].Value, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+// HeaderHas reports whether the YAML header has the top-level key.
+func HeaderHas(b []byte, key string) bool {
+	_, _, node, e := documentHeader(b)
+	if e != nil {
+		return false
+	}
+	m := node.Content[0].Content
+	for i := 0; i < len(m); i += 2 {
+		if m[i].Value == key {
+			return true
+		}
+	}
+	return false
+}
+
+// InsertHeaderKey adds a top-level key to the YAML header, leaving other keys and
+// the body untouched. It reports false, with b unchanged, when the key exists.
+func InsertHeaderKey(b []byte, key string, value any) ([]byte, bool, error) {
+	_, body, node, e := documentHeader(b)
+	if e != nil {
+		return nil, false, e
+	}
+	m := node.Content[0]
+	for i := 0; i < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			return b, false, nil
+		}
+	}
+	var v yaml.Node
+	if e := v.Encode(value); e != nil {
+		return nil, false, e
+	}
+	m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, &v)
+	h, e := yaml.Marshal(m)
+	if e != nil {
+		return nil, false, e
+	}
+	out := append([]byte("---\n"), h...)
+	out = append(out, []byte("---\n")...)
+	return append(out, []byte(body)...), true, nil
+}
+
 func ParseDocument(b []byte, out any) (string, error) {
 	header, body, node, e := documentHeader(b)
 	if e != nil {
