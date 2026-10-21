@@ -2,11 +2,9 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
-## 1.1.0-beta.2 (2026-10-21)
+## 1.1.0-beta.3 (2026-10-21)
 
-The Groups update, published as the latest release for all users. It carries every development note below since 1.0: book-club group work, Family Contact emails, current-period parent reports, school-calendar late timing, targeted scoring sessions, and installation and quiet updates by git (the `userinstall` branch with `get-engine.cmd`), with the Windows ZIP kept as the fallback.
-
-## Development notes
+Lighter scoring reads, Engine-run updates for git installs, and results files that start from the packet.
 
 ### Results files start from the packet (2026-10-21)
 
@@ -19,6 +17,12 @@ The Groups update, published as the latest release for all users. It carries eve
 ### Lighter packets for the agent (2026-10-21)
 
 - Pulls no longer write assignment directions HTML twice into each packet or repeat each submission's HTML beside its readable text. Packets carry readable directions in the body (`directions_html` names the original HTML file) and student files carry `readable_text` with `body_html_path`; group pulls do the same for shared artifacts. Readable text now keeps code indentation inside ``` fences, link addresses, table cells and `[image: alt]` markers. On this PC's 441 existing pulled files the new layout is 67% smaller for packets and 22% for student files. Grading-basis checks never used the directions HTML; older packets and student files still read as before. Local tests only.
+
+## 1.1.0-beta.2 (2026-10-21)
+
+The Groups update, published as the latest release for all users. It carries every development note below since 1.0: book-club group work, Family Contact emails, current-period parent reports, school-calendar late timing, targeted scoring sessions, and installation and quiet updates by git (the `userinstall` branch with `get-engine.cmd`), with the Windows ZIP kept as the fallback.
+
+## Development notes
 
 ### 1.1 beta 2 version and live session evidence (2026-10-21)
 

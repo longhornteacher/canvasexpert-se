@@ -4,11 +4,11 @@
 
 CanvasExpert-SE (CE-SE) helps teachers draft assignments and New Quizzes, organize course content, assess student work, prepare feedback and contact families. Your chosen agent follows editable teaching playbooks and your preferences; the Engine handles Canvas access, student/attempt identity, exact score arithmetic and supported writes.
 
-**Published release: 1.1 beta 2 (`1.1.0-beta.2`, the Groups update) · Windows 11 · MIT**
+**Published release: 1.1 beta 3 (`1.1.0-beta.3`, the Groups update) · Windows 11 · MIT**
 
 [Get started](#get-started) · [Changelog](CHANGELOG.md) · [Release policy](docs/releasing.md) · [Contribute](.github/CONTRIBUTING.md)
 
-The links below install the published 1.1 beta 2 release, which adds book-club group work, Family Contact emails, parent reports, school-calendar late timing, targeted scoring sessions and installation by git. Development continues on `dev`.
+The links below install the published 1.1 beta 3 release, which adds book-club group work, Family Contact emails, parent reports, school-calendar late timing, targeted scoring sessions, installation and quiet updates by git, and lighter scoring files for the agent. Development continues on `dev`.
 
 This is an independent open-source project. The teacher-first installation mechanics have local fixture and package checks; the complete fresh-user Cowork/Work installation and teaching example still need a destination-client pilot. See the [capability record](docs/engine-capabilities.md) for the distinction between Canvas Live evidence, local tests and pending human validation.
 
