@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -87,8 +88,10 @@ func TestAudiencePrepareReviewCreateAndChangedSourceHold(t *testing.T) {
 		t.Fatalf("%+v %v", state, err)
 	}
 	content, _ := os.ReadFile(path)
-	for _, secret := range []string{"Private Person", "secret@example.test", "9001", "9002", "9003"} {
-		if strings.Contains(string(content), secret) {
+	// User IDs are matched as whole numbers: random refs and nanosecond
+	// timestamps in the draft can contain the same digits.
+	for _, secret := range []string{"Private Person", `secret@example\.test`, `\b9001\b`, `\b9002\b`, `\b9003\b`} {
+		if regexp.MustCompile(secret).MatchString(string(content)) {
 			t.Errorf("private roster leaked %s", secret)
 		}
 	}
