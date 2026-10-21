@@ -1,15 +1,32 @@
 # Playbook and Engine conflicts: execution brief
 
-Prepared 2026-10-21 against Dev branch `dev`, revision `236a20f` (targeted scoring sessions). Nothing in this brief has been implemented. It does not authorize Canvas writes, release, or UserInstall/UserSync adoption.
+Prepared 2026-10-21 against Dev branch `dev`, revision `236a20f` (targeted scoring sessions). Implemented the same day in batches; see "Implementation status" below. It does not authorize Canvas writes, release, or UserInstall/UserSync adoption.
+
+## Implementation status (updated 2026-10-21, end of day)
+
+Everything below is committed on `dev` and passes `go vet ./...` and `go test ./... -count=1`. Tests are local fakes only; nothing was run against Canvas Live, and no ZIP was built or adopted into any UserInstall. The git-install migration that replaced the ZIP plan is in [GIT-INSTALL-MIGRATION.md](GIT-INSTALL-MIGRATION.md).
+
+| Commit | Content |
+|---|---|
+| `34754a7` | **Batch 1.** A1 bare playbook names resolve through `read_workspace_file` (`playbooks/` fallback, root file wins). A2 results and group-results may omit `assignment:`; `FillResultsAssignment` (`internal/workflow/results_assignment.go`) copies it from the packet on validate, review and post, and names the differing field when a present block drifts; evidence error names the missing `discussion_topic_id`. C4 New Quiz and graded-discussion pulls use `--session` with a title or ID. C5 results path `scoring/results-<YYYYMMDD>-<HHMM>.md`, pull report prints workspace-relative packet paths. C6 one indented line per criterion in feedback; criterion descriptions are short names. C8 "Canvas count differs" note counts pulled plus comment-posted students. C9 reuse an earlier `scoring_basis` (the two PAP 3705775 files confirmed the 40/30/30 vs six 5-point mismatch). A3 `formats.md` lines 11, 62/65, 145. |
+| `8cf0d61` | **Batch 2.** B11 images in assignment directions are downloaded beside the packet as `direction_images` (`internal/workflow/direction_images.go`, via `/api/v1/files/<id>` then an unauthenticated signed download; fake-Canvas test only, no live run). C10 genuine-submission wording, New Quiz pointer, checkpointed discussions offer `comment-only`. D1 `quiz-points` writes after submissions and warns (playbook, comment, capabilities, docs agree). D2/D3/D4 authoring and native-content corrections (valid Page starter, `push_quiz`, read-back exception, rerun wording). An unchanged pulled `only_visible_to_overrides` no longer blocks an audience update. E1 setup address field accepts a scheme-less address. A3 leftovers and stale tool descriptions. |
+| `3f76d30` | **Batch 3.** E3 `shipped/` readable (never writable) through MCP. E2 handled as docs only: `playbooks update` already treats `AGENTS.md`/`CLAUDE.md` as seeds, but extracting a ZIP replaces them first; `AGENTS.md` is also the first-run marker, so it stays in the ZIP. E4/E6 README, setup and install wording and the real Settings headings. E5 parent-report context and playbook wording (sign-off, defaults, window, skip wins when `skip_eligible`). |
+| `415d1ef` | **Small items.** C7 New Quiz: `score` = `full`, layout preference applies to criterion lines only. `correction_days` setting (default 14, 1 to 60) in `context/parent-updates.md` drives the report window and each correction deadline. Quiz same-title error no longer asks the agent to edit a `.cse.json` sidecar. Graded-discussion results example (`engine-docs/examples/synthetic-graded-discussion-results.md`). Low text pass (E7). |
+
+**Not done, deliberately or by finding:** the existing synthetic examples still include their `assignment:` block (tests validate them standalone; a comment says to omit it normally); `field-limits.md` had no stale text left to fix; the E7 starter-calendar gaps and the `install.md` "latest release" line were left because the git install rewrites that route; D4 quiz resume option was not built (error and playbook reworded); A2 "later" fills (`late_timing`, discussion `digest`, group refs) remain a separate decision.
+
+**Correction to this brief's UserInstall section below:** the "9 teacher-owned" files were the eight `context/` files plus `Teacher_Override.md`, not edited playbooks. A seed-playbook fix reaches an install as an `updated` file.
+
+**Behavior changes worth knowing before the next scoring session:** results files no longer need an `assignment:` block (omit it); `pull_work` for a New Quiz or graded discussion should use `session: true`; packet paths in the pull report are workspace-relative; a New Quiz comment has indented per-criterion lines; assignment reference images appear in the packet as `direction_images` and are read with `read_workspace_asset`.
 
 ## Resume here
 
-- **State:** audit complete, no fixes made. The list below is the work. Start with Batch 1.
+- **State:** the work in this brief is implemented (table above). Remaining optional work is only what "Not done" lists. The developer's own UserInstall still runs the older Engine build (`236a20f+dirty`); none of the changes above reach it until the Engine is rebuilt and adopted (see the git-install handoff, Step 4).
 - **Developer decisions (2026-10-21):**
   - Squash conflicts between Engine and playbooks so agents stop working around them.
   - Agreed: one consistent scoring basis per assignment (C9), the Engine fills the assignment snapshot from the packet (A2), and assignment images are downloaded with the pull so the agent can read the reference (B11).
   - Rejected: a helper page for entering New Quiz item points. The teacher uses SpeedGrader. Only the jumbled comment formatting needs fixing (C6).
-- **Open decision for the developer:** whether `quiz-points` should hold or write once students have submitted (D1).
+- **Decided (D1):** `quiz-points` writes after students have submitted and warns that Canvas may not regrade existing attempts.
 - **Checks before starting:** read root [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), [SCORING-RULES.md](../../docs/SCORING-RULES.md), the seed [score.md](../../workspace-template/playbooks/score.md), and [TARGETED-SCORING-SESSION.md](TARGETED-SCORING-SESSION.md). Run `git status`: [SCORING-SESSION-HAIKU-LOG-2026-10-21.md](SCORING-SESSION-HAIKU-LOG-2026-10-21.md) was untracked when this was written.
 - **Line numbers** are from revision `236a20f` and shift as files change. Re-grep before editing.
 
@@ -31,9 +48,8 @@ Prepared 2026-10-21 against Dev branch `dev`, revision `236a20f` (targeted scori
 - **UserInstall `C:\Users\adamb\CanvasExpert-SE` now runs Dev `236a20f+dirty`, development build.** `+dirty` is only the untracked log. It is local mode with no `.cse/rules-location.json`.
   - The previous Engine is kept as `engine\cse.exe.1.1.0-beta.1-20261019`.
   - The files the extract replaced are backed up in `engine\pre-update-20261021\`. AGENTS.md changed only by the shipped Family Contact routing line.
-- **`playbooks update` result:** 14 files `current` and **9 `teacher-owned`**. Teacher-owned files are never replaced by a seed update.
-  - So a seed-playbook fix does not reach those installed copies.
-  - Prefer an Engine fix where one exists (A1, A2), because it reaches every install. Where only a playbook fix works, say so in the record, and tell the teacher which installed files keep the old text.
+- **`playbooks update` result:** 14 files `current` and **9 `teacher-owned`**. **Correction (2026-10-21):** the 9 are the eight `context/` files plus `Teacher_Override.md`, which hold teacher data and are never replaced. They are not edited playbooks. On this install every playbook matches the seed, so a seed-playbook fix reaches it as an `updated` file. A playbook the teacher did edit would be `kept`; none is.
+  - An Engine fix still reaches every install regardless (A1, A2).
 - **Engine processes started before the swap still run the old binary.** New Claude Code sessions start the new one. Claude Desktop's Cowork extension needs an app restart.
 
 ## Constraints (from AGENTS.md)
