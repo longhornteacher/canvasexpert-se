@@ -4,7 +4,7 @@ Prepared 2026-10-21 against Dev branch `dev`, revision `236a20f` (targeted scori
 
 ## Implementation status (updated 2026-10-21, end of day)
 
-Everything below is committed on `dev` and passes `go vet ./...` and `go test ./... -count=1`. Tests are local fakes only; nothing was run against Canvas Live, and no ZIP was built or adopted into any UserInstall. The git-install migration that replaced the ZIP plan is in [GIT-INSTALL-MIGRATION.md](GIT-INSTALL-MIGRATION.md).
+Everything below is committed on `dev` and passes `go vet ./...` and `go test ./... -count=1`. Tests are local fakes only; nothing was run against Canvas Live, and no ZIP was built or adopted into any UserInstall. The git-install migration that replaced the ZIP plan is in [GIT-INSTALL-MIGRATION.md](../active/GIT-INSTALL-MIGRATION.md).
 
 | Commit | Content |
 |---|---|
@@ -27,7 +27,7 @@ Everything below is committed on `dev` and passes `go vet ./...` and `go test ./
   - Agreed: one consistent scoring basis per assignment (C9), the Engine fills the assignment snapshot from the packet (A2), and assignment images are downloaded with the pull so the agent can read the reference (B11).
   - Rejected: a helper page for entering New Quiz item points. The teacher uses SpeedGrader. Only the jumbled comment formatting needs fixing (C6).
 - **Decided (D1):** `quiz-points` writes after students have submitted and warns that Canvas may not regrade existing attempts.
-- **Checks before starting:** read root [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), [SCORING-RULES.md](../../docs/SCORING-RULES.md), the seed [score.md](../../workspace-template/playbooks/score.md), and [TARGETED-SCORING-SESSION.md](TARGETED-SCORING-SESSION.md). Run `git status`: [SCORING-SESSION-HAIKU-LOG-2026-10-21.md](SCORING-SESSION-HAIKU-LOG-2026-10-21.md) was untracked when this was written.
+- **Checks before starting:** read root [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), [SCORING-RULES.md](../../docs/SCORING-RULES.md), the seed [score.md](../../workspace-template/playbooks/score.md), and [TARGETED-SCORING-SESSION.md](../active/TARGETED-SCORING-SESSION.md). Run `git status`: [SCORING-SESSION-HAIKU-LOG-2026-10-21.md](SCORING-SESSION-HAIKU-LOG-2026-10-21.md) was untracked when this was written.
 - **Line numbers** are from revision `236a20f` and shift as files change. Re-grep before editing.
 
 ## Where the evidence came from
@@ -333,7 +333,7 @@ The playbooks are right in each case below; fix the Engine docs. `formats.md` is
 ## Out of scope here
 
 - **A New Quiz item-points entry page:** rejected by the developer 2026-10-21.
-- **Engine session-narrowing flags, a "never score" list, and re-timing graded work:** decisions 2, 6, and 1 in [TARGETED-SCORING-SESSION.md](TARGETED-SCORING-SESSION.md).
+- **Engine session-narrowing flags, a "never score" list, and re-timing graded work:** decisions 2, 6, and 1 in [TARGETED-SCORING-SESSION.md](../active/TARGETED-SCORING-SESSION.md).
 - **Posting performance (serial posting, repeated re-reads):** listed in the targeted-session brief.
 - **The targeted-session live-validation checklist:** separate work; keep it in its own brief.
   - The second Haiku run supplies evidence for two items: comment-only rows suppress re-pull with counts matching Canvas, and a graded discussion was pulled, scored, and posted.

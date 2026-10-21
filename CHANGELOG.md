@@ -4,6 +4,10 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Development notes
 
+### 1.1 beta 2 version and live session evidence (2026-10-21)
+
+- `VERSION` is `1.1.0-beta.2`; nothing is tagged or released. The `userinstall` branch ignores `install-log.jsonl`. The Capabilities page records the 2026-10-21 Haiku scoring session: New Quiz comment-only students were not pulled again, and one graded-discussion entry was scored and posted. Before/after counts, resubmission and group-assignment session checks remain pending.
+
 ### Targeted scoring sessions (2026-10-21)
 
 - Scoring sessions target unscored submissions using Canvas needs-grading counts, include not-yet-due work, report closed periods, and leave already-scored timing alone. Concurrent detailed lists replace individual submission fetches; one local results index suppresses completed attempts and reminds teachers when New Quiz comments are posted but item points still await entry. Explicit pulls without `--session` retain reassessment behavior.

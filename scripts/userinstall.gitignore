@@ -6,6 +6,7 @@
 /.claude/settings.local.json
 /playbook-old/
 /shipped/
+/install-log.jsonl
 *.cse.json
 
 # The Engine is downloaded by get-engine.cmd; only its manifest and notices are tracked.
