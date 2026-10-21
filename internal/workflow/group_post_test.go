@@ -93,6 +93,8 @@ func newGroupEnv(t *testing.T, coupled, individual bool) *groupPostEnv {
 				rows = append(rows, map[string]any{"user_id": id, "type": "StudentEnrollment", "enrollment_state": "active", "user": map[string]any{"id": id, "name": fmt.Sprintf("Private Student %d", id), "short_name": fmt.Sprintf("Student %d", id)}})
 			}
 			write(rows)
+		case path == "/api/v1/courses/1/assignment_groups":
+			write([]any{map[string]any{"id": 1, "name": "Daily", "group_weight": 30}})
 		case strings.HasSuffix(path, "/group_members"):
 			rows := []any{}
 			for _, id := range env.audience {

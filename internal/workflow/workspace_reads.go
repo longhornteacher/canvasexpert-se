@@ -22,6 +22,8 @@ type Service struct {
 	Skip map[string]bool
 	// privateGroupComments marks comments written for individual group results.
 	privateGroupComments bool
+	// resultsIndex is a read-only snapshot scoped to one pull or timing batch.
+	resultsIndex *resultsIndex
 }
 
 func (s *Service) Course(nickname string) (domain.Course, error) {

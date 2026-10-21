@@ -75,7 +75,7 @@ type PullWorkInput struct {
 	Course     string `json:"course,omitempty" jsonschema:"Configured course nickname; omit to pull current courses"`
 	Assignment string `json:"assignment,omitempty" jsonschema:"Optional assignment title or ID"`
 	GroupID    *int64 `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID; requires course and assignment"`
-	Session    bool   `json:"session,omitempty" jsonschema:"Prepare this pull for a scoring session, including current-term discovery and timing-only evidence"`
+	Session    bool   `json:"session,omitempty" jsonschema:"Pull unscored submitted work for a scoring session, including not-yet-due work; timing applies only to work being scored"`
 }
 
 type PrepareLateTimingInput struct {

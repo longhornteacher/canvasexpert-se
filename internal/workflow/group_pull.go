@@ -104,8 +104,7 @@ func unsupportedGroupPull(a Assignment) string {
 	return ""
 }
 
-func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course, listed Assignment, groupFilter *int64, active map[int64]bool, students *workspace.StudentStore, summary *PullAssignmentSummary, explicitAssignment bool, options PullWorkOptions, currentPeriod *workspace.GradingPeriod, calendar *workspace.SchoolCalendar) ([]string, int, []string, error) {
-	timezone := calendarTimezone(calendar)
+func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course, listed Assignment, groupFilter *int64, active map[int64]bool, students *workspace.StudentStore, summary *PullAssignmentSummary, explicitAssignment bool, options PullWorkOptions) ([]string, int, []string, error) {
 	if listed.ID <= 0 {
 		return nil, 0, nil, fmt.Errorf("group assignment has no exact ID")
 	}
@@ -274,15 +273,6 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 		}
 		rowsByGroup[gid] = append(rowsByGroup[gid], sub)
 	}
-	if currentPeriod != nil {
-		filtered := unassigned[:0]
-		for _, sub := range unassigned {
-			if submissionDueInPeriod(sub, a, *currentPeriod, timezone) {
-				filtered = append(filtered, sub)
-			}
-		}
-		unassigned = filtered
-	}
 	groupIDs := []int64{}
 	for id := range groups {
 		if selected == nil || id == selected.ID {
@@ -291,13 +281,9 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 	}
 	sort.Slice(groupIDs, func(i, j int) bool { return groupIDs[i] < groupIDs[j] })
 	handledGroups := map[int64]bool{}
-	if !explicitAssignment && selected == nil {
+	if (!explicitAssignment && selected == nil) || options.Session {
 		for _, gid := range groupIDs {
-			if currentPeriod != nil && !groupHasDueInPeriod(rowsByGroup[gid], a, *currentPeriod, timezone) {
-				handledGroups[gid] = true
-				continue
-			}
-			if handled, count := s.groupSubmissionsHandled(a, rowsByGroup[gid], roster.ByUserID, active, snapshot); handled && (!options.Session || !groupHasTimingCandidate(s, course.ID, a, rowsByGroup[gid], roster.ByUserID) || groupTimingAccepted(s, course.ID, a, rowsByGroup[gid], roster.ByUserID, active, calendar)) {
+			if handled, count := s.groupSubmissionsHandled(a, rowsByGroup[gid], roster.ByUserID, active, snapshot); handled {
 				handledGroups[gid] = true
 				summary.Handled += count
 			}
@@ -425,14 +411,16 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 			}
 			memberSeen[st.Ref] = true
 			memberDoc := s.buildGroupMember(st, sub, currentMember, member)
-			if options.Session && (currentPeriod == nil || submissionDueInPeriod(sub, a, *currentPeriod, timezone)) {
+			if options.Session {
 				gradeHandled := s.groupSubmissionHandled(a, st.Ref, sub, snapshot)
-				needsTiming := s.sessionTimingCandidate(course.ID, a.ID, st.Ref, sub)
+				needsTiming := !gradeHandled && s.sessionTimingCandidate(course.ID, a.ID, st.Ref, sub)
 				switch {
-				case gradeHandled && needsTiming:
-					memberDoc.WorkPurpose = "late-only"
+				case gradeHandled:
+					// Retain audience evidence without scheduling handled members for scoring or timing.
+					summary.Handled++
 				case needsTiming:
 					memberDoc.WorkPurpose = "score-and-late"
+					summary.TimingCandidates++
 				default:
 					memberDoc.WorkPurpose = "score"
 				}
@@ -479,7 +467,9 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 			}
 			sort.Slice(memberDoc.Prior, func(i, j int) bool { return memberDoc.Prior[i].Attempt.Attempt < memberDoc.Prior[j].Attempt.Attempt })
 			work.Members = append(work.Members, memberDoc)
-			memberCount++
+			if !options.Session || memberDoc.WorkPurpose != "" {
+				memberCount++
+			}
 		}
 		for ref, current := range members {
 			if memberSeen[ref] {
@@ -631,51 +621,6 @@ func (s *Service) groupSubmissionHandled(a Assignment, studentRef string, sub Su
 		return true
 	}
 	return a.GradeGroupStudentsIndividually != nil && *a.GradeGroupStudentsIndividually && studentRef != "" && s.completedHint(a.ID, studentRef, sub, snapshot)
-}
-
-func groupHasTimingCandidate(s *Service, courseID int64, a Assignment, rows []Submission, byUserID map[int64]workspace.Student) bool {
-	for _, row := range rows {
-		userID := row.UserID
-		if userID <= 0 {
-			userID = row.User.ID
-		}
-		student, ok := byUserID[userID]
-		if ok && s.sessionTimingCandidate(courseID, a.ID, student.Ref, row) {
-			return true
-		}
-	}
-	return false
-}
-
-func groupHasDueInPeriod(rows []Submission, a Assignment, p workspace.GradingPeriod, timezone string) bool {
-	for _, row := range rows {
-		if submissionDueInPeriod(row, a, p, timezone) {
-			return true
-		}
-	}
-	return false
-}
-
-func groupTimingAccepted(s *Service, courseID int64, a Assignment, rows []Submission, byUserID map[int64]workspace.Student, active map[int64]bool, calendar *workspace.SchoolCalendar) bool {
-	seen := 0
-	for _, row := range rows {
-		userID := row.UserID
-		if userID <= 0 {
-			userID = row.User.ID
-		}
-		if !active[userID] || row.Attempt < 1 || row.SubmittedAt == nil {
-			continue
-		}
-		student, ok := byUserID[userID]
-		if !ok {
-			return false
-		}
-		seen++
-		if !s.completedTimingHint(a.ID, courseID, student.Ref, row, a, calendar) {
-			return false
-		}
-	}
-	return seen > 0
 }
 
 func (s *Service) groupSubmissionsHandled(a Assignment, rows []Submission, byID map[int64]workspace.Student, active map[int64]bool, snapshot domain.AssignmentSnapshot) (bool, int) {

@@ -238,7 +238,7 @@ type WrittenFile struct {
 type StudentWorkDocument struct {
 	Schema                 int               `yaml:"schema"`
 	Kind                   string            `yaml:"kind"`
-	WorkPurpose            string            `yaml:"work_purpose,omitempty"` // score, late-only, or score-and-late
+	WorkPurpose            string            `yaml:"work_purpose,omitempty"` // score or score-and-late; late-only appears only in older packets
 	StudentRef             string            `yaml:"student_ref"`
 	Alias                  string            `yaml:"alias"`
 	AssignmentID           int64             `yaml:"assignment_id"`

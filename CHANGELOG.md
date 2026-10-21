@@ -4,6 +4,11 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Development notes
 
+### Targeted scoring sessions (2026-10-21)
+
+- Scoring sessions target unscored submissions using Canvas needs-grading counts, include not-yet-due work, report closed periods, and leave already-scored timing alone. Concurrent detailed lists replace individual submission fetches; one local results index suppresses completed attempts and reminds teachers when New Quiz comments are posted but item points still await entry. Explicit pulls without `--session` retain reassessment behavior.
+- The compact report includes assignment group/weight, due state, workload and count explanations. Local tests pass. Read-only CS8 observations confirm assignment-list counts and reconcile the earlier Hotline Miami mismatch as a later submission; a read-only Dev session pull on CS8 produced the expected two-row report. Attachment downloads now run concurrently at the client's 4-request cap (CS8 fetch 19.8s to 5.6s). Broader live session checks remain pending. No release or UserInstall/UserSync adoption.
+
 ### Family Contact (2026-10-20)
 
 - The existing private family review and Outlook delivery accept general class messages alongside unchanged grade updates. `prepare_family_contact` resolves course, group and stable-ref audiences for `contact.json`; the teacher reviews each version and recipient, then sends or fills Outlook Drafts. Markdown/HTML messages support local inline images and attachments, optional parents-only routing and the saved closing. Duplicate/stale audiences hold sending; accepted and uncertain outcomes retain their no-replay protections.
