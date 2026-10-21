@@ -16,7 +16,7 @@ Prepare static instructional content: headings, lists, tables, code, links and a
 
 ## Build native content
 
-1. Upload student assets with `cse upload-file`, selecting access explicitly. Keep the receipts and provenance beside the conversion drafts, with a local-to-Canvas asset map. An unpublished Page does not make its files private. Use actual returned file IDs and stable course links in authored HTML; do not save signed download URLs.
+1. Upload student assets with `cse upload-file`, selecting access explicitly. Keep the receipts and provenance beside the conversion drafts, with a local-to-Canvas asset map. An unpublished Page does not make its files private. Use the returned file IDs and stable course links in authored HTML; do not save signed download URLs.
 2. Create `kind: page` documents and push them with `cse push`. Use `body_format: html` for tables, images and rich teaching bodies, or `markdown` for the Engine's small Markdown subset. Keep the returned Page ID, slug and URL in the document. To revise a Page, use `cse pull-page` and edit the pulled document. Preserve a held draft's unsent work and compare its fresh baseline before reapplying changes.
 
 For a club reading plan, evidence notebook or meeting log, use the exact configured course plus `group_id` from `cse groups COURSE --set SET_ID`; set `editing_roles: [members]` only when club members should edit (Canvas receives `members` as a role string). Group Pages cannot be placed in course modules. A starter can be as small as:
@@ -31,7 +31,10 @@ title: Evidence notebook
 body_format: html
 editing_roles: [members]
 published: true
+---
+<p>Record your evidence here.</p>
 ```
+The header ends with a `---` line and the Page needs a non-empty body after it.
 
 Pull before each edit. If the body conflicts, keep the unsent draft and merge its requested change into a fresh pull; a title-only change leaves current student writing untouched. Never push the starter body again over a populated notebook. `cse page-history COURSE PAGE_ID --group GROUP_ID` reads history; a revision is not a complete record of who contributed or simultaneous editing.
 3. Create activities with the existing assignment contract, optionally `body_format: html`. Follow `authoring.md` and its review policy. Choose text entry, file submission, a rubric or teacher grading to suit the student product.
@@ -40,11 +43,11 @@ Pull before each edit. If the body conflicts, keep the unsent draft and merge it
 
 For a club unit whose Page, response and quiz are restricted to selected clubs, push each resource first and then the module, so every native reference already exists. A restricted course Page and an individual assignment are ordinary native entries; a New Quiz uses its associated assignment ID. The module itself carries no audience: it is a navigation list, and each child keeps its own restriction. Do not add a group-specific `ExternalUrl` for a resource that is now a native restricted course Page.
 
-Pages, files and modules have no new universal approval gate. Follow the teacher's requested scope; assignments and quizzes retain their existing review policy. A held or uncertain write needs the specific recovery described by the Engine. Do not erase a receipt or saved create record to make a rerun write again; use exact live IDs to resolve uncertainty. Continue independent content while an item is held and report which objects exist and what remains.
+Pages, files and modules have no new universal approval gate. Follow the teacher's requested scope; assignments and quizzes retain their existing review policy. A held or uncertain write needs the specific recovery described by the Engine. Do not erase a receipt or saved create record to make a rerun write again; rerun the same file and report what was adopted or preserved. Continue independent content while an item is held and report which objects exist and what remains.
 
 ## Verify in Canvas
 
-Read saved HTML back from Canvas to see its normalization. Check links, image alt text, file availability, question keys/points and module order. Open the teacher view and distinguish it from actual student-view evidence. Record both outcomes and remaining checks in conversion notes.
+For an HTML Page conversion only, read the saved HTML back once to see Canvas's normalization (the standing no-read-back rule is for write confirmation). Check links, image alt text, file availability, question keys/points and module order. Open the teacher view and distinguish it from actual student-view evidence. Record both outcomes and remaining checks in conversion notes.
 
 For video, upload MP4 and available VTT assets, then test the saved Page's player, course-file access and captions in the live browser before claiming embedded playback. If Canvas removes the markup or captions fail, use a native course-file link and explain the limitation. Missing source captions remain a source gap; an uploaded MP4 alone is not a working lesson player.
 

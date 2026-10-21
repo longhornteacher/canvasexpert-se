@@ -423,6 +423,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			var discussion *discussionAssignmentEvidence
 			if len(detailed) > 0 {
 				discussion = s.readAssignmentDiscussion(ctx, course, a, snapshot, relDir)
+				packet.DirectionImages = s.downloadDirectionImages(ctx, relDir, a.Description)
 			}
 			handled := make([]bool, len(detailed))
 			var downloads []attemptDownload

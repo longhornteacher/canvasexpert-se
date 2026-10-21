@@ -74,7 +74,8 @@ func ValidateAssignmentDates(d AssignmentDatesDocument) error {
 		return err
 	}
 	if d.Audience != nil {
-		if d.OnlyVisibleToOverrides != nil && !*d.OnlyVisibleToOverrides {
+		unchanged := d.OnlyVisibleToOverrides != nil && d.ObservedOnlyVisibleToOverrides != nil && *d.OnlyVisibleToOverrides == *d.ObservedOnlyVisibleToOverrides
+		if d.OnlyVisibleToOverrides != nil && !*d.OnlyVisibleToOverrides && !unchanged {
 			return fmt.Errorf("individual audience cannot request visibility to Everyone")
 		}
 		for _, row := range d.Rows {

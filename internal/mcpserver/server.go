@@ -192,7 +192,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "help", in.Topic)
 	})
-	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Set session for current-term scoring discovery and timing-only evidence. Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
+	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Set session for targeted scoring discovery (Canvas needs-grading counts) Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
 		args := []string{"pull-work"}
 		if in.Course != "" {
 			args = append(args, in.Course)

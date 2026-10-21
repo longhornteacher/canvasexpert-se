@@ -185,6 +185,9 @@ type PacketDocument struct {
 	Course     string             `yaml:"course"`
 	Assignment AssignmentSnapshot `yaml:"assignment"`
 	Students   []string           `yaml:"students"`
+	// DirectionImages are Canvas images embedded in the assignment directions,
+	// downloaded beside the packet so reference images can be read.
+	DirectionImages []Attachment `yaml:"direction_images,omitempty"`
 }
 type AttemptRef struct {
 	Attempt     int    `yaml:"attempt" json:"attempt"`
