@@ -5,6 +5,8 @@ rem
 rem   get-engine.cmd              download, verify and install
 rem   get-engine.cmd --stage      download and verify into engine\staged\ only; nothing live changes
 rem   get-engine.cmd --base-url U fetch from U instead of the manifest's base_url (testing)
+rem   get-engine.cmd --manifest F  read the manifest file F instead of engine\manifest.txt; used to
+rem                               stage the Engine of a release that has been fetched but not yet pulled
 rem
 rem Needs only what Windows 10 and later ship: curl.exe and certutil. No admin rights.
 rem Exit codes: 0 ok, 2 bad option, 3 checksum mismatch, 4 missing tool or manifest,
@@ -21,12 +23,13 @@ set "BASE_OVERRIDE="
 if "%~1"=="" goto argsdone
 if /i "%~1"=="--stage" set "STAGE_ONLY=1" & shift & goto args
 if /i "%~1"=="--base-url" set "BASE_OVERRIDE=%~2" & shift & shift & goto args
+if /i "%~1"=="--manifest" set "MANIFEST=%~2" & shift & shift & goto args
 echo Unknown option %~1 1>&2
 exit /b 2
 :argsdone
 
 if not exist "%MANIFEST%" (
-  echo engine\manifest.txt was not found. This folder is incomplete; pull the latest version again. 1>&2
+  echo The Engine manifest was not found. This folder is incomplete; pull the latest version again. 1>&2
   exit /b 4
 )
 where curl.exe >nul 2>&1
@@ -107,6 +110,7 @@ if errorlevel 1 (
 )
 goto nextmove
 :movesdone
+del /f /q "%STAGED%\manifest.txt" >nul 2>&1
 rmdir "%STAGED%" >nul 2>&1
 echo CanvasExpert-SE Engine %VERSION% is installed in engine\.
 exit /b 0
