@@ -244,7 +244,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		if err != nil {
 			return TextOutput{}, err
 		}
-		return s.startSession(ctx, "review", []string{"parent-review", dir})
+		return s.startReviewSession(ctx, dir, []string{"parent-review", dir})
 	})
 	addActionTool(server, "print_student_reports", "Save one PDF of student reports from a parent-update run folder (report.json and drafts.json), one student per page, in the teacher's Downloads folder, and open it for printing. Every student gets a page. Returns the file path and count only; the PDF holds student names and is outside the workspace. Nothing is sent or written to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
 		dir, err := s.coursePath(in.Folder)

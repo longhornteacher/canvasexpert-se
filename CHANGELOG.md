@@ -24,6 +24,10 @@ The Groups update, published as the latest release for all users. It carries eve
 
 ## Development notes
 
+### Review pages survive an app restart (2026-10-21)
+
+- A review page started by `start_review` or `start_parent_review` used to close when the agent app restarted the tool connection, losing the teacher's Approve click (observed on the home PC; nothing posted). Review pages now keep running past the adapter, so the approval still posts; setup and students pages still close with it. Calling `start_review` again for the same file reconnects to the page that is still open, and once it closes `review_status` reports revision notes and points to the saved outcomes. Local tests and a compiled-Engine restart check; not yet observed with a real app restart.
+
 ### 1.1 beta 2 version and live session evidence (2026-10-21)
 
 - `VERSION` is `1.1.0-beta.2`. The `userinstall` branch ignores `install-log.jsonl`. The Capabilities page records the 2026-10-21 Haiku scoring session: New Quiz comment-only students were not pulled again, and one graded-discussion entry was scored and posted. Before/after counts, resubmission and group-assignment session checks remain pending.

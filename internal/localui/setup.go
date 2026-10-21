@@ -287,7 +287,7 @@ func SetupForRoot(ctx context.Context, output io.Writer, initialOrigin, root str
 		return errors.New("could not create the local setup form")
 	}
 	origin := "http://" + listener.Addr().String()
-	defer hubcoord.MarkPage(root, "setup", origin)()
+	defer hubcoord.MarkPage(root, "setup", origin, "")()
 	handler := &setupHandler{origin: origin, secret: hex.EncodeToString(nonce[:]), initialOrigin: initialOrigin, root: root, ctx: ctx, validate: validateCredential, save: platform.SaveCredential, done: make(chan struct{})}
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	serveErr := make(chan error, 1)

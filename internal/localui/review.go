@@ -347,7 +347,7 @@ func ReviewWithTest(ctx context.Context, path string, build func() (workflow.Rev
 	if len(roots) > 0 {
 		root = roots[0]
 	}
-	defer hubcoord.MarkPage(root, "review", origin)()
+	defer hubcoord.MarkPage(root, "review", origin, path)()
 	h := &reviewHandler{root: root, origin: origin, secret: hex.EncodeToString(nonce[:]), path: path, build: build, post: post, test: test, ctx: ctx, done: make(chan struct{})}
 	server := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 11 * time.Minute, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	serveErr := make(chan error, 1)

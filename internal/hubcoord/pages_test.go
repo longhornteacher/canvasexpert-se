@@ -13,9 +13,18 @@ func TestOpenPagesListsLivePagesAndDropsClosedOnes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	release := MarkPage(root, "review", "http://"+listener.Addr().String())
+	release := MarkPage(root, "review", "http://"+listener.Addr().String(), filepath.Join(root, "courses", "results.md"))
 	if open := OpenPages(root); len(open) != 1 || open[0] != "review" {
 		t.Fatalf("open page not listed: %v", open)
+	}
+	if rec, ok := FindPage(root, "review", filepath.Join(root, "courses", "results.md")); !ok || rec.URL != "http://"+listener.Addr().String() {
+		t.Fatalf("page not found by its file: %+v %v", rec, ok)
+	}
+	if _, ok := FindPage(root, "review", filepath.Join(root, "courses")); !ok {
+		t.Fatal("page not found by its folder")
+	}
+	if _, ok := FindPage(root, "review", filepath.Join(root, "courses", "other.md")); ok {
+		t.Fatal("another file matched")
 	}
 	_ = listener.Close()
 	if open := OpenPages(root); len(open) != 0 {
@@ -26,7 +35,7 @@ func TestOpenPagesListsLivePagesAndDropsClosedOnes(t *testing.T) {
 		t.Fatalf("stale record kept: %d", len(entries))
 	}
 	release() // removing an already-dropped record is harmless
-	if MarkPage("", "review", "http://127.0.0.1:1") == nil {
+	if MarkPage("", "review", "http://127.0.0.1:1", "") == nil {
 		t.Fatal("empty root must return a no-op release")
 	}
 }
