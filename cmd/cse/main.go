@@ -163,9 +163,10 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			location, locErr := workspace.GetRulesLocation(root)
 			status := struct {
 				Location          workspace.RulesLocation `json:"location"`
+				ManagedBy         string                  `json:"managed_by,omitempty"`
 				AvailabilityError string                  `json:"availability_error,omitempty"`
 				Files             []playbooks.StatusRow   `json:"files"`
-			}{Location: location, Files: playbooks.Status(root)}
+			}{Location: location, ManagedBy: playbooks.ManagedBy(root), Files: playbooks.Status(root)}
 			if locErr != nil {
 				status.AvailabilityError = locErr.Error()
 			}
@@ -249,13 +250,15 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		return fail(mcpserver.Run(ctx, root), progress)
 	}
 	if cmd == "version" {
+		install := installInfoFor(*rootOpt)
 		if len(args) == 1 && args[0] == "--json" {
 			data, _ := json.Marshal(struct {
 				Version   string `json:"version"`
 				Revision  string `json:"revision"`
 				BuiltAt   string `json:"built_at"`
 				BuildKind string `json:"build_kind"`
-			}{version, revision, builtAt, buildKind})
+				installInfo
+			}{version, revision, builtAt, buildKind, install})
 			fmt.Fprintln(out, string(data))
 			return 0
 		}
@@ -263,6 +266,9 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return fail(inputError(fmt.Errorf("use version [--json]")), progress)
 		}
 		fmt.Fprintf(out, "CanvasExpert-SE %s (SE = %s)\nrevision %s\nbuilt %s\nbuild_kind %s\n%s %s/%s\n", version, localui.SEExpansion(), revision, builtAt, buildKind, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		if install.InstallKind != "" {
+			fmt.Fprintf(out, "install_kind %s\nmanifest %s (engine %s)\n", install.InstallKind, install.ManifestIdentity, map[bool]string{true: "matches", false: "differs"}[install.EngineMatchesManifest != nil && *install.EngineMatchesManifest])
+		}
 		if info, ok := debug.ReadBuildInfo(); ok {
 			for _, dep := range info.Deps {
 				fmt.Fprintf(out, "dependency %s %s\n", dep.Path, dep.Version)

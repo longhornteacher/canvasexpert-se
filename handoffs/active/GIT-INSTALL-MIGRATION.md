@@ -64,7 +64,8 @@ Prepared 2026-10-21 against Dev branch `dev`, revision `415d1ef`; decisions reco
 
 - **Step 1, release tooling: built and verified locally** (2026-10-21): `scripts/package-userinstall.ps1`, `scripts/get-engine.cmd`, `scripts/userinstall.gitignore`, documented in `docs/releasing.md`. Verified against a throwaway repo on PowerShell 7 and 5.1: clone of the `userinstall` branch, stage and install of the Engine, a tampered hash refused (exit 3, live Engine untouched), a download failure (exit 5), install over an existing Engine, replacing a running `cse.exe`, a fast-forward pull, ZIP contents (tree plus engine, no teacher files), and first-run seeding of `context/` in both the clone (git stays clean) and the extracted ZIP. Not verified: a real GitHub download, a district PC, or the release (non-dev) compile path.
 - **Deviation from the plan above:** the manifest is `engine/manifest.txt` (`key=value`), not JSON, because `get-engine.cmd` has to parse it in batch.
-- **Open for step 2:** `package.ps1`'s own ZIP is still separate; retire it once this ZIP is accepted.
+- **Step 2, Engine changes: built** (2026-10-21): `internal/workspace/install_kind.go` (`InstallKind`, `ReadEngineManifest`, `IsSharedRulePathIn`, `ArtifactIdentity`); UserSync routing, bootstrap rewrites and the scaffold are git-aware in `rules_location.go` and the MCP file tools; `playbooks update/status/replace` report `managed_by: git` and change nothing; `cse version` and `engine_info` report `install_kind`, `manifest_identity` and `engine_matches_manifest`. Local Go tests only.
+- **Still open:** `package.ps1`'s own ZIP is still separate; retire it once this ZIP is accepted.
 
 ## Suggested order
 1. **Release tooling:** manifest, engine asset, flattened-branch generation, `get-engine.cmd`, ZIP built from the same tree. Verify locally against a throwaway bare repo.

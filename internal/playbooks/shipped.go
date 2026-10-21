@@ -34,7 +34,10 @@ type UpdateRow struct {
 }
 
 type UpdateReport struct {
-	Previous string      `json:"previous_shipped,omitempty"`
+	// ManagedBy is "git" when git delivers the playbooks; Update then changes nothing.
+	ManagedBy string `json:"managed_by,omitempty"`
+	Note      string `json:"note,omitempty"`
+	Previous  string      `json:"previous_shipped,omitempty"`
 	Current  string      `json:"current_shipped"`
 	Files    []UpdateRow `json:"files"`
 }
@@ -54,6 +57,9 @@ func SeedLabel() string {
 // Update adopts this Engine's seed without overriding teacher choices. Every
 // difference from the previous shipped copy counts as the teacher's choice.
 func Update(root string, now time.Time) (UpdateReport, error) {
+	if ManagedBy(root) == "git" {
+		return UpdateReport{ManagedBy: "git", Note: gitManagedNote}, nil
+	}
 	if err := workspace.RestoreSyncBootstrap(root); err != nil {
 		return UpdateReport{}, err
 	}

@@ -112,7 +112,7 @@ func (s *Server) rulesMetadata(relative string) (workspace.RulesLocation, string
 		return location, "", err
 	}
 	authority := location.InstallRoot
-	if workspace.IsSharedRulePath(filepath.ToSlash(strings.ReplaceAll(relative, "\\", "/"))) {
+	if workspace.IsSharedRulePathIn(s.root, filepath.ToSlash(strings.ReplaceAll(relative, "\\", "/"))) {
 		authority = location.RulesRoot
 	}
 	return location, authority, nil
@@ -129,7 +129,7 @@ func (s *Server) safePath(relative string) (string, error) {
 		}
 	}
 	path, err := workspace.ConstrainPath(s.root, relative)
-	if workspace.IsSharedRulePath(filepath.ToSlash(strings.ReplaceAll(relative, "\\", "/"))) {
+	if workspace.IsSharedRulePathIn(s.root, filepath.ToSlash(strings.ReplaceAll(relative, "\\", "/"))) {
 		path, err = workspace.ResolveTeacherPath(s.root, relative)
 	}
 	if err != nil {
@@ -139,7 +139,7 @@ func (s *Server) safePath(relative string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if workspace.IsSharedRulePath(filepath.ToSlash(strings.ReplaceAll(relative, "\\", "/"))) {
+	if workspace.IsSharedRulePathIn(s.root, filepath.ToSlash(strings.ReplaceAll(relative, "\\", "/"))) {
 		if location, locationErr := workspace.GetRulesLocation(s.root); locationErr == nil {
 			root, err = filepath.Abs(location.RulesRoot)
 			if err != nil {
@@ -320,8 +320,9 @@ func (s *Server) listWorkspaceFiles(in ListFilesInput) (TextOutput, error) {
 	syncMode := locationErr == nil && location.Mode == "sync"
 	listingError := ""
 	requestedRoot := strings.Trim(strings.ReplaceAll(in.Path, "\\", "/"), "/")
-	isPlaybooksRoot := strings.EqualFold(requestedRoot, "playbooks")
-	if in.Path != "" && locationErr != nil && (isPlaybooksRoot || workspace.IsSharedRulePath(requestedRoot)) {
+	// In a git install playbooks come from git on this PC, not from UserSync.
+	isPlaybooksRoot := strings.EqualFold(requestedRoot, "playbooks") && !workspace.IsGitInstall(s.root)
+	if in.Path != "" && locationErr != nil && (isPlaybooksRoot || workspace.IsSharedRulePathIn(s.root, requestedRoot)) {
 		return TextOutput{}, fmt.Errorf("teacher rules location unavailable: %w", locationErr)
 	}
 	addRulesDirectory := func(name string) error {
@@ -342,7 +343,7 @@ func (s *Server) listWorkspaceFiles(in ListFilesInput) (TextOutput, error) {
 			return TextOutput{}, err
 		}
 		for _, entry := range rootEntries {
-			if entry.IsDir() || syncMode && workspace.IsSharedRulePath(entry.Name()) {
+			if entry.IsDir() || syncMode && workspace.IsSharedRulePathIn(s.root, entry.Name()) {
 				continue
 			}
 			if _, err := s.readablePath(entry.Name()); err == nil {
@@ -352,7 +353,7 @@ func (s *Server) listWorkspaceFiles(in ListFilesInput) (TextOutput, error) {
 		if syncMode {
 			if entries, readErr := os.ReadDir(location.RulesRoot); readErr == nil {
 				for _, entry := range entries {
-					if entry.IsDir() || !workspace.IsSharedRulePath(entry.Name()) {
+					if entry.IsDir() || !workspace.IsSharedRulePathIn(s.root, entry.Name()) {
 						continue
 					}
 					if _, pathErr := s.readablePath(entry.Name()); pathErr == nil {
@@ -368,7 +369,7 @@ func (s *Server) listWorkspaceFiles(in ListFilesInput) (TextOutput, error) {
 			if pathErr == nil {
 				candidates = append(candidates, candidate{name, p})
 			}
-			if syncMode && (name == "context" || name == "playbooks") {
+			if syncMode && (name == "context" || name == "playbooks" && !workspace.IsGitInstall(s.root)) {
 				if err := addRulesDirectory(name); err != nil {
 					return TextOutput{}, err
 				}

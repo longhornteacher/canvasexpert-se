@@ -218,9 +218,10 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 			location, locErr := workspace.GetRulesLocation(s.root)
 			status := struct {
 				Location          workspace.RulesLocation `json:"location"`
+				ManagedBy         string                  `json:"managed_by,omitempty"`
 				AvailabilityError string                  `json:"availability_error,omitempty"`
 				Files             []playbooks.StatusRow   `json:"files"`
-			}{Location: location, Files: playbooks.Status(s.root)}
+			}{Location: location, ManagedBy: playbooks.ManagedBy(s.root), Files: playbooks.Status(s.root)}
 			if locErr != nil {
 				status.AvailabilityError = locErr.Error()
 			}
