@@ -13,6 +13,8 @@ import (
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/doctor"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/gitupdate"
+	"canvasexpertse/internal/hubcoord"
 	"canvasexpertse/internal/outlook"
 	"canvasexpertse/internal/playbooks"
 	"canvasexpertse/internal/workflow"
@@ -67,11 +69,12 @@ type ExternalResourcesInput struct {
 }
 
 type EngineInfoInput struct {
-	Operation      string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, or replace-playbook"`
+	Operation      string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, replace-playbook, update-status, update-stage, or update-apply"`
 	SyncRoot       string `json:"sync_root,omitempty" jsonschema:"Explicit teacher-rules directory for set-rules-location; empty selects local UserInstall mode"`
 	Path           string `json:"path,omitempty" jsonschema:"Seed-managed workspace-relative file for replace-playbook"`
 	ExpectedSHA256 string `json:"expected_sha256,omitempty" jsonschema:"Current hash from playbooks-status, or missing when explicitly adding an absent file"`
 	Offline        bool   `json:"offline,omitempty" jsonschema:"For doctor only: skip Canvas and local hub network checks; those results are not_verified"`
+	ArchiveEdits   bool   `json:"archive_edits,omitempty" jsonschema:"For update-apply only: after moving the teacher's edits into Teacher_Override.md, archive the edited shipped files under playbook-old/ and apply"`
 }
 
 func (s *Server) registerOperationTools(server *mcp.Server) {
@@ -168,7 +171,7 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		return s.command(ctx, "api", in.Path)
 	})
-	addActionTool(server, "engine_info", "Read Engine build/version; run doctor with bounded authenticated read-only Canvas and same-UserInstall hub checks (or offline:true to skip network checks); inspect/set teacher-rules authority; outlook-status reports whether classic Outlook can send parent updates (a boolean and reason, never an address); or compare and explicitly replace one seed-managed playbook. Doctor reports categorized results and never returns Canvas identity, credentials, or raw responses, and does not inspect client settings. playbooks-status returns active-rule paths and hashes; replace-playbook requires path plus expected_sha256 (current hash or missing). Replacement archives the prior file and never replaces context preferences. update-playbooks adopts this Engine's seed on install/update: it replaces only playbooks still identical to the previous shipped copy, keeps teacher-edited ones (reported kept, for agent reconciliation against shipped/<version>/), and never touches context/ or Teacher_Override.md.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
+	addActionTool(server, "engine_info", "Read Engine build/version; run doctor with bounded authenticated read-only Canvas and same-UserInstall hub checks (or offline:true to skip network checks); inspect/set teacher-rules authority; outlook-status reports whether classic Outlook can send parent updates (a boolean and reason, never an address); or compare and explicitly replace one seed-managed playbook. Doctor reports categorized results and never returns Canvas identity, credentials, or raw responses, and does not inspect client settings. playbooks-status returns active-rule paths and hashes; replace-playbook requires path plus expected_sha256 (current hash or missing). Replacement archives the prior file and never replaces context preferences. update-playbooks adopts this Engine's seed on install/update: it replaces only playbooks still identical to the previous shipped copy, keeps teacher-edited ones (reported kept, for agent reconciliation against shipped/<version>/), and never touches context/ or Teacher_Override.md. In a git install, update-stage checks at most once a day and downloads a newer verified Engine without changing anything live; update-status reports a waiting update; update-apply installs it, holding while a review, setup or students page is open or shipped files have local edits.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
 		op := in.Operation
 		if op == "" {
 			op = "version"
@@ -237,6 +240,24 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 			}
 			return TextOutput{Text: in.Path + " replaced with this Engine's seed; previous copy archived under playbook-old."}, nil
 		}
+		if op == "update-status" || op == "update-stage" || op == "update-apply" {
+			u := gitupdate.New(s.root, hubcoord.OpenPages)
+			var report gitupdate.Report
+			var err error
+			switch op {
+			case "update-status":
+				report, err = u.Status()
+			case "update-stage":
+				report, err = u.Stage(true)
+			default:
+				report, err = u.Apply(in.ArchiveEdits)
+			}
+			if err != nil {
+				return TextOutput{}, err
+			}
+			b, err := json.Marshal(report)
+			return TextOutput{Text: string(b)}, err
+		}
 		if op == "update-playbooks" {
 			report, err := playbooks.Update(s.root, time.Now())
 			if err != nil {
@@ -246,7 +267,7 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 			return TextOutput{Text: string(b)}, err
 		}
 		if op != "version" && op != "doctor" && op != "link" {
-			return TextOutput{}, errors.New("operation must be version, doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, or replace-playbook")
+			return TextOutput{}, errors.New("operation must be version, doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, replace-playbook, update-status, update-stage, or update-apply")
 		}
 		result, err := s.command(ctx, op)
 		if op == "version" {

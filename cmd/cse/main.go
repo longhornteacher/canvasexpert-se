@@ -19,6 +19,8 @@ import (
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/doctor"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/gitupdate"
+	"canvasexpertse/internal/hubcoord"
 	"canvasexpertse/internal/installation"
 	"canvasexpertse/internal/installlog"
 	"canvasexpertse/internal/localui"
@@ -44,6 +46,8 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   link                          Record this program's location for workspace cse.cmd
   rules-location                Show teacher-rules authority; use --sync PATH or --local to set it
   playbooks status              Compare active teacher rules with this Engine's seed
+  update status|stage [--if-due]|apply [--archive-edits]
+                                Git install: check, stage (no live change) or apply an update
   playbooks replace PATH --expected-sha256 HASH
                                 Explicitly archive and replace one seed-managed file (HASH may be 'missing')
   setup                         Connect Canvas privately on this machine
@@ -206,6 +210,33 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return 0
 		}
 		return fail(inputError(fmt.Errorf("use playbooks status, playbooks update, or playbooks replace PATH --expected-sha256 HASH")), progress)
+	}
+	if cmd == "update" {
+		root, e := runtimeRoot(*rootOpt)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		u := gitupdate.New(root, hubcoord.OpenPages)
+		var report gitupdate.Report
+		switch {
+		case len(args) == 1 && args[0] == "status":
+			report, e = u.Status()
+		case len(args) >= 1 && args[0] == "stage" && (len(args) == 1 || len(args) == 2 && args[1] == "--if-due"):
+			report, e = u.Stage(len(args) == 2)
+		case len(args) >= 1 && args[0] == "apply" && (len(args) == 1 || len(args) == 2 && args[1] == "--archive-edits"):
+			report, e = u.Apply(len(args) == 2)
+		default:
+			return fail(inputError(fmt.Errorf("use update status, update stage [--if-due], or update apply [--archive-edits]")), progress)
+		}
+		if e != nil {
+			return fail(e, progress)
+		}
+		b, e := json.MarshalIndent(report, "", "  ")
+		if e != nil {
+			return fail(e, progress)
+		}
+		fmt.Fprintln(out, string(b))
+		return 0
 	}
 	if cmd == "rules-location" {
 		root, e := runtimeRoot(*rootOpt)

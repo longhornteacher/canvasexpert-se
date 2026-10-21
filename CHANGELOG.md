@@ -8,6 +8,10 @@ The Groups update, published as the latest release for all users. It carries eve
 
 ## Development notes
 
+### Engine-run updates for git installs (2026-10-21)
+
+- `cse update status|stage [--if-due]|apply [--archive-edits]` (MCP `engine_info` `update-status`, `update-stage`, `update-apply`) replaces the git and batch steps the install playbook asked the agent to run. Staging checks at most once a day and verifies the new Engine without live change. Applying holds while a review, setup or students page is open (pages now record themselves under `.cse/open-pages/` while they answer) or while shipped files carry local edits, archives those edits after the agent moves the teacher's choices into `Teacher_Override.md`, fast-forwards only, installs the Engine and checks its checksum. Local tests with real git repositories, a throwaway two-release trial with the real `get-engine.cmd`, and a GitHub clone check; no agent has run it for a teacher yet.
+
 ### Lighter packets for the agent (2026-10-21)
 
 - Pulls no longer write assignment directions HTML twice into each packet or repeat each submission's HTML beside its readable text. Packets carry readable directions in the body (`directions_html` names the original HTML file) and student files carry `readable_text` with `body_html_path`; group pulls do the same for shared artifacts. Readable text now keeps code indentation inside ``` fences, link addresses, table cells and `[image: alt]` markers. On this PC's 441 existing pulled files the new layout is 67% smaller for packets and 22% for student files. Grading-basis checks never used the directions HTML; older packets and student files still read as before. Local tests only.
