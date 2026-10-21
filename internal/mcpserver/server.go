@@ -340,6 +340,12 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addActionTool(server, "write_draft", "Create or update a draft under courses/. Existing files require their current SHA-256 to prevent overwriting newer unsent work. This tool never writes to Canvas.", true, func(_ context.Context, _ *mcp.CallToolRequest, in WriteFileInput) (TextOutput, error) {
 		return s.writeDraft(in)
 	})
+	addActionTool(server, "init_results", "Start a results file for a pulled individual packet under its assignment's scoring/ folder: the packet path, each student's exact current attempt, the operation the assignment allows and any discussion-evidence digest, with an earlier results file's interpretation and scoring_basis reused. Interpretation, components and feedback are left blank and fail validation until filled. Never writes to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
+		if _, err := s.coursePath(in.Path); err != nil {
+			return TextOutput{}, err
+		}
+		return s.command(ctx, "results-init", in.Path)
+	})
 	addReadTool(server, "validate_document", "Validate a CE-SE workspace document without writing to Canvas.", func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
 		if _, err := s.coursePath(in.Path); err != nil {
 			return TextOutput{}, err

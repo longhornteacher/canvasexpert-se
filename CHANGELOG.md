@@ -8,6 +8,10 @@ The Groups update, published as the latest release for all users. It carries eve
 
 ## Development notes
 
+### Results files start from the packet (2026-10-21)
+
+- `cse results-init PACKET` (MCP `init_results`) writes `scoring/results-<YYYYMMDD>-<HHMM>.md` beside the assignment with the packet path, each student's exact current attempt, the operation the assignment allows (grade, or comment-only for a New Quiz) and any discussion-evidence digest, with short flags for excused, late, unreadable-file and partial-discussion students. It reuses an earlier results file's interpretation and scoring basis for the same assignment, so a scoring basis stays consistent across sessions and sections. Interpretation, components and feedback stay blank and fail validation until the agent fills them; it never overwrites an existing results file. Local tests only.
+
 ### Engine-run updates for git installs (2026-10-21)
 
 - `cse update status|stage [--if-due]|apply [--archive-edits]` (MCP `engine_info` `update-status`, `update-stage`, `update-apply`) replaces the git and batch steps the install playbook asked the agent to run. Staging checks at most once a day and verifies the new Engine without live change. Applying holds while a review, setup or students page is open (pages now record themselves under `.cse/open-pages/` while they answer) or while shipped files carry local edits, archives those edits after the agent moves the teacher's choices into `Teacher_Override.md`, fast-forwards only, installs the Engine and checks its checksum. Local tests with real git repositories, a throwaway two-release trial with the real `get-engine.cmd`, and a GitHub clone check; no agent has run it for a teacher yet.

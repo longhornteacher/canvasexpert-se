@@ -81,6 +81,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   quiz-points COURSE QUIZ [N=PTS ...] List a New Quiz's questions, or set question N to PTS points
   api PATH                      Read-only Canvas API GET when no command fits; prints the JSON
   validate FILE                 Validate a workspace document locally
+  results-init PACKET           Start a results file for a pulled packet (attempts and evidence filled in)
   doctor [--json] [--offline]   Check this UserInstall; authenticated Canvas and hub checks unless offline
   version [--json]              Print version and build information
   review FILE [COURSE]  Open a local page where the teacher reviews scores (results file), a new assignment (create document) or a quiz (QuizForge file plus COURSE), revises some, and posts or creates the approved ones; exits when finished and prints what was posted, revised and held
@@ -488,7 +489,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -501,6 +502,17 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return fail(inputError(fmt.Errorf("students takes no arguments")), progress)
 		}
 		return fail(localui.Students(ctx, root, progress), progress)
+	}
+	if cmd == "results-init" {
+		if len(args) != 1 {
+			return fail(inputError(fmt.Errorf("results-init requires one packet path")), progress)
+		}
+		rel, e := workflow.InitResults(root, args[0], time.Now())
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		fmt.Fprintf(out, "Results scaffold: %s\nFill interpretation, each student's components and feedback, then validate.\n", rel)
+		return 0
 	}
 	if cmd == "validate" {
 		if len(args) != 1 {
