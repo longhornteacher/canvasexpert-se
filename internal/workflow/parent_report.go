@@ -68,6 +68,8 @@ type ParentReportCourse struct {
 	DueSoon           []ParentReportItem  `json:"due_soon,omitempty"`
 	History           []ParentHistoryItem `json:"history,omitempty"`
 	WorkDue           []ParentWorkDueItem `json:"work_due"`
+	// correctionDays is the configured window; zero means the default.
+	correctionDays int
 }
 
 // ParentWorkDueItem is one required assignment whose effective due date is in
@@ -143,7 +145,7 @@ func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []s
 	if e != nil {
 		return "", ParentReportPacket{}, fmt.Errorf("school calendar: %w; correct context/school-calendar.md before creating a parent report", e)
 	}
-	scope, recentStart, dueSoonEnd, e := makeParentReportScope(calendar, period, now)
+	scope, recentStart, dueSoonEnd, e := makeParentReportScopeDays(calendar, period, now, config.CorrectionDays)
 	if e != nil {
 		return "", ParentReportPacket{}, e
 	}
@@ -156,7 +158,7 @@ func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []s
 		return "", ParentReportPacket{}, e
 	}
 	runID := now.UTC().Format("20060102T150405Z")
-	packet := ParentReportPacket{Schema: 1, Kind: "parent-report", RunID: runID, CorrectionDays: correctionWindowDays, DueSoonDays: dueSoonDays, Scope: scope}
+	packet := ParentReportPacket{Schema: 1, Kind: "parent-report", RunID: runID, CorrectionDays: config.CorrectionDays, DueSoonDays: dueSoonDays, Scope: scope}
 	byRef := map[string]*ParentReportStudent{}
 	matched := map[string]bool{}
 	for _, nickname := range nicknames {
@@ -252,6 +254,7 @@ func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []s
 			for _, note := range incomplete {
 				rc.Flags = append(rc.Flags, note)
 			}
+			rc.correctionDays = config.CorrectionDays
 			buildStudentReportScoped(&rc, studentSubs, versions[id], byAssignment, now, loc, recentStart, dueSoonEnd)
 			rs := byRef[en.st.Ref]
 			if rs == nil {
@@ -295,6 +298,17 @@ func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []s
 }
 
 func makeParentReportScope(calendar workspace.SchoolCalendar, period workspace.GradingPeriod, asOf time.Time) (*ParentReportScope, time.Time, time.Time, error) {
+	return makeParentReportScopeDays(calendar, period, asOf, correctionWindowDays)
+}
+
+func daysOrDefault(days int) int {
+	if days <= 0 {
+		return correctionWindowDays
+	}
+	return days
+}
+
+func makeParentReportScopeDays(calendar workspace.SchoolCalendar, period workspace.GradingPeriod, asOf time.Time, days int) (*ParentReportScope, time.Time, time.Time, error) {
 	loc, err := time.LoadLocation(calendar.Timezone)
 	if err != nil {
 		return nil, time.Time{}, time.Time{}, fmt.Errorf("school calendar timezone %q is invalid; correct context/school-calendar.md", calendar.Timezone)
@@ -307,7 +321,7 @@ func makeParentReportScope(calendar workspace.SchoolCalendar, period workspace.G
 	if err != nil {
 		return nil, time.Time{}, time.Time{}, fmt.Errorf("school calendar period end date is invalid; correct context/school-calendar.md")
 	}
-	recentStart := asOf.In(loc).AddDate(0, 0, -correctionWindowDays)
+	recentStart := asOf.In(loc).AddDate(0, 0, -daysOrDefault(days))
 	if periodStart.After(recentStart) {
 		recentStart = periodStart
 	}
@@ -512,11 +526,15 @@ func containsStudent(ids []int64, id int64) bool {
 	return false
 }
 
-// correctionDeadline is 11:59:59 pm, course time, on the 14th calendar day
-// after the due date's local calendar day.
+// correctionDeadline is 11:59:59 pm, course time, on the 14th (configurable)
+// calendar day after the due date's local calendar day.
 func correctionDeadline(due time.Time, loc *time.Location) time.Time {
+	return correctionDeadlineDays(due, loc, correctionWindowDays)
+}
+
+func correctionDeadlineDays(due time.Time, loc *time.Location, days int) time.Time {
 	d := due.In(loc)
-	return time.Date(d.Year(), d.Month(), d.Day()+correctionWindowDays, 23, 59, 59, 0, loc)
+	return time.Date(d.Year(), d.Month(), d.Day()+daysOrDefault(days), 23, 59, 59, 0, loc)
 }
 
 func isOnline(a Assignment) bool {
@@ -618,7 +636,7 @@ func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, version
 			rs.WorkDue = append(rs.WorkDue, row)
 		}
 		if inWindow && item.Basis == "" && a.GradingType != "not_graded" && !gradeNotReleased {
-			c := ParentCorrection{ParentReportItem: item, CorrectionDeadline: correctionDeadline(*due, loc).Format(time.RFC3339)}
+			c := ParentCorrection{ParentReportItem: item, CorrectionDeadline: correctionDeadlineDays(*due, loc, rs.correctionDays).Format(time.RFC3339)}
 			for _, cm := range sub.Comments {
 				if feedbackWithheld || cm.AuthorID == sub.UserID || strings.TrimSpace(cm.Comment) == "" {
 					continue

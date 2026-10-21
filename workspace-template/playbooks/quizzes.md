@@ -33,7 +33,7 @@ Run `validate_quiz` on the saved draft before review; it checks item shape and s
 
 Run `.\cse.cmd review <quiz-file> <course>`; when the teacher clicks Create, the Engine pushes the quiz. With review skipped, run `.\cse.cmd push-quiz <course> <quiz-file>`. The quiz stays unpublished unless `metadata.canvas.published` is true.
 
-The Engine records the quiz ID in `<quiz-file>.cse.json`. If it reports `partial`, fix the named problem and rerun the same file; it adds only the missing items. If it refuses because a quiz with that title exists, ask the teacher whether it is an unfinished earlier push (resume it) or a different quiz (rename this one). For a club-restricted quiz, a refused or uncertain audience leaves the quiz unpublished; report that plainly and resume the same file, which repeats only unfinished steps.
+The Engine records the quiz ID in `<quiz-file>.cse.json`. If it reports `partial`, fix the named problem and rerun the same file; it adds only the missing items. If it refuses because a quiz with that title exists, ask the teacher whether it is an unfinished earlier push or a different quiz. For a different quiz, rename this one; for an unfinished push, the teacher renames or deletes the old one in Canvas before you push again. For a club-restricted quiz, a refused or uncertain audience leaves the quiz unpublished; report that plainly and resume the same file, which repeats only unfinished steps.
 
 ## Change question points
 

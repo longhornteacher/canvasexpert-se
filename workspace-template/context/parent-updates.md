@@ -11,6 +11,8 @@ bobcat_hour_text: ""
 sign_off: ""
 # Every included Canvas course score at or above this, with no resolved Missing/0 items, means no email is needed.
 skip_score: 90
+# Report window and correction deadline, in calendar days after the due date (1 to 60).
+correction_days: 14
 ---
 
 Parent update preferences. The Engine reads the settings above when it prepares a report and renders an email; the notes below are for the agent.
@@ -23,6 +25,6 @@ Standing parent-update rules:
 - A current recorded zero belongs first under Missing/0, including graded or submitted work. Only work due inside the report window is listed. A zero does not prove work was never submitted; an earlier zero raised to a positive grade is history only.
 - Do not repeat Missing/0 items under Corrections. Keep their grade-history entries.
 - Use the Engine's resolved `missing` list and `skip_eligible`. Apply the skip rule after classification: skip only when every included course meets `skip_score` (90 by default) and no Missing/0 items remain. Other incomplete-data or contact problems still need their own resolution.
-- Reports include required work whose student-effective due date falls from the later of the current grading period's start or 14 calendar days before `as_of`, through `as_of`. The Engine selects the period from `context/school-calendar.md`; retain all grading periods when updating that calendar.
+- Reports include required work whose student-effective due date falls from the later of the current grading period's start or `correction_days` (14 by default) calendar days before `as_of`, through `as_of`. The Engine selects the period from `context/school-calendar.md`; retain all grading periods when updating that calendar.
 - If `work_due` is empty, do not use a low current course score or Due Soon alone to create an email. Skip with the reason “No required work was due in this report window.” unless incomplete evidence requires a flag.
 - The Engine renders every saved `work_due` row in email and printable reports. Keep that complete inventory even when selecting Missing/0, correction or history references for agent notes.

@@ -56,3 +56,13 @@ func TestFillResultsAssignmentFromPacket(t *testing.T) {
 		t.Fatalf("drift accepted: %v", err)
 	}
 }
+
+func TestGradedDiscussionExampleValidates(t *testing.T) {
+	var doc domain.ResultsDocument
+	if _, err := workspace.ReadDocument(filepath.Join("..", "..", "engine-docs", "examples", "synthetic-graded-discussion-results.md"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Assignment.DiscussionTopicID == nil || doc.Students[0].Grade.Evidence == nil {
+		t.Fatal("example lacks the discussion topic or evidence")
+	}
+}
