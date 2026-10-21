@@ -134,25 +134,23 @@ If git or github.com is blocked on this computer, or `get-engine.cmd` fails with
 
 ### Updates: stage quietly, apply with the teacher's yes
 
-Run `.\cse.cmd version --json` first. When `install_kind` is `git`, playbooks, `AGENTS.md` and `CLAUDE.md` come from git, and `.\cse.cmd playbooks update` changes nothing (it reports `managed_by: git`). The Engine and the playbooks are released together, so an update moves both. Teachers will not ask for updates, so this runs without being asked and in two parts.
+Run `.\cse.cmd version --json` first. When `install_kind` is `git`, playbooks, `AGENTS.md` and `CLAUDE.md` come from git, and `.\cse.cmd playbooks update` changes nothing (it reports `managed_by: git`). The Engine and the playbooks are released together, so an update moves both. Teachers will not ask for updates, so this runs without being asked and in two parts. The Engine does the mechanics; you decide when to ask.
 
-**Stage** (silent; at the start of a session, at most once a day, recorded by the date in `engine\last-update-check.txt`). It changes no live file.
-1. `git fetch origin userinstall`. If the fetch fails or is blocked, stop quietly and try again the next day; never interrupt the teacher's work.
-2. If `git rev-parse HEAD` equals `git rev-parse origin/userinstall`, there is nothing to do.
-3. Otherwise save `git show origin/userinstall:engine/manifest.txt` to `engine\staged\manifest.txt` and run `.\get-engine.cmd --stage --manifest engine\staged\manifest.txt`. This downloads and verifies the new Engine into `engine\staged\` but changes nothing live. A failure is not shown to the teacher; retry the next day.
+**Stage** (silent, at the start of a session): `engine_info` operation `update-stage` (CLI: `.\cse.cmd update stage --if-due`). It checks at most once a day, and when a newer release exists it downloads and verifies the new Engine into `engine\staged\` without changing any live file. `state` is `current`, `skipped` (already checked today), `pending` or `staged`. If it fails or GitHub is blocked, say nothing and let the next day's check retry; never interrupt the teacher's work. `update-status` (CLI: `.\cse.cmd update status`) reports a waiting update without contacting GitHub.
 
-An update is **pending** whenever `HEAD` differs from `origin/userinstall`.
-
-**Apply** (changes live files). Do not apply while an unsent review, unsent work, or a review page is open; wait for the next opening.
-- **At the end of the teacher's work**, when an update is pending: "Can I install the latest CanvasExpert? It takes a moment." On yes, apply now.
+**Apply** (changes live files) when `update-status` reports `pending` or `staged`:
+- **At the end of the teacher's work**: "Can I install the latest CanvasExpert? It takes a moment." On yes, apply now.
 - **Otherwise at the start of the next session**, apply it before any work and say so in one line: "I installed the latest CanvasExpert update."
 
-Apply steps:
-1. If tracked files are changed (`git status --porcelain --untracked-files=no` is not empty), they are leftover edits to shipped files. For each: understand what the teacher wanted, add that as a clearly worded line in `Teacher_Override.md`, copy the old file to `playbook-old/<date>/<path>`, then `git checkout -- <path>`. Do this quietly; tell the teacher only what changed for them.
-2. `git merge --ff-only origin/userinstall`. If it refuses, stop, change nothing else and tell the teacher you need help with this update. Never force it.
-3. `.\get-engine.cmd`. It uses the staged, already verified Engine when the manifest matches, and downloads otherwise. If it exits 6, ask the teacher to close the apps using CanvasExpert and run it again.
-4. `.\cse.cmd version --json` should show `engine_matches_manifest: true`. Apps that were running keep the old Engine until they restart: say, when it is a good time, "Close and reopen Claude (or ChatGPT) when you're between tasks so it picks up the update." Never ask during an active review.
-5. Report in plain words, with no merge questions: "You're on the newest CanvasExpert; your settings and choices are unchanged." Mention a new teaching option only when it is worth their attention, in a sentence.
+Run `engine_info` operation `update-apply` (CLI: `.\cse.cmd update apply`). Read its `state`:
+- `applied`: report in plain words, with no merge questions: "You're on the newest CanvasExpert; your settings and choices are unchanged." Mention a new teaching option only when it is worth their attention, in a sentence. Apps that were running keep the old Engine until they restart: when it is a good time, say "Close and reopen Claude (or ChatGPT) when you're between tasks so it picks up the update." Never ask during an active review.
+- `held` because a review, setup or students page is open: leave it; try again when the teacher is done or at the next session.
+- `held` with `edited` files: these are leftover edits to shipped files. For each, understand what the teacher wanted and add it as a clearly worded line in `Teacher_Override.md`, then run `update-apply` with `archive_edits: true` (CLI: `update apply --archive-edits`). The Engine copies the old files to `playbook-old/` and applies. Do this quietly; tell the teacher only what changed for them.
+- `held` because it could not fast-forward: change nothing else and tell the teacher you need help with this update. Never force it.
+- `repaired`: the Engine had drifted from this release and was reinstalled; nothing to tell the teacher.
+- An error naming `get-engine.cmd`: the playbooks may already be updated; ask the teacher to close the apps using CanvasExpert, then run `.\get-engine.cmd` and check `engine_matches_manifest: true` in `.\cse.cmd version --json`.
+
+Unsent drafts and results under `courses/` are never touched by an update.
 
 The teacher's own choices live in `Teacher_Override.md`, `context/` and the other root guides they wrote, which git never touches. Do not edit `playbooks/`, `AGENTS.md`, `CLAUDE.md` or `TEACHER.md` in a git install; save a standing preference in `Teacher_Override.md` instead.
 
