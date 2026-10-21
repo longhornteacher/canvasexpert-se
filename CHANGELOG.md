@@ -2,11 +2,15 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
+## 1.1.0-beta.2 (2026-10-21)
+
+The Groups update, published as the latest release for all users. It carries every development note below since 1.0: book-club group work, Family Contact emails, current-period parent reports, school-calendar late timing, targeted scoring sessions, and installation and quiet updates by git (the `userinstall` branch with `get-engine.cmd`), with the Windows ZIP kept as the fallback.
+
 ## Development notes
 
 ### 1.1 beta 2 version and live session evidence (2026-10-21)
 
-- `VERSION` is `1.1.0-beta.2`; nothing is tagged or released. The `userinstall` branch ignores `install-log.jsonl`. The Capabilities page records the 2026-10-21 Haiku scoring session: New Quiz comment-only students were not pulled again, and one graded-discussion entry was scored and posted. Before/after counts, resubmission and group-assignment session checks remain pending.
+- `VERSION` is `1.1.0-beta.2`. The `userinstall` branch ignores `install-log.jsonl`. The Capabilities page records the 2026-10-21 Haiku scoring session: New Quiz comment-only students were not pulled again, and one graded-discussion entry was scored and posted. Before/after counts, resubmission and group-assignment session checks remain pending.
 
 ### Targeted scoring sessions (2026-10-21)
 
