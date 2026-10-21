@@ -3,8 +3,6 @@ package render
 
 import (
 	"fmt"
-	"html"
-	"regexp"
 	"strings"
 
 	"canvasexpertse/internal/domain"
@@ -114,44 +112,6 @@ func contains(items []string, value string) bool {
 		}
 	}
 	return false
-}
-
-var blockTag = regexp.MustCompile(`(?i)^/?(p|div|section|article|li|ul|ol|h[1-6]|blockquote|pre|br|tr|td|th)(\s|/|$)`)
-
-// HTMLText extracts readable text from Canvas HTML without interpreting it.
-// Block elements become line breaks and entities are decoded.
-func HTMLText(source string) string {
-	var out strings.Builder
-	inTag := false
-	var tag strings.Builder
-	for _, r := range source {
-		if !inTag && r == '<' {
-			inTag = true
-			tag.Reset()
-			continue
-		}
-		if inTag {
-			if r == '>' {
-				if blockTag.MatchString(strings.TrimSpace(tag.String())) {
-					out.WriteRune('\n')
-				}
-				inTag = false
-			} else {
-				tag.WriteRune(r)
-			}
-			continue
-		}
-		out.WriteRune(r)
-	}
-	lines := strings.Split(html.UnescapeString(out.String()), "\n")
-	clean := make([]string, 0, len(lines))
-	for _, line := range lines {
-		line = strings.Join(strings.Fields(line), " ")
-		if line != "" {
-			clean = append(clean, line)
-		}
-	}
-	return strings.Join(clean, "\n")
 }
 
 // shortNumber prints a points value the way a teacher writes it: Canvas returns

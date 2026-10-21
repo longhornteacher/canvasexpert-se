@@ -13,7 +13,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-
 	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/render"
@@ -496,6 +495,13 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				privateNotes, warnings := workspace.NotesFor(notes, course.Nickname, st, courseRoster)
 				doc.Notes = privateNotes
 				report.Warnings = append(report.Warnings, warnings...)
+				bodies := []*domain.AttemptWork{&doc.Current}
+				for p := range doc.Prior {
+					bodies = append(bodies, &doc.Prior[p])
+				}
+				if e = s.moveAttemptHTML(relDir, st.Ref, bodies...); e != nil {
+					return report, e
+				}
 				file, e := workspace.ConstrainPath(s.Root, filepath.Join(relDir, "students", st.Ref+".md"))
 				if e != nil {
 					return report, e
@@ -515,7 +521,11 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			if e != nil {
 				return report, e
 			}
-			if e = workspace.WriteDocument(file, packet, a.Description); e != nil {
+			var directions string
+			if packet.DirectionsHTML, directions, e = s.packetDirections(relDir, &packet.Assignment); e != nil {
+				return report, e
+			}
+			if e = workspace.WriteDocument(file, packet, directions); e != nil {
 				return report, e
 			}
 			report.Packets = append(report.Packets, file)
@@ -627,6 +637,7 @@ func attemptRef(sub Submission) domain.AttemptRef {
 	}
 	return ref
 }
+
 // priorAttempts returns each earlier genuine attempt in the submission history once.
 func priorAttempts(sub Submission) []Submission {
 	var out []Submission

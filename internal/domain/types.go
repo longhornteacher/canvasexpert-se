@@ -185,6 +185,10 @@ type PacketDocument struct {
 	Course     string             `yaml:"course"`
 	Assignment AssignmentSnapshot `yaml:"assignment"`
 	Students   []string           `yaml:"students"`
+	// DirectionsHTML is the workspace-relative file holding the assignment's
+	// directions HTML. New packets keep readable directions in the document
+	// body and leave assignment.description_html empty.
+	DirectionsHTML string `yaml:"directions_html,omitempty"`
 	// DirectionImages are Canvas images embedded in the assignment directions,
 	// downloaded beside the packet so reference images can be read.
 	DirectionImages []Attachment `yaml:"direction_images,omitempty"`
@@ -212,7 +216,8 @@ type AttemptWork struct {
 	SubmissionType   string            `yaml:"submission_type,omitempty"`
 	URL              string            `yaml:"url,omitempty"`
 	Note             string            `yaml:"note,omitempty"`
-	BodyHTML         string            `yaml:"body_html,omitempty"`
+	BodyHTML         string            `yaml:"body_html,omitempty"` // older pulls only
+	BodyHTMLPath     string            `yaml:"body_html_path,omitempty"`
 	ReadableText     string            `yaml:"readable_text,omitempty"`
 	WrittenResponses []WrittenResponse `yaml:"written_responses,omitempty"`
 	WrittenFiles     []WrittenFile     `yaml:"written_files,omitempty"`

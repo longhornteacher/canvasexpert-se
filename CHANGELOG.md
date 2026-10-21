@@ -8,6 +8,10 @@ The Groups update, published as the latest release for all users. It carries eve
 
 ## Development notes
 
+### Lighter packets for the agent (2026-10-21)
+
+- Pulls no longer write assignment directions HTML twice into each packet or repeat each submission's HTML beside its readable text. Packets carry readable directions in the body (`directions_html` names the original HTML file) and student files carry `readable_text` with `body_html_path`; group pulls do the same for shared artifacts. Readable text now keeps code indentation inside ``` fences, link addresses, table cells and `[image: alt]` markers. On this PC's 441 existing pulled files the new layout is 67% smaller for packets and 22% for student files. Grading-basis checks never used the directions HTML; older packets and student files still read as before. Local tests only.
+
 ### 1.1 beta 2 version and live session evidence (2026-10-21)
 
 - `VERSION` is `1.1.0-beta.2`. The `userinstall` branch ignores `install-log.jsonl`. The Capabilities page records the 2026-10-21 Haiku scoring session: New Quiz comment-only students were not pulled again, and one graded-discussion entry was scored and posted. Before/after counts, resubmission and group-assignment session checks remain pending.

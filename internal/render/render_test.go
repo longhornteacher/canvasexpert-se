@@ -80,8 +80,23 @@ func TestMarkdownHTMLSafeSubsetAndHTMLText(t *testing.T) {
 	if got != want {
 		t.Fatalf("got %s, want %s", got, want)
 	}
-	if text := HTMLText(`<p>Use &amp; compare</p><ul><li>One</li><li>Two</li></ul>`); text != "Use & compare\nOne\nTwo" {
+	if text := HTMLText(`<p>Use &amp; compare</p><ul><li>One</li><li>Two</li></ul>`); text != "Use & compare\n- One\n- Two" {
 		t.Fatalf("unexpected HTML text %q", text)
+	}
+}
+
+func TestHTMLTextKeepsCodeLinksAndImages(t *testing.T) {
+	source := `<p>See <a href="https://example.test/guide">the guide</a> and <a href="https://example.test/x">https://example.test/x</a>.</p>` +
+		`<pre><code>def f(x):
+    if x &lt; 2:
+        return 1</code></pre>` +
+		`<p><img src="/files/9/preview" alt="Reference code"><img src="/files/10/preview"></p>` +
+		`<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table><script>alert(1)</script><p>End<br>line</p>`
+	want := "See the guide (https://example.test/guide) and https://example.test/x.\n" +
+		"```\ndef f(x):\n    if x < 2:\n        return 1\n```\n" +
+		"[image: Reference code] [image]\nA | B\n1 | 2\nEnd\nline"
+	if got := HTMLText(source); got != want {
+		t.Fatalf("got %q\nwant %q", got, want)
 	}
 }
 

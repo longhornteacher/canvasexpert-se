@@ -568,7 +568,7 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 			if e != nil {
 				return nil, 0, nil, e
 			}
-			entry.BodyHTML = artifact.BodyHTML
+			entry.BodyHTMLPath = artifact.BodyHTMLPath
 			entry.ReadableText = artifact.ReadableText
 			entry.Attachments = artifact.Attachments
 			_ = key
@@ -588,7 +588,7 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 				if artifactErr != nil {
 					return nil, 0, nil, artifactErr
 				}
-				old.BodyHTML, old.ReadableText, old.Attachments = artifact.BodyHTML, artifact.ReadableText, artifact.Attachments
+				old.BodyHTMLPath, old.ReadableText, old.Attachments = artifact.BodyHTMLPath, artifact.ReadableText, artifact.Attachments
 			}
 			entry.Prior = append(entry.Prior, old)
 		}
@@ -602,7 +602,11 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 	if err != nil {
 		return nil, 0, nil, err
 	}
-	if err = workspace.WriteDocument(packetPath, &packet, a.Description); err != nil {
+	var directions string
+	if packet.DirectionsHTML, directions, err = s.packetDirections(relDir, &packet.Assignment); err != nil {
+		return nil, 0, nil, err
+	}
+	if err = workspace.WriteDocument(packetPath, &packet, directions); err != nil {
 		return nil, 0, nil, err
 	}
 	return []string{packetPath}, memberCount, skipped, nil
@@ -718,7 +722,12 @@ func submissionFingerprint(sub Submission) string {
 func (s *Service) groupArtifact(ctx context.Context, sub Submission, studentRef string, groupID int64, relDir string, cache map[int64]domain.Attachment) (string, domain.GroupArtifact, error) {
 	fingerprint := submissionFingerprint(sub)
 	key := "artifact-" + fingerprint[:16]
-	artifact := domain.GroupArtifact{Key: key, Fingerprint: fingerprint, SubmissionType: sub.Type, URL: sub.URL, BodyHTML: sub.Body, ReadableText: render.HTMLText(sub.Body)}
+	artifact := domain.GroupArtifact{Key: key, Fingerprint: fingerprint, SubmissionType: sub.Type, URL: sub.URL, ReadableText: render.HTMLText(sub.Body)}
+	bodyPath, err := s.writeHTMLSidecar(filepath.Join(relDir, "artifacts", key+".html"), sub.Body)
+	if err != nil {
+		return "", domain.GroupArtifact{}, err
+	}
+	artifact.BodyHTMLPath = bodyPath
 	if sub.Type == "online_url" {
 		artifact.Note = "Student submitted a web address; the Engine does not open it."
 	}
