@@ -44,6 +44,10 @@ Team teaching: teammates' Canvas keys on one team PC.
 
 - New Quiz student feedback is now formatted by the Engine: every auto-scored item must have a rationale (MC/MA for every choice, correct and distractor; TF, NUMERICAL, FITB, MATCHING, ORDERING and CATEGORIZATION a `rationale`), so those items need an `id`, and validation refuses a quiz without them. The Engine renders correct MC choices green ("Why this is the best answer:") and distractors red ("Why this isn't the best answer:"), MA with "Why this choice is correct / isn't correct:", other items as green "Why this is correct:", and keeps an MC/MA general rationale uncolored; authored wrappers, styles, color tags and an earlier "Why this ...:" label are stripped so authors write plain text. Local tests only; rendering in the quiz player not yet viewed.
 
+### Quizzes tell students their feedback is there (2026-10-22)
+
+- The quizzes playbook has the agent end each quiz's instructions with one plain line saying every question explains why the correct answer is best and why the others aren't, followed by the teacher's corrections offer only when `Teacher_Override.md` sets one. Playbook only.
+
 ## 1.1.0-beta.4 (2026-10-21)
 
 Review pages stay open when the agent app restarts, and CI fixes.
