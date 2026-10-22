@@ -40,7 +40,7 @@ func (c *tagCanvas) handler(t *testing.T) http.HandlerFunc {
 		p := r.URL.Path
 		switch {
 		case p == "/api/v1/courses/1/group_categories":
-			write([]map[string]any{{"id": 5316, "name": "Book Club", "course_id": 1, "context_type": "Course", "non_collaborative": true}})
+			write([]map[string]any{{"id": 5316, "name": "Book Club", "course_id": 1, "context_type": "Course"}})
 		case p == "/api/v1/group_categories/5316/groups":
 			write(groups)
 		case p == "/api/v1/courses/1/modules":

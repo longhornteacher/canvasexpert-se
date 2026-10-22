@@ -27,6 +27,7 @@ type audRow struct {
 	StudentIDs []int64
 	Course     bool // the "Everyone" row some Canvas shapes use
 	Unknown    bool // a shape this Engine cannot rewrite faithfully
+	Inherited  bool // shown on an item because its module grants it
 	live       *AssignmentOverrideLive
 	unlockAt   *string
 	lockAt     *string
@@ -66,6 +67,17 @@ func (a liveAud) keys() map[string]bool {
 }
 
 func (a liveAud) restricted() bool { return !a.Everyone }
+
+// hasOwn reports whether an item carries an audience of its own rather than
+// only the rows it inherits from a module.
+func (a liveAud) hasOwn() bool {
+	for _, r := range a.Rows {
+		if !r.Inherited {
+			return true
+		}
+	}
+	return len(a.Rows) == 0 && a.restricted()
+}
 
 func (a liveAud) describe(cat TagCatalog) string {
 	var parts []string
@@ -261,7 +273,7 @@ func (a *assignmentSurface) Read(ctx context.Context) (liveAud, error) {
 	out := liveAud{Everyone: as.OnlyVisibleToOverrides == nil || !*as.OnlyVisibleToOverrides}
 	for i := range as.Overrides {
 		o := as.Overrides[i]
-		row := audRow{ID: o.ID, Title: o.Title, GroupID: o.GroupID, SectionID: o.CourseSectionID, StudentIDs: o.StudentIDs, live: &o}
+		row := audRow{ID: o.ID, Title: o.Title, GroupID: o.GroupID, SectionID: o.CourseSectionID, StudentIDs: o.StudentIDs, live: &o, Inherited: o.ContextModuleID > 0}
 		if o.CourseID > 0 {
 			continue
 		}
@@ -398,7 +410,7 @@ func (d *dateDetailsSurface) Read(ctx context.Context) (liveAud, error) {
 	d.unlck, d.lck = det.UnlockAt, det.LockAt
 	out := liveAud{Everyone: !*det.OnlyVisibleToOverrides}
 	for _, o := range overrides {
-		row := audRow{ID: o.ID, Title: o.Title, GroupID: o.GroupID, SectionID: o.CourseSectionID, StudentIDs: o.StudentIDs, unlockAt: o.UnlockAt, lockAt: o.LockAt}
+		row := audRow{ID: o.ID, Title: o.Title, GroupID: o.GroupID, SectionID: o.CourseSectionID, StudentIDs: o.StudentIDs, unlockAt: o.UnlockAt, lockAt: o.LockAt, Inherited: o.ContextModuleID > 0}
 		if row.GroupID == 0 && row.SectionID == 0 && len(row.StudentIDs) == 0 {
 			row.Unknown = true
 		}
@@ -866,7 +878,7 @@ func (ss *assignSession) otherModuleWarnings(ctx context.Context, target liveMod
 				continue
 			}
 			if surf, ok := items[it.ID]; ok {
-				if own, err := surf.Read(ctx); err == nil && own.restricted() {
+				if own, err := surf.Read(ctx); err == nil && own.hasOwn() {
 					continue
 				}
 			}
@@ -1020,11 +1032,11 @@ func (ss *assignSession) runModule(ctx context.Context, t domain.AssignToTarget,
 		case "clear_item_overrides":
 			itemOpts := opts
 			itemOpts.mode, itemOpts.groups, itemOpts.everyone, itemOpts.explicit, itemOpts.dates = "replace", nil, true, true, nil
-			if own, err := surf.Read(ctx); err == nil && (own.restricted() || len(own.Rows) > 0) {
+			if own, err := surf.Read(ctx); err == nil && own.hasOwn() {
 				results = append(results, ss.applyOne(ctx, surf, itemOpts))
 			}
 		default:
-			if own, err := surf.Read(ctx); err == nil && (own.restricted() || len(own.Rows) > 0) {
+			if own, err := surf.Read(ctx); err == nil && own.hasOwn() {
 				ownRestricted = append(ownRestricted, fmt.Sprintf("%q has its own audience (%s) and does not follow the module", it.Title, own.describe(ss.cat)))
 			}
 		}

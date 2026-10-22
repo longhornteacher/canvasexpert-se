@@ -90,6 +90,7 @@ type AssignmentOverrideLive struct {
 	DueAtOverridden    *bool           `json:"due_at_overridden,omitempty"`
 	UnlockAtOverridden *bool           `json:"unlock_at_overridden,omitempty"`
 	LockAtOverridden   *bool           `json:"lock_at_overridden,omitempty"`
+	ContextModuleID    int64           `json:"context_module_id,omitempty"`
 	ID                 int64           `json:"id"`
 	Title              string          `json:"title"`
 	GroupID            int64           `json:"group_id"`

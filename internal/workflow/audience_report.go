@@ -72,7 +72,7 @@ func (s *Service) ReportAudience(ctx context.Context, nickname, module string) (
 					if surf, ok, err := ss.itemSurface(ctx, it); err == nil && ok {
 						if own, err := surf.Read(ctx); err == nil {
 							ownCache[key] = own
-							hasOwn[key] = own.restricted() || len(own.Rows) > 0
+							hasOwn[key] = own.hasOwn()
 						}
 					}
 				}

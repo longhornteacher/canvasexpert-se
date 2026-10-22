@@ -47,8 +47,10 @@ func (s *Service) readTagCatalog(ctx context.Context, courseID int64, nickname s
 		return TagCatalog{}, err
 	}
 	out := TagCatalog{Course: nickname, Sets: []TagSetInfo{}}
+	// The category response carries no non_collaborative flag (observed live); the
+	// query filter scopes it, and each group below is checked.
 	for _, c := range cats {
-		if c.ID <= 0 || c.ContextType != "Course" || c.CourseID != courseID || !nonCollaborative(c.NonCollaborative) {
+		if c.ID <= 0 || c.ContextType != "Course" || c.CourseID != courseID {
 			continue
 		}
 		var groups []canvasGroup
