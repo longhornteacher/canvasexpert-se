@@ -125,7 +125,7 @@ var capabilityGroups = []capabilityGroup{
 		},
 	},
 	{
-		Title: "Team teaching (1.2 beta)", Status: capabilityYellow,
+		Title: "Team teaching (1.2)", Status: capabilityYellow,
 		Summary: "Built in Dev and checked with local tests only. No Canvas Live evidence is recorded for these team features yet; each item states its remaining check.",
 		Items: []capability{
 			{"Teammate keys on a team PC", "Teammates add their own Canvas key on the Team page; CE-SE uses it only for their courses. Local tests."},

@@ -2,7 +2,7 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
-## 1.2.0-beta.1 (unreleased)
+## 1.2.0 (2026-10-22)
 
 Team teaching: teammates' Canvas keys on one team PC.
 
