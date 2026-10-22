@@ -160,3 +160,7 @@ Built in Dev through slices 01-06 (see [docs/team/README.md](team/README.md)). C
 - **Family replies go to the actual teacher** (slice 05): Reply-To and one note for teammates' students in emails and review pages, never on printed report sheets. Local tests only; no family email was sent. Pending: Reply-To on a real classic Outlook draft.
 
 Each limit above is recorded as a pending live check in the README, not as a blocker for ordinary use.
+
+## Quiz corrections for points (playbook default, 2026-10-22)
+
+Every quiz's instructions end with a line saying the per-question feedback explains why the correct answer is best and why the others aren't, then an offer: students earn points back by copying the correct answer's rationale for every question they missed, by the correction deadline. It is on by default in the seed `TEACHER.md` and `quizzes.md`. On a teacher's first quiz the agent mentions it once and asks the points a full correction earns and how corrections are turned in, saving both in `Teacher_Override.md`; a teacher who doesn't want it says so and the offer is left out. Playbook guidance only; not yet used with a real class.
