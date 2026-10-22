@@ -7,12 +7,34 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"strconv"
 )
 
 const credentialTarget = "CanvasExpert-SE/Canvas/v1"
+const teammateTargetPrefix = credentialTarget + "/teammate/"
 
 // ErrNoCredential reports that this machine has no saved Canvas credential.
 var ErrNoCredential = errors.New("no SE credential is saved on this machine")
+
+// ErrNoTeammateCredential reports that a teammate's key is not saved on this PC.
+// It also satisfies errors.Is(err, ErrNoCredential).
+var ErrNoTeammateCredential error = noTeammateCredential{}
+
+type noTeammateCredential struct{}
+
+func (noTeammateCredential) Error() string {
+	return "this teammate's Canvas key isn't on this PC"
+}
+func (noTeammateCredential) Is(target error) bool { return target == ErrNoCredential }
+
+// TeammateTarget names a teammate's Credential Manager entry by Canvas user ID.
+// An unusable ID returns "", which callers treat as a failure.
+func TeammateTarget(canvasUserID int64) string {
+	if canvasUserID <= 0 {
+		return ""
+	}
+	return teammateTargetPrefix + strconv.FormatInt(canvasUserID, 10)
+}
 
 type Credential struct{ Origin, Token string }
 

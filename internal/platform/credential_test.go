@@ -2,6 +2,7 @@ package platform
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 )
 
@@ -36,5 +37,17 @@ func TestBrowserURLRestrictions(t *testing.T) {
 		if validBrowserURL(raw) {
 			t.Fatal("accepted unsafe browser URL")
 		}
+	}
+}
+
+func TestTeammateTargetAndMissingKey(t *testing.T) {
+	if got := TeammateTarget(123456); got != "CanvasExpert-SE/Canvas/v1/teammate/123456" {
+		t.Fatalf("target %q", got)
+	}
+	if TeammateTarget(0) != "" || TeammateTarget(-4) != "" {
+		t.Fatal("unusable IDs must give an empty target")
+	}
+	if !errors.Is(ErrNoTeammateCredential, ErrNoCredential) {
+		t.Fatal("missing teammate key should also be a missing credential")
 	}
 }

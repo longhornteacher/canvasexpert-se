@@ -15,6 +15,8 @@ type Course struct {
 	ID       int64  `yaml:"id" json:"id"`
 	Current  bool   `yaml:"current" json:"current"`
 	Timezone string `yaml:"timezone,omitempty" json:"timezone,omitempty"`
+	// Owner is the label of the teammate whose course this is; empty means yours.
+	Owner string `yaml:"owner,omitempty" json:"owner,omitempty"`
 }
 type CourseConfig struct {
 	Schema     int      `yaml:"schema"`

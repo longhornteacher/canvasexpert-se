@@ -119,7 +119,7 @@ Do this only after Part A passes, and only with the teammate present and agreein
 - Record: the post-policy mutation succeeded with the teammate's key; the summary line; and the teammate seeing hidden grades in SpeedGrader and posting them.
 
 **B6. Remove.**
-- Remove the teammate with "also remove courses" checked.
+- Remove the teammate.
 - Expect: the key is gone (the Test button says it isn't on this PC); `courses.md` has no rows for them; notes and log are kept.
 - The teammate deletes the token in Canvas.
 

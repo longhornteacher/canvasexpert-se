@@ -53,6 +53,12 @@ type Hub struct {
 	forgetFn          func() error
 	pickFolderFn      func(context.Context) (string, error)
 	desktopShortcutFn func(string) (string, error)
+	// Team page seams; nil means Credential Manager and Canvas.
+	loadTeammateFn     func(int64) (platform.Credential, error)
+	saveTeammateFn     func(int64, platform.Credential) error
+	deleteTeammateFn   func(int64) error
+	teammateIdentityFn func(context.Context, platform.Credential) (teamIdentity, error)
+	teammateCoursesFn  func(context.Context, platform.Credential) ([]workflow.Course, error)
 	// canvasUser is the account name from the last successful connection test.
 	canvasUser                                              string
 	setupValidated                                          bool

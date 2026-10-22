@@ -25,6 +25,7 @@ type homeData struct {
 	RulesMode, RulesRoot, SyncRoot, RulesError        string
 	Commands                                          []homeCommand
 	CommandsNote, PickedCourse, FirstPrompt           string
+	TeamWarnings                                      []string
 }
 
 type homeCourse struct {
@@ -90,6 +91,7 @@ func (h *Hub) pageData() homeData {
 				}
 			}
 		}
+		data.TeamWarnings = h.teamWarnings()
 		if s, err := workspace.OpenStudents(h.root); err == nil {
 			data.Students = len(s.Rows)
 			for _, row := range s.Rows {

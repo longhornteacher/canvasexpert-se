@@ -2,6 +2,14 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
+## 1.2.0-beta.1 (unreleased)
+
+Team teaching: teammates' Canvas keys on one team PC.
+
+### Teammate keys and Team page (2026-10-22)
+
+- The hub has a Team page under Classroom. On the team PC, a teammate pastes their own Canvas key and the date it expires; CE-SE checks it, saves it in Windows Credential Manager (never in a file) and lists the teammate in `context/team.md`. You then choose which of the teammate's Canvas courses to add to `context/courses.md`, each marked with an `owner`. The page can also test a key, rename a teammate, remove one, and shows expiry warnings (also on Home) and each teammate's recent actions from `.cse/team-log.jsonl`. Nothing uses a teammate's key yet. Local tests only.
+
 ## 1.1.0-beta.4 (2026-10-21)
 
 Review pages stay open when the agent app restarts, and CI fixes.

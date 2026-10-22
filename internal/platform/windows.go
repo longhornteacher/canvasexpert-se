@@ -105,6 +105,32 @@ func deleteAt(target string) error {
 func LoadCredential() (Credential, error) { return loadAt(credentialTarget) }
 func SaveCredential(c Credential) error   { return saveAt(credentialTarget, c) }
 
+func LoadTeammateCredential(id int64) (Credential, error) {
+	target := TeammateTarget(id)
+	if target == "" {
+		return Credential{}, errors.New("invalid teammate ID")
+	}
+	c, err := loadAt(target)
+	if errors.Is(err, ErrNoCredential) {
+		return Credential{}, fmt.Errorf("%w", ErrNoTeammateCredential)
+	}
+	return c, err
+}
+func SaveTeammateCredential(id int64, c Credential) error {
+	target := TeammateTarget(id)
+	if target == "" {
+		return errors.New("invalid teammate ID")
+	}
+	return saveAt(target, c)
+}
+func DeleteTeammateCredential(id int64) error {
+	target := TeammateTarget(id)
+	if target == "" {
+		return errors.New("invalid teammate ID")
+	}
+	return deleteAt(target)
+}
+
 // DeleteCredential forgets this machine's saved Canvas token; absent is fine.
 func DeleteCredential() error { return deleteAt(credentialTarget) }
 

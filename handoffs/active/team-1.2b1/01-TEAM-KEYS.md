@@ -134,10 +134,10 @@ Validation failures re-render the form. Never echo the token back into the page.
 - 401: "Canvas no longer accepts Ms. Turner's key. Ask Ms. Turner to make a new one, then remove and re-add."
 - Missing key: the single R2 missing-key message.
 
-**`POST /team/remove`** is confirmed on the page with a checkbox, "Also remove Ms. Turner's N courses from your course list" (checked by default). It:
-1. deletes the key;
-2. removes the team entry;
-3. removes those courses from `courses.md` if checked;
+**`POST /team/remove`** (decided 2026-10-22 during execution: always removes the courses, because an owner missing from the team list stops every command after slice 02). It:
+1. removes that teammate's courses from `courses.md` first;
+2. deletes the key;
+3. removes the team entry;
 4. keeps notes, pulled work and the log;
 5. reports what it did in one line.
 
@@ -159,7 +159,7 @@ None beyond CHANGELOG; slice 06 carries the docs. Add a one-line entry to the ca
 - The operator's own key is refused, and so is a duplicate `canvas_user_id`. An unset or placeholder instance refuses.
 - A failed `WriteTeam` leaves no saved key.
 - Chosen courses land in `courses.md` with `owner`, existing courses are untouched, and nickname collisions are refused.
-- Remove deletes the key and entry, optionally removes the courses, and keeps notes and log.
+- Remove removes the courses, deletes the key and entry, and keeps notes and log.
 - Expiry states render for: none, soon (exactly 14 days before), and past.
 - `team.md` validation rejects each bad field.
 - Full tests, vet and the diff check pass. CHANGELOG: "Local tests only."

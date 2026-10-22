@@ -11,9 +11,9 @@
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <form method="post" action="/courses" data-draft-key="{{.DraftKey}}" data-draft-fields="active_ nick_" data-clear-draft="{{.ClearDraft}}">
 <input type="hidden" name="request_secret" value="{{.Secret}}">
-<div class="table-scroll"><table class="courses"><thead><tr><th>Active</th><th>Course</th><th>Canvas code</th><th>Nickname</th></tr></thead><tbody>
-{{range .Rows}}<tr{{if .Unpublished}} class="unpublished"{{end}}><td><input type="hidden" name="id" value="{{.ID}}"><input type="checkbox" name="active_{{.ID}}" {{if .Active}}checked{{end}} aria-label="Active course {{.Name}} ({{.ID}})"></td><td>{{.Name}} <span class="course-state">ID {{.ID}} · {{if .State}}{{.State}}{{else}}not in Canvas list{{end}}</span>{{if .Unpublished}} <span class="pill off">unpublished</span>{{end}}</td><td><code>{{.Code}}</code></td><td><input type="text" name="nick_{{.ID}}" value="{{.Nick}}" maxlength="40" autocomplete="off" aria-label="Nickname for {{.Name}} ({{.ID}})"></td></tr>
-{{else}}<tr><td colspan="4">No courses to show yet. Connect Canvas first (Settings → Connections); your Canvas courses will be listed here after you reload.</td></tr>{{end}}</tbody></table></div>
+<div class="table-scroll"><table class="courses"><thead><tr><th>Active</th><th>Course</th><th>Canvas code</th><th>Nickname</th><th>Owner</th></tr></thead><tbody>
+{{range .Rows}}<tr{{if .Unpublished}} class="unpublished"{{end}}><td><input type="hidden" name="id" value="{{.ID}}"><input type="checkbox" name="active_{{.ID}}" {{if .Active}}checked{{end}} aria-label="Active course {{.Name}} ({{.ID}})"></td><td>{{.Name}} <span class="course-state">ID {{.ID}} · {{if .State}}{{.State}}{{else}}not in Canvas list{{end}}</span>{{if .Unpublished}} <span class="pill off">unpublished</span>{{end}}</td><td><code>{{.Code}}</code></td><td><input type="text" name="nick_{{.ID}}" value="{{.Nick}}" maxlength="40" autocomplete="off" aria-label="Nickname for {{.Name}} ({{.ID}})"></td><td>{{if .Owner}}{{.Owner}}{{else}}You{{end}}</td></tr>
+{{else}}<tr><td colspan="5">No courses to show yet. Connect Canvas first (Settings → Connections); your Canvas courses will be listed here after you reload.</td></tr>{{end}}</tbody></table></div>
 {{if .Rows}}<button type="submit">Save active courses</button>{{end}}
 </form>
 <script src="/_cse/drafts.js" defer></script>

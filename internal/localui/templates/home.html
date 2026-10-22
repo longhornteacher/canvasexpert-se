@@ -16,6 +16,7 @@
 </div>
 <div class="status-links"><a href="/settings?section=connections">Connection details</a><a href="/connect">Connect a teaching app</a></div>
 </section>
+{{range .TeamWarnings}}<p class="error">{{.}} <a href="/team">Team</a></p>{{end}}
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <div class="home-layout">
 <section class="home-commands" aria-labelledby="commands-head">

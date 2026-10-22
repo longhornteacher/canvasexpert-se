@@ -43,7 +43,7 @@ Opus made these on 2026-10-22 from the developer's answers; they are final for 1
 
 | Slice | Handoff | Status | Local evidence | Canvas Live / human evidence |
 |---|---|---|---|---|
-| 01 Team keys, list and Team page | [01](../../handoffs/active/team-1.2b1/01-TEAM-KEYS.md) | Planned | — | — |
+| 01 Team keys, list and Team page | [01](../../handoffs/active/team-1.2b1/01-TEAM-KEYS.md) | Implemented in Dev | Team list validation, notes, action-log redaction, Team page add/courses/test/remove/expiry via seams; full tests and vet | — |
 | 02 Per-course key routing | [02](../../handoffs/active/team-1.2b1/02-KEY-ROUTING.md) | Planned | — | — |
 | 03 Scoring consent and hidden grades | [03](../../handoffs/active/team-1.2b1/03-SCORING-CONSENT.md) | Planned | — | — |
 | 04 Copy a Collab module | [04](../../handoffs/active/team-1.2b1/04-COLLAB-COPY.md) | Planned | — | — |

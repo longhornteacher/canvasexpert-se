@@ -16,6 +16,13 @@ func LoadCredential() (Credential, error) {
 }
 func SaveCredential(Credential) error { return errors.New("SE credential storage requires Windows") }
 func DeleteCredential() error         { return errors.New("SE credential storage requires Windows") }
+func LoadTeammateCredential(int64) (Credential, error) {
+	return Credential{}, errors.New("SE credentials require Windows; run cse setup on the Windows machine")
+}
+func SaveTeammateCredential(int64, Credential) error {
+	return errors.New("SE credential storage requires Windows")
+}
+func DeleteTeammateCredential(int64) error { return errors.New("SE credential storage requires Windows") }
 func CredentialSelfTest() error       { return errors.New("SE credential self-test requires Windows") }
 func OpenBrowser(string) error {
 	return errors.New("SE default-browser launch requires Windows; open the displayed local URL")
