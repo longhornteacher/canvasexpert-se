@@ -8,7 +8,7 @@ Team teaching: teammates' Canvas keys on one team PC.
 
 ### Slice 07 live checks, Part A so far (2026-10-22)
 
-- Checked live: operator-key routing on an owned course (A1), the untagged-assignment refusal (A2), and copy-once from Collab to CS8 (A7): all three items and the file arrived unpublished, the assignment and New Quiz landed in a new "Imported Assignments" group, a repeat copy and a (CE)-tagged item were refused. Hidden grades, the already-visible hold, the New Quiz comment and family Reply-To (A3-A6) are not yet run.
+- Checked live: operator-key routing on an owned course (A1), the untagged-assignment refusal (A2), and copy-once from Collab to CS8 (A7): all three items and the file arrived unpublished, the assignment and New Quiz landed in a new "Imported Assignments" group, a repeat copy and a (CE)-tagged item were refused. Hidden grades (A3) and the already-visible hold (A4) were also checked live with the Test Student: manual posting set through GraphQL with the legacy ID, grade and comment hidden until posted, then visible, and a later post held. The New Quiz comment (A5) waits for first real use because Canvas cannot open a New Quiz as the Test Student; family Reply-To (A6) needs a report with work to send.
 
 ### Assign To by differentiation tag (2026-10-22)
 
