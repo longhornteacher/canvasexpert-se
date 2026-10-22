@@ -96,13 +96,13 @@ func TestNewQuizResponsesMapsLatestStudentAttemptAndWrittenItems(t *testing.T) {
 {"student_data":{"id":6,"attempt":1,"submitted_at":"2026-10-07T12:00:00Z"},"item_responses":[{"item_id":23,"item_type":"choice","answer":"b","score":0.0},{"item_id":24,"item_type":"choice","answer":null,"score":null}]}
 ]`))
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/items"):
-			_, _ = w.Write([]byte(`[{"id":"21","entry_type":"Item","entry":{"id":"121","interaction_type_slug":"essay","item_body":"<p>Explain your reasoning.</p>"}},{"id":"22","entry_type":"Item","entry":{"id":"122","interaction_type_slug":"file-upload","item_body":"Upload your work."}},{"id":"23","entry_type":"Item","points_possible":4.0,"entry":{"id":"123","interaction_type_slug":"choice","item_body":"Choose one."}},{"id":"24","entry_type":"Item","points_possible":5.0,"entry":{"id":"124","interaction_type_slug":"choice","item_body":"Choose again."}},{"id":"25","entry_type":"Stimulus","points_possible":0,"entry":{"id":"125","item_body":"Passage."}}]`))
+			_, _ = w.Write([]byte(`[{"id":"21","entry_type":"Item","points_possible":10.0,"entry":{"id":"121","interaction_type_slug":"essay","item_body":"<p>Explain your reasoning.</p>"}},{"id":"22","entry_type":"Item","points_possible":5.0,"entry":{"id":"122","interaction_type_slug":"file-upload","item_body":"Upload your work."}},{"id":"23","entry_type":"Item","points_possible":4.0,"entry":{"id":"123","interaction_type_slug":"choice","item_body":"Choose one."}},{"id":"24","entry_type":"Item","points_possible":5.0,"entry":{"id":"124","interaction_type_slug":"choice","item_body":"Choose again."}},{"id":"25","entry_type":"Stimulus","points_possible":0,"entry":{"id":"125","item_body":"Passage."}}]`))
 		default:
 			t.Errorf("unexpected Student Analysis request: %s %s", r.Method, r.URL.Path)
 			http.NotFound(w, r)
 		}
 	})
-	rows, err := newQuizResponses(context.Background(), s.Client, 1, 10)
+	rows, written, err := newQuizResponses(context.Background(), s.Client, 1, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,6 +118,9 @@ func TestNewQuizResponsesMapsLatestStudentAttemptAndWrittenItems(t *testing.T) {
 	}
 	if other := rows[6]; other.AutoScored != nil || other.AutoScoredNote != "1 of 2 auto-scored items have no score in Canvas's report" {
 		t.Fatalf("a missing item score must leave the subtotal unknown: %#v %q", other.AutoScored, other.AutoScoredNote)
+	}
+	if len(written) != 2 || written[0].ItemID != "21" || written[0].EntryID != "121" || written[0].Type != "essay" || written[1].Type != "file-upload" {
+		t.Fatalf("written items were not listed for the packet: %#v", written)
 	}
 	if signedRequestHadAuth {
 		t.Fatal("signed Student Analysis download received the Canvas token")

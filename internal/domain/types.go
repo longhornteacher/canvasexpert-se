@@ -192,6 +192,18 @@ type PacketDocument struct {
 	// DirectionImages are Canvas images embedded in the assignment directions,
 	// downloaded beside the packet so reference images can be read.
 	DirectionImages []Attachment `yaml:"direction_images,omitempty"`
+	// WrittenItems lists a New Quiz's written items with their Canvas points.
+	WrittenItems []WrittenItem `yaml:"written_items,omitempty"`
+}
+
+// WrittenItem is one New Quiz essay or file-upload item. Responses may name
+// it by either id.
+type WrittenItem struct {
+	ItemID  string  `yaml:"item_id"`
+	EntryID string  `yaml:"entry_id,omitempty"`
+	Type    string  `yaml:"type"`
+	Prompt  string  `yaml:"prompt,omitempty"`
+	Points  Decimal `yaml:"points"`
 }
 type AttemptRef struct {
 	Attempt     int    `yaml:"attempt" json:"attempt"`
@@ -285,6 +297,9 @@ type Component struct {
 	Label        string   `yaml:"label"`
 	Weight       Decimal  `yaml:"weight"`
 	CriterionIDs []string `yaml:"criterion_ids,omitempty"`
+	// ItemID names the New Quiz written item this part scores (from the
+	// packet's written_items), so the comment shows it in quiz points.
+	ItemID string `yaml:"item_id,omitempty"`
 }
 type Interpretation struct {
 	Mapping    string      `yaml:"mapping"` // repeated or direct

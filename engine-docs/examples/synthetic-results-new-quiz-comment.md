@@ -25,7 +25,7 @@ interpretation:
   mapping: repeated
   rationale: "Synthetic: assess the one required written response; auto-scored quiz items are outside this comment."
   components:
-    - {key: written_response, label: Written response, weight: 1}
+    - {key: written_response, label: Written response, weight: 1, item_id: "8806218"}
 students:
   - student_ref: synthetic-student-01
     operation: comment-only
@@ -38,4 +38,4 @@ students:
       feedback: "Synthetic feedback grounded in the written response."
 ---
 
-Synthetic result fixture. Replace all identity, attempt and packet fields with the actual pull before teacher use. The Engine leads with the auto-scored subtotal recorded in the pulled work (for example `Questions Canvas scored: 14/20`), then the criterion scores, without an aggregate quiz assessment, and posts only a submission comment. The teacher enters per-item points in SpeedGrader.
+Synthetic result fixture. Replace all identity, attempt and packet fields with the actual pull before teacher use. The Engine leads with the auto-scored subtotal recorded in the pulled work (for example `Questions Canvas scored: 14/20`) and the written response in its quiz points from `item_id` (for example `Written response: 10.5/15`), then the rubric lines, without an aggregate quiz assessment, and posts only a submission comment. The teacher enters per-item points in SpeedGrader.

@@ -393,7 +393,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			var newQuizRows map[int64]newQuizRow
 			var newQuizDownloadBudget int64
 			if a.NewQuiz {
-				newQuizRows, e = newQuizResponses(ctx, s.Client, course.ID, a.ID)
+				newQuizRows, packet.WrittenItems, e = newQuizResponses(ctx, s.Client, course.ID, a.ID)
 				if e != nil {
 					return report, fmt.Errorf("read New Quiz written responses: %w", e)
 				}

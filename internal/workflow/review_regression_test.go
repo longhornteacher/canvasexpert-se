@@ -718,3 +718,17 @@ func TestRubricCommentFactsNameCriteriaAndKeepText(t *testing.T) {
 		t.Fatal("no Canvas rubric means no rubric comments are posted")
 	}
 }
+
+func TestPartPointsUseTheNamedWrittenItem(t *testing.T) {
+	doc := &domain.ResultsDocument{Assignment: domain.AssignmentSnapshot{NewQuiz: true}}
+	items := []domain.WrittenItem{{ItemID: "21", EntryID: "121", Type: "essay", Points: domain.MustDecimal("15")}}
+	interp := domain.Interpretation{Components: []domain.Component{{Key: "a", ItemID: "121"}, {Key: "b"}}}
+	parts, err := partPoints(doc, items, interp)
+	if err != nil || len(parts) != 1 || parts["a"].String() != "15" {
+		t.Fatalf("%v %v", parts, err)
+	}
+	interp.Components[1].ItemID = "99"
+	if _, err = partPoints(doc, items, interp); err == nil {
+		t.Fatal("an item_id the quiz does not have must stop that comment")
+	}
+}

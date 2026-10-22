@@ -65,7 +65,7 @@ type newQuizRow struct {
 // newQuizResponses reads Canvas's Student Analysis report and joins only the
 // requested assignment's written items. The signed result file is fetched by
 // the Canvas client's credential-free Download path.
-func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmentID int64) (map[int64]newQuizRow, error) {
+func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmentID int64) (map[int64]newQuizRow, []domain.WrittenItem, error) {
 	var launched struct {
 		Progress struct {
 			URL string `json:"url"`
@@ -73,60 +73,64 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 	}
 	path := fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes/%d/reports", courseID, assignmentID)
 	if err := c.Write(ctx, "POST", path, map[string]any{"quiz_report": map[string]string{"report_type": "student_analysis", "format": "json"}}, &launched); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	progressURL, err := canvasAPIPath(c, launched.Progress.URL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var progress quizReportProgress
 	deadline := time.Now().Add(5 * time.Minute)
 	for {
 		if err = c.Get(ctx, progressURL, &progress); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if progress.WorkflowState == "completed" {
 			break
 		}
 		if progress.WorkflowState == "failed" || progress.WorkflowState == "error" {
-			return nil, fmt.Errorf("Student Analysis report failed")
+			return nil, nil, fmt.Errorf("Student Analysis report failed")
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("Student Analysis report did not complete")
+			return nil, nil, fmt.Errorf("Student Analysis report did not complete")
 		}
 		t := time.NewTimer(time.Second)
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		case <-t.C:
 		}
 	}
 	if progress.Results.URL == "" {
-		return nil, fmt.Errorf("Student Analysis report has no results URL")
+		return nil, nil, fmt.Errorf("Student Analysis report has no results URL")
 	}
 	var buf bytes.Buffer
 	if err = c.DownloadUnauthenticated(ctx, progress.Results.URL, &buf); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var rows []quizReportRow
 	if err = json.Unmarshal(buf.Bytes(), &rows); err != nil {
-		return nil, fmt.Errorf("invalid Student Analysis results")
+		return nil, nil, fmt.Errorf("invalid Student Analysis results")
 	}
 	var items []writtenQuizItem
 	if err = c.List(ctx, fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes/%d/items?per_page=100", courseID, assignmentID), &items); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	prompts := map[string]writtenQuizItem{}
 	fileItemIDs := []string{}
 	var autoItems []writtenQuizItem
+	var written []domain.WrittenItem
 	for _, item := range items {
 		item.Type, item.Body = item.Entry.Type, item.Entry.Body
 		typ := strings.ToLower(item.Type)
+		points, pointsErr := domain.ParseDecimal(item.Points.String())
 		if typ != "essay" && typ != "file-upload" && typ != "file_upload" {
-			if p, e := domain.ParseDecimal(item.Points.String()); e == nil && p.Sign() > 0 {
+			if pointsErr == nil && points.Sign() > 0 {
 				autoItems = append(autoItems, item)
 			}
+		} else if pointsErr == nil {
+			written = append(written, domain.WrittenItem{ItemID: item.ID.String(), EntryID: item.Entry.ID.String(), Type: typ, Prompt: render.HTMLText(item.Body), Points: points})
 		}
 		for _, id := range []json.Number{item.ID, item.Entry.ID} {
 			if id == "" {
@@ -171,7 +175,7 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 		}
 		out[row.Student.ID] = entry
 	}
-	return out, nil
+	return out, written, nil
 }
 
 // autoScoredTotal sums one report row's auto-scored items. Any item without a

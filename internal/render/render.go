@@ -3,6 +3,7 @@ package render
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 
 	"canvasexpertse/internal/domain"
@@ -21,19 +22,21 @@ type FeedbackInput struct {
 	// AutoScored leads a New Quiz comment with the auto-scored subtotal from
 	// the pulled report; it is never a whole-quiz total.
 	AutoScored *domain.AutoScored
+	// PartPoints gives a New Quiz part the Canvas points of its written item,
+	// keyed by component key, so its score reads on the quiz's scale.
+	PartPoints map[string]domain.Decimal
 	// Late marks the overall line "(late)". The score stays the earned
 	// assessment; Canvas applies any late deduction in the gradebook.
 	Late bool
 	// Header is the teacher's choice of what leads the comment: "" or "full"
-	// (the default: overall line and per-item criterion lines), "score" (just
+	// (the default: all scores, then each part's rubric lines), "score" (just
 	// the overall line) or "none" (the feedback exactly as written, so the
 	// teacher controls any score text).
 	Header string
 }
 
 // RenderFeedback produces a deterministic Canvas comment. The order is the
-// computed assessment, component criteria, and
-// the teacher's conversational feedback.
+// scores, each part's rubric lines, and the teacher's conversational feedback.
 func RenderFeedback(in FeedbackInput) (string, error) {
 	if err := domain.ValidateInterpretation(in.Rubric, in.Interpretation); err != nil {
 		return "", fmt.Errorf("invalid interpretation: %w", err)
@@ -61,54 +64,80 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		return in.Feedback, nil
 	case "score":
 		// A New Quiz comment has no honest whole-quiz total from the written
-		// portion, so it always leads with the per-item criterion lines.
+		// portion, so it always shows the full score layout.
 		if !in.OmitAssessment {
 			return overall + "\n\n" + in.Feedback, nil
 		}
 	}
-	var out strings.Builder
+	// All scores lead: the overall (or, on a New Quiz, the Canvas-scored
+	// questions) and each part, then each part's rubric lines, then feedback.
+	var top []string
 	if !in.OmitAssessment {
-		out.WriteString(overall)
-		out.WriteString("\n")
+		top = append(top, overall)
 	} else if in.AutoScored != nil {
-		fmt.Fprintf(&out, "Questions Canvas scored: %s/%s\n", shortNumber(in.AutoScored.Earned), shortNumber(in.AutoScored.Possible))
-	}
-	// Plain words a student reads: a New Quiz comment covers only the written
-	// answers; an ordinary assignment lists every part.
-	if in.OmitAssessment {
-		out.WriteString("Written answers:")
-	} else {
-		out.WriteString("Scores:")
+		top = append(top, fmt.Sprintf("Questions Canvas scored: %s/%s", shortNumber(in.AutoScored.Earned), shortNumber(in.AutoScored.Possible)))
 	}
 	components := make(map[string]domain.ComponentScore, len(in.Components))
 	for _, c := range in.Components {
 		components[c.Key] = c
 	}
+	rubricMax, totalWeight := new(big.Rat), new(big.Rat)
+	for _, c := range in.Rubric.Criteria {
+		rubricMax.Add(rubricMax, c.Points.Rat())
+	}
+	for _, c := range in.Interpretation.Components {
+		totalWeight.Add(totalWeight, c.Weight.Rat())
+	}
+	// One part on an ordinary assignment is the overall line already.
+	showParts := in.OmitAssessment || len(in.Interpretation.Components) > 1
+	var blocks []string
 	for _, component := range in.Interpretation.Components {
 		score := components[component.Key]
 		byID := make(map[string]domain.CriterionScore, len(score.Criteria))
 		for _, criterionScore := range score.Criteria {
 			byID[criterionScore.CriterionID] = criterionScore
 		}
-		var lines []string
+		lines := []string{component.Label}
+		earned, possible := new(big.Rat), new(big.Rat)
 		for _, rubricCriterion := range in.Rubric.Criteria {
 			if in.Interpretation.Mapping == "direct" && !contains(component.CriterionIDs, rubricCriterion.ID) {
 				continue
 			}
 			cs := byID[rubricCriterion.ID]
-			lines = append(lines, fmt.Sprintf("%s %s/%s", rubricCriterion.Description, shortNumber(cs.Points), shortNumber(rubricCriterion.Points)))
+			earned.Add(earned, cs.Points.Rat())
+			possible.Add(possible, rubricCriterion.Points.Rat())
+			lines = append(lines, fmt.Sprintf("- %s %s/%s", rubricCriterion.Description, shortNumber(cs.Points), shortNumber(rubricCriterion.Points)))
 		}
-		// One criterion stays on the item's line; several each get their own
-		// indented line so long criterion names stay readable.
-		if len(lines) > 1 {
-			fmt.Fprintf(&out, "\n- %s:", component.Label)
-			for _, line := range lines {
-				fmt.Fprintf(&out, "\n  - %s", line)
+		blocks = append(blocks, strings.Join(lines, "\n"))
+		if !showParts {
+			continue
+		}
+		// A part's maximum is its share of the assignment points; on a New
+		// Quiz it is the written item's Canvas points, or the rubric points
+		// when the part names no item.
+		max := possible
+		switch {
+		case !in.OmitAssessment && in.Interpretation.Mapping == "repeated" && totalWeight.Sign() > 0:
+			max = new(big.Rat).Mul(in.AssignmentPoints.Rat(), new(big.Rat).Quo(component.Weight.Rat(), totalWeight))
+		case !in.OmitAssessment && rubricMax.Sign() > 0:
+			max = new(big.Rat).Mul(in.AssignmentPoints.Rat(), new(big.Rat).Quo(possible, rubricMax))
+		case in.OmitAssessment:
+			if points, ok := in.PartPoints[component.Key]; ok {
+				max = points.Rat()
 			}
-		} else {
-			fmt.Fprintf(&out, "\n- %s: %s", component.Label, strings.Join(lines, ""))
 		}
+		part := new(big.Rat)
+		if possible.Sign() > 0 {
+			part.Mul(max, new(big.Rat).Quo(earned, possible))
+		}
+		top = append(top, fmt.Sprintf("%s: %s/%s", component.Label, shortNumber(domain.RoundRat(part, 2)), shortNumber(domain.RoundRat(max, 2))))
 	}
+	var out strings.Builder
+	if len(top) > 0 {
+		out.WriteString(strings.Join(top, "\n"))
+		out.WriteString("\n\n")
+	}
+	out.WriteString(strings.Join(blocks, "\n\n"))
 	out.WriteString("\n\n")
 	// comment[text_comment] is plain text. Preserve the teacher's supplied
 	// feedback exactly so quoted prose and code are never reinterpreted.

@@ -352,9 +352,11 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 	// Aliases and first names come from the packet and the private student store; both are best effort.
 	aliases := map[string]string{}
 	works := map[string]domain.StudentWorkDocument{}
+	var writtenItems []domain.WrittenItem
 	if packetPath, e := workspace.ConstrainPath(root, doc.Packet); e == nil {
 		var packet domain.PacketDocument
 		if _, e = workspace.ReadDocument(packetPath, &packet); e == nil {
+			writtenItems = packet.WrittenItems
 			for _, rel := range packet.Students {
 				if p, e := workspace.ConstrainPath(root, rel); e == nil {
 					var work domain.StudentWorkDocument
@@ -432,7 +434,13 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 		} else if r.ReviseFeedback != nil {
 			c.Comment = feedback
 			if rf := r.ReviseFeedback; rf.Assessment != nil && doc.Basis() != nil {
-				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: rf.Assessment.Components, Assessment: rf.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(&doc, works[r.StudentRef], rf.Attempt.Attempt), Header: rf.Header})
+				parts, e := partPoints(&doc, writtenItems, v.Interpretation)
+				if e != nil {
+					c.Hold = e.Error()
+					m.Cards = append(m.Cards, c)
+					continue
+				}
+				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: rf.Assessment.Components, Assessment: rf.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(&doc, works[r.StudentRef], rf.Attempt.Attempt), PartPoints: parts, Header: rf.Header})
 				if e != nil {
 					c.Hold = e.Error()
 				} else {
@@ -441,10 +449,14 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			}
 		} else if r.CommentOnly != nil && doc.Basis() != nil {
 			computed, e := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, r.CommentOnly.Components, doc.Assignment.Points)
+			parts, pe := partPoints(&doc, writtenItems, v.Interpretation)
+			if e == nil {
+				e = pe
+			}
 			if e != nil {
 				c.Hold = e.Error()
 			} else {
-				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(&doc, works[r.StudentRef], r.CommentOnly.Attempt.Attempt), Header: r.CommentOnly.Header})
+				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(&doc, works[r.StudentRef], r.CommentOnly.Attempt.Attempt), PartPoints: parts, Header: r.CommentOnly.Header})
 				if e != nil {
 					c.Hold = e.Error()
 				} else {
@@ -464,6 +476,31 @@ func autoScoredFor(doc *domain.ResultsDocument, work domain.StudentWorkDocument,
 		return nil
 	}
 	return work.Current.AutoScored
+}
+
+// partPoints maps each New Quiz part that names a written item to that item's
+// Canvas points. A part naming an item the quiz does not have is an error.
+func partPoints(doc *domain.ResultsDocument, items []domain.WrittenItem, interp domain.Interpretation) (map[string]domain.Decimal, error) {
+	if !doc.Assignment.NewQuiz {
+		return nil, nil
+	}
+	parts := map[string]domain.Decimal{}
+	for _, c := range interp.Components {
+		if c.ItemID == "" {
+			continue
+		}
+		found := false
+		for _, item := range items {
+			if c.ItemID == item.ItemID || c.ItemID == item.EntryID {
+				parts[c.Key], found = item.Points, true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("part %q names item_id %s, which is not a written item in the pulled quiz", c.Key, c.ItemID)
+		}
+	}
+	return parts, nil
 }
 
 // submissionText returns what the student wrote for one attempt, from the
