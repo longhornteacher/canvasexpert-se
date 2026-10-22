@@ -12,7 +12,7 @@ Select configured courses, exact collaborative groups or stable student referenc
 
 Write one clear subject and body per version. Markdown supports everyday formatting; use HTML only when needed. Use `{{student_name}}` for the reader's own student and `{{group_name}}` for a group-selected audience. Never name other students or include teacher-only notes. Use local covers and files, ordinary links and the saved closing. Remote images are not embedded; save intended images under `assets/`. Messages allow a conservative 20 MiB total estimate including image/file encoding overhead.
 
-Run `prepare_family_contact {folder}` (CLI `family-contact-prepare RUN_FOLDER`). Explain empty groups, unmatched students, missing assets or unknown placeholders, and resolve double matches before review. A student outside every version is reported and skipped; do not broaden the audience to hide the warning. Preparation reads current Canvas membership and sends nothing. Preserve outcomes when refreshing a draft.
+Run `prepare_family_contact {folder}` (CLI `family-contact-prepare RUN_FOLDER`). Explain empty groups, unmatched students, missing assets or unknown placeholders, and resolve double matches before review. A student outside every version is reported and skipped; do not broaden the audience to hide the warning. Preparation reads current Canvas membership and sends nothing. Preserve outcomes when refreshing a draft. For a teammate's students, the Engine sets replies to go to that teammate and adds a short note saying so; don't write your own.
 
 ## Let the teacher review and send
 

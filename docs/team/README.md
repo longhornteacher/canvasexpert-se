@@ -1,6 +1,6 @@
 # Team teaching (1.2.0-beta.1 plan)
 
-Date: 2026-10-22. Status: **planned; nothing is built.** Execution handoffs are in [handoffs/active/team-1.2b1/](../../handoffs/active/team-1.2b1/00-BRIEF.md). This plan does not authorize collecting real colleague keys, Canvas Live writes in a colleague's course, release, or UserInstall/UserSync adoption.
+Date: 2026-10-22. Status: **slices 01–06 built in Dev, local tests only; slice 07 live checks pending.** Execution handoffs are in [handoffs/active/team-1.2b1/](../../handoffs/active/team-1.2b1/00-BRIEF.md). This plan does not authorize collecting real colleague keys, Canvas Live writes in a colleague's course, release, or UserInstall/UserSync adoption.
 
 Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
 
@@ -48,7 +48,7 @@ Opus made these on 2026-10-22 from the developer's answers; they are final for 1
 | 03 Scoring consent and hidden grades | [03](../../handoffs/active/team-1.2b1/03-SCORING-CONSENT.md) | Implemented in Dev | Tag rule at pull/post; manual-policy mutation before any write, once, with one retry on uncertain; holds for untagged, unconfirmed policy and visible grades across grade, comment, late and group paths; probe-style and co-teaching variants; full tests and vet | — |
 | 04 Copy a Collab module | [04](../../handoffs/active/team-1.2b1/04-COLLAB-COPY.md) | Implemented in Dev | Pre-flight refusals incl. (CE) items; copy-once for every prior status and after nickname rename; pending saved before POST, no retries; lock; per-destination keys and failures; compiled MCP smoke with 42 tools; full tests and vet | — |
 | 05 Family reply-to | [05](../../handoffs/active/team-1.2b1/05-FAMILY-REPLY-TO.md) | Implemented in Dev | Reply routing cases; own-course emails byte-identical; note only in emails; grouped family previews; skipped hold retried by a later run; test send carries note and Reply-To; full tests and vet | — |
-| 06 Playbooks, docs, capabilities | [06](../../handoffs/active/team-1.2b1/06-DOCS-AND-PLAYBOOKS.md) | Planned | — | — |
+| 06 Playbooks, docs, capabilities | [06](../../handoffs/active/team-1.2b1/06-DOCS-AND-PLAYBOOKS.md) | Implemented in Dev | Seed `team.md` and routing sentences; developer docs, privacy and security notes; Team capabilities group; seed and capability tests, full tests and vet | — |
 | 07 Live checks | [07](../../handoffs/active/team-1.2b1/07-LIVE-CHECKS.md) | Planned | — | — |
 
 Order: 01 → 02 → (03, 04 and 05 in any order, one at a time) → 06 → 07. Slice 06 lands its share with each slice. The live checks in 07 need the developer and the Test Student, and some need a willing teammate.

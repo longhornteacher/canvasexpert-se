@@ -32,6 +32,11 @@ Team teaching: teammates' Canvas keys on one team PC.
 - If a teammate has no email on the Team page, that student's email is not sent and is recorded as skipped ("Ms. Turner has no email on the Team page, so replies couldn't be routed."); a later run sends it once the email is added. Review cards show "Replies go to" or "Held", and Family Contact previews are grouped as "Your students" / "Ms. Turner's students" when a message reaches both.
 - Local tests only; Reply-To on a real Outlook draft is pending live check (07). No family email was sent.
 
+### Team playbook and docs (2026-10-22)
+
+- New seed playbook `playbooks/team.md` explains team courses to the agent: how a request maps to teammates' courses, the `(CE)` scoring rule and hidden grades, copying a Collab module once, and family replies. Short routing sentences in `AGENTS.md`, `score.md`, `family-contact.md`, `setup.md` (Add a teammate, on the team PC) and `authoring.md` point to it. `parent-updates.md` is unchanged.
+- Developer docs (`AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/PRIVACY.md`, `.github/SECURITY.md`) describe the team storage locations, key routing, consent and family-reply behavior, and the 1.2b1 handoffs. The WebUI Capabilities page and `docs/engine-capabilities.md` add a Team teaching group, status yellow, with local tests and pending live checks kept separate. Local tests only.
+
 ## 1.1.0-beta.4 (2026-10-21)
 
 Review pages stay open when the agent app restarts, and CI fixes.

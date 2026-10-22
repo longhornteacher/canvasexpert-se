@@ -24,7 +24,7 @@ type capabilityGroup struct {
 
 // Keep this teacher-facing snapshot aligned with docs/engine-capabilities.md.
 // Recorded live evidence and local checks are different kinds of verification.
-const capabilitiesReviewed = "2026-10-21"
+const capabilitiesReviewed = "2026-10-22"
 
 var capabilityGroups = []capabilityGroup{
 	{
@@ -120,6 +120,18 @@ var capabilityGroups = []capabilityGroup{
 			{"Synchronize or reorganize existing module structure", "Native module assembly adds only explicitly requested entries. Deletion, replacement, prerequisites and completion requirements are not implemented."},
 			{"Write New Quiz item scores or per-item feedback", "Automatic New Quiz item-score and per-item feedback writes are not implemented. Supported written-work scoring posts criterion scores and feedback in a whole-assignment comment; the teacher enters item points in SpeedGrader. The comment-only operation also writes no quiz grade, rubric assessment or late timing."},
 			{"Apply grading curves", "Future capability."},
+		},
+	},
+	{
+		Title: "Team teaching (1.2 beta)", Status: capabilityYellow,
+		Summary: "Built in Dev and checked with local tests only. No Canvas Live evidence is recorded for these team features yet; each item states its remaining check.",
+		Items: []capability{
+			{"Teammate keys on a team PC", "Teammates add their own Canvas key on the Team page; CE-SE uses it only for their courses. Local tests."},
+			{"Right key for each course", "Your key for your courses and wherever you co-teach; the owner's key otherwise. Local tests."},
+			{"Scoring only what teammates tag (CE)", "Checked when work is pulled and again right before posting. Local tests."},
+			{"Hidden grades for the teammate to post", "Grades go in with manual posting; already-visible grades are held. Canvas hiding behavior pending live check."},
+			{"Copy a Collab module once", "Sends one module to each named course with Canvas's course copy, never twice. Pending live check."},
+			{"Family replies go to the actual teacher", "Reply-To and a short note for teammates' students. Outlook draft check pending."},
 		},
 	},
 }

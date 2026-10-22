@@ -34,7 +34,7 @@ Post a teacher entry or reply only when the teacher explicitly asks to communica
 
 Run `.\cse.cmd review <draft-file>`. The page shows the content as the Engine will write it (it doesn't simulate the student view). When the teacher clicks Create, the Engine creates the assignment. With review skipped, run `.\cse.cmd push <draft-file>`.
 
-A new assignment stays unpublished until its requested rubric and module pieces succeed. If `push` reports partial or ambiguous results, rerun the same file; it resumes from saved IDs and adopts an existing matching item or preserves a teacher's change. Report what was adopted or preserved. Never pick a same-titled Canvas assignment arbitrarily or start a second create when the first may have succeeded. Report the resulting Canvas state and anything incomplete.
+A new assignment stays unpublished until its requested rubric and module pieces succeed. If `push` reports partial or ambiguous results, rerun the same file; it resumes from saved IDs and adopts an existing matching item or preserves a teacher's change. Report what was adopted or preserved. Never pick a same-titled Canvas assignment arbitrarily or start a second create when the first may have succeeded. Report the resulting Canvas state and anything incomplete. To share a finished module with the team through Collab, see `team.md`.
 
 ## Differentiated hub (tier support pages)
 
