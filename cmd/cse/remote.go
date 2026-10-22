@@ -719,6 +719,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				if failed == 0 {
 					summary = "all approved group actions completed"
 				}
+				if line := report.OwnerSummary(); line != "" {
+					summary = line + " " + summary
+				}
 				status := "completed"
 				if failed > 0 || e != nil {
 					status = "partial"
@@ -739,6 +742,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			summary := fmt.Sprintf("%d approved student(s) did not fully complete; run cse validate/post output or rerun review", failed)
 			if failed == 0 {
 				summary = "all approved students completed"
+			}
+			if line := report.OwnerSummary(); line != "" {
+				summary = line + " " + summary
 			}
 			status := "completed"
 			if failed > 0 || e != nil {
@@ -786,6 +792,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				}
 			}
 			_ = table.Flush()
+			if line := report.OwnerSummary(); line != "" {
+				fmt.Fprintln(out, line)
+			}
 			fmt.Fprintln(out, "Results:", report.Path)
 			if e != nil {
 				return fail(workflowError(e), progress)
@@ -809,6 +818,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			}
 		}
 		_ = table.Flush()
+		if line := report.OwnerSummary(); line != "" {
+			fmt.Fprintln(out, line)
+		}
 		fmt.Fprintln(out, "Results:", report.Path)
 		if e != nil {
 			return fail(workflowError(e), progress)

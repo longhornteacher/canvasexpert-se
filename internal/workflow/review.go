@@ -130,6 +130,36 @@ func digestOf(c ReviewCard) string {
 	return hex.EncodeToString(sum[:8])
 }
 
+// ownerReviewNotice tells the teacher that a results file belongs to a
+// teammate's course and how its scores will land. It uses the assignment title
+// saved at pull, so the review page reads nothing from Canvas; Post checks the
+// live name before writing. Empty for your own courses or when the setup files
+// can't be read.
+func ownerReviewNotice(root string, a domain.AssignmentSnapshot) string {
+	var config domain.CourseConfig
+	if _, e := workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
+		return ""
+	}
+	team, e := workspace.ReadTeam(root)
+	if e != nil {
+		return ""
+	}
+	for _, c := range config.Courses {
+		if c.ID != a.CourseID || c.Owner == "" {
+			continue
+		}
+		owner, ok := team.Find(c.Owner)
+		if !ok {
+			return ""
+		}
+		if !domain.HasConsentTag(a.Title) {
+			return "Not tagged (CE) in Canvas right now. Approving will post nothing."
+		}
+		return owner.Name + "'s course. Scores go in hidden; " + owner.Name + " posts them in Canvas."
+	}
+	return ""
+}
+
 // BuildReview renders a results file without credentials or any Canvas call.
 func BuildReview(root, path string) (ReviewModel, error) {
 	if e := FillResultsAssignment(root, path); e != nil {
@@ -373,7 +403,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 	if doc.Assignment.NewQuiz {
 		kind = "New Quiz comments"
 	}
-	m := ReviewModel{Kind: kind, Title: doc.Assignment.Title}
+	m := ReviewModel{Kind: kind, Title: doc.Assignment.Title, Notice: ownerReviewNotice(root, doc.Assignment)}
 	for i, r := range doc.Students {
 		v := validated[i]
 		c := ReviewCard{Ref: r.StudentRef, Alias: aliases[r.StudentRef], Operation: r.Operation, Hold: v.Hold, Done: resultComplete(r)}

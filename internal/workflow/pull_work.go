@@ -125,6 +125,11 @@ func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, a
 	if !strings.HasPrefix(a.Name, "[CSE 0.1b DISPOSABLE]") && !strings.HasPrefix(a.Name, "[CSE UNATTENDED] ") {
 		return PullReport{}, fmt.Errorf("developer pull requires conspicuously disposable assignment prefix")
 	}
+	if owner, owned, e := s.Owned(course); e != nil {
+		return PullReport{}, e
+	} else if owned && !domain.HasConsentTag(a.Name) {
+		return PullReport{}, untaggedError(a.Name, course, owner)
+	}
 	probeElapsed := time.Since(start)
 	probeRequests := s.requestCount() - requests
 	report, e := s.pullWork(ctx, course.Nickname, fmt.Sprint(assignmentID), &user, nil, PullWorkOptions{})
@@ -133,6 +138,12 @@ func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, a
 	report.Elapsed = time.Since(start)
 	report.Requests = s.requestCount() - requests
 	return report, e
+}
+
+// untaggedError is the refusal for work in a teammate's course that the
+// teammate hasn't opted in with (CE) in the assignment name.
+func untaggedError(name string, course domain.Course, owner workspace.Teammate) error {
+	return fmt.Errorf("%s in %s isn't tagged (CE), so %s hasn't opted it in to CE-SE scoring. Ask %s to add (CE) to its name in Canvas.", name, course.Nickname, owner.Name, owner.Name)
 }
 
 func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin *CanvasUser, groupFilter *int64, options PullWorkOptions) (report PullReport, err error) {
@@ -201,6 +212,10 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			return report, scopeErr
 		}
 		s := scoped
+		owner, owned, ownErr := outer.Owned(course)
+		if ownErr != nil {
+			return report, ownErr
+		}
 		var enrollments []Enrollment
 		var e error
 		if builtin != nil {
@@ -240,11 +255,26 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			if e != nil {
 				return report, e
 			}
+			if owned && !domain.HasConsentTag(a.Name) {
+				return report, untaggedError(a.Name, course, owner)
+			}
 			assignments = []Assignment{a}
 		} else {
 			assignments, err = Assignments(ctx, s.Client, course.ID)
 			if err != nil {
 				return report, err
+			}
+			if owned {
+				tagged := assignments[:0:0]
+				for _, a := range assignments {
+					if domain.HasConsentTag(a.Name) {
+						tagged = append(tagged, a)
+					}
+				}
+				if n := len(assignments) - len(tagged); n > 0 {
+					report.Warnings = append(report.Warnings, fmt.Sprintf("%s: %d assignments not tagged (CE) were skipped.", course.Nickname, n))
+				}
+				assignments = tagged
 			}
 		}
 		groups := map[int64]AssignmentGroup{}
@@ -375,6 +405,14 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			a, e = GetAssignment(ctx, s.Client, course.ID, a.ID)
 			if e != nil {
 				return report, e
+			}
+			if owned && !domain.HasConsentTag(a.Name) {
+				if query != "" {
+					return report, untaggedError(a.Name, course, owner)
+				}
+				summary.SkipReason = "not tagged (CE)"
+				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, untaggedError(a.Name, course, owner)))
+				continue
 			}
 			if reason := unpullableAssignment(a); reason != "" {
 				summary.SkipReason = reason

@@ -34,6 +34,9 @@ type GroupPostReport struct {
 	Groups   []GroupRowReport
 	Requests int64
 	Elapsed  time.Duration
+	// Set for a teammate's course; see PostReport.
+	Owner, Course, Assignment string
+	Hidden                    bool
 }
 
 // groupSource is the pulled, constrained evidence behind one results row.
@@ -235,8 +238,16 @@ func (s *Service) PostGroupResults(ctx context.Context, path string) (report Gro
 	if !configured {
 		return report, fmt.Errorf("group results course is not configured")
 	}
+	owner, owned, err := s.Owned(course)
+	if err != nil {
+		return report, err
+	}
 	if s, err = s.ForCourse(ctx, course); err != nil {
 		return report, err
+	}
+	if owned {
+		s = s.forScoring(owner)
+		report.Owner, report.Course, report.Assignment = owner.Name, course.Nickname, doc.Assignment.Title
 	}
 	allComplete := true
 	for _, r := range doc.Groups {
@@ -245,6 +256,7 @@ func (s *Service) PostGroupResults(ctx context.Context, path string) (report Gro
 		}
 	}
 	if allComplete {
+		report.Hidden = owned // nothing needed writing
 		return report, nil
 	}
 	// Resolve the packet, work files and identities before the first Canvas write.
@@ -281,6 +293,20 @@ func (s *Service) PostGroupResults(ctx context.Context, path string) (report Gro
 	}
 	coupledRubric := liveBasis.Rubric != nil && liveBasis.Rubric.UseForGradingKnown && liveBasis.Rubric.UseForGrading
 	save := func() error { return workspace.WriteDocument(path, &doc, body) }
+	if owned {
+		// See Post: tagged (CE) right now, and Canvas confirmed to hide the grades.
+		hold := ""
+		if !domain.HasConsentTag(liveAssignment.Name) {
+			hold = notTaggedHold
+		} else if e := s.hideGrades(ctx, doc.Assignment.AssignmentID); e != nil {
+			hold = cantHideHold
+		}
+		if hold != "" {
+			s.holdAllGroups(&doc, hold)
+			return report, save()
+		}
+		report.Hidden = true
+	}
 	for i := range doc.Groups {
 		row := &doc.Groups[i]
 		v := validated[i]
@@ -626,10 +652,49 @@ func (s *Service) groupPreflight(ctx context.Context, doc domain.GroupResultsDoc
 			hold = s.checkGroupMember(ctx, a, row, src, ref, &live)
 		}
 		if hold != "" {
+			if s.scoring != nil && strings.Contains(hold, visibleMarker) {
+				hold = fmt.Sprintf(groupVisibleMsg, s.scoring.Name)
+			}
 			return live, hold, nil
 		}
 	}
 	return live, "", nil
+}
+
+// holdAllGroups holds every unfinished action in every group, keeping all
+// scoring text in the results file.
+func (s *Service) holdAllGroups(doc *domain.GroupResultsDocument, reason string) {
+	for i := range doc.Groups {
+		row := &doc.Groups[i]
+		if row.Operation == "individual" {
+			for j := range row.Students {
+				if r := &row.Students[j]; !resultComplete(*r) && !s.Skip[GroupStudentRef(row.GroupID, r.StudentRef)] {
+					holdStudentResult(r, reason)
+				}
+			}
+			if sf := row.SharedFeedback; sf != nil && !definite(sf.Outcome) && !s.Skip[GroupCardRef(row.GroupID)] {
+				holdOutcome(&sf.Outcome, reason)
+			}
+		} else if !groupSharedComplete(*row) && !s.Skip[GroupCardRef(row.GroupID)] {
+			holdGroupShared(row, reason)
+		}
+		for j := range row.IndividualFeedback {
+			if f := &row.IndividualFeedback[j]; !definite(f.Outcome) && !s.Skip[GroupPrivateRef(row.GroupID, f.StudentRef)] {
+				holdOutcome(&f.Outcome, reason)
+			}
+		}
+	}
+}
+
+// groupVisibleHold holds a member whose grade Canvas shows to the student.
+func (s *Service) groupVisibleHold(ref string, sub Submission) string {
+	if s.scoring == nil {
+		return ""
+	}
+	if gradeVisibleHold(*s.scoring, sub) == "" {
+		return ""
+	}
+	return fmt.Sprintf("grade for %s is %s to the student; %s can change it in SpeedGrader", ref, visibleMarker, s.scoring.Name)
 }
 
 func groupTimingSnapshot(a Assignment, origin string, timingOnly bool) (domain.AssignmentSnapshot, error) {
@@ -669,6 +734,9 @@ func (s *Service) checkGroupMember(ctx context.Context, a domain.AssignmentSnaps
 	if submissionFingerprint(sub) != expected.Fingerprint {
 		return "submitted work for " + ref + " changed since pull"
 	}
+	if hold := s.groupVisibleHold(ref, sub); hold != "" {
+		return hold
+	}
 	if sub.Excused {
 		return "member " + ref + " is excused; shared grade would reach them"
 	}
@@ -695,6 +763,9 @@ func (s *Service) checkGroupTimingMember(ctx context.Context, a domain.Assignmen
 	}
 	if submissionGroupID(sub) != row.GroupID || sub.ID != m.SubmissionID || !sameAttempt(domain.AttemptRef{Attempt: m.Attempt}, attemptRef(sub)) {
 		return "submission attempt or group changed for " + ref + "; pull-work before adjusting timing"
+	}
+	if hold := s.groupVisibleHold(ref, sub); hold != "" {
+		return hold
 	}
 	if sub.Excused || (sub.AssignmentVisible != nil && !*sub.AssignmentVisible) {
 		return "member " + ref + " is excused or cannot see the assignment; timing would reach them"
@@ -1165,6 +1236,9 @@ func buildGroupResultsReview(root, path string) (ReviewModel, error) {
 	}
 	store, _ := workspace.OpenStudents(root)
 	m := ReviewModel{Kind: "Shared group assessment", Title: doc.Assignment.Title, Notice: "A shared grade and rubric reach every member of the group together, so each group card is approved or revised as a whole. Private comments are separate cards."}
+	if n := ownerReviewNotice(root, doc.Assignment); n != "" {
+		m.Notice = n + " " + m.Notice
+	}
 	for i, row := range doc.Groups {
 		v := validated[i]
 		if row.Operation == "individual" {

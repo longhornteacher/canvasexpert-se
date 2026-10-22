@@ -28,6 +28,13 @@ type groupPostEnv struct {
 	attempt  map[int64]int
 	timing   map[int64]map[string]any
 	shared   *bool // live grade_group_students_individually, as Canvas currently reports it
+	// Teammate-course checks: the live assignment name, members whose grade
+	// Canvas already shows, post-policy calls seen, and whether a grade write
+	// preceded the first one.
+	liveName             string
+	visible              map[int64]bool
+	policies             int
+	firstPutBeforePolicy bool
 }
 
 type groupPut struct {
@@ -53,7 +60,7 @@ func newGroupPostEnv(t *testing.T, coupled bool) *groupPostEnv {
 
 func newGroupEnv(t *testing.T, coupled, individual bool) *groupPostEnv {
 	t.Helper()
-	env := &groupPostEnv{audience: []string{"10", "11", "12"}, attempt: map[int64]int{10: 1, 11: 1, 12: 1}, timing: map[int64]map[string]any{}}
+	env := &groupPostEnv{liveName: "Evidence essay", audience: []string{"10", "11", "12"}, attempt: map[int64]int{10: 1, 11: 1, 12: 1}, timing: map[int64]map[string]any{}}
 	setID := int64(50)
 	mode := individual
 	env.shared = &mode
@@ -69,7 +76,10 @@ func newGroupEnv(t *testing.T, coupled, individual bool) *groupPostEnv {
 		w.Header().Set("Content-Type", "application/json")
 		write := func(v any) { _ = json.NewEncoder(w).Encode(v) }
 		sub := func(user int64) map[string]any {
-			result := map[string]any{"id": 700 + user, "user_id": user, "assignment_id": 10, "group_id": 60, "attempt": env.attempt[user], "submitted_at": "2026-10-16T18:00:00Z", "workflow_state": "submitted", "submission_type": "online_text_entry", "body": "<p>Our club's shared interpretation.</p>", "cached_due_date": "2026-10-15T12:00:00Z", "late": false, "late_policy_status": nil, "seconds_late": 0, "assignment_visible": true}
+			result := map[string]any{"id": 700 + user, "user_id": user, "assignment_id": 10, "group_id": 60, "attempt": env.attempt[user], "submitted_at": "2026-10-16T18:00:00Z", "workflow_state": "submitted", "submission_type": "online_text_entry", "body": "<p>Our club's shared interpretation.</p>", "cached_due_date": "2026-10-15T12:00:00Z", "late": false, "late_policy_status": nil, "seconds_late": 0, "assignment_visible": true, "posted_at": nil}
+			if env.visible[user] {
+				result["posted_at"] = "2026-10-20T12:00:00Z"
+			}
 			for key, value := range env.timing[user] {
 				result[key] = value
 			}
@@ -77,8 +87,15 @@ func newGroupEnv(t *testing.T, coupled, individual bool) *groupPostEnv {
 		}
 		path := r.URL.Path
 		switch {
+		case path == "/api/graphql":
+			env.mu.Lock()
+			env.policies++
+			env.firstPutBeforePolicy = env.firstPutBeforePolicy || (env.policies == 1 && len(env.puts) > 0)
+			env.mu.Unlock()
+			write(map[string]any{"data": map[string]any{"setAssignmentPostPolicy": map[string]any{"postPolicy": map[string]any{"postManually": true}, "errors": []any{}}}})
 		case path == "/api/v1/courses/1/assignments/10":
 			live := a
+			live.Name = env.liveName
 			live.GradeGroupStudentsIndividually = env.shared
 			write(live)
 		case path == "/api/v1/group_categories/50":

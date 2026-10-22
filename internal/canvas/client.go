@@ -134,7 +134,7 @@ func (c *Client) apiURL(path string) (*url.URL, error) {
 		return nil, &Error{Kind: "validation"}
 	}
 	u = c.origin.ResolveReference(u)
-	if !sameOrigin(c.origin, u) || !(strings.HasPrefix(u.Path, "/api/v1/") || strings.HasPrefix(u.Path, "/api/quiz/v1/")) {
+	if !sameOrigin(c.origin, u) || !(strings.HasPrefix(u.Path, "/api/v1/") || strings.HasPrefix(u.Path, "/api/quiz/v1/") || u.Path == "/api/graphql") {
 		return nil, &Error{Kind: "validation"}
 	}
 	return u, nil
@@ -513,6 +513,57 @@ func (c *Client) Write(ctx context.Context, method, path string, body any, out a
 		return &Error{Kind: "validation"}
 	}
 	return c.request(ctx, method, u, data, false, func(resp *http.Response) error { return readJSON(resp, out) })
+}
+
+const setPostManuallyMutation = `mutation($id: ID!) {
+  setAssignmentPostPolicy(input: {assignmentId: $id, postManually: true}) {
+    postPolicy { postManually }
+    errors { attribute message }
+  }
+}`
+
+// SetAssignmentPostManually makes Canvas hold an assignment's grades until the
+// teacher posts them. It succeeds only when Canvas confirms manual posting.
+func (c *Client) SetAssignmentPostManually(ctx context.Context, assignmentID int64) error {
+	var out struct {
+		Data struct {
+			Set *struct {
+				PostPolicy *struct {
+					PostManually bool `json:"postManually"`
+				} `json:"postPolicy"`
+				Errors []struct {
+					Message string `json:"message"`
+				} `json:"errors"`
+			} `json:"setAssignmentPostPolicy"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	body := map[string]any{"query": setPostManuallyMutation, "variables": map[string]string{"id": strconv.FormatInt(assignmentID, 10)}}
+	if err := c.Write(ctx, http.MethodPost, "/api/graphql", body, &out); err != nil {
+		return err
+	}
+	fail := func(msg string) error {
+		if len(msg) > 200 {
+			msg = msg[:200]
+		}
+		return &Error{Kind: "validation", Body: msg}
+	}
+	if len(out.Errors) > 0 {
+		return fail(out.Errors[0].Message)
+	}
+	set := out.Data.Set
+	if set == nil {
+		return fail("no post policy in response")
+	}
+	if len(set.Errors) > 0 {
+		return fail(set.Errors[0].Message)
+	}
+	if set.PostPolicy == nil || !set.PostPolicy.PostManually {
+		return fail("manual posting was not confirmed")
+	}
+	return nil
 }
 
 // WriteAccepted preserves an accepted HTTP write even if Canvas omits or

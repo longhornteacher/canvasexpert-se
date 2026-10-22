@@ -180,7 +180,12 @@ func TestEachAreaReachesTheOwnedCourseWithTheOwnersKey(t *testing.T) {
 func TestPostToOwnedCourseUsesOwnersKeyAndLogsRedactedWrites(t *testing.T) {
 	live := fixtureSubmission(5)
 	assignment := fixtureAssignment()
+	assignment.Name += " (CE)"
 	k := newTeamKit(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/graphql" {
+			_, _ = w.Write([]byte(`{"data":{"setAssignmentPostPolicy":{"postPolicy":{"postManually":true},"errors":[]}}}`))
+			return
+		}
 		if strings.Contains(r.URL.Path, "submissions/5") {
 			if r.Method == "PUT" {
 				var request struct {
@@ -220,7 +225,7 @@ func TestPostToOwnedCourseUsesOwnersKeyAndLogsRedactedWrites(t *testing.T) {
 		t.Fatalf("no action log: %v", err)
 	}
 	for _, e := range entries {
-		if e.Course != "TEST" || e.CourseID != 1 || e.Method != "PUT" || !strings.HasSuffix(e.Path, "/submissions/:student") || e.Status != 200 {
+		if e.Course != "TEST" || e.CourseID != 1 || e.Status != 200 || (e.Path != "/api/graphql" && (e.Method != "PUT" || !strings.HasSuffix(e.Path, "/submissions/:student"))) {
 			t.Errorf("unexpected log entry %+v", e)
 		}
 	}

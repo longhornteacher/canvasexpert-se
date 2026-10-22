@@ -500,3 +500,7 @@ func DiscussionEvidenceDigest(entries []DiscussionEntry) string {
 	sum := sha256.Sum256([]byte(strings.Join(lines, "\n")))
 	return hex.EncodeToString(sum[:])
 }
+
+// HasConsentTag reports whether an assignment name carries (CE), the mark a
+// teammate adds to opt that assignment in to CE-SE scoring.
+func HasConsentTag(name string) bool { return strings.Contains(strings.ToLower(name), "(ce)") }

@@ -23,6 +23,12 @@ type PostReport struct {
 	Students []StudentPostReport
 	Requests int64
 	Elapsed  time.Duration
+	// Set for a teammate's course: the teammate's name, whether Canvas was
+	// confirmed to hide grades this run, and students held because their grade
+	// was already visible.
+	Owner, Course, Assignment string
+	Hidden                    bool
+	HeldVisible               int
 }
 type postSource struct {
 	student      workspace.Student
@@ -55,6 +61,7 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		for _, row := range doc.Students {
 			report.Students = append(report.Students, postReport(row))
 		}
+		report.HeldVisible = countVisibleHolds(report.Students)
 	}()
 	if doc.Assignment.Instance != s.Client.Origin() {
 		return report, fmt.Errorf("results target a different Canvas instance")
@@ -69,8 +76,16 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 	if !configured {
 		return report, fmt.Errorf("results course is not configured")
 	}
+	owner, owned, err := s.Owned(course)
+	if err != nil {
+		return report, err
+	}
 	if s, err = s.ForCourse(ctx, course); err != nil {
 		return report, err
+	}
+	if owned {
+		s = s.forScoring(owner)
+		report.Owner, report.Course, report.Assignment = owner.Name, course.Nickname, doc.Assignment.Title
 	}
 	allComplete := true
 	for _, r := range doc.Students {
@@ -79,6 +94,7 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		}
 	}
 	if allComplete {
+		report.Hidden = owned // nothing needed writing
 		for _, r := range doc.Students {
 			report.Students = append(report.Students, postReport(r))
 		}
@@ -126,6 +142,25 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		}
 	}
 	save := func() error { return workspace.WriteDocument(path, &doc, body) }
+	if owned {
+		// A teammate's grades are written only for an assignment tagged (CE) right
+		// now, and only after Canvas confirms it will hide them from students.
+		hold := ""
+		if !domain.HasConsentTag(liveAssignment.Name) {
+			hold = notTaggedHold
+		} else if e := s.hideGrades(ctx, doc.Assignment.AssignmentID); e != nil {
+			hold = cantHideHold
+		}
+		if hold != "" {
+			for i := range doc.Students {
+				if r := &doc.Students[i]; !resultComplete(*r) && !s.Skip[r.StudentRef] {
+					holdStudentResult(r, hold)
+				}
+			}
+			return report, save()
+		}
+		report.Hidden = true
+	}
 	for i := range doc.Students {
 		r := &doc.Students[i]
 		v := validated[i]
@@ -192,6 +227,16 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		}
 		if live.UserID != source.student.UserID || live.AssignmentID != doc.Assignment.AssignmentID {
 			return report, fmt.Errorf("live submission identity disagrees with requested target")
+		}
+		if owned {
+			if reason := gradeVisibleHold(owner, live); reason != "" {
+				holdStudentResult(r, reason)
+				if err = save(); err != nil {
+					return report, err
+				}
+				report.Students = append(report.Students, postReport(*r))
+				continue
+			}
 		}
 		if r.Operation == "revise-feedback" {
 			err = s.postRevision(ctx, &doc, r, v, source, live, save)

@@ -45,7 +45,7 @@ Opus made these on 2026-10-22 from the developer's answers; they are final for 1
 |---|---|---|---|---|
 | 01 Team keys, list and Team page | [01](../../handoffs/active/team-1.2b1/01-TEAM-KEYS.md) | Implemented in Dev | Team list validation, notes, action-log redaction, Team page add/courses/test/remove/expiry via seams; full tests and vet | — |
 | 02 Per-course key routing | [02](../../handoffs/active/team-1.2b1/02-KEY-ROUTING.md) | Implemented in Dev | Token-aware fixture: owned-course commands reach Canvas only with the teammate key; post success path with redacted log; co-teaching, uncached transient check, missing key, unknown owner; full tests and vet | — |
-| 03 Scoring consent and hidden grades | [03](../../handoffs/active/team-1.2b1/03-SCORING-CONSENT.md) | Planned | — | — |
+| 03 Scoring consent and hidden grades | [03](../../handoffs/active/team-1.2b1/03-SCORING-CONSENT.md) | Implemented in Dev | Tag rule at pull/post; manual-policy mutation before any write, once, with one retry on uncertain; holds for untagged, unconfirmed policy and visible grades across grade, comment, late and group paths; probe-style and co-teaching variants; full tests and vet | — |
 | 04 Copy a Collab module | [04](../../handoffs/active/team-1.2b1/04-COLLAB-COPY.md) | Planned | — | — |
 | 05 Family reply-to | [05](../../handoffs/active/team-1.2b1/05-FAMILY-REPLY-TO.md) | Planned | — | — |
 | 06 Playbooks, docs, capabilities | [06](../../handoffs/active/team-1.2b1/06-DOCS-AND-PLAYBOOKS.md) | Planned | — | — |

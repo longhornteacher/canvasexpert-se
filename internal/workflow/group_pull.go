@@ -115,6 +115,11 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 	if a.CourseID != course.ID || a.ID != listed.ID {
 		return nil, 0, nil, fmt.Errorf("group assignment is outside the configured course")
 	}
+	if owner, owned, e := s.Owned(course); e != nil {
+		return nil, 0, nil, e
+	} else if owned && !domain.HasConsentTag(a.Name) {
+		return nil, 0, nil, untaggedError(a.Name, course, owner)
+	}
 	if reason := unsupportedGroupPull(a); reason != "" {
 		summary.SkipReason = reason
 		return nil, 0, []string{fmt.Sprintf("assignment %d: %s", a.ID, reason)}, nil

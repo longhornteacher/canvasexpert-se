@@ -32,6 +32,8 @@ type Service struct {
 	Status io.Writer
 	route  *routeState
 	team   *workspace.Teammate
+	// scoring is the owner when this Service writes grades in a teammate's course.
+	scoring *workspace.Teammate
 	// Skip lists student refs post must leave untouched (review: not approved).
 	Skip map[string]bool
 	// privateGroupComments marks comments written for individual group results.
