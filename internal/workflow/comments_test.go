@@ -141,7 +141,7 @@ func TestNewQuizCommentOnlyWritesOnlyAttemptScopedComment(t *testing.T) {
 	if writes != 1 || reads != 0 || row.CommentOnly.Outcome.Status != "succeeded" {
 		t.Fatalf("accepted comment did not finish quietly: writes=%d reads=%d outcome=%#v", writes, reads, row.CommentOnly.Outcome)
 	}
-	if got := row.CommentOnly.Outcome.PostedText; !strings.HasPrefix(got, "Auto-scored items: 14/20\nCriterion scores:\n") || strings.Contains(got, "Overall") {
+	if got := row.CommentOnly.Outcome.PostedText; !strings.HasPrefix(got, "Questions Canvas scored: 14/20\nWritten answers:\n") || strings.Contains(got, "Overall") {
 		t.Fatalf("New Quiz comment should lead with the pulled auto-scored subtotal and no total: %q", got)
 	}
 	currentAttempt := live.Attempt

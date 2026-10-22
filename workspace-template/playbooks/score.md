@@ -70,7 +70,7 @@ For each written prompt, pick the two strongest student responses across the tea
 
 Exemplars never hold up individual feedback. Post each student's feedback as usual. When the last student whose work answers that prompt is scored, across the courses that assigned it, send the exemplars as a follow-up: a second results file with `operation: comment-only` for each student, their same scores, `header: none` and the exemplar text as `feedback`. It adds only the comment and never touches the grade, so a grade the teacher changed in SpeedGrader stays as they left it. Review follows the teacher's usual review choice.
 
-A New Quiz comment leads with `Auto-scored items: X/Y` when the pull recorded that subtotal from Canvas, then the per-item criterion lines, and never an overall line. The Engine adds the subtotal from the pulled work; you never supply, restate or add to it. It is posted before the teacher enters the written-item points, so Canvas has no complete quiz result yet. Never build a whole-quiz score from the written portion and the subtotal together. A work file whose attempt shows `auto_scored_note` instead has no subtotal; the comment simply omits that line.
+A New Quiz comment leads with `Questions Canvas scored: X/Y` when the pull recorded that subtotal from Canvas, then the per-item criterion lines, and never an overall line. The Engine adds the subtotal from the pulled work; you never supply, restate or add to it. It is posted before the teacher enters the written-item points, so Canvas has no complete quiz result yet. Never build a whole-quiz score from the written portion and the subtotal together. A work file whose attempt shows `auto_scored_note` instead has no subtotal; the comment simply omits that line.
 
 ## Save, review, post
 

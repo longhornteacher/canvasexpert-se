@@ -71,9 +71,15 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		out.WriteString(overall)
 		out.WriteString("\n")
 	} else if in.AutoScored != nil {
-		fmt.Fprintf(&out, "Auto-scored items: %s/%s\n", shortNumber(in.AutoScored.Earned), shortNumber(in.AutoScored.Possible))
+		fmt.Fprintf(&out, "Questions Canvas scored: %s/%s\n", shortNumber(in.AutoScored.Earned), shortNumber(in.AutoScored.Possible))
 	}
-	out.WriteString("Criterion scores:")
+	// Plain words a student reads: a New Quiz comment covers only the written
+	// answers; an ordinary assignment lists every part.
+	if in.OmitAssessment {
+		out.WriteString("Written answers:")
+	} else {
+		out.WriteString("Scores:")
+	}
 	components := make(map[string]domain.ComponentScore, len(in.Components))
 	for _, c := range in.Components {
 		components[c.Key] = c

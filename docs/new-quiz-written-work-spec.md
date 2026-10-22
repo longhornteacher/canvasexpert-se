@@ -29,7 +29,7 @@ When the teacher asks to score a New Quiz's written items, the agent reads each 
 - The packet keeps the pseudonymized `student_ref`, attempt and submit time, with written responses labelled by prompt and item id.
 - Identity: `student_data.id` must match the enrolled submission's user id and the attempt must match; otherwise that student is skipped with a one-line reason.
 - Scoring basis: the attached Canvas rubric when present, else the teacher's `scoring_basis`; quiz-file `rubric_hint`s guide the agent's judgment.
-- Output is a **comment-only** results mode: one submission comment per student on the quiz assignment (ordinary REST comment, `attempt` set), the Engine's pulled `Auto-scored items: X/Y` subtotal when known (added 2026-10-21), then criterion lines, then the agent's glows and grows. It has no aggregate assessment line and cannot carry grade, rubric-assessment or late actions. Review-before-post applies. After the teacher approves, the Engine writes and reports once; no read-back.
+- Output is a **comment-only** results mode: one submission comment per student on the quiz assignment (ordinary REST comment, `attempt` set), the Engine's pulled `Questions Canvas scored: X/Y` subtotal when known (added 2026-10-21), then criterion lines, then the agent's glows and grows. It has no aggregate assessment line and cannot carry grade, rubric-assessment or late actions. Review-before-post applies. After the teacher approves, the Engine writes and reports once; no read-back.
 
 The new Engine path still needs MCP and Canvas Live validation to establish attempt placement and verify the quiz score remains untouched. The prior hand-run is API evidence only.
 

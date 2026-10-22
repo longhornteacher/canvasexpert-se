@@ -28,7 +28,7 @@ func TestRenderFeedbackShowsAssessmentScoresThenConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Overall: 4.67/20\nCriterion scores:\n- Response 1:\n  - Evidence 3/4\n  - Reasoning 4/6\n- Response 2:\n  - Evidence 0/4\n  - Reasoning 0/6\n\n" + feedback
+	want := "Overall: 4.67/20\nScores:\n- Response 1:\n  - Evidence 3/4\n  - Reasoning 4/6\n- Response 2:\n  - Evidence 0/4\n  - Reasoning 0/6\n\n" + feedback
 	if got != want {
 		t.Fatalf("unexpected rendering\n got: %s\nwant: %s", got, want)
 	}
@@ -51,7 +51,7 @@ func TestRenderFeedbackDirectMappingAndXSS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Overall: 7/10\nCriterion scores:\n- Prompt A: Read <carefully> 4/5\n- Prompt B: Write 3/5\n\n<script>alert(1)</script>"
+	want := "Overall: 7/10\nScores:\n- Prompt A: Read <carefully> 4/5\n- Prompt B: Write 3/5\n\n<script>alert(1)</script>"
 	if got != want {
 		t.Fatalf("plain text criteria or exact feedback preservation incorrect:\n got: %s\nwant: %s", got, want)
 	}
@@ -65,7 +65,7 @@ func TestRenderCommentOnlyOmitsAggregateAssessment(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(got, "Assessment:") || !strings.HasPrefix(got, "Criterion scores:\n") || !strings.HasSuffix(got, "\n\nGood evidence.") {
+		if strings.Contains(got, "Assessment:") || !strings.HasPrefix(got, "Written answers:\n") || !strings.HasSuffix(got, "\n\nGood evidence.") {
 			t.Fatalf("header %q: comment-only text included an aggregate grade or lost feedback: %q", header, got)
 		}
 	}
@@ -82,7 +82,7 @@ func TestRenderNewQuizLeadsWithAutoScoredSubtotal(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got != "Auto-scored items: 6.5/9\nCriterion scores:\n- Response: Evidence 4/5\n\nGood evidence." {
+		if got != "Questions Canvas scored: 6.5/9\nWritten answers:\n- Response: Evidence 4/5\n\nGood evidence." {
 			t.Fatalf("header %q: %q", header, got)
 		}
 	}
@@ -185,7 +185,7 @@ func TestHeaderLetsTheTeacherControlWhatLeadsTheComment(t *testing.T) {
 	}
 	for _, h := range []string{"", "full"} {
 		in.Header = h
-		if got, err := RenderFeedback(in); err != nil || got != "Overall: 3/4\nCriterion scores:\n- Response 1: Evidence 3/4\n\n32/40\nGreat work." {
+		if got, err := RenderFeedback(in); err != nil || got != "Overall: 3/4\nScores:\n- Response 1: Evidence 3/4\n\n32/40\nGreat work." {
 			t.Fatalf("header %q must lead with the overall and item lines: %q %v", h, got, err)
 		}
 	}
