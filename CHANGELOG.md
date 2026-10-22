@@ -2,6 +2,18 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
+## 1.1.0-beta.4 (2026-10-21)
+
+Review pages stay open when the agent app restarts, and CI fixes.
+
+### Review pages survive an app restart (2026-10-21)
+
+- A review page started by `start_review` or `start_parent_review` used to close when the agent app restarted the tool connection, losing the teacher's Approve click (observed on the home PC; nothing posted). Review pages now keep running past the adapter, so the approval still posts; setup and students pages still close with it. Calling `start_review` again for the same file reconnects to the page that is still open, and once it closes `review_status` reports revision notes and points to the saved outcomes. Local tests and a compiled-Engine restart check; not yet observed with a real app restart.
+
+### CI fixes (2026-10-21)
+
+- The compiled MCP check expects the 41 tools that include `init_results`, and the audience privacy test matches roster IDs as whole numbers so random refs cannot trip it.
+
 ## 1.1.0-beta.3 (2026-10-21)
 
 Lighter scoring reads, Engine-run updates for git installs, and results files that start from the packet.
@@ -23,10 +35,6 @@ Lighter scoring reads, Engine-run updates for git installs, and results files th
 The Groups update, published as the latest release for all users. It carries every development note below since 1.0: book-club group work, Family Contact emails, current-period parent reports, school-calendar late timing, targeted scoring sessions, and installation and quiet updates by git (the `userinstall` branch with `get-engine.cmd`), with the Windows ZIP kept as the fallback.
 
 ## Development notes
-
-### Review pages survive an app restart (2026-10-21)
-
-- A review page started by `start_review` or `start_parent_review` used to close when the agent app restarted the tool connection, losing the teacher's Approve click (observed on the home PC; nothing posted). Review pages now keep running past the adapter, so the approval still posts; setup and students pages still close with it. Calling `start_review` again for the same file reconnects to the page that is still open, and once it closes `review_status` reports revision notes and points to the saved outcomes. Local tests and a compiled-Engine restart check; not yet observed with a real app restart.
 
 ### 1.1 beta 2 version and live session evidence (2026-10-21)
 
