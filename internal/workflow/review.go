@@ -431,12 +431,20 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			}
 		} else if r.ReviseFeedback != nil {
 			c.Comment = feedback
+			if rf := r.ReviseFeedback; rf.Assessment != nil && doc.Basis() != nil {
+				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: rf.Assessment.Components, Assessment: rf.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(&doc, works[r.StudentRef], rf.Attempt.Attempt), Header: rf.Header})
+				if e != nil {
+					c.Hold = e.Error()
+				} else {
+					c.Comment = text
+				}
+			}
 		} else if r.CommentOnly != nil && doc.Basis() != nil {
 			computed, e := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, r.CommentOnly.Components, doc.Assignment.Points)
 			if e != nil {
 				c.Hold = e.Error()
 			} else {
-				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, Header: r.CommentOnly.Header})
+				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(&doc, works[r.StudentRef], r.CommentOnly.Attempt.Attempt), Header: r.CommentOnly.Header})
 				if e != nil {
 					c.Hold = e.Error()
 				} else {
@@ -447,6 +455,15 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 		m.Cards = append(m.Cards, c)
 	}
 	return m, nil
+}
+
+// autoScoredFor returns the pulled New Quiz auto-scored subtotal for exactly
+// this attempt, or nil when the pull has none.
+func autoScoredFor(doc *domain.ResultsDocument, work domain.StudentWorkDocument, attempt int) *domain.AutoScored {
+	if !doc.Assignment.NewQuiz || work.Current.Ref.Attempt != attempt {
+		return nil
+	}
+	return work.Current.AutoScored
 }
 
 // submissionText returns what the student wrote for one attempt, from the

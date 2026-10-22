@@ -475,6 +475,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 						continue
 					}
 					doc.Current.WrittenResponses = row.Responses
+					doc.Current.AutoScored, doc.Current.AutoScoredNote = row.AutoScored, row.AutoScoredNote
 					doc.Current.WrittenFiles = s.downloadNewQuizFiles(ctx, relDir, st.Ref, sub.UserID, course.ID, a.ID, sub.Attempt, row, &newQuizDownloadBudget)
 				}
 				for _, prior := range priorAttempts(sub) {

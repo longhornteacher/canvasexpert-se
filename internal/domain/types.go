@@ -227,6 +227,18 @@ type AttemptWork struct {
 	EffectiveDueAt   string            `yaml:"effective_due_at,omitempty"`
 	EnteredGrade     *Decimal          `yaml:"entered_grade,omitempty"`
 	RubricAssessment []CriterionScore  `yaml:"rubric_assessment,omitempty"`
+	// AutoScored is the New Quiz auto-scored subtotal from Canvas's Student
+	// Analysis report at pull time. Absent when unknown; AutoScoredNote says why.
+	AutoScored     *AutoScored `yaml:"auto_scored,omitempty"`
+	AutoScoredNote string      `yaml:"auto_scored_note,omitempty"`
+}
+
+// AutoScored totals the auto-scored items (everything but written items) of
+// one New Quiz attempt. It is Engine-owned evidence, never agent input.
+type AutoScored struct {
+	Earned   Decimal `yaml:"earned"`
+	Possible Decimal `yaml:"possible"`
+	Items    int     `yaml:"items"`
 }
 type WrittenResponse struct {
 	ItemID string `yaml:"item_id"`

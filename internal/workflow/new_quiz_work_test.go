@@ -92,10 +92,11 @@ func TestNewQuizResponsesMapsLatestStudentAttemptAndWrittenItems(t *testing.T) {
 			signedRequestHadAuth = r.Header.Get("Authorization") != ""
 			_, _ = w.Write([]byte(`[
 {"student_data":{"id":5,"attempt":1,"submitted_at":"2026-10-01T12:00:00Z"},"item_responses":[{"item_id":21,"item_type":"essay","answer":"<p>Earlier</p>"}]},
-{"student_data":{"id":5,"attempt":2,"submitted_at":"2026-10-07T12:00:00Z"},"item_responses":[{"item_id":21,"item_type":"essay","answer":"<p>Current <em>typed</em></p>"},{"item_id":22,"item_type":"file-upload","answer":"answer.docx"}]}
+{"student_data":{"id":5,"attempt":2,"submitted_at":"2026-10-07T12:00:00Z"},"item_responses":[{"item_id":21,"item_type":"essay","answer":"<p>Current <em>typed</em></p>","score":0},{"item_id":22,"item_type":"file-upload","answer":"answer.docx"},{"item_id":23,"item_type":"choice","answer":"b","score":4.0},{"item_id":124,"item_type":"choice","answer":"a","score":2.5}]},
+{"student_data":{"id":6,"attempt":1,"submitted_at":"2026-10-07T12:00:00Z"},"item_responses":[{"item_id":23,"item_type":"choice","answer":"b","score":0.0},{"item_id":24,"item_type":"choice","answer":null,"score":null}]}
 ]`))
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/items"):
-			_, _ = w.Write([]byte(`[{"id":"21","entry_type":"Item","entry":{"id":"121","interaction_type_slug":"essay","item_body":"<p>Explain your reasoning.</p>"}},{"id":"22","entry_type":"Item","entry":{"id":"122","interaction_type_slug":"file-upload","item_body":"Upload your work."}},{"id":"23","entry_type":"Item","entry":{"id":"123","interaction_type_slug":"choice","item_body":"Choose one."}}]`))
+			_, _ = w.Write([]byte(`[{"id":"21","entry_type":"Item","entry":{"id":"121","interaction_type_slug":"essay","item_body":"<p>Explain your reasoning.</p>"}},{"id":"22","entry_type":"Item","entry":{"id":"122","interaction_type_slug":"file-upload","item_body":"Upload your work."}},{"id":"23","entry_type":"Item","points_possible":4.0,"entry":{"id":"123","interaction_type_slug":"choice","item_body":"Choose one."}},{"id":"24","entry_type":"Item","points_possible":5.0,"entry":{"id":"124","interaction_type_slug":"choice","item_body":"Choose again."}},{"id":"25","entry_type":"Stimulus","points_possible":0,"entry":{"id":"125","item_body":"Passage."}}]`))
 		default:
 			t.Errorf("unexpected Student Analysis request: %s %s", r.Method, r.URL.Path)
 			http.NotFound(w, r)
@@ -111,6 +112,12 @@ func TestNewQuizResponsesMapsLatestStudentAttemptAndWrittenItems(t *testing.T) {
 	}
 	if row.Responses[0].Prompt != "Explain your reasoning." || row.Responses[0].Text != "Current typed" || row.Files[0].Name != "answer.docx" || row.Files[0].Status != "not-retrieved" || row.FileItemIDs[0] != "22" {
 		t.Fatalf("written items were not joined to prompts: %#v", row)
+	}
+	if a := row.AutoScored; a == nil || a.Earned.Cmp(domain.MustDecimal("6.5")) != 0 || a.Possible.Cmp(domain.MustDecimal("9")) != 0 || a.Items != 2 || row.AutoScoredNote != "" {
+		t.Fatalf("auto-scored subtotal should sum choice items only, by either item id: %#v %q", row.AutoScored, row.AutoScoredNote)
+	}
+	if other := rows[6]; other.AutoScored != nil || other.AutoScoredNote != "1 of 2 auto-scored items have no score in Canvas's report" {
+		t.Fatalf("a missing item score must leave the subtotal unknown: %#v %q", other.AutoScored, other.AutoScoredNote)
 	}
 	if signedRequestHadAuth {
 		t.Fatal("signed Student Analysis download received the Canvas token")

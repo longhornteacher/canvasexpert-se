@@ -38,4 +38,4 @@ students:
       feedback: "Synthetic feedback grounded in the written response."
 ---
 
-Synthetic result fixture. Replace all identity, attempt and packet fields with the actual pull before teacher use. The Engine renders criterion scores without an aggregate quiz assessment and posts only a submission comment. The teacher enters per-item points in SpeedGrader.
+Synthetic result fixture. Replace all identity, attempt and packet fields with the actual pull before teacher use. The Engine leads with the auto-scored subtotal recorded in the pulled work (for example `Auto-scored items: 14/20`), then the criterion scores, without an aggregate quiz assessment, and posts only a submission comment. The teacher enters per-item points in SpeedGrader.

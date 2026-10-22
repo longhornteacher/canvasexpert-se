@@ -18,6 +18,9 @@ type FeedbackInput struct {
 	AssignmentPoints domain.Decimal
 	Feedback         string
 	OmitAssessment   bool
+	// AutoScored leads a New Quiz comment with the auto-scored subtotal from
+	// the pulled report; it is never a whole-quiz total.
+	AutoScored *domain.AutoScored
 	// Late marks the overall line "(late)". The score stays the earned
 	// assessment; Canvas applies any late deduction in the gradebook.
 	Late bool
@@ -67,6 +70,8 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 	if !in.OmitAssessment {
 		out.WriteString(overall)
 		out.WriteString("\n")
+	} else if in.AutoScored != nil {
+		fmt.Fprintf(&out, "Auto-scored items: %s/%s\n", shortNumber(in.AutoScored.Earned), shortNumber(in.AutoScored.Possible))
 	}
 	out.WriteString("Criterion scores:")
 	components := make(map[string]domain.ComponentScore, len(in.Components))

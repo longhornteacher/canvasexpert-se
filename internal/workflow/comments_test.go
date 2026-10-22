@@ -133,12 +133,16 @@ func TestNewQuizCommentOnlyWritesOnlyAttemptScopedComment(t *testing.T) {
 	doc := &domain.ResultsDocument{Assignment: domain.AssignmentSnapshot{CourseID: 1, AssignmentID: 10, Points: domain.MustDecimal("20"), NewQuiz: true, Rubric: &rubric}, Interpretation: domain.Interpretation{Mapping: "repeated", Rationale: "Each written item uses this rubric.", Components: []domain.Component{{Key: "answer", Label: "Answer", Weight: domain.MustDecimal("1")}}}}
 	row := &domain.StudentResult{Operation: "comment-only", CommentOnly: &domain.CommentOnlyOperation{Attempt: attemptRef(live), Components: []domain.ComponentScore{{Key: "answer", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "c1", Points: domain.MustDecimal("80")}}}}, Feedback: "Explain your evidence."}}
 	validated := domain.ValidatedStudent{Interpretation: doc.Interpretation}
-	source := postSource{student: workspace.Student{UserID: 5}}
+	work := domain.StudentWorkDocument{Current: domain.AttemptWork{Ref: attemptRef(live), AutoScored: &domain.AutoScored{Earned: domain.MustDecimal("14.00"), Possible: domain.MustDecimal("20.00"), Items: 5}}}
+	source := postSource{student: workspace.Student{UserID: 5}, work: work}
 	if err := s.postCommentOnly(context.Background(), doc, row, validated, source, live, func() error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if writes != 1 || reads != 0 || row.CommentOnly.Outcome.Status != "succeeded" {
 		t.Fatalf("accepted comment did not finish quietly: writes=%d reads=%d outcome=%#v", writes, reads, row.CommentOnly.Outcome)
+	}
+	if got := row.CommentOnly.Outcome.PostedText; !strings.HasPrefix(got, "Auto-scored items: 14/20\nCriterion scores:\n") || strings.Contains(got, "Overall") {
+		t.Fatalf("New Quiz comment should lead with the pulled auto-scored subtotal and no total: %q", got)
 	}
 	currentAttempt := live.Attempt
 	live.Comments = []SubmissionComment{{ID: 72, Comment: row.CommentOnly.Outcome.PostedText, Attempt: &currentAttempt}}

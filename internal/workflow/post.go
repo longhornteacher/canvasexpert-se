@@ -259,7 +259,7 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 	if err != nil {
 		return err
 	}
-	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: doc.Assignment.NewQuiz, Header: c.Header})
+	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(doc, source.work, c.Attempt.Attempt), Header: c.Header})
 	if err != nil {
 		return err
 	}
@@ -793,7 +793,7 @@ func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument,
 	text := workspace.ReplaceStudentName(r.Feedback, source.student)
 	if r.Assessment != nil {
 		var e error
-		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text, OmitAssessment: doc.Assignment.NewQuiz, Header: r.Header})
+		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(doc, source.work, r.Attempt.Attempt), Header: r.Header})
 		if e != nil {
 			return e
 		}

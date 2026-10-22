@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/url"
 	"os"
 	"path"
@@ -34,13 +35,15 @@ type quizReportRow struct {
 		ItemID   json.Number     `json:"item_id"`
 		ItemType string          `json:"item_type"`
 		Answer   json.RawMessage `json:"answer"`
+		Score    *json.Number    `json:"score"`
 	} `json:"item_responses"`
 }
 // writtenQuizItem is one entry of the New Quizzes items list. Canvas nests the
 // question type and body under "entry"; the outer id is the quiz-entry id and
 // entry.id is the item id, so either may be the id other reports use.
 type writtenQuizItem struct {
-	ID    json.Number `json:"id"`
+	ID     json.Number `json:"id"`
+	Points json.Number `json:"points_possible"`
 	Entry struct {
 		ID   json.Number `json:"id"`
 		Type string      `json:"interaction_type_slug"`
@@ -55,6 +58,8 @@ type newQuizRow struct {
 	Responses   []domain.WrittenResponse
 	Files       []domain.WrittenFile
 	FileItemIDs []string
+	AutoScored     *domain.AutoScored
+	AutoScoredNote string
 }
 
 // newQuizResponses reads Canvas's Student Analysis report and joins only the
@@ -114,9 +119,15 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 	}
 	prompts := map[string]writtenQuizItem{}
 	fileItemIDs := []string{}
+	var autoItems []writtenQuizItem
 	for _, item := range items {
 		item.Type, item.Body = item.Entry.Type, item.Entry.Body
 		typ := strings.ToLower(item.Type)
+		if typ != "essay" && typ != "file-upload" && typ != "file_upload" {
+			if p, e := domain.ParseDecimal(item.Points.String()); e == nil && p.Sign() > 0 {
+				autoItems = append(autoItems, item)
+			}
+		}
 		for _, id := range []json.Number{item.ID, item.Entry.ID} {
 			if id == "" {
 				continue
@@ -139,6 +150,7 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 		if entry.Attempt != row.Student.Attempt { entry = newQuizRow{} }
 		entry.Attempt, entry.SubmittedAt = row.Student.Attempt, row.Student.SubmittedAt
 		entry.FileItemIDs = append([]string(nil), fileItemIDs...)
+		entry.AutoScored, entry.AutoScoredNote = autoScoredTotal(autoItems, row)
 		for _, response := range row.Responses {
 			id := response.ItemID.String()
 			item, ok := prompts[id]
@@ -160,6 +172,39 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 		out[row.Student.ID] = entry
 	}
 	return out, nil
+}
+
+// autoScoredTotal sums one report row's auto-scored items. Any item without a
+// numeric score leaves the total unknown rather than guessed.
+func autoScoredTotal(items []writtenQuizItem, row quizReportRow) (*domain.AutoScored, string) {
+	if len(items) == 0 {
+		return nil, ""
+	}
+	scores := map[string]string{}
+	for _, response := range row.Responses {
+		if response.Score != nil {
+			scores[response.ItemID.String()] = response.Score.String()
+		}
+	}
+	earned, possible := new(big.Rat), new(big.Rat)
+	missing := 0
+	for _, item := range items {
+		score, ok := scores[item.ID.String()]
+		if !ok {
+			score, ok = scores[item.Entry.ID.String()]
+		}
+		d, e := domain.ParseDecimal(score)
+		if !ok || e != nil {
+			missing++
+			continue
+		}
+		earned.Add(earned, d.Rat())
+		possible.Add(possible, domain.MustDecimal(item.Points.String()).Rat())
+	}
+	if missing > 0 {
+		return nil, fmt.Sprintf("%d of %d auto-scored items have no score in Canvas's report", missing, len(items))
+	}
+	return &domain.AutoScored{Earned: domain.RoundRat(earned, 2), Possible: domain.RoundRat(possible, 2), Items: len(items)}, ""
 }
 
 func (s *Service) downloadNewQuizFiles(ctx context.Context, relDir, studentRef string, userID int64, courseID, assignmentID int64, attempt int, row newQuizRow, budget *int64) []domain.WrittenFile {

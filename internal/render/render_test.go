@@ -71,6 +71,27 @@ func TestRenderCommentOnlyOmitsAggregateAssessment(t *testing.T) {
 	}
 }
 
+func TestRenderNewQuizLeadsWithAutoScoredSubtotal(t *testing.T) {
+	rubric := domain.Rubric{Title: "R", Criteria: []domain.Criterion{{ID: "a", Description: "Evidence", Points: domain.MustDecimal("5")}}}
+	interpretation := domain.Interpretation{Mapping: "repeated", Rationale: "private", Components: []domain.Component{{Key: "one", Label: "Response", Weight: domain.MustDecimal("1")}}}
+	auto := &domain.AutoScored{Earned: domain.MustDecimal("6.50"), Possible: domain.MustDecimal("9.00"), Items: 2}
+	in := FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: []domain.ComponentScore{{Key: "one", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal("4")}}}}, Assessment: domain.MustDecimal("16"), AssignmentPoints: domain.MustDecimal("20"), Feedback: "Good evidence.", OmitAssessment: true, AutoScored: auto}
+	for _, header := range []string{"", "full", "score"} {
+		in.Header = header
+		got, err := RenderFeedback(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "Auto-scored items: 6.5/9\nCriterion scores:\n- Response: Evidence 4/5\n\nGood evidence." {
+			t.Fatalf("header %q: %q", header, got)
+		}
+	}
+	in.Header = "none"
+	if got, _ := RenderFeedback(in); got != "Good evidence." {
+		t.Fatalf("header none must post the feedback exactly: %q", got)
+	}
+}
+
 func TestMarkdownHTMLSafeSubsetAndHTMLText(t *testing.T) {
 	got, err := MarkdownHTML("# Directions\n\nAnswer both prompts.\n\n- First\n- Second\n\n```text\nx < y\n```")
 	if err != nil {
