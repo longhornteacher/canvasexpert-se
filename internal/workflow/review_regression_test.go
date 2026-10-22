@@ -706,3 +706,15 @@ func TestRegressionSubmittedWorkOnLaterPageHoldsOnlyStructure(t *testing.T) {
 		t.Fatalf("later submitted work must protect structure and allow title: pages=%d report=%+v patch=%v", pages, report, patch)
 	}
 }
+
+func TestRubricCommentFactsNameCriteriaAndKeepText(t *testing.T) {
+	rubric := &domain.Rubric{Criteria: []domain.Criterion{{ID: "c1", Description: "Evidence"}, {ID: "c2", Description: "Voice"}}}
+	a := &domain.Assessment{Criteria: []domain.AggregateCriterion{{CriterionID: "c1", Comment: "a: Specific.\nb: Cite a line."}, {CriterionID: "c2"}}}
+	got := rubricCommentFacts(rubric, a)
+	if len(got) != 1 || got[0].Label != "Evidence" || got[0].Value != "a: Specific.\nb: Cite a line." {
+		t.Fatalf("%+v", got)
+	}
+	if rubricCommentFacts(nil, a) != nil {
+		t.Fatal("no Canvas rubric means no rubric comments are posted")
+	}
+}

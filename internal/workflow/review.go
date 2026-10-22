@@ -55,7 +55,7 @@ type ReviewCard struct {
 	Total                 string // computed assessment, e.g. "18.5 / 20"
 	Comment               string // exact plain text that will be posted (ordinary results)
 	Submission            string // the student's work for this attempt, so feedback is judged against it
-	Lines                 []ReviewLine
+	RubricComments        []ReviewFact // criterion comments sent with the rubric assessment, exact text
 	Facts                 []ReviewFact
 	Frames                []ReviewFrame
 	Key                   string // teacher-only answer key, shown behind a toggle
@@ -65,12 +65,6 @@ type ReviewCard struct {
 	Hold                  string // reason this student will not post
 	Done                  bool   // already posted
 	Digest                string
-}
-
-// ReviewLine is one line within a review card.
-type ReviewLine struct {
-	Name, Score, Comment, TeacherNote, Hold string
-	Done                                    bool
 }
 
 // ReviewItem is the teacher's decision on one card.
@@ -395,6 +389,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			if v.Assessment != nil {
 				c.Total = v.Assessment.Posted.String() + " / " + doc.Assignment.Points.String()
 			}
+			c.RubricComments = rubricCommentFacts(doc.Assignment.Rubric, v.Assessment)
 		case r.ReviseFeedback != nil:
 			c.Attempt = r.ReviseFeedback.Attempt.Attempt
 			feedback = r.ReviseFeedback.Feedback
@@ -497,6 +492,30 @@ func submissionText(w domain.StudentWorkDocument, attempt int) string {
 		}
 	}
 	return ""
+}
+
+// rubricCommentFacts lists the criterion comments a rubric assessment will
+// carry, so the teacher approves every student-facing text.
+func rubricCommentFacts(rubric *domain.Rubric, a *domain.Assessment) []ReviewFact {
+	if rubric == nil || a == nil {
+		return nil
+	}
+	names := map[string]string{}
+	for _, c := range rubric.Criteria {
+		names[c.ID] = c.Description
+	}
+	var facts []ReviewFact
+	for _, c := range a.Criteria {
+		if c.Comment == "" {
+			continue
+		}
+		label := names[c.CriterionID]
+		if label == "" {
+			label = c.CriterionID
+		}
+		facts = append(facts, ReviewFact{Label: label, Value: c.Comment})
+	}
+	return facts
 }
 
 func compactText(s string) string { return strings.Join(strings.Fields(s), " ") }

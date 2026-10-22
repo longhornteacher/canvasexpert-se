@@ -74,11 +74,6 @@ type reviewCardView struct {
 	Status, Note   string
 	ChangedSinceRv bool
 	Collapsed      bool
-	Lines          []reviewLineView
-}
-type reviewLineView struct {
-	workflow.ReviewLine
-	Comment string // comments display the way Canvas shows them: one paragraph
 }
 
 type reviewHandler struct {
@@ -107,11 +102,6 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 	v := reviewView{Appearance: appearanceFor(h.root, h.secret), Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, PostLabel: model.PostLabel, Actions: model.Actions, Test: model.Test && h.test != nil, Email: model.Email, Frames: model.Frames, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
 	for i, c := range model.Cards {
 		cv := reviewCardView{ReviewCard: c, Index: i, Status: "approved"}
-		for _, l := range c.Lines {
-			lv := reviewLineView{ReviewLine: l, Comment: strings.Join(strings.Fields(l.Comment), " ")}
-			cv.Lines = append(cv.Lines, lv)
-		}
-		cv.ReviewCard.Lines = nil
 		if item, ok := state.Items[c.Ref]; ok && (item.Status == "revise" || model.Email && item.Status == "skip") {
 			if item.Digest == c.Digest {
 				cv.Status, cv.Note = item.Status, item.Note

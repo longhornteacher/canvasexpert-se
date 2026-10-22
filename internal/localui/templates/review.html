@@ -17,9 +17,7 @@
 {{if .Key}}<details class="private"><summary><b>Answer key (teacher only)</b></summary><pre>{{.Key}}</pre></details>{{end}}
 {{if .Submission}}<div class="evidence-label">Student submission</div><pre class="work">{{.Submission}}</pre>{{end}}
 {{if .Comment}}<div class="evidence-label">Feedback to be posted</div><pre>{{.Comment}}</pre>{{end}}
-{{range .Lines}}<div class="q"><b>{{.Name}}</b>{{if .Score}} &middot; {{.Score}}{{end}}{{if .Done}} <span class="tag">Posted</span>{{end}}
-{{if .Hold}}<div class="hold">Held: {{.Hold}}</div>{{end}}{{if .Comment}}<div class="comment">{{.Comment}}</div><div class="sub">Canvas shows this to the student as one paragraph.</div>{{end}}
-{{if .TeacherNote}}<div class="private"><b>Teacher only</b><br>{{.TeacherNote}}</div>{{end}}</div>{{end}}
+{{if .RubricComments}}<div class="evidence-label">Rubric comments to be posted</div>{{range .RubricComments}}<div class="q"><b>{{.Label}}</b><pre>{{.Value}}</pre></div>{{end}}{{end}}
 {{if .TeacherNote}}<div class="private"><b>Teacher only (not posted)</b><br>{{.TeacherNote}}</div>{{end}}
 {{if .LateBasis}}<div class="private"><b>Lateness, teacher only (not posted)</b><br>{{.LateBasis}}</div>{{end}}
 {{if and (not .Hold) (not .Done)}}<div class="choice"><label><input type="radio" name="status_{{.Index}}" value="approved"{{if eq .Status "approved"}} checked{{end}}> Approved</label>

@@ -1255,6 +1255,7 @@ func buildGroupResultsReview(root, path string) (ReviewModel, error) {
 			if v.Assessment != nil {
 				c.Total = v.Assessment.Posted.String() + " / " + doc.Assignment.Points.String()
 			}
+			c.RubricComments = rubricCommentFacts(doc.Assignment.Rubric, v.Assessment)
 			if g.FeedbackAudience == "none" {
 				c.Facts = append(c.Facts, ReviewFact{"Shared comment", "none"})
 			}
@@ -1512,6 +1513,7 @@ func individualReviewCards(root string, doc domain.GroupResultsDocument, row dom
 			if vs.Assessment != nil {
 				c.Total = vs.Assessment.Posted.String() + " / " + doc.Assignment.Points.String()
 			}
+			c.RubricComments = rubricCommentFacts(doc.Assignment.Rubric, vs.Assessment)
 		case r.CommentOnly != nil:
 			attempt, feedback = r.CommentOnly.Attempt.Attempt, r.CommentOnly.Feedback
 		case r.LateOnly != nil:
