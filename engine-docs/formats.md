@@ -199,6 +199,36 @@ The module is a navigation list and carries no audience; each child keeps its ow
 
 Membership changes are refreshed per resource with `prepare_audience {course, path, refresh: true}`. Assignment and quiz removals are work-protected; Page removals are not, because Pages have no submission evidence route. Report the three results together and never recreate a resource to refresh access.
 
+## Assign To by differentiation tag (`assign-to`)
+
+```yaml
+---
+schema: 1
+kind: assign-to
+course: PAP LANG ARTS 7 - Beckham
+mode: replace            # replace (default) sets exactly these tags; add merges with the existing audience
+everyone: false          # optional; per-target everyone wins. Default: restricted when tags are named
+allow_remove_with_submissions: false
+targets:
+  - module: "Book Club: Ghost"          # title, or a bare integer for the module ID
+    tags: ["Book Club/Ghost"]           # Set/Tag, a bare tag name unique in the course, or a tag ID
+    cascade: none                       # module only: none (default, reports items with their own audience), apply_to_items, clear_item_overrides
+  - page: "Ghost: Quiz 1 Study Guide"   # title, slug or page ID
+    tags: ["Book Club/Ghost"]
+  - quiz: "Ghost: Quiz 1"               # New Quiz or classic quiz; resolves to its assignment
+    tags: ["Book Club/Ghost"]
+    dates: {due_at: 2026-10-30T15:00:00-05:00}   # assignment and quiz targets only
+  - assignment: 3706953
+    tags: ["Book Club/Ghost"]
+  - discussion: "Thought Log 1"         # graded discussions use their linked assignment
+    tags: ["Book Club/Ghost"]
+---
+```
+
+Tags are differentiation tags (non-collaborative groups) that the teacher already made; CE-SE never creates or edits them and writes no student names or user IDs. Set and tag names match ignoring case, spacing and a trailing `s` ("Book Club" matches "Book Clubs"). A missing or ambiguous name holds that target, names the problem and the other targets continue.
+
+Each target is reconciled against live Canvas: the current audience is read, nothing is written when it already matches, and every write is read back. A module with no tags and `everyone: true` returns to Everyone. Removing access from an assignment or quiz that students have already submitted is held unless `allow_remove_with_submissions: true`. A native group assignment refuses tag targets. Module audiences inherit to items that have none of their own; an item in two modules is visible if either grants access, and a module target warns when its items also sit in a broader module. `cse assign-to FILE --preview` (MCP `assign_to {preview: true}`) resolves every name read-only and prints current -> new audience with member counts. Per-target outcomes are saved under each target's `outcome`.
+
 ## Family Contact runs
 
 Free-form email uses `courses/<first course>/family-contact/<run>/contact.json` with local `assets/`; the Engine writes `audience.json` and reuses schema-2 `outcomes.json` keyed by `student_ref`. These session files stay in UserInstall. Grade updates retain `report.json` and `drafts.json` and all existing inventory/privacy rules; do not mix the run kinds or include grade fields in free-form contact.

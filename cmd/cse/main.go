@@ -68,6 +68,12 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   pull-item COURSE TITLE|ID|LINK Pull actual assignment HTML for editing
   prepare-audience COURSE FILE [--refresh] Prepare individual club audience without Canvas writes
   pull-assignment-dates COURSE ASSIGNMENT_ID Pull exact audience override baselines for editing
+  tags COURSE                   List differentiation tag sets and tags with member counts (no students)
+  assign-to FILE [--preview]    Set Assign To (module, page, quiz, assignment, discussion) to tags from an assign-to document; --preview shows current -> new audience
+  assign-modules COURSE (--pattern "Book Club: {tag}" | --map "Module=Tag" ...) [--tag-set NAME] [--preview]
+                                Assign each module to its same-named tag
+  audience-report COURSE [--module TITLE|ID] Show who can see each module and item; flags items in several modules
+  set-file-access COURSE FILE_ID --access course|hidden|locked Change an existing course file's access
   pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
@@ -490,7 +496,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -615,6 +621,8 @@ func validateDocument(path string, roots ...string) error {
 		target = &domain.AssignmentDocument{}
 	case "assignment-dates":
 		target = &domain.AssignmentDatesDocument{}
+	case "assign-to":
+		target = &domain.AssignToDocument{}
 	case "group-set":
 		target = &domain.GroupSetDocument{}
 	case "group-memberships":
@@ -652,7 +660,7 @@ func validateDocument(path string, roots ...string) error {
 		case "students.md":
 			target = &domain.StudentNotes{}
 		default:
-			return fmt.Errorf("unsupported document kind %q; expected assignment, assignment-dates, group-set, group-memberships, group-packet, group-work, page, discussion, discussion-packet, discussion-reply, module, results, group-results, packet, or student-work", kind)
+			return fmt.Errorf("unsupported document kind %q; expected assignment, assignment-dates, assign-to, group-set, group-memberships, group-packet, group-work, page, discussion, discussion-packet, discussion-reply, module, results, group-results, packet, or student-work", kind)
 		}
 	}
 	if kindErr != nil && kind != "" {
@@ -674,7 +682,10 @@ func validateDocument(path string, roots ...string) error {
 		if d, ok := target.(*domain.AssignmentDatesDocument); ok {
 			e = domain.ValidateAssignmentDates(*d)
 		}
-		if d, ok := target.(*domain.GroupSetDocument); ok {
+		if d, ok := target.(*domain.AssignToDocument); ok {
+				e = d.Validate()
+			}
+			if d, ok := target.(*domain.GroupSetDocument); ok {
 			e = d.Validate()
 		}
 		if d, ok := target.(*domain.GroupMembershipDocument); ok {

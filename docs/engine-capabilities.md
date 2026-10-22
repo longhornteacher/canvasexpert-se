@@ -161,6 +161,16 @@ Built in Dev through slices 01-06 (see [docs/team/README.md](team/README.md)). C
 
 Each limit above is recorded as a pending live check in the README, not as a blocker for ordinary use.
 
+## Assign To by differentiation tag (2026-10-22, local tests only)
+
+`cse tags COURSE` (MCP `list_tags`) lists tag sets and tags with member counts and no students. A `kind: assign-to` document (`cse assign-to FILE [--preview]`, `push`, MCP `assign_to`) sets selective release for modules, pages, New Quizzes, assignments, graded and ungraded discussions and classic quizzes to tags, resolving names across courses ("Book Club" = "Book Clubs"). `cse assign-modules` (MCP `assign_modules_by_tag`) maps modules to same-named tags by pattern or map, and `cse audience-report` (MCP `audience_report`) shows effective audiences and flags items in several modules.
+
+Read/write routes: modules use `GET`/bulk `PUT /courses/:id/modules/:id/assignment_overrides`; assignments and New Quizzes use the existing per-override routes plus `only_visible_to_overrides`; pages, ungraded discussions and classic quizzes use the `date_details` collection (replaced whole, with unrelated rows preserved). Every target is read back, and a rerun writes nothing when Canvas already matches. Canvas Live: only the read routes were observed (handoff of 2026-10-22). The tag-group write payloads (`{group_id}` on a module, a page `date_details` row and an assignment override) are unconfirmed until the live check, and the module override response shape is parsed leniently. Local tests use a stateful fixture.
+
+`set-file-access COURSE FILE_ID --access course|hidden|locked` (MCP `set_file_access`) changes an existing file. The upload-time access write was also fixed: it sends only `locked` and `hidden` (plus clearing dates or a public visibility only when set), accepts the `inherit` visibility Canvas reports for course files (the old check demanded `course` and could never confirm), and includes Canvas's own explanation when a request is rejected. The original live failure (2026-10-22) is not reproduced locally; confirm with a hidden upload.
+
+Not built: a `start_review` page for assign-to (use `--preview`), an `assign` block on `copy_module`, and Collab intent manifests.
+
 ## Quiz corrections for points (playbook default, 2026-10-22)
 
 Every quiz's instructions end with a line saying the per-question feedback explains why the correct answer is best and why the others aren't, then an offer: students earn points back by copying the correct answer's rationale for every question they missed, by the correction deadline. It is on by default in the seed `TEACHER.md` and `quizzes.md`. Quizzes also default to one attempt with no retakes. The agent follows both defaults without asking; a teacher who wants retakes, a points amount, a turn-in method or no corrections says so, and the choice is saved in `Teacher_Override.md`. Playbook guidance only; not yet used with a real class.

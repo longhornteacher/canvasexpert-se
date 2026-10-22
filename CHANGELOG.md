@@ -6,6 +6,13 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 Team teaching: teammates' Canvas keys on one team PC.
 
+### Assign To by differentiation tag (2026-10-22)
+
+- `cse tags COURSE` lists a course's differentiation tag sets and tags with member counts (no students). A `kind: assign-to` document sets Assign To on modules, pages, New Quizzes, assignments, discussions and classic quizzes by tag, by name or ID, with replace or add, per-target dates for assignments and quizzes, and a `--preview` that shows each target's current -> new audience. `cse assign-modules` assigns each module to its same-named tag in one call, and `cse audience-report` shows who can see each module and item and flags items in more than one module. MCP: `list_tags`, `assign_to`, `assign_modules_by_tag`, `audience_report`.
+- Names match across courses ignoring case and a trailing `s`; a missing or ambiguous name holds only that target. Writes are read back, reruns write nothing when Canvas already matches, removing access from submitted work is held unless authorized, native group assignments refuse tags, and tags are never created or edited.
+- `cse set-file-access COURSE FILE_ID --access course|hidden|locked` (MCP `set_file_access`) changes an existing file, including files copied by `copy_module`. Fixed upload `--access hidden`: the access write now sends only what is needed, the readback accepts the `inherit` visibility Canvas reports, and a rejection shows Canvas's reason.
+- Local tests only; tag write payloads and the module override shape are pending live check. No review page for assign-to yet; use `--preview`.
+
 ### Teammate keys and Team page (2026-10-22)
 
 - The hub has a Team page under Classroom. On the team PC, a teammate pastes their own Canvas key and the date it expires; CE-SE checks it, saves it in Windows Credential Manager (never in a file) and lists the teammate in `context/team.md`. You then choose which of the teammate's Canvas courses to add to `context/courses.md`, each marked with an `owner`. The page can also test a key, rename a teammate, remove one, and shows expiry warnings (also on Home) and each teammate's recent actions from `.cse/team-log.jsonl`. Nothing uses a teammate's key yet. Local tests only.

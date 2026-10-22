@@ -266,7 +266,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addReadTool(server, "list_modules", "List a configured course's Canvas modules through the CE-SE Engine.", func(ctx context.Context, _ *mcp.CallToolRequest, in CourseInput) (TextOutput, error) {
 		return s.command(ctx, "modules", in.Course)
 	})
-	addReadTool(server, "list_group_sets", "List collaborative group sets in a configured course. Differentiation tags are excluded.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupSetsInput) (TextOutput, error) {
+	addReadTool(server, "list_group_sets", "List collaborative group sets in a configured course. Differentiation tags are excluded; use list_tags for those.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupSetsInput) (TextOutput, error) {
 		return s.command(ctx, "groups", in.Course)
 	})
 	addReadTool(server, "list_groups", "List collaborative clubs. An exact group-set read includes stable-ref memberships and unassigned students; an exact group read includes memberships only when requested. Private names, logins and contact data are never returned.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupsInput) (TextOutput, error) {
