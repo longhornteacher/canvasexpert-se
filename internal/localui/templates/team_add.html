@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Add a teammate</title>
+<style>{{pageCSS}}</style>
+<main class="wide">
+{{nav "Classroom" "Team" .Appearance}}
+<h1>Add a teammate</h1>
+<p>This part is for the teammate at the keyboard.</p>
+<ol class="steps">
+<li>Sign in to Canvas in a private window on this computer.</li>
+<li>Go to Account &rarr; Settings &rarr; <b>New Access Token</b>. Purpose: <code>CE-SE on the team PC</code>. Expires: the last day of school.</li>
+<li>Copy the token, paste it below, then sign out of Canvas and close the private window.</li>
+</ol>
+<h2>What CE-SE does with it</h2>
+<p>CE-SE scores only assignments you tag (CE), and scores arrive hidden until you post them. You can stop it any time by deleting this token in Canvas.</p>
+{{if .Message}}<p class="error">{{.Message}}</p>{{end}}
+<form method="post" action="/team/add">
+<input type="hidden" name="request_secret" value="{{.Secret}}">
+<p><label>Token<br><input type="password" name="token" autocomplete="off" required></label></p>
+<p><label>Key expires<br><input type="date" name="key_expires" value="{{.Expires}}" required></label></p>
+<p><label>School email (optional)<br><input type="email" name="email" value="{{.Email}}" maxlength="120" autocomplete="off"></label><br><small>Families' replies about your students go here. Leave it blank to use the email in your Canvas profile.</small></p>
+<button type="submit">Save key</button>
+</form>
+</main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
+</html>

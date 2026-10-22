@@ -81,6 +81,10 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 	if err != nil {
 		return ModulePushReport{}, err
 	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return ModulePushReport{}, err
+	}
 	report = ModulePushReport{Status: "partial", Course: course.Nickname, CourseID: course.ID, Title: d.Title, ItemsTotal: len(d.Items)}
 	if d.Instance != "" && d.Instance != s.Client.Origin() {
 		return report, fmt.Errorf("module document belongs to a different Canvas instance")

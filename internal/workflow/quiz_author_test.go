@@ -32,7 +32,13 @@ const qfFixture = `Intro text outside the envelope is ignored.
   ],
   "rationales": [
     {"item_id": "Q1", "choices": [{"id":"A","rationale":"Yes, the lantern."},{"id":"B","rationale":"No."}]},
-    {"item_id": "Q3", "rationale": "Because."}
+    {"item_id": "Q2", "choices": [{"id":"A","rationale":"Right."},{"id":"B","rationale":"Also right."},{"id":"C","rationale":"Wrong."}]},
+    {"item_id": "Q3", "rationale": "Because."},
+    {"item_id": "Q4", "rationale": "Two plus two is four."},
+    {"item_id": "Q5", "rationale": "The sun is a star."},
+    {"item_id": "Q6", "rationale": "Each letter pairs with its number."},
+    {"item_id": "Q7", "rationale": "First comes before second."},
+    {"item_id": "Q8", "rationale": "Trout swim; eagles fly."}
   ]
 }
 </QUIZFORGE_JSON>`
@@ -66,7 +72,7 @@ func TestQuizForgeTransformMatchesVerifiedShapes(t *testing.T) {
 	if len(mc["answer_feedback"].(map[string]any)) != 2 {
 		t.Errorf("choice rationales not mapped to answer_feedback: %v", mc["answer_feedback"])
 	}
-	if entryOf(items[2])["feedback"].(map[string]any)["neutral"] != "<p>Because.</p>" {
+	if entryOf(items[2])["feedback"].(map[string]any)["neutral"] != `<p style="color: #2e7d32;"><strong>Why this is correct:</strong> Because.</p>` {
 		t.Errorf("single rationale not mapped to feedback.neutral")
 	}
 	num := entryOf(items[3])
@@ -188,7 +194,8 @@ func TestNewQuizWrittenItemsShape(t *testing.T) {
 	body := `{"title":"Mixed","items":[
 		{"id":"M","type":"MC","prompt":"q","points":2,"choices":[{"text":"a","correct":true},{"text":"b"}]},
 		{"id":"E","type":"ESSAY","prompt":"Explain.","points":5,"rubric_hint":"TEACHER ONLY","length_guidance":"TEACHER ONLY","word_limit_max":300},
-		{"id":"F","type":"FILEUPLOAD","prompt":"Upload.","points":3,"accepted_formats":[".pdf","docx"]}]}`
+		{"id":"F","type":"FILEUPLOAD","prompt":"Upload.","points":3,"accepted_formats":[".pdf","docx"]}],
+		"rationales":[{"item_id":"M","choices":[{"id":"A","rationale":"Right."},{"id":"B","rationale":"Not it."}]}]}`
 	q, e := ReadQuizForge(writeQF(t, body))
 	if e != nil {
 		t.Fatal(e)
@@ -245,9 +252,10 @@ func TestPushQuizWithWrittenItemsKeepsOrderAndResumes(t *testing.T) {
 		}
 	})
 	path := writeQF(t, `{"title":"Mixed","items":[
-		{"type":"MC","prompt":"q","points":2,"choices":[{"text":"a","correct":true},{"text":"b"}]},
+		{"id":"MC","type":"MC","prompt":"q","points":2,"choices":[{"text":"a","correct":true},{"text":"b"}]},
 		{"id":"E","type":"ESSAY","prompt":"Explain.","points":5},
-		{"id":"F","type":"FILEUPLOAD","prompt":"Upload.","points":3}]}`)
+		{"id":"F","type":"FILEUPLOAD","prompt":"Upload.","points":3}],
+		"rationales":[{"item_id":"MC","choices":[{"id":"A","rationale":"Right."},{"id":"B","rationale":"Not it."}]}]}`)
 	report, e := s.PushQuiz(t.Context(), "TEST", path)
 	if e == nil || report.Status != "partial" || report.ItemsAdded != 2 || !strings.Contains(report.Message, "(F)") {
 		t.Fatalf("expected partial naming F, got %+v, %v", report, e)

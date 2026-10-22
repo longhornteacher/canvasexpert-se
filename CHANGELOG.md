@@ -2,7 +2,106 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
+## 1.2.0 (2026-10-22)
+
+Team teaching: teammates' Canvas keys on one team PC.
+
+### Slice 07 live checks, Part A so far (2026-10-22)
+
+- Checked live: operator-key routing on an owned course (A1), the untagged-assignment refusal (A2), and copy-once from Collab to CS8 (A7): all three items and the file arrived unpublished, the assignment and New Quiz landed in a new "Imported Assignments" group, a repeat copy and a (CE)-tagged item were refused. Hidden grades (A3) and the already-visible hold (A4) were also checked live with the Test Student: manual posting set through GraphQL with the legacy ID, grade and comment hidden until posted, then visible, and a later post held. The New Quiz comment (A5) waits for first real use because Canvas cannot open a New Quiz as the Test Student; family Reply-To (A6) needs a report with work to send.
+
+### Assign To by differentiation tag (2026-10-22)
+
+- `cse tags COURSE` lists a course's differentiation tag sets and tags with member counts (no students). A `kind: assign-to` document sets Assign To on modules, pages, New Quizzes, assignments, discussions and classic quizzes by tag, by name or ID, with replace or add, per-target dates for assignments and quizzes, and a `--preview` that shows each target's current -> new audience. `cse assign-modules` assigns each module to its same-named tag in one call, and `cse audience-report` shows who can see each module and item and flags items in more than one module. MCP: `list_tags`, `assign_to`, `assign_modules_by_tag`, `audience_report`.
+- Names match across courses ignoring case and a trailing `s`; a missing or ambiguous name holds only that target. Writes are read back, reruns write nothing when Canvas already matches, removing access from submitted work is held unless authorized, native group assignments refuse tags, and tags are never created or edited.
+- `cse set-file-access COURSE FILE_ID --access course|hidden|locked` (MCP `set_file_access`) changes an existing file, including files copied by `copy_module`. Fixed upload `--access hidden`: the access write now sends only what is needed, the readback accepts the `inherit` visibility Canvas reports, and a rejection shows Canvas's reason.
+- Checked live in LANG ARTS 7 on disposable unpublished objects: tag listing, preview, module/page/assignment assignment with read-back and a no-write rerun, hidden upload, and set-file-access. New Quizzes, ungraded and graded discussions, add mode, reset and the apply_to_items cascade were also checked live. Classic quizzes, the group-assignment refusal, the submitted-work hold and clear_item_overrides are not. Live runs fixed tag listing (Canvas omits `non_collaborative` on categories) and the inherited-row report. No review page for assign-to yet; use `--preview`.
+
+### Teammate keys and Team page (2026-10-22)
+
+- The hub has a Team page under Classroom. On the team PC, a teammate pastes their own Canvas key and the date it expires; CE-SE checks it, saves it in Windows Credential Manager (never in a file) and lists the teammate in `context/team.md`. You then choose which of the teammate's Canvas courses to add to `context/courses.md`, each marked with an `owner`. The page can also test a key, rename a teammate, remove one, and shows expiry warnings (also on Home) and each teammate's recent actions from `.cse/team-log.jsonl`. Nothing uses a teammate's key yet. Local tests only.
+
+- Each teammate card on the Team page has an "Email for family replies" box, and the Add page takes an optional school email that wins over the Canvas profile email. A card without an email says family emails about that teammate's students are held until one is added. Local tests only.
+
+### Per-course key routing (2026-10-22)
+
+- Courses marked with an `owner` now use the right Canvas key. Your own courses behave exactly as before, with no extra requests. For a teammate's course CE-SE asks Canvas once, with your key, whether you are an active teacher there: if so it keeps using your key; if Canvas says you are not (or refuses), it uses the teammate's saved key. Any other answer (Canvas busy, network trouble) stops that course instead of guessing. This covers the commands, the agent tools and the hub's roster and tag reads. A missing key says "Ms. Turner's Canvas key isn't on this PC. Add it on the Team page, or run this on the team PC."; a rejected key names the teammate and course. Every write made with a teammate's key is appended to `.cse/team-log.jsonl` without student names or comments, and the status line notes a key that expires soon. A scoring session with no course pulls only your own courses; a teammate's course is pulled only when named. `cse courses --as turner` lists that teammate's courses, and `list_courses` shows each course's `owner` and a `team` list (key on this PC, expiry) without any key. `cse api` and `canvas_get` still use only your key. Local tests only.
+
+### Scoring consent and hidden grades (2026-10-22)
+
+- In a teammate's course, CE-SE pulls and posts only assignments whose name contains `(CE)`: an explicit pull of an untagged assignment is refused, a session skips untagged assignments with a count line, and posting re-checks the live name. Before writing anything, posting sets the assignment to manual posting through Canvas GraphQL and posts nothing unless Canvas confirms it. A student whose grade is already visible (or whose visibility Canvas doesn't report) is held, for grades, comments, rubrics, late timing and group posts alike. The post result and review page say the grades are hidden and that the teammate posts them. Your own courses are unchanged. Local tests only; whether Canvas accepts the assignment ID, hides comments and handles re-grades of posted work as expected is pending live check (07).
+
+### Copy a Collab module (2026-10-22)
+
+- `cse copy-module SOURCE "MODULE TITLE" COURSE [COURSE...]` (MCP `copy_module`) copies one module, matched by exact title, with its items into each listed course using Canvas's selective course copy and each course's own teacher key. Dates and published state are copied as Collab has them. If any item in the module is tagged `(CE)`, the whole command stops before any copy, because each teacher adds `(CE)` in their own course.
+- A module is copied into a course only once. CE-SE keeps a record by Canvas IDs under `courses/_team-copies/` and refuses any course that already has an entry (succeeded, failed, uncertain or interrupted). It saves the entry before asking Canvas to copy, never retries a copy, and holds a lock so two runs can't overlap. Copies run from the team PC; the records are not synced. A course whose teacher's key isn't on this PC is reported and skipped while the others proceed.
+- The result is one line per course with its status, Canvas's copy warnings and any message; the command exits 3 when any course didn't succeed.
+- After a copy succeeds and the new module is found, CE-SE reads each copied item once (read-only, routed with the course's own key) and prints a `Check after copy` block: items assigned to no one, items whose text still links to Collab (Canvas doesn't rewrite those, so students can't open them), and a count of items, published and unpublished. The facts are saved in the copy record; nothing is fixed. An item that can't be read adds the note "Some copied items couldn't be checked." and the copy stays succeeded. Local tests only.
+- Local tests only; the selective-copy property shape, New Quiz and file behavior, and assignment-group placement are pending live check (07).
+
+### Family replies go to the actual teacher (2026-10-22)
+
+- Family Contact messages and parent grade updates for a student in a teammate's course now set the Outlook Reply-To to that teammate's Team page email and add one plain note just before the sign-off, for example "Please reply to Ms. Turner, your child's teacher, at turner@school.org. Replies to this email go to Ms. Turner." When one parent update covers courses with different teachers, Reply-To lists each teacher (plus you if one course is yours) and the note has one line per course.
+- Emails about only your own courses are unchanged. The note appears in emails and on the review page, never on printed student report sheets, and the parent-update grade content and playbook are untouched. The test email to yourself shows the same note and Reply-To a family would get.
+- If a teammate has no email on the Team page, that student's email is not sent and is recorded as skipped ("Ms. Turner has no email on the Team page, so replies couldn't be routed."); a later run sends it once the email is added. Review cards show "Replies go to" or "Held", and Family Contact previews are grouped as "Your students" / "Ms. Turner's students" when a message reaches both.
+- Local tests only; Reply-To on a real Outlook draft is pending live check (07). No family email was sent.
+
+### Team playbook and docs (2026-10-22)
+
+- New seed playbook `playbooks/team.md` explains team courses to the agent: how a request maps to teammates' courses, the `(CE)` scoring rule and hidden grades, copying a Collab module once, and family replies. Short routing sentences in `AGENTS.md`, `score.md`, `family-contact.md`, `setup.md` (Add a teammate, on the team PC) and `authoring.md` point to it. `parent-updates.md` is unchanged.
+- Developer docs (`AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/PRIVACY.md`, `.github/SECURITY.md`) describe the team storage locations, key routing, consent and family-reply behavior, and the 1.2b1 handoffs. The WebUI Capabilities page and `docs/engine-capabilities.md` add a Team teaching group, status yellow, with local tests and pending live checks kept separate. Local tests only.
+
+### Quiz feedback colors set by the Engine (2026-10-22)
+
+- New Quiz student feedback is now formatted by the Engine: every auto-scored item must have a rationale (MC/MA for every choice, correct and distractor; TF, NUMERICAL, FITB, MATCHING, ORDERING and CATEGORIZATION a `rationale`), so those items need an `id`, and validation refuses a quiz without them. The Engine renders correct MC choices green ("Why this is the best answer:") and distractors red ("Why this isn't the best answer:"), MA with "Why this choice is correct / isn't correct:", other items as green "Why this is correct:", and keeps an MC/MA general rationale uncolored; authored wrappers, styles, color tags and an earlier "Why this ...:" label are stripped so authors write plain text. Local tests only; rendering in the quiz player not yet viewed.
+
+### Quizzes tell students their feedback is there (2026-10-22)
+
+- The quizzes playbook has the agent end each quiz's instructions with one plain line saying every question explains why the correct answer is best and why the others aren't.
+- Quiz corrections for points are a default: the instructions also say students earn points back by copying the correct answer's rationale for every question they missed. Quizzes default to one attempt with no retakes. The agent follows both defaults without asking; a teacher's later choice (retakes, points amount, turn-in method, no corrections) is saved in `Teacher_Override.md`. Listed on the Capabilities page. Playbook only.
+
+## 1.1.0-beta.4 (2026-10-21)
+
+Review pages stay open when the agent app restarts, and CI fixes.
+
+### Review pages survive an app restart (2026-10-21)
+
+- A review page started by `start_review` or `start_parent_review` used to close when the agent app restarted the tool connection, losing the teacher's Approve click (observed on the home PC; nothing posted). Review pages now keep running past the adapter, so the approval still posts; setup and students pages still close with it. Calling `start_review` again for the same file reconnects to the page that is still open, and once it closes `review_status` reports revision notes and points to the saved outcomes. Local tests and a compiled-Engine restart check; not yet observed with a real app restart.
+
+### CI fixes (2026-10-21)
+
+- The compiled MCP check expects the 41 tools that include `init_results`, and the audience privacy test matches roster IDs as whole numbers so random refs cannot trip it.
+
+## 1.1.0-beta.3 (2026-10-21)
+
+Lighter scoring reads, Engine-run updates for git installs, and results files that start from the packet.
+
+### Results files start from the packet (2026-10-21)
+
+- `cse results-init PACKET` (MCP `init_results`) writes `scoring/results-<YYYYMMDD>-<HHMM>.md` beside the assignment with the packet path, each student's exact current attempt, the operation the assignment allows (grade, or comment-only for a New Quiz) and any discussion-evidence digest, with short flags for excused, late, unreadable-file and partial-discussion students. It reuses an earlier results file's interpretation and scoring basis for the same assignment, so a scoring basis stays consistent across sessions and sections. Interpretation, components and feedback stay blank and fail validation until the agent fills them; it never overwrites an existing results file. Local tests only.
+
+### Engine-run updates for git installs (2026-10-21)
+
+- `cse update status|stage [--if-due]|apply [--archive-edits]` (MCP `engine_info` `update-status`, `update-stage`, `update-apply`) replaces the git and batch steps the install playbook asked the agent to run. Staging checks at most once a day and verifies the new Engine without live change. Applying holds while a review, setup or students page is open (pages now record themselves under `.cse/open-pages/` while they answer) or while shipped files carry local edits, archives those edits after the agent moves the teacher's choices into `Teacher_Override.md`, fast-forwards only, installs the Engine and checks its checksum. Local tests with real git repositories, a throwaway two-release trial with the real `get-engine.cmd`, and a GitHub clone check; no agent has run it for a teacher yet.
+
+### Lighter packets for the agent (2026-10-21)
+
+- Pulls no longer write assignment directions HTML twice into each packet or repeat each submission's HTML beside its readable text. Packets carry readable directions in the body (`directions_html` names the original HTML file) and student files carry `readable_text` with `body_html_path`; group pulls do the same for shared artifacts. Readable text now keeps code indentation inside ``` fences, link addresses, table cells and `[image: alt]` markers. On this PC's 441 existing pulled files the new layout is 67% smaller for packets and 22% for student files. Grading-basis checks never used the directions HTML; older packets and student files still read as before. Local tests only.
+
+## 1.1.0-beta.2 (2026-10-21)
+
+The Groups update, published as the latest release for all users. It carries every development note below since 1.0: book-club group work, Family Contact emails, current-period parent reports, school-calendar late timing, targeted scoring sessions, and installation and quiet updates by git (the `userinstall` branch with `get-engine.cmd`), with the Windows ZIP kept as the fallback.
+
 ## Development notes
+
+### 1.1 beta 2 version and live session evidence (2026-10-21)
+
+- `VERSION` is `1.1.0-beta.2`. The `userinstall` branch ignores `install-log.jsonl`. The Capabilities page records the 2026-10-21 Haiku scoring session: New Quiz comment-only students were not pulled again, and one graded-discussion entry was scored and posted. Before/after counts, resubmission and group-assignment session checks remain pending.
+
+### Targeted scoring sessions (2026-10-21)
+
+- Scoring sessions target unscored submissions using Canvas needs-grading counts, include not-yet-due work, report closed periods, and leave already-scored timing alone. Concurrent detailed lists replace individual submission fetches; one local results index suppresses completed attempts and reminds teachers when New Quiz comments are posted but item points still await entry. Explicit pulls without `--session` retain reassessment behavior.
+- The compact report includes assignment group/weight, due state, workload and count explanations. Local tests pass. Read-only CS8 observations confirm assignment-list counts and reconcile the earlier Hotline Miami mismatch as a later submission; a read-only Dev session pull on CS8 produced the expected two-row report. Attachment downloads now run concurrently at the client's 4-request cap (CS8 fetch 19.8s to 5.6s). Broader live session checks remain pending. No release or UserInstall/UserSync adoption.
 
 ### Family Contact (2026-10-20)
 

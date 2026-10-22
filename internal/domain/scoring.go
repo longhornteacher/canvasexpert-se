@@ -596,7 +596,7 @@ func (d *ResultsDocument) Validate() error { _, e := ValidateResults(d); return 
 func validateEvidence(a AssignmentSnapshot, ev *EvidenceSelection) error {
 	if a.DiscussionTopicID == nil {
 		if ev != nil {
-			return fmt.Errorf("evidence is only for graded discussions")
+			return fmt.Errorf("evidence is only for graded discussions; this assignment snapshot has no discussion_topic_id (omit the assignment block so the Engine fills it from the packet)")
 		}
 		return nil
 	}

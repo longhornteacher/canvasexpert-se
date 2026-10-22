@@ -18,7 +18,8 @@ const hubQuizFixture = `{
     {"label": "Red", "tag": "Red", "supports": "<p>Guide.</p>"}
   ],
   "metadata": {"canvas": {"published": true}},
-  "items": [{"id": "Q1", "type": "TF", "points": 1, "prompt": "True?", "answer": true}]
+  "items": [{"id": "Q1", "type": "TF", "points": 1, "prompt": "True?", "answer": true}],
+  "rationales": [{"item_id": "Q1", "rationale": "It is true."}]
 }`
 
 func TestRetiredClassicEngineIsRefused(t *testing.T) {

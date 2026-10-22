@@ -3,6 +3,7 @@ package canvas
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -313,6 +314,94 @@ func TestListFieldEnvelopePagination(t *testing.T) {
 		requireKind(t, e, "validation")
 		if len(rows) != 2 {
 			t.Fatal("failed response changed output")
+		}
+	}
+}
+
+func TestOnWriteSeesSentWritesOnly(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/bad") {
+			http.Error(w, `{"errors":[]}`, http.StatusUnprocessableEntity)
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+	c := testClient(t, server)
+	type seen struct {
+		method, path string
+		status       int
+		uncertain    bool
+	}
+	var got []seen
+	c.OnWrite = func(m, p string, s int, u bool) { got = append(got, seen{m, p, s, u}) }
+	_ = c.Write(context.Background(), "PUT", "/api/v1/courses/1/ok", map[string]string{}, nil)
+	_ = c.Write(context.Background(), "PUT", "/api/v1/courses/1/bad", map[string]string{}, nil)
+	_ = c.Get(context.Background(), "/api/v1/courses/1", nil)
+	_ = c.Write(context.Background(), "GET", "/api/v1/courses/1", nil, nil) // refused before sending
+	want := []seen{{"PUT", "/api/v1/courses/1/ok", 200, false}, {"PUT", "/api/v1/courses/1/bad", 422, false}}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("OnWrite saw %+v", got)
+	}
+}
+
+func TestSetAssignmentPostManually(t *testing.T) {
+	cases := []struct {
+		name, body string
+		status     int
+		kind       string // "" means success
+		uncertain  bool
+	}{
+		{"success", `{"data":{"setAssignmentPostPolicy":{"postPolicy":{"postManually":true},"errors":null}}}`, 200, "", false},
+		{"top-level errors", `{"errors":[{"message":"nope"}],"data":null}`, 200, "validation", false},
+		{"mutation errors", `{"data":{"setAssignmentPostPolicy":{"postPolicy":null,"errors":[{"attribute":"x","message":"bad"}]}}}`, 200, "validation", false},
+		{"not manual", `{"data":{"setAssignmentPostPolicy":{"postPolicy":{"postManually":false},"errors":[]}}}`, 200, "validation", false},
+		{"server error", `oops`, 500, "uncertain", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got struct {
+				Variables struct{ ID string } `json:"variables"`
+			}
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/graphql" || r.Method != "POST" {
+					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+				}
+				data, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(data, &got)
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			c := testClient(t, server)
+			var logged int
+			c.OnWrite = func(string, string, int, bool) { logged++ }
+			err := c.SetAssignmentPostManually(context.Background(), 3700001)
+			if tc.kind == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if ce := requireKind(t, err, tc.kind); ce.Uncertain != tc.uncertain {
+				t.Fatalf("uncertain = %v", ce.Uncertain)
+			}
+			if got.Variables.ID != "3700001" || logged != 1 {
+				t.Fatalf("id %q, OnWrite calls %d", got.Variables.ID, logged)
+			}
+		})
+	}
+}
+
+func TestOnlyTheExactGraphQLPathIsAllowed(t *testing.T) {
+	c, err := New("https://canvas.example", "SYNTHETIC-PAT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.apiURL("/api/graphql"); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"/api/graphql/other", "/api/graphqlx", "/graphql"} {
+		if _, err := c.apiURL(p); err == nil {
+			t.Fatalf("allowed %s", p)
 		}
 	}
 }

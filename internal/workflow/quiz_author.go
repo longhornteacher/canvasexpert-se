@@ -227,6 +227,10 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 	if e != nil {
 		return report, e
 	}
+	s, e = s.ForCourse(ctx, course)
+	if e != nil {
+		return report, e
+	}
 	items := q.itemPayloads()
 	report.ItemsTotal = len(items)
 	base := fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes", course.ID)
@@ -261,7 +265,7 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 		title := normalizeStudentText(strings.TrimSpace(q.Title)).(string)
 		for _, x := range quizzes {
 			if x.Title == title {
-				return report, fmt.Errorf("a New Quiz titled %q already exists in this course (id %s); rename this quiz, or if that is an unfinished push of this file, write {\"assignment_id\": %s} to %s", title, x.ID, x.ID, sidecarPath(path))
+				return report, fmt.Errorf("a New Quiz titled %q already exists in this course (id %s); rename this quiz; if it is an unfinished earlier push of this file, ask the teacher to rename or delete it in Canvas before pushing again", title, x.ID)
 			}
 		}
 		quiz := map[string]any{"title": title, "grading_type": "points", "quiz_settings": set.quizSettings()}

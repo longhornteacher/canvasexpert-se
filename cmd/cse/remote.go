@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "copy-module": {3, 200}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -38,6 +38,16 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
+	}
+	if cmd == "assign-to" {
+		p, e := documentPath(root, args[0])
+		if e == nil {
+			e = validateDocument(p, root)
+		}
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		file = p
 	}
 	if cmd == "push-quiz" {
 		p, e := documentPath(root, args[1])
@@ -86,8 +96,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 		kind := documentKind(b)
-		if cmd == "push" && kind != "assignment" && kind != "assignment-dates" && kind != "page" && kind != "discussion" && kind != "discussion-reply" && kind != "module" && kind != "group-set" && kind != "group-memberships" {
-			return fail(inputError(fmt.Errorf("push supports assignment, assignment-dates, page, discussion/reply, module, group-set, or group-memberships documents")), progress)
+		if cmd == "push" && kind != "assignment" && kind != "assignment-dates" && kind != "page" && kind != "discussion" && kind != "discussion-reply" && kind != "module" && kind != "group-set" && kind != "group-memberships" && kind != "assign-to" {
+			return fail(inputError(fmt.Errorf("push supports assignment, assignment-dates, assign-to, page, discussion/reply, module, group-set, or group-memberships documents")), progress)
 		}
 		if cmd == "post" && kind != "results" && kind != "group-results" {
 			return fail(inputError(fmt.Errorf("post requires a results or group-results document")), progress)
@@ -95,6 +105,13 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	}
 	var config domain.CourseConfig
 	if _, e := workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
+		return fail(inputError(e), progress)
+	}
+	team, e := workspace.ReadTeam(root)
+	if e == nil {
+		e = workspace.CheckOwners(config, team)
+	}
+	if e != nil {
 		return fail(inputError(e), progress)
 	}
 	if cmd == "prepare-late-timing" {
@@ -122,15 +139,79 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	if originErr != nil || configuredOrigin.Origin() != c.Origin() {
 		return fail(inputError(errors.New(workspace.OriginMismatchMessage(config.Instance, c.Origin()))), progress)
 	}
-	service := &workflow.Service{Root: root, Client: c, Config: config}
-	start := time.Now()
 	status := statusWriter(progress)
+	service := &workflow.Service{Root: root, Client: c, Config: config, Team: team, Keys: workflow.PlatformKeys(), InstallRoot: root, Status: status}
+	start := time.Now()
 	defer func() {
-		fmt.Fprintf(status, "%s: %s, %d HTTP requests\n", cmd, time.Since(start).Round(time.Millisecond), c.Requests())
+		fmt.Fprintf(status, "%s: %s, %d HTTP requests\n", cmd, time.Since(start).Round(time.Millisecond), c.Requests()+service.RoutedRequests())
 	}()
 	fmt.Fprintf(status, "%s…\n", cmd)
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	switch cmd {
+	case "tags":
+		catalog, e := service.ReadTags(ctx, args[0])
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, _ := json.MarshalIndent(catalog, "", "  ")
+		fmt.Fprintln(out, string(b))
+	case "assign-to":
+		preview := false
+		if len(args) == 2 {
+			if args[1] != "--preview" {
+				return fail(inputError(fmt.Errorf("expected optional --preview")), progress)
+			}
+			preview = true
+		}
+		var report workflow.AssignToReport
+		var e error
+		if preview {
+			report, e = service.PreviewAssignTo(ctx, file)
+		} else {
+			report, e = service.PushAssignTo(ctx, file)
+		}
+		return finishAssignTo(report, e, out, progress)
+	case "assign-modules":
+		opts, e := parseAssignModules(args[1:])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		report, e := service.AssignModulesByTag(ctx, args[0], opts)
+		return finishAssignTo(report, e, out, progress)
+	case "audience-report":
+		module := ""
+		if len(args) > 1 {
+			if len(args) != 3 || args[1] != "--module" {
+				return fail(inputError(fmt.Errorf("usage: audience-report COURSE [--module TITLE|ID]")), progress)
+			}
+			module = args[2]
+		}
+		report, e := service.ReportAudience(ctx, args[0], module)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, _ := json.MarshalIndent(report, "", "  ")
+		fmt.Fprintln(out, string(b))
+	case "set-file-access":
+		id, access, e := parseSetFileAccess(args[1:])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		report, e := service.SetFileAccess(ctx, args[0], id, access)
+		if report.File.ID > 0 {
+			f := report.File
+			fmt.Fprintf(out, "Canvas file %d: %s\nActual locked: %s, hidden: %s, visibility: %s\n", f.ID, f.DisplayName, optionalBool(f.Locked), optionalBool(f.Hidden), knownText(f.VisibilityLevel))
+		}
+		if report.Message != "" {
+			fmt.Fprintln(out, report.Message)
+		}
+		if e != nil {
+			if report.Status == "held" {
+				fmt.Fprintln(progress, e)
+				return 3
+			}
+			return fail(workflowError(e), progress)
+		}
 	case "prepare-audience":
 		if len(args) == 3 && args[2] != "--refresh" {
 			return fail(inputError(fmt.Errorf("expected optional --refresh")), progress)
@@ -291,7 +372,21 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	case "api":
 		return fail(apiGet(ctx, c, args[0], out), progress)
 	case "courses":
-		list, e := workflow.Courses(ctx, c)
+		client := c
+		if len(args) > 0 {
+			if len(args) != 2 || args[0] != "--as" {
+				return fail(inputError(fmt.Errorf("usage: cse courses [--as TEAMMATE]")), progress)
+			}
+			mate, ok := team.Find(args[1])
+			if !ok {
+				return fail(inputError(fmt.Errorf("%q isn't on the Team page", args[1])), progress)
+			}
+			var e error
+			if client, e = service.TeammateClient(mate); e != nil {
+				return fail(inputError(e), progress)
+			}
+		}
+		list, e := workflow.Courses(ctx, client)
 		if e != nil {
 			return fail(e, progress)
 		}
@@ -305,7 +400,11 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
-		list, e := workflow.Modules(ctx, c, course.ID)
+		scoped, e := service.ForCourse(ctx, course)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		list, e := workflow.Modules(ctx, scoped.Client, course.ID)
 		if e != nil {
 			return fail(e, progress)
 		}
@@ -349,7 +448,10 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 	case "push":
 		b, _ := os.ReadFile(file)
-		if kind := documentKind(b); kind == "assignment-dates" {
+		if kind := documentKind(b); kind == "assign-to" {
+				report, e := service.PushAssignTo(ctx, file)
+				return finishAssignTo(report, e, out, progress)
+			} else if kind == "assignment-dates" {
 			report, e := service.PushAssignmentDates(ctx, file)
 			fmt.Fprintf(out, "%s: %d override rows, %s\n", report.Status, len(report.Rows), report.Path)
 			if report.Message != "" {
@@ -495,6 +597,34 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}
+	case "copy-module":
+		outcomes, e := service.CopyModule(ctx, args[0], args[1], args[2:])
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(table, "Course\tTeacher\tStatus\tIssues\tMessage")
+		code := 0
+		for _, o := range outcomes {
+			fmt.Fprintf(table, "%s\t%s\t%s\t%d\t%s\n", compact(o.Course), compact(o.Teacher), o.Status, o.Issues, compact(o.Message))
+			if o.Status != "succeeded" {
+				code = 3
+			}
+		}
+		_ = table.Flush()
+		fmt.Fprintln(out, "Copied as in Collab: due dates and published state are unchanged.")
+		var checks []string
+		for _, o := range outcomes {
+			checks = append(checks, workflow.CopyCheckLines(o)...)
+		}
+		if len(checks) > 0 {
+			fmt.Fprintln(out, "Check after copy")
+			for _, l := range checks {
+				fmt.Fprintln(out, l)
+			}
+		}
+		if code != 0 {
+			return code
+		}
 	case "parent-report":
 		courseList, refList := splitParentArgs(args)
 		path, packet, e := service.ParentReport(ctx, courseList, refList, time.Now())
@@ -552,14 +682,22 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		} else {
 			report, e = service.PullWorkWithOptions(ctx, nickname, query, options)
 		}
-		if len(report.Assignments) > 0 {
-			fmt.Fprintln(table, "Course\tAssignment\tTitle\tPulled\tLate\tMissing\tExcused\tInactive\tUnsupported\tHandled\tUnreadable attachments\tDetails")
-			for _, summary := range report.Assignments {
-				fmt.Fprintf(table, "%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\n", compact(summary.Course), summary.AssignmentID, compact(summary.Title), summary.Students, summary.Late, summary.Missing, summary.Excused, summary.Inactive, summary.Unsupported, summary.Handled, summary.UnreadableAttachments, compact(summary.SkipReason))
+		if session {
+			printSessionReport(out, report.Assignments)
+		} else {
+			if len(report.Assignments) > 0 {
+				fmt.Fprintln(table, "Course\tAssignment\tTitle\tPulled\tLate\tMissing\tExcused\tInactive\tUnsupported\tHandled\tUnreadable attachments\tDetails")
+				for _, summary := range report.Assignments {
+					fmt.Fprintf(table, "%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\n", compact(summary.Course), summary.AssignmentID, compact(summary.Title), summary.Students, summary.Late, summary.Missing, summary.Excused, summary.Inactive, summary.Unsupported, summary.Handled, summary.UnreadableAttachments, compact(summary.SkipReason))
+				}
+				_ = table.Flush()
 			}
-			_ = table.Flush()
 		}
 		for _, p := range report.Packets {
+			// results files name the packet by its workspace-relative path
+			if rel, e := filepath.Rel(root, p); e == nil && !strings.HasPrefix(rel, "..") {
+				p = filepath.ToSlash(rel)
+			}
 			fmt.Fprintln(out, p)
 		}
 		fmt.Fprintf(out, "%d students in %d packets\n", report.Students, len(report.Packets))
@@ -686,6 +824,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				if failed == 0 {
 					summary = "all approved group actions completed"
 				}
+				if line := report.OwnerSummary(); line != "" {
+					summary = line + " " + summary
+				}
 				status := "completed"
 				if failed > 0 || e != nil {
 					status = "partial"
@@ -706,6 +847,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			summary := fmt.Sprintf("%d approved student(s) did not fully complete; run cse validate/post output or rerun review", failed)
 			if failed == 0 {
 				summary = "all approved students completed"
+			}
+			if line := report.OwnerSummary(); line != "" {
+				summary = line + " " + summary
 			}
 			status := "completed"
 			if failed > 0 || e != nil {
@@ -753,6 +897,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				}
 			}
 			_ = table.Flush()
+			if line := report.OwnerSummary(); line != "" {
+				fmt.Fprintln(out, line)
+			}
 			fmt.Fprintln(out, "Results:", report.Path)
 			if e != nil {
 				return fail(workflowError(e), progress)
@@ -776,6 +923,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			}
 		}
 		_ = table.Flush()
+		if line := report.OwnerSummary(); line != "" {
+			fmt.Fprintln(out, line)
+		}
 		fmt.Fprintln(out, "Results:", report.Path)
 		if e != nil {
 			return fail(workflowError(e), progress)
@@ -983,3 +1133,81 @@ func splitParentArgs(args []string) (courses, refs []string) {
 }
 
 func fileKind(path string) string { b, _ := os.ReadFile(path); return documentKind(b) }
+
+// finishAssignTo prints one line per target and exits 3 when any is held.
+func finishAssignTo(report workflow.AssignToReport, e error, out, progress io.Writer) int {
+	if e != nil {
+		return fail(workflowError(e), progress)
+	}
+	fmt.Fprintf(out, "%s: %d target(s)", report.Status, len(report.Results))
+	if report.Path != "" {
+		fmt.Fprintf(out, ", %s", report.Path)
+	}
+	fmt.Fprintln(out)
+	for _, r := range report.Results {
+		fmt.Fprintf(out, "%s %q: %s", r.Kind, r.Target, r.Status)
+		if r.Before != "" || r.After != "" {
+			fmt.Fprintf(out, " (%s -> %s)", r.Before, r.After)
+		}
+		if r.Message != "" {
+			fmt.Fprintf(out, " %s", r.Message)
+		}
+		fmt.Fprintln(out)
+		for _, n := range r.Notes {
+			fmt.Fprintf(out, "  note: %s\n", n)
+		}
+	}
+	if report.Status == "partial" {
+		return 3
+	}
+	return 0
+}
+
+type mapFlag map[string]string
+
+func (m mapFlag) String() string { return "" }
+func (m mapFlag) Set(v string) error {
+	module, tag, ok := strings.Cut(v, "=")
+	if !ok || strings.TrimSpace(module) == "" || strings.TrimSpace(tag) == "" {
+		return fmt.Errorf("--map looks like \"Module title=Tag\"")
+	}
+	m[strings.TrimSpace(module)] = strings.TrimSpace(tag)
+	return nil
+}
+
+func parseAssignModules(args []string) (workflow.AssignModulesOptions, error) {
+	opts := workflow.AssignModulesOptions{Map: map[string]string{}}
+	flags := flag.NewFlagSet("assign-modules", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	flags.StringVar(&opts.Pattern, "pattern", "", "module title pattern containing {tag}")
+	flags.StringVar(&opts.TagSet, "tag-set", "", "restrict tags to this tag set")
+	flags.BoolVar(&opts.Preview, "preview", false, "show the changes without writing")
+	flags.Var(mapFlag(opts.Map), "map", "module title=tag (repeatable)")
+	if e := flags.Parse(args); e != nil {
+		return opts, e
+	}
+	if flags.NArg() != 0 {
+		return opts, fmt.Errorf("usage: assign-modules COURSE (--pattern \"Book Club: {tag}\" | --map \"Module=Tag\" ...) [--tag-set NAME] [--preview]")
+	}
+	return opts, nil
+}
+
+func parseSetFileAccess(args []string) (int64, string, error) {
+	flags := flag.NewFlagSet("set-file-access", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	access := flags.String("access", "", "course, hidden (links work), or locked")
+	if len(args) == 0 {
+		return 0, "", fmt.Errorf("usage: set-file-access COURSE FILE_ID --access course|hidden|locked")
+	}
+	id, e := strconv.ParseInt(args[0], 10, 64)
+	if e != nil || id <= 0 {
+		return 0, "", fmt.Errorf("file ID must be a positive integer")
+	}
+	if e := flags.Parse(args[1:]); e != nil {
+		return 0, "", e
+	}
+	if flags.NArg() != 0 || (*access != "course" && *access != "hidden" && *access != "locked") {
+		return 0, "", fmt.Errorf("set-file-access requires --access course|hidden|locked")
+	}
+	return id, *access, nil
+}

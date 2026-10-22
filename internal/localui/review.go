@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"canvasexpertse/internal/hubcoord"
 	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workflow"
 )
@@ -73,11 +74,6 @@ type reviewCardView struct {
 	Status, Note   string
 	ChangedSinceRv bool
 	Collapsed      bool
-	Lines          []reviewLineView
-}
-type reviewLineView struct {
-	workflow.ReviewLine
-	Comment string // comments display the way Canvas shows them: one paragraph
 }
 
 type reviewHandler struct {
@@ -106,11 +102,6 @@ func (h *reviewHandler) view(message string, form map[string]string) (reviewView
 	v := reviewView{Appearance: appearanceFor(h.root, h.secret), Title: model.Title, Kind: model.Kind, Notice: model.Notice, AllOrNothing: model.AllOrNothing, Action: model.Action, PostLabel: model.PostLabel, Actions: model.Actions, Test: model.Test && h.test != nil, Email: model.Email, Frames: model.Frames, Secret: h.secret, Token: model.ReviewDigest(), Message: message}
 	for i, c := range model.Cards {
 		cv := reviewCardView{ReviewCard: c, Index: i, Status: "approved"}
-		for _, l := range c.Lines {
-			lv := reviewLineView{ReviewLine: l, Comment: strings.Join(strings.Fields(l.Comment), " ")}
-			cv.Lines = append(cv.Lines, lv)
-		}
-		cv.ReviewCard.Lines = nil
 		if item, ok := state.Items[c.Ref]; ok && (item.Status == "revise" || model.Email && item.Status == "skip") {
 			if item.Digest == c.Digest {
 				cv.Status, cv.Note = item.Status, item.Note
@@ -346,6 +337,7 @@ func ReviewWithTest(ctx context.Context, path string, build func() (workflow.Rev
 	if len(roots) > 0 {
 		root = roots[0]
 	}
+	defer hubcoord.MarkPage(root, "review", origin, path)()
 	h := &reviewHandler{root: root, origin: origin, secret: hex.EncodeToString(nonce[:]), path: path, build: build, post: post, test: test, ctx: ctx, done: make(chan struct{})}
 	server := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 11 * time.Minute, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	serveErr := make(chan error, 1)

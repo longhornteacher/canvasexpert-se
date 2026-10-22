@@ -48,12 +48,15 @@ type quizItem struct {
 var htmlTag = regexp.MustCompile(`<[^>]+>`)
 
 // QuizPoints lists a New Quiz's items, or sets the points of the items named by
-// position. It holds before writing once any student has submitted, because
-// changing points would then change their scores; Canvas's editor offers
-// regrade choices for that case. Setting points is idempotent, so a rerun
+// position. Once any student has submitted it still writes but warns that Canvas
+// may not regrade their existing attempts. Setting points is idempotent, so a rerun
 // resolves an uncertain write.
 func (s *Service) QuizPoints(ctx context.Context, nickname, query string, changes map[int]domain.Decimal) (r QuizPointsReport, err error) {
 	course, err := s.Course(nickname)
+	if err != nil {
+		return r, err
+	}
+	s, err = s.ForCourse(ctx, course)
 	if err != nil {
 		return r, err
 	}

@@ -17,7 +17,7 @@ import (
 func reviewModelFixture() workflow.ReviewModel {
 	return workflow.ReviewModel{Kind: "Assignment scores", Title: "Essay", Cards: []workflow.ReviewCard{
 		{Ref: "s-a", Attempt: 1, Total: "9 / 10", Submission: "student response", Comment: "Assessment: 9 / 10\n\nNice <b>work</b>", TeacherNote: "private-note", Late: "late 1d 3h", LateBasis: "school-day accommodation", Facts: []workflow.ReviewFact{{Label: "Current Canvas timing", Value: "status automatic; late=false; seconds=0"}, {Label: "Proposed timing", Value: "late 3600 seconds"}}, Digest: "d1"},
-		{Ref: "s-b", Attempt: 1, Total: "5 / 10", Comment: "Needs more", Digest: "d2"},
+		{Ref: "s-b", Attempt: 1, Total: "5 / 10", Comment: "Needs more", RubricComments: []workflow.ReviewFact{{Label: "Evidence", Value: "Item 1: Specific.\nItem 2: Cite a line."}}, Digest: "d2"},
 		{Ref: "s-c", Attempt: 1, Hold: "unreadable evidence", Digest: "d3"},
 	}}
 }
@@ -56,6 +56,9 @@ func TestReviewPageShowsPlainTextAndMarksPrivateNotes(t *testing.T) {
 	}
 	if strings.Index(body, `<pre class="work">student response</pre>`) < 0 || strings.Index(body, `<pre class="work">student response</pre>`) > strings.Index(body, `Feedback to be posted`) {
 		t.Fatal("student evidence should appear before proposed feedback")
+	}
+	if !strings.Contains(body, "Rubric comments to be posted") || !strings.Contains(body, "<b>Evidence</b><pre>Item 1: Specific.\nItem 2: Cite a line.</pre>") {
+		t.Fatal("rubric criterion comments should show with their line breaks")
 	}
 	for _, want := range []string{"Only approved items can be posted", "prefers-color-scheme:dark", "color:var(--accent-ink)", "summary:focus-visible", "Held"} {
 		if !strings.Contains(body, want) {

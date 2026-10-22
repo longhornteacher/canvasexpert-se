@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Choose courses</title>
+<style>{{pageCSS}}</style>
+<main class="wide">
+{{nav "Classroom" "Team" .Appearance}}
+<h1>Choose {{.Name}}'s courses</h1>
+<p>Tick each course CE-SE should work in, and give each a short nickname you will recognize.</p>
+{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
+<form method="post" action="/team/courses">
+<input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="label" value="{{.Label}}">
+<div class="table-scroll"><table class="courses"><thead><tr><th>Add</th><th>Course</th><th>Canvas code</th><th>Nickname</th></tr></thead><tbody>
+{{range .Rows}}<tr><td><input type="hidden" name="id" value="{{.ID}}"><input type="checkbox" name="pick_{{.ID}}" aria-label="Add {{.Name}} ({{.ID}})"></td><td>{{.Name}} <span class="course-state">ID {{.ID}}</span></td><td><code>{{.Code}}</code></td><td><input type="text" name="nick_{{.ID}}" maxlength="40" autocomplete="off" placeholder="e.g. Turner P2" aria-label="Nickname for {{.Name}} ({{.ID}})"></td></tr>
+{{else}}<tr><td colspan="4">No more courses to add. Every active course {{.Name}} teaches is already in your list.</td></tr>{{end}}</tbody></table></div>
+{{if .Rows}}<button type="submit">Add ticked courses</button>{{end}}
+</form>
+<p><a class="go" href="/team">Back to Team</a></p>
+</main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
+</html>

@@ -106,7 +106,12 @@ func GetRulesLocation(root string) (RulesLocation, error) {
 		if err := initializeReusableData(install, syncRoot); err != nil {
 			return loc, err
 		}
+		// A git install keeps AGENTS.md/CLAUDE.md as tracked files that git owns, so they
+		// are never rewritten into pointers.
 		for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
+			if IsGitInstall(install) {
+				break
+			}
 			if b, err := os.ReadFile(filepath.Join(install, name)); err == nil {
 				if err := archiveOne(install, name, b); err != nil {
 					return loc, err
@@ -136,7 +141,7 @@ func ResolveTeacherPath(root, relative string) (string, error) {
 		return "", err
 	}
 	base := install
-	if !IsSharedRulePath(relative) {
+	if !IsSharedRulePathIn(install, relative) {
 		return ConstrainPath(base, relative)
 	}
 	loc, err := GetRulesLocation(install)
@@ -187,17 +192,18 @@ func SetRulesLocation(root, syncRoot string, template fs.FS, base string) (Rules
 	}
 	current, err := GetRulesLocation(install)
 	currentErr := err
+	shared := func(rel string) bool { return IsSharedRulePathIn(install, rel) }
 	if strings.TrimSpace(syncRoot) == "" {
 		if currentErr != nil {
 			return current, currentErr
 		}
 		if current.Mode == "sync" {
 			if template != nil {
-				if _, err := ScaffoldRules(current.RulesRoot, template, base); err != nil {
+				if _, err := scaffoldRules(current.RulesRoot, template, base, shared); err != nil {
 					return current, err
 				}
 			}
-			if err := copyShared(current.RulesRoot, install, true); err != nil {
+			if err := copyShared(current.RulesRoot, install, true, shared); err != nil {
 				return RulesLocation{}, err
 			}
 			if err := os.Remove(rulesBindingPath(install)); err != nil && !os.IsNotExist(err) {
@@ -249,11 +255,11 @@ func SetRulesLocation(root, syncRoot string, template fs.FS, base string) (Rules
 		if current.Mode == "sync" {
 			source = current.RulesRoot
 		}
-		if err := copyShared(source, syncPath, false); err != nil {
+		if err := copyShared(source, syncPath, false, shared); err != nil {
 			return RulesLocation{}, err
 		}
 		if template != nil {
-			if _, err := ScaffoldRules(syncPath, template, base); err != nil {
+			if _, err := scaffoldRules(syncPath, template, base, shared); err != nil {
 				return RulesLocation{}, err
 			}
 		}
@@ -268,19 +274,21 @@ func SetRulesLocation(root, syncRoot string, template fs.FS, base string) (Rules
 			}
 		}
 		if template != nil {
-			if _, err := ScaffoldRules(syncPath, template, base); err != nil {
+			if _, err := scaffoldRules(syncPath, template, base, shared); err != nil {
 				return RulesLocation{}, err
 			}
 		}
 	}
-	if err := archiveShared(install); err != nil {
+	if err := archiveShared(install, shared); err != nil {
 		return RulesLocation{}, err
 	}
-	if err := writeBootstrap(install, "AGENTS.md", syncPath); err != nil {
-		return RulesLocation{}, err
-	}
-	if err := writeBootstrap(install, "CLAUDE.md", syncPath); err != nil {
-		return RulesLocation{}, err
+	if !IsGitInstall(install) {
+		if err := writeBootstrap(install, "AGENTS.md", syncPath); err != nil {
+			return RulesLocation{}, err
+		}
+		if err := writeBootstrap(install, "CLAUDE.md", syncPath); err != nil {
+			return RulesLocation{}, err
+		}
 	}
 	if err := writeRulesBinding(install, syncPath); err != nil {
 		return RulesLocation{}, err
@@ -303,7 +311,7 @@ func isEmptyDir(p string) (bool, error) {
 	return len(entries) == 0, nil
 }
 
-func sharedFiles(root string) ([]string, error) {
+func sharedFiles(root string, isShared func(string) bool) ([]string, error) {
 	var files []string
 	// Private contact JSON follows the teacher between PCs but remains outside
 	// ordinary teacher-rule classification and MCP file access.
@@ -350,7 +358,7 @@ func sharedFiles(root string) ([]string, error) {
 					return e
 				}
 				rel = filepath.ToSlash(rel)
-				if IsSharedRulePath(rel) {
+				if isShared(rel) {
 					if e := rejectLinkedPrefixes(root, rel); e != nil {
 						return e
 					}
@@ -363,7 +371,7 @@ func sharedFiles(root string) ([]string, error) {
 			}
 			continue
 		}
-		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !IsSharedRulePath(name) {
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !isShared(name) {
 			continue
 		}
 		if err := rejectLinkedPrefixes(root, name); err != nil {
@@ -402,8 +410,8 @@ func rejectLinkedPrefixes(root, relative string) error {
 	return nil
 }
 
-func copyShared(source, dest string, archiveDiff bool) error {
-	files, err := sharedFiles(source)
+func copyShared(source, dest string, archiveDiff bool, isShared func(string) bool) error {
+	files, err := sharedFiles(source, isShared)
 	if err != nil {
 		return err
 	}
@@ -452,8 +460,8 @@ func copyShared(source, dest string, archiveDiff bool) error {
 	return nil
 }
 
-func archiveShared(root string) error {
-	files, err := sharedFiles(root)
+func archiveShared(root string, isShared func(string) bool) error {
+	files, err := sharedFiles(root, isShared)
 	if err != nil {
 		return err
 	}
@@ -506,6 +514,10 @@ func writeRulesBinding(root, syncRoot string) error {
 // ScaffoldRules applies only starter files that belong to the shared rules
 // authority; local context and product files are left in UserInstall.
 func ScaffoldRules(root string, template fs.FS, base string) ([]string, error) {
+	return scaffoldRules(root, template, base, IsSharedRulePath)
+}
+
+func scaffoldRules(root string, template fs.FS, base string, isShared func(string) bool) ([]string, error) {
 	sub, err := fs.Sub(template, base)
 	if err != nil {
 		return nil, err
@@ -522,7 +534,7 @@ func ScaffoldRules(root string, template fs.FS, base string) ([]string, error) {
 		if d.IsDir() {
 			return nil
 		}
-		if !IsSharedRulePath(slash) {
+		if !isShared(slash) {
 			return nil
 		}
 		p, e := ConstrainPath(root, slash)
@@ -558,7 +570,7 @@ func ScaffoldRules(root string, template fs.FS, base string) ([]string, error) {
 // replaced them with full template copies. The replaced copy is archived.
 func RestoreSyncBootstrap(root string) error {
 	loc, err := GetRulesLocation(root)
-	if err != nil || loc.Mode != "sync" {
+	if err != nil || loc.Mode != "sync" || IsGitInstall(loc.InstallRoot) {
 		return nil
 	}
 	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {

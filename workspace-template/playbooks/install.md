@@ -1,6 +1,6 @@
 # Set this all up for the teacher
 
-Use this when the teacher unzips CanvasExpert-SE, opens the folder in a coding agent (Claude Code, Codex, Antigravity) and says "set this all up," "set this up," "get me ready to teach," or "install this", or asks to connect Claude, ChatGPT or Antigravity. For full first-run setup, read both this playbook and `setup.md`. The extracted folder is already **UserInstall**. Run directly here; setup connects apps and Canvas without copying the product into a second folder; no Dev checkout, developer runtime, separate Codex CLI or teacher terminal command is needed.
+Use this when the teacher has CanvasExpert-SE in a folder (cloned from git, or unzipped as the fallback), opens it in a coding agent (Claude Code, Codex, Antigravity) and says "set this all up," "set this up," "get me ready to teach," or "install this", or asks to connect Claude, ChatGPT or Antigravity. For full first-run setup, read both this playbook and `setup.md`. That folder is already **UserInstall**. Run directly here; setup connects apps and Canvas without copying the product into a second folder; no Dev checkout, developer runtime, separate Codex CLI or teacher terminal command is needed.
 
 ## Own the whole setup
 
@@ -121,29 +121,60 @@ Do not ask about visual style, grading scale or teaching philosophy now. Ask on 
 
 Do not narrate this to the teacher.
 
-### Lay down or update the playbooks
+### Get CanvasExpert onto the computer (git install)
 
-On every "set up", "install" or "update", run `.\cse.cmd playbooks update` (MCP: `engine_info` operation `update-playbooks`) before anything else. The ZIP carries only the Engine and a bootstrap `AGENTS.md`; this command lays down the playbooks, `TEACHER.md`, `Teacher_Override.md` and the `context/` starter files from the Engine, and on an update adopts the new versions without overriding the teacher. It keeps each shipped version under `shipped/<version>/` for comparison; those copies are inactive, never current rules.
+Use this only when there is no CanvasExpert folder yet. Ask before downloading anything, and never overwrite an existing folder.
 
-The report lists each file's state. `added`, `current`, `updated` and `teacher-owned` need nothing from you. For each `kept` file, reconcile it in the background: compare `shipped/<previous_shipped>/<path>` (when there is a previous version), the active file and `shipped/<current_shipped>/<path>`. Every difference between the active file and what shipped before is the teacher's choice; with no previous version, every difference is. Keep those choices, bring in new shipped improvements that don't conflict with them, and write the result to the active file. Where a new shipped default conflicts with a teacher choice, keep the teacher's. Never change `context/` or `Teacher_Override.md` during an update.
+1. Choose a local folder that OneDrive and Google Drive do not sync (for example `%USERPROFILE%\CanvasExpert-SE`); district sync folders can block programs.
+2. `git clone --branch userinstall --single-branch https://github.com/longhornteacher/canvasexpert-se.git "<folder>"`. That folder is UserInstall.
+3. In it, run `.\get-engine.cmd`. It downloads the Engine, checks it against the checksum recorded in `engine\manifest.txt`, and installs it in `engine\`. It needs only `curl.exe` and `certutil`, which Windows includes, and no admin rights. Exit codes: 3 the download did not match its checksum (it was discarded), 4 a needed Windows tool or the manifest is missing, 5 the download failed, 6 the running Engine could not be replaced.
+4. Run `.\cse.cmd version`; the first Engine run adds the teacher's starter files under `context/` and `Teacher_Override.md`. Then continue with the script at the top.
 
-Don't ask the teacher to merge anything. Tell them only what matters in plain words, for example "You're on the newest CanvasExpert; your settings and choices are unchanged." Mention a new teaching option only when it is worth their attention, in a sentence.
+If git or github.com is blocked on this computer, or `get-engine.cmd` fails with 4 or 5, say so plainly and offer the ZIP fallback below. Do not work around a district block.
 
-To get a newer version for the teacher, download the versioned Windows ZIP from the latest [GitHub release](https://github.com/longhornteacher/canvasexpert-se/releases) (not GitHub's source-code ZIP) and extract it over this folder, then run the update above. It contains no playbooks or teacher files, so extracting over the folder can't overwrite the teacher's work. If `engine/cse.exe` is in use, ask the teacher to close the apps using CanvasExpert first, and never during an active review.
+### Updates: stage quietly, apply with the teacher's yes
+
+Run `.\cse.cmd version --json` first. When `install_kind` is `git`, playbooks, `AGENTS.md` and `CLAUDE.md` come from git, and `.\cse.cmd playbooks update` changes nothing (it reports `managed_by: git`). The Engine and the playbooks are released together, so an update moves both. Teachers will not ask for updates, so this runs without being asked and in two parts. The Engine does the mechanics; you decide when to ask.
+
+**Stage** (silent, at the start of a session): `engine_info` operation `update-stage` (CLI: `.\cse.cmd update stage --if-due`). It checks at most once a day, and when a newer release exists it downloads and verifies the new Engine into `engine\staged\` without changing any live file. `state` is `current`, `skipped` (already checked today), `pending` or `staged`. If it fails or GitHub is blocked, say nothing and let the next day's check retry; never interrupt the teacher's work. `update-status` (CLI: `.\cse.cmd update status`) reports a waiting update without contacting GitHub.
+
+**Apply** (changes live files) when `update-status` reports `pending` or `staged`:
+- **At the end of the teacher's work**: "Can I install the latest CanvasExpert? It takes a moment." On yes, apply now.
+- **Otherwise at the start of the next session**, apply it before any work and say so in one line: "I installed the latest CanvasExpert update."
+
+Run `engine_info` operation `update-apply` (CLI: `.\cse.cmd update apply`). Read its `state`:
+- `applied`: report in plain words, with no merge questions: "You're on the newest CanvasExpert; your settings and choices are unchanged." Mention a new teaching option only when it is worth their attention, in a sentence. Apps that were running keep the old Engine until they restart: when it is a good time, say "Close and reopen Claude (or ChatGPT) when you're between tasks so it picks up the update." Never ask during an active review.
+- `held` because a review, setup or students page is open: leave it; try again when the teacher is done or at the next session.
+- `held` with `edited` files: these are leftover edits to shipped files. For each, understand what the teacher wanted and add it as a clearly worded line in `Teacher_Override.md`, then run `update-apply` with `archive_edits: true` (CLI: `update apply --archive-edits`). The Engine copies the old files to `playbook-old/` and applies. Do this quietly; tell the teacher only what changed for them.
+- `held` because it could not fast-forward: change nothing else and tell the teacher you need help with this update. Never force it.
+- `repaired`: the Engine had drifted from this release and was reinstalled; nothing to tell the teacher.
+- An error naming `get-engine.cmd`: the playbooks may already be updated; ask the teacher to close the apps using CanvasExpert, then run `.\get-engine.cmd` and check `engine_matches_manifest: true` in `.\cse.cmd version --json`.
+
+Unsent drafts and results under `courses/` are never touched by an update.
+
+The teacher's own choices live in `Teacher_Override.md`, `context/` and the other root guides they wrote, which git never touches. Do not edit `playbooks/`, `AGENTS.md`, `CLAUDE.md` or `TEACHER.md` in a git install; save a standing preference in `Teacher_Override.md` instead.
+
+### ZIP fallback
+
+Use this only when the teacher cannot use git on their computer. The folder is an extracted ZIP and `install_kind` is `zip` or empty (any value other than `git`). On every "set up", "install" or "update", run `.\cse.cmd playbooks update` (MCP: `engine_info` operation `update-playbooks`) before anything else. The ZIP carries the Engine and the bootstrap files (`AGENTS.md`, `CLAUDE.md`, `README.md`, `TEACHING-ASSISTANT.md`, `cse.cmd`, `webui.cmd`); this command lays down the playbooks, `TEACHER.md`, `Teacher_Override.md` and the `context/` starter files from the Engine, and on an update adopts the new versions without overriding the teacher. It keeps each shipped version under `shipped/<version>/` for comparison; those copies are inactive, never current rules.
+
+The report lists each file's state. `added`, `current`, `updated` and `teacher-owned` need nothing from you. For each `kept` file, reconcile it in the background: compare `shipped/<previous_shipped>/<path>` (when there is a previous version), the active file and `shipped/<current_shipped>/<path>`. Every difference between the active file and what shipped before is the teacher's choice; with no previous version, every difference is. Keep those choices, bring in new shipped improvements that don't conflict with them, and write the result to the active file. Where a new shipped default conflicts with a teacher choice, keep the teacher's. Never change `context/` or `Teacher_Override.md` during an update. Don't ask the teacher to merge anything.
+
+To get a newer version, download the Windows ZIP from the latest [GitHub release](https://github.com/longhornteacher/canvasexpert-se/releases) (not GitHub's source-code ZIP) and extract it over this folder, then run the update above. It contains no playbooks, `context/` or other teacher files, but extracting does replace `AGENTS.md` and `CLAUDE.md`. Before extracting, copy those two files into `engine/pre-update-<date>/`; afterwards compare them with the backup and carry the teacher's own additions into the new files. If `engine/cse.exe` is in use, ask the teacher to close the apps using CanvasExpert first, and never during an active review.
 
 ### Select the correct UserInstall
 
 By default `.\cse.cmd install` connects every supported app whose configuration folder exists: Claude (`cowork`), ChatGPT/Codex (`work`) and Antigravity (`antigravity`). `.\cse.cmd install --inspect` shows the read-only hints it uses; they do not prove an app is installed, running or in a supported mode. Do not read whole client configuration files or private settings. All connected apps point at this same UserInstall, so they share one Canvas credential and course list.
 
-Resolve this extracted folder and its bundled `engine/cse.exe`, not an existing CE-SE MCP connection, PATH executable or another teacher folder. An already-connected server may belong to a different UserInstall: it must not receive this teacher's setup or preferences.
+Resolve this folder and its `engine/cse.exe`, not an existing CE-SE MCP connection, PATH executable or another teacher folder. An already-connected server may belong to a different UserInstall: it must not receive this teacher's setup or preferences.
 
 ### Run the helper
 
 Run `.\cse.cmd install` yourself (add `--client work`, `--client cowork` or `--client antigravity` only to connect one app, for example when the teacher later installs another). This saves narrowly scoped connection settings, or prepares the Claude extension and tries to open it, checks the local Engine/MCP without Canvas writes, and starts the private WebUI independently of any destination restart. A repeat install reuses the same UserInstall's running WebUI. It needs no `codex` command. Do not add `--no-ui` for ordinary first installation. `--check-only` is a local diagnostic, not registration or proof of destination access.
 
-Inspect the returned outcomes rather than assuming the whole operation succeeded. The helper's `install_root` identifies the extracted folder this operation selected. If an existing CE-SE registration targets another UserInstall, explain the exact old and new folders to the teacher in plain words before using `--replace-existing`; that flag replaces the connection entry, not the old folder's files. Keep other servers/settings and all unsent work. Malformed client configuration stays intact: explain the helper's reported repair action without exposing unrelated configuration or secrets. An unavailable app does not prevent preparing the other selected route.
+Inspect the returned outcomes rather than assuming the whole operation succeeded. The helper's `install_root` identifies the folder this operation selected. If an existing CE-SE registration targets another UserInstall, explain the exact old and new folders to the teacher in plain words before using `--replace-existing`; that flag replaces the connection entry, not the old folder's files. Keep other servers/settings and all unsent work. Malformed client configuration stays intact: explain the helper's reported repair action without exposing unrelated configuration or secrets. An unavailable app does not prevent preparing the other selected route.
 
-For Claude, read `cowork_launch_outcome`: `launch_requested` means Claude was asked to open the file (use the first Claude line above); `file_revealed`, `launch_failed` and `prepared` mean the file is ready at `extension_path` (use the second Claude line, adding any error the helper reported). None of these means the extension is installed, trusted or connected. Report organizational restrictions or trust prompts as the app reports them; do not promise to bypass them. The extension launches this UserInstall's Engine; the teacher does not maintain a second Engine.
+For Claude, read `cowork_launch_outcome`: `launch_requested` means Claude was asked to open the file (use the first Claude line above); `file_revealed` and `launch_failed` (and `prepared`, which happens only with `--no-ui`) mean the file is ready at `extension_path` (use the second Claude line, adding any error the helper reported). None of these means the extension is installed, trusted or connected. Report organizational restrictions or trust prompts as the app reports them; do not promise to bypass them. The extension launches this UserInstall's Engine; the teacher does not maintain a second Engine.
 
 The WebUI: always give the helper's actual local form address as a fallback, since a browser launch was only requested, not seen. If the helper returns a `ui_warning`, the page may not have started: tell the teacher to double-click `webui.cmd`, and do not invent an address. A failed WebUI start does not undo saved connection settings or a prepared extension; report them separately. Never fetch the private form or receive the token in chat, a command, a file or client configuration. Inspect only non-secret setup status. Keep a working saved credential on repeat installation.
 
@@ -155,7 +186,7 @@ UserSync is optional. Make the brief offer above once, preserve an existing bind
 
 Distinguish: the helper ran; connection settings saved or extension file prepared; local check passed; WebUI started; destination still needs an action; destination tools actually used. Saved settings and local checks are not connected tools. Loaded adapter identity and on-disk Engine identity are separate; if they differ, the destination must reconnect after active review work finishes.
 
-After reconnect, the destination assistant reads current `AGENTS.md`, `context/teaching-profile.md`, `context/grading.md`, the relevant playbook and configured `list_courses`, and its returned `install_root` must match the helper's `install_root` and the extracted folder before teacher work. If they differ, stop and connect the intended UserInstall. Do not claim a Teaching Assistant Project was created when only connection configuration was saved. Use a supported app action if available; otherwise give the starter message in `TEACHING-ASSISTANT.md`.
+After reconnect, the destination assistant reads current `AGENTS.md`, `context/teaching-profile.md`, `context/grading.md`, the relevant playbook and configured `list_courses`, and its returned `install_root` must match the helper's `install_root` and this folder before teacher work. If they differ, stop and connect the intended UserInstall. Do not claim a Teaching Assistant Project was created when only connection configuration was saved. Use a supported app action if available; otherwise give the starter message in `TEACHING-ASSISTANT.md`.
 
 ## Use the Engine through MCP or its launcher
 

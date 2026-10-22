@@ -119,6 +119,28 @@ func compose(app *ole.IDispatch, m Message) (*ole.IDispatch, error) {
 			return fail(err)
 		}
 	}
+	if len(m.ReplyTo) > 0 {
+		rv, err := oleutil.GetProperty(item, "ReplyRecipients")
+		if err != nil {
+			return fail(err)
+		}
+		reply := rv.ToIDispatch()
+		defer reply.Release()
+		for _, addr := range m.ReplyTo {
+			r, err := oleutil.CallMethod(reply, "Add", addr)
+			if err != nil {
+				return fail(err)
+			}
+			r.ToIDispatch().Release()
+		}
+		ok, err := oleutil.CallMethod(reply, "ResolveAll")
+		if err != nil {
+			return fail(err)
+		}
+		if b, _ := ok.Value().(bool); !b {
+			return fail(errors.New("a Reply-To address did not resolve"))
+		}
+	}
 	if _, err := oleutil.PutProperty(item, "Subject", m.Subject); err != nil {
 		return fail(err)
 	}

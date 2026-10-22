@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CanvasExpert-SE team</title>
+<style>{{pageCSS}}</style>
+<main class="wide">
+{{nav "Classroom" "Team" .Appearance}}
+<h1>Team</h1>
+<p>Teammates whose Canvas keys are saved on this PC. CE-SE works in each teammate's courses with that teammate's key.</p>
+{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
+<div class="cards">
+{{range .Cards}}<section class="card" aria-label="{{.Name}}">
+<h2>{{.Name}} <code>{{.Label}}</code></h2>
+<form method="post" action="/team/email" class="inline"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="label" value="{{.Label}}">
+<label>Email for family replies <input type="email" name="email" value="{{.Email}}" maxlength="120" autocomplete="off"></label> <button type="submit" class="small">Save email</button></form>
+{{if not .Email}}<p class="error">No email yet. Family emails about {{.Name}}'s students are held until one is added.</p>{{end}}
+<p>{{if .KeyOnPC}}<span class="pill on">Key saved on this PC</span>{{else}}<span class="pill off">Key isn't on this PC</span>{{end}} <span class="pill{{if eq .ExpiryState "ok"}}{{else if eq .ExpiryState "soon"}} warn{{else}} off{{end}}">{{.Expiry}}</span></p>
+<p>{{if .Courses}}Courses: {{range $i, $c := .Courses}}{{if $i}}, {{end}}{{$c}}{{end}}{{else}}No courses chosen yet.{{end}}</p>
+{{if .Log}}<details><summary>Recent actions</summary><div class="table-scroll"><table><thead><tr><th>Time</th><th>Course</th><th>Method</th><th>Path</th></tr></thead><tbody>{{range .Log}}<tr><td>{{.Time}}</td><td>{{.Course}}</td><td>{{.Method}}</td><td><code>{{.Path}}</code></td></tr>{{end}}</tbody></table></div></details>{{end}}
+<div class="row">
+<form method="post" action="/team/test"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="label" value="{{.Label}}"><button type="submit" class="small">Test key</button></form>
+<a class="go" href="/team/courses?label={{.Label}}">Choose courses</a>
+</div>
+<details><summary>Change the name families see</summary>
+<form method="post" action="/team/name" class="inline"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="label" value="{{.Label}}"><input type="hidden" name="email" value="{{.Email}}">
+<label>Name <input type="text" name="name" value="{{.Name}}" maxlength="80" autocomplete="off"></label> <button type="submit" class="small">Save name</button></form>
+</details>
+<details><summary>Remove</summary>
+<form method="post" action="/team/remove"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="label" value="{{.Label}}">
+<p>This deletes {{.Name}}'s key from this PC and removes {{.Name}}'s {{.CourseCount}} courses from your course list. Notes and the action log stay.</p>
+<button type="submit" class="small danger">Remove {{.Name}}</button></form>
+</details>
+</section>
+{{else}}<p>No teammates yet.</p>{{end}}
+</div>
+<p><a class="go" href="/team/add">Add a teammate</a></p>
+</main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
+</html>

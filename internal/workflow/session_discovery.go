@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"canvasexpertse/internal/domain"
@@ -16,89 +15,6 @@ func studentRefByCanvasID(students *workspace.StudentStore, instance string, use
 		}
 	}
 	return ""
-}
-
-// completedTimingHint suppresses a second timing packet only when a prior
-// accepted CE-SE timing action has structured provenance that still computes
-// to the live Canvas timing for the same attempt and effective due date.
-func (s *Service) completedTimingHint(assignmentID, courseID int64, studentRef string, sub Submission, a Assignment, calendar *workspace.SchoolCalendar) bool {
-	if studentRef == "" || !sub.LateKnown || !sub.SecondsLateKnown || !sub.LatePolicyStatusKnown {
-		return false
-	}
-	due, known := submissionEffectiveDue(sub, a)
-	if !known || due == "" {
-		return false
-	}
-	matched := false
-	_ = walkResultFiles(s.Root, func(path string) error {
-		var results domain.ResultsDocument
-		if _, err := workspace.ReadDocument(path, &results); err == nil && results.Schema == 1 && results.Kind == "results" && results.Assignment.Instance == s.Client.Origin() && results.Assignment.CourseID == courseID && results.Assignment.AssignmentID == assignmentID {
-			for _, row := range results.Students {
-				if row.StudentRef != studentRef {
-					continue
-				}
-				var timing *domain.LateTiming
-				accepted := false
-				if row.Operation == "grade" && row.Grade != nil && sameAttempt(row.Grade.Attempt, attemptRef(sub)) {
-					timing, accepted = row.Grade.LateTiming, row.Grade.Outcomes.Late.Status == "succeeded"
-				} else if row.Operation == "late-only" && row.LateOnly != nil && sameAttempt(row.LateOnly.Attempt, attemptRef(sub)) {
-					timing, accepted = &row.LateOnly.LateTiming, row.LateOnly.Outcome.Status == "succeeded"
-				}
-				if accepted && timing != nil && timingSourcePresent(*timing, sub) && timingStillMatches(*timing, due, sub, calendar) {
-					matched = true
-					return filepath.SkipAll
-				}
-			}
-			return nil
-		}
-		// Group-results has its own typed contract; tolerate its group wrapper
-		// while still requiring exact course, assignment, student and attempt.
-		var groupResults domain.GroupResultsDocument
-		if _, err := workspace.ReadDocument(path, &groupResults); err != nil || groupResults.Schema != 1 || groupResults.Kind != "group-results" || groupResults.Assignment.Instance != s.Client.Origin() || groupResults.Assignment.CourseID != courseID || groupResults.Assignment.AssignmentID != assignmentID {
-			return nil
-		}
-		for _, group := range groupResults.Groups {
-			if group.Operation == "late-only" && group.LateOnly != nil && group.LateOnly.Outcome.Status == "succeeded" && containsString(group.MemberRefs, studentRef) {
-				provenance, ok := group.LateOnly.MemberSchoolTime[studentRef]
-				if ok && provenance.Status == group.LateOnly.LateTiming.Status && provenance.SecondsLate == group.LateOnly.LateTiming.SecondsLate && groupResultCurrentAttempt(s.Root, groupResults.Packet, group.GroupID, studentRef, attemptRef(sub)) {
-					timing := group.LateOnly.LateTiming
-					timing.SchoolTime = &provenance
-					if timingSourcePresent(timing, sub) && timingStillMatches(timing, due, sub, calendar) {
-						matched = true
-						return filepath.SkipAll
-					}
-				}
-			}
-			if group.Operation == "grade" && containsString(group.MemberRefs, studentRef) && group.Grade != nil && group.Grade.Outcomes.Late.Status == "succeeded" && group.Grade.LateTiming != nil && groupResultCurrentAttempt(s.Root, groupResults.Packet, group.GroupID, studentRef, attemptRef(sub)) {
-				if provenance, ok := group.Grade.MemberSchoolTime[studentRef]; ok && provenance.Status == group.Grade.LateTiming.Status && provenance.SecondsLate == group.Grade.LateTiming.SecondsLate {
-					timing := *group.Grade.LateTiming
-					timing.SchoolTime = &provenance
-					if timingSourcePresent(timing, sub) && timingStillMatches(timing, due, sub, calendar) {
-						matched = true
-						return filepath.SkipAll
-					}
-				}
-			}
-			for _, row := range group.Students {
-				if row.StudentRef != studentRef {
-					continue
-				}
-				var timing *domain.LateTiming
-				accepted := false
-				if row.Operation == "grade" && row.Grade != nil && sameAttempt(row.Grade.Attempt, attemptRef(sub)) {
-					timing, accepted = row.Grade.LateTiming, row.Grade.Outcomes.Late.Status == "succeeded"
-				} else if row.Operation == "late-only" && row.LateOnly != nil && sameAttempt(row.LateOnly.Attempt, attemptRef(sub)) {
-					timing, accepted = &row.LateOnly.LateTiming, row.LateOnly.Outcome.Status == "succeeded"
-				}
-				if accepted && timing != nil && timingSourcePresent(*timing, sub) && timingStillMatches(*timing, due, sub, calendar) {
-					matched = true
-					return filepath.SkipAll
-				}
-			}
-		}
-		return nil
-	})
-	return matched
 }
 
 func timingSourcePresent(timing domain.LateTiming, sub Submission) bool {

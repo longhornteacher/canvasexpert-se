@@ -155,6 +155,7 @@ func (s *Service) PrepareLateTiming(path string) (LateTimingPreparation, error) 
 }
 
 func (s *Service) prepareLateTiming(decisions LateTimingDecisionsDocument, packetBytes []byte, kind string) (LateTimingPreparation, error) {
+	s = s.withResultsIndex()
 	result := LateTimingPreparation{Schema: 1, Kind: "late-timing-preparation", Packet: filepath.ToSlash(decisions.Packet)}
 	switch kind {
 	case "packet":
@@ -397,6 +398,7 @@ func timingMatchesObserved(timing domain.LateTiming, observed domain.ObservedTim
 }
 
 func (s *Service) prepareGroupTiming(work domain.GroupWorkDocument, group LateTimingGroupDecision) PreparedGroupLateTiming {
+	s = s.withResultsIndex()
 	result := PreparedGroupLateTiming{GroupID: work.GroupID}
 	individual := work.Assignment.GradeGroupStudentsIndividually != nil && *work.Assignment.GradeGroupStudentsIndividually
 	if !work.RosterComplete || !work.PropagationAudienceComplete || (!individual && work.SharedAssessmentStatus == "held") {
@@ -478,108 +480,11 @@ func (s *Service) prepareGroupTiming(work domain.GroupWorkDocument, group LateTi
 }
 
 func (s *Service) acceptedTimingOrigin(courseID, assignmentID int64, studentRef string, current, source domain.AttemptRef, observed domain.ObservedTiming) bool {
-	accepted := false
-	_ = walkResultFiles(s.Root, func(path string) error {
-		var results domain.ResultsDocument
-		if _, err := workspace.ReadDocument(path, &results); err == nil && results.Schema == 1 && results.Kind == "results" && results.Assignment.Instance == s.Config.Instance && results.Assignment.CourseID == courseID && results.Assignment.AssignmentID == assignmentID {
-			for _, row := range results.Students {
-				if row.StudentRef != studentRef {
-					continue
-				}
-				if row.Operation == "grade" && row.Grade != nil && row.Grade.LateTiming != nil && row.Grade.Outcomes.Late.Status == "succeeded" && sameAttempt(row.Grade.Attempt, current) && acceptedTimingMatches(*row.Grade.LateTiming, source, observed) {
-					accepted = true
-					return filepath.SkipAll
-				}
-				if row.Operation == "late-only" && row.LateOnly != nil && row.LateOnly.Outcome.Status == "succeeded" && sameAttempt(row.LateOnly.Attempt, current) && acceptedTimingMatches(row.LateOnly.LateTiming, source, observed) {
-					accepted = true
-					return filepath.SkipAll
-				}
-			}
-			return nil
-		}
-		var groups domain.GroupResultsDocument
-		if _, err := workspace.ReadDocument(path, &groups); err != nil || groups.Schema != 1 || groups.Kind != "group-results" || groups.Assignment.Instance != s.Config.Instance || groups.Assignment.CourseID != courseID || groups.Assignment.AssignmentID != assignmentID {
-			return nil
-		}
-		for _, group := range groups.Groups {
-			if !containsString(group.MemberRefs, studentRef) {
-				continue
-			}
-			if group.Operation == "late-only" && group.LateOnly != nil && group.LateOnly.Outcome.Status == "succeeded" && groupResultCurrentAttempt(s.Root, groups.Packet, group.GroupID, studentRef, current) {
-				if provenance, ok := group.LateOnly.MemberSchoolTime[studentRef]; ok && sameAttempt(provenance.Attempt, source) {
-					timing := group.LateOnly.LateTiming
-					timing.SchoolTime = &provenance
-					if acceptedTimingMatches(timing, source, observed) {
-						accepted = true
-						return filepath.SkipAll
-					}
-				}
-			}
-			if group.Operation == "grade" && group.Grade != nil && group.Grade.LateTiming != nil && group.Grade.Outcomes.Late.Status == "succeeded" && groupResultCurrentAttempt(s.Root, groups.Packet, group.GroupID, studentRef, current) {
-				if provenance, ok := group.Grade.MemberSchoolTime[studentRef]; ok && sameAttempt(provenance.Attempt, source) {
-					timing := *group.Grade.LateTiming
-					timing.SchoolTime = &provenance
-					if acceptedTimingMatches(timing, source, observed) {
-						accepted = true
-						return filepath.SkipAll
-					}
-				}
-			}
-			for _, row := range group.Students {
-				if row.StudentRef == studentRef && row.Operation == "grade" && row.Grade != nil && row.Grade.LateTiming != nil && row.Grade.Outcomes.Late.Status == "succeeded" && sameAttempt(row.Grade.Attempt, current) && acceptedTimingMatches(*row.Grade.LateTiming, source, observed) {
-					accepted = true
-					return filepath.SkipAll
-				}
-				if row.StudentRef == studentRef && row.Operation == "late-only" && row.LateOnly != nil && row.LateOnly.Outcome.Status == "succeeded" && sameAttempt(row.LateOnly.Attempt, current) && acceptedTimingMatches(row.LateOnly.LateTiming, source, observed) {
-					accepted = true
-					return filepath.SkipAll
-				}
-			}
-		}
-		return nil
-	})
-	return accepted
+	return s.indexedResults().acceptedTimingOrigin(s.Config.Instance, courseID, assignmentID, studentRef, current, source, observed)
 }
 
 func (s *Service) acceptedTimingRecordExists(courseID, assignmentID int64, studentRef string, current domain.AttemptRef) bool {
-	found := false
-	_ = walkResultFiles(s.Root, func(path string) error {
-		var results domain.ResultsDocument
-		if _, err := workspace.ReadDocument(path, &results); err == nil && results.Schema == 1 && results.Kind == "results" && results.Assignment.Instance == s.Config.Instance && results.Assignment.CourseID == courseID && results.Assignment.AssignmentID == assignmentID {
-			for _, row := range results.Students {
-				if row.StudentRef == studentRef && ((row.Operation == "grade" && row.Grade != nil && row.Grade.Outcomes.Late.Status == "succeeded" && row.Grade.LateTiming != nil && sameAttempt(row.Grade.Attempt, current)) || (row.Operation == "late-only" && row.LateOnly != nil && row.LateOnly.Outcome.Status == "succeeded" && sameAttempt(row.LateOnly.Attempt, current))) {
-					found = true
-					return filepath.SkipAll
-				}
-			}
-			return nil
-		}
-		var groups domain.GroupResultsDocument
-		if _, err := workspace.ReadDocument(path, &groups); err != nil || groups.Schema != 1 || groups.Kind != "group-results" || groups.Assignment.Instance != s.Config.Instance || groups.Assignment.CourseID != courseID || groups.Assignment.AssignmentID != assignmentID {
-			return nil
-		}
-		for _, group := range groups.Groups {
-			if !containsString(group.MemberRefs, studentRef) {
-				continue
-			}
-			if group.Operation == "late-only" && group.LateOnly != nil && group.LateOnly.Outcome.Status == "succeeded" && groupResultCurrentAttempt(s.Root, groups.Packet, group.GroupID, studentRef, current) {
-				found = true
-				return filepath.SkipAll
-			}
-			if group.Operation == "grade" && group.Grade != nil && group.Grade.LateTiming != nil && group.Grade.MemberSchoolTime[studentRef].Attempt.Attempt > 0 && group.Grade.Outcomes.Late.Status == "succeeded" && groupResultCurrentAttempt(s.Root, groups.Packet, group.GroupID, studentRef, current) {
-				found = true
-				return filepath.SkipAll
-			}
-			for _, row := range group.Students {
-				if row.StudentRef == studentRef && ((row.Operation == "grade" && row.Grade != nil && row.Grade.LateTiming != nil && row.Grade.Outcomes.Late.Status == "succeeded" && sameAttempt(row.Grade.Attempt, current)) || (row.Operation == "late-only" && row.LateOnly != nil && row.LateOnly.Outcome.Status == "succeeded" && sameAttempt(row.LateOnly.Attempt, current))) {
-					found = true
-					return filepath.SkipAll
-				}
-			}
-		}
-		return nil
-	})
-	return found
+	return s.indexedResults().acceptedTimingRecordExists(s.Config.Instance, courseID, assignmentID, studentRef, current)
 }
 
 func acceptedTimingMatches(timing domain.LateTiming, source domain.AttemptRef, observed domain.ObservedTiming) bool {

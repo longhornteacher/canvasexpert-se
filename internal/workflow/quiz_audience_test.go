@@ -19,7 +19,8 @@ const quizAudienceFixture = `{
   "metadata": {"canvas": {"published": true, "audience": {"mode": "individual", "policy": "snapshot", "source": {"group_category_id": 50, "group_ids": [60]}}}},
   "items": [
     {"id": "Q1", "type": "MC", "points": 2, "prompt": "Which?", "choices": [{"id":"A","text":"Lantern","correct":true},{"id":"B","text":"Sun","correct":false}]}
-  ]
+  ],
+  "rationales": [{"item_id": "Q1", "choices": [{"id":"A","rationale":"The lantern is the detail."},{"id":"B","rationale":"The sun is not in the story."}]}]
 }`
 
 type quizAudienceFixtureState struct {
@@ -328,11 +329,11 @@ func TestQuizAudienceRejectsWrongOriginAndGroupAssignment(t *testing.T) {
 }
 
 func TestQuizAudienceSettingsRejectInvalidIntent(t *testing.T) {
-	body := `{"title":"Bad","metadata":{"canvas":{"audience":{"mode":"shared","policy":"snapshot","source":{"group_category_id":50,"group_ids":[60]}}}},"items":[{"id":"Q1","type":"MC","points":1,"prompt":"q","choices":[{"text":"a","correct":true}]}]}`
+	body := `{"title":"Bad","metadata":{"canvas":{"audience":{"mode":"shared","policy":"snapshot","source":{"group_category_id":50,"group_ids":[60]}}}},"items":[{"id":"Q1","type":"MC","points":1,"prompt":"q","choices":[{"text":"a","correct":true}]}],"rationales":[{"item_id":"Q1","choices":[{"id":"A","rationale":"Because."}]}]}`
 	if _, err := ReadQuizForge(writeQF(t, body)); err == nil {
 		t.Fatal("invalid audience mode accepted")
 	}
-	body = `{"title":"Bad","metadata":{"canvas":{"audience":{"mode":"individual","policy":"snapshot","source":{"group_category_id":50,"group_ids":[]}}}},"items":[{"id":"Q1","type":"MC","points":1,"prompt":"q","choices":[{"text":"a","correct":true}]}]}`
+	body = `{"title":"Bad","metadata":{"canvas":{"audience":{"mode":"individual","policy":"snapshot","source":{"group_category_id":50,"group_ids":[]}}}},"items":[{"id":"Q1","type":"MC","points":1,"prompt":"q","choices":[{"text":"a","correct":true}]}],"rationales":[{"item_id":"Q1","choices":[{"id":"A","rationale":"Because."}]}]}`
 	if _, err := ReadQuizForge(writeQF(t, body)); err == nil {
 		t.Fatal("empty audience source accepted")
 	}

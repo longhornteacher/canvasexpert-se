@@ -55,6 +55,9 @@ type Assignment struct {
 	CreatedAt                      string      `json:"created_at"`
 	HTMLURL                        string      `json:"html_url"`
 	GradingType                    string      `json:"grading_type"`
+	NeedsGradingCount              *int        `json:"needs_grading_count"`
+	AssignmentGroupID              *int64      `json:"assignment_group_id"`
+	InClosedGradingPeriod          bool        `json:"in_closed_grading_period"`
 	GroupCategoryID                *int64      `json:"group_category_id"`
 	GradeGroupStudentsIndividually *bool       `json:"grade_group_students_individually"`
 	DiscussionTopicID              *int64      `json:"discussion_topic_id"`
@@ -87,6 +90,7 @@ type AssignmentOverrideLive struct {
 	DueAtOverridden    *bool           `json:"due_at_overridden,omitempty"`
 	UnlockAtOverridden *bool           `json:"unlock_at_overridden,omitempty"`
 	LockAtOverridden   *bool           `json:"lock_at_overridden,omitempty"`
+	ContextModuleID    int64           `json:"context_module_id,omitempty"`
 	ID                 int64           `json:"id"`
 	Title              string          `json:"title"`
 	GroupID            int64           `json:"group_id"`
@@ -321,7 +325,19 @@ func Modules(ctx context.Context, c *canvas.Client, courseID int64) ([]Module, e
 }
 func Assignments(ctx context.Context, c *canvas.Client, courseID int64) ([]Assignment, error) {
 	var result []Assignment
-	err := c.List(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments?per_page=100", courseID), &result)
+	err := c.List(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments?per_page=100&include[]=all_dates", courseID), &result)
+	return result, err
+}
+
+type AssignmentGroup struct {
+	ID     int64       `json:"id"`
+	Name   string      `json:"name"`
+	Weight json.Number `json:"group_weight"`
+}
+
+func AssignmentGroups(ctx context.Context, c *canvas.Client, courseID int64) ([]AssignmentGroup, error) {
+	var result []AssignmentGroup
+	err := c.List(ctx, fmt.Sprintf("/api/v1/courses/%d/assignment_groups?per_page=100", courseID), &result)
 	return result, err
 }
 func GetAssignment(ctx context.Context, c *canvas.Client, courseID, id int64) (Assignment, error) {

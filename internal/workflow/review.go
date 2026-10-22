@@ -55,7 +55,7 @@ type ReviewCard struct {
 	Total                 string // computed assessment, e.g. "18.5 / 20"
 	Comment               string // exact plain text that will be posted (ordinary results)
 	Submission            string // the student's work for this attempt, so feedback is judged against it
-	Lines                 []ReviewLine
+	RubricComments        []ReviewFact // criterion comments sent with the rubric assessment, exact text
 	Facts                 []ReviewFact
 	Frames                []ReviewFrame
 	Key                   string // teacher-only answer key, shown behind a toggle
@@ -65,12 +65,6 @@ type ReviewCard struct {
 	Hold                  string // reason this student will not post
 	Done                  bool   // already posted
 	Digest                string
-}
-
-// ReviewLine is one line within a review card.
-type ReviewLine struct {
-	Name, Score, Comment, TeacherNote, Hold string
-	Done                                    bool
 }
 
 // ReviewItem is the teacher's decision on one card.
@@ -136,8 +130,41 @@ func digestOf(c ReviewCard) string {
 	return hex.EncodeToString(sum[:8])
 }
 
+// ownerReviewNotice tells the teacher that a results file belongs to a
+// teammate's course and how its scores will land. It uses the assignment title
+// saved at pull, so the review page reads nothing from Canvas; Post checks the
+// live name before writing. Empty for your own courses or when the setup files
+// can't be read.
+func ownerReviewNotice(root string, a domain.AssignmentSnapshot) string {
+	var config domain.CourseConfig
+	if _, e := workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
+		return ""
+	}
+	team, e := workspace.ReadTeam(root)
+	if e != nil {
+		return ""
+	}
+	for _, c := range config.Courses {
+		if c.ID != a.CourseID || c.Owner == "" {
+			continue
+		}
+		owner, ok := team.Find(c.Owner)
+		if !ok {
+			return ""
+		}
+		if !domain.HasConsentTag(a.Title) {
+			return "Not tagged (CE) in Canvas right now. Approving will post nothing."
+		}
+		return owner.Name + "'s course. Scores go in hidden; " + owner.Name + " posts them in Canvas."
+	}
+	return ""
+}
+
 // BuildReview renders a results file without credentials or any Canvas call.
 func BuildReview(root, path string) (ReviewModel, error) {
+	if e := FillResultsAssignment(root, path); e != nil {
+		return ReviewModel{}, e
+	}
 	kind, e := ReviewInputKind(path)
 	if e != nil {
 		return ReviewModel{}, e
@@ -193,6 +220,9 @@ func ReviewInputKind(path string) (string, error) {
 func ValidateReviewInput(root, path, course string) (string, error) {
 	kind, e := ReviewInputKind(path)
 	if e != nil {
+		return "", e
+	}
+	if e = FillResultsAssignment(root, path); e != nil {
 		return "", e
 	}
 	var nickname string
@@ -352,9 +382,11 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 	// Aliases and first names come from the packet and the private student store; both are best effort.
 	aliases := map[string]string{}
 	works := map[string]domain.StudentWorkDocument{}
+	var writtenItems []domain.WrittenItem
 	if packetPath, e := workspace.ConstrainPath(root, doc.Packet); e == nil {
 		var packet domain.PacketDocument
 		if _, e = workspace.ReadDocument(packetPath, &packet); e == nil {
+			writtenItems = packet.WrittenItems
 			for _, rel := range packet.Students {
 				if p, e := workspace.ConstrainPath(root, rel); e == nil {
 					var work domain.StudentWorkDocument
@@ -371,7 +403,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 	if doc.Assignment.NewQuiz {
 		kind = "New Quiz comments"
 	}
-	m := ReviewModel{Kind: kind, Title: doc.Assignment.Title}
+	m := ReviewModel{Kind: kind, Title: doc.Assignment.Title, Notice: ownerReviewNotice(root, doc.Assignment)}
 	for i, r := range doc.Students {
 		v := validated[i]
 		c := ReviewCard{Ref: r.StudentRef, Alias: aliases[r.StudentRef], Operation: r.Operation, Hold: v.Hold, Done: resultComplete(r)}
@@ -389,6 +421,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			if v.Assessment != nil {
 				c.Total = v.Assessment.Posted.String() + " / " + doc.Assignment.Points.String()
 			}
+			c.RubricComments = rubricCommentFacts(doc.Assignment.Rubric, v.Assessment)
 		case r.ReviseFeedback != nil:
 			c.Attempt = r.ReviseFeedback.Attempt.Attempt
 			feedback = r.ReviseFeedback.Feedback
@@ -430,12 +463,30 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			}
 		} else if r.ReviseFeedback != nil {
 			c.Comment = feedback
+			if rf := r.ReviseFeedback; rf.Assessment != nil && doc.Basis() != nil {
+				parts, e := partPoints(&doc, writtenItems, v.Interpretation)
+				if e != nil {
+					c.Hold = e.Error()
+					m.Cards = append(m.Cards, c)
+					continue
+				}
+				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: rf.Assessment.Components, Assessment: rf.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(&doc, works[r.StudentRef], rf.Attempt.Attempt), PartPoints: parts, Header: rf.Header})
+				if e != nil {
+					c.Hold = e.Error()
+				} else {
+					c.Comment = text
+				}
+			}
 		} else if r.CommentOnly != nil && doc.Basis() != nil {
 			computed, e := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, r.CommentOnly.Components, doc.Assignment.Points)
+			parts, pe := partPoints(&doc, writtenItems, v.Interpretation)
+			if e == nil {
+				e = pe
+			}
 			if e != nil {
 				c.Hold = e.Error()
 			} else {
-				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, Header: r.CommentOnly.Header})
+				text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.CommentOnly.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(&doc, works[r.StudentRef], r.CommentOnly.Attempt.Attempt), PartPoints: parts, Header: r.CommentOnly.Header})
 				if e != nil {
 					c.Hold = e.Error()
 				} else {
@@ -446,6 +497,40 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 		m.Cards = append(m.Cards, c)
 	}
 	return m, nil
+}
+
+// autoScoredFor returns the pulled New Quiz auto-scored subtotal for exactly
+// this attempt, or nil when the pull has none.
+func autoScoredFor(doc *domain.ResultsDocument, work domain.StudentWorkDocument, attempt int) *domain.AutoScored {
+	if !doc.Assignment.NewQuiz || work.Current.Ref.Attempt != attempt {
+		return nil
+	}
+	return work.Current.AutoScored
+}
+
+// partPoints maps each New Quiz part that names a written item to that item's
+// Canvas points. A part naming an item the quiz does not have is an error.
+func partPoints(doc *domain.ResultsDocument, items []domain.WrittenItem, interp domain.Interpretation) (map[string]domain.Decimal, error) {
+	if !doc.Assignment.NewQuiz {
+		return nil, nil
+	}
+	parts := map[string]domain.Decimal{}
+	for _, c := range interp.Components {
+		if c.ItemID == "" {
+			continue
+		}
+		found := false
+		for _, item := range items {
+			if c.ItemID == item.ItemID || c.ItemID == item.EntryID {
+				parts[c.Key], found = item.Points, true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("part %q names item_id %s, which is not a written item in the pulled quiz", c.Key, c.ItemID)
+		}
+	}
+	return parts, nil
 }
 
 // submissionText returns what the student wrote for one attempt, from the
@@ -491,6 +576,30 @@ func submissionText(w domain.StudentWorkDocument, attempt int) string {
 		}
 	}
 	return ""
+}
+
+// rubricCommentFacts lists the criterion comments a rubric assessment will
+// carry, so the teacher approves every student-facing text.
+func rubricCommentFacts(rubric *domain.Rubric, a *domain.Assessment) []ReviewFact {
+	if rubric == nil || a == nil {
+		return nil
+	}
+	names := map[string]string{}
+	for _, c := range rubric.Criteria {
+		names[c.ID] = c.Description
+	}
+	var facts []ReviewFact
+	for _, c := range a.Criteria {
+		if c.Comment == "" {
+			continue
+		}
+		label := names[c.CriterionID]
+		if label == "" {
+			label = c.CriterionID
+		}
+		facts = append(facts, ReviewFact{Label: label, Value: c.Comment})
+	}
+	return facts
 }
 
 func compactText(s string) string { return strings.Join(strings.Fields(s), " ") }

@@ -17,6 +17,7 @@ import (
 	"strconv"
 
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/hubcoord"
 	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
@@ -317,6 +318,7 @@ func Students(ctx context.Context, root string, output io.Writer) error {
 		return fmt.Errorf("could not create the student form")
 	}
 	origin := "http://" + listener.Addr().String()
+	defer hubcoord.MarkPage(root, "students", origin, "")()
 	h := &studentHandler{origin: origin, secret: hex.EncodeToString(nonce[:]), store: store, done: make(chan struct{}), notesRoot: root}
 	server := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	errs := make(chan error, 1)
@@ -357,7 +359,7 @@ func (h *Hub) fetchTags(ctx context.Context, courseID int64) (map[int64][]string
 	if h.tagsFn != nil {
 		return h.tagsFn(ctx, courseID)
 	}
-	c, err := h.canvasClient()
+	c, err := h.clientForCourse(ctx, courseID)
 	if err != nil {
 		return nil, "", err
 	}

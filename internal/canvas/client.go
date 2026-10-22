@@ -61,6 +61,13 @@ type Client struct {
 	changed       chan struct{}
 	nextAllowed   time.Time
 	backoff       time.Duration
+	// OnWrite, when set, sees every write attempt that was sent: the HTTP
+	// status of any response, or uncertain with status 0 when the transport
+	// failed. Only teammate clients set it, for the action log.
+	OnWrite func(method, path string, status int, uncertain bool)
+	// MapError, when set, rewrites every error a request returns. Teammate
+	// clients use it to name the teammate and course on a rejected key.
+	MapError func(error) error
 }
 
 type countingTransport struct {
@@ -127,7 +134,7 @@ func (c *Client) apiURL(path string) (*url.URL, error) {
 		return nil, &Error{Kind: "validation"}
 	}
 	u = c.origin.ResolveReference(u)
-	if !sameOrigin(c.origin, u) || !(strings.HasPrefix(u.Path, "/api/v1/") || strings.HasPrefix(u.Path, "/api/quiz/v1/")) {
+	if !sameOrigin(c.origin, u) || !(strings.HasPrefix(u.Path, "/api/v1/") || strings.HasPrefix(u.Path, "/api/quiz/v1/") || u.Path == "/api/graphql") {
 		return nil, &Error{Kind: "validation"}
 	}
 	return u, nil
@@ -233,8 +240,22 @@ func statusError(status int, body []byte, write bool) *Error {
 	return &Error{Kind: kind, Status: status, Uncertain: uncertain, Body: string(body)}
 }
 
-// request retries safe reads only. The slot remains occupied through body use.
+func (c *Client) wrote(method string, u *url.URL, status int, uncertain bool) {
+	if c.OnWrite != nil && method != http.MethodGet {
+		c.OnWrite(method, u.Path, status, uncertain)
+	}
+}
+
 func (c *Client) request(ctx context.Context, method string, u *url.URL, body []byte, download bool, consume func(*http.Response) error) error {
+	err := c.send(ctx, method, u, body, download, consume)
+	if err != nil && c.MapError != nil {
+		err = c.MapError(err)
+	}
+	return err
+}
+
+// send retries safe reads only. The slot remains occupied through body use.
+func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byte, download bool, consume func(*http.Response) error) error {
 	write := method != http.MethodGet
 	attempts := 1
 	if !write {
@@ -263,6 +284,7 @@ func (c *Client) request(ctx context.Context, method string, u *url.URL, body []
 		if err != nil {
 			c.release()
 			if write {
+				c.wrote(method, u, 0, true)
 				return &Error{Kind: "uncertain", Uncertain: true}
 			}
 			var ce *Error
@@ -285,6 +307,7 @@ func (c *Client) request(ctx context.Context, method string, u *url.URL, body []
 			resp.Body.Close()
 			c.release()
 			ce := statusError(resp.StatusCode, data, write)
+			c.wrote(method, u, resp.StatusCode, ce.Uncertain)
 			delay := retryDelay(resp.Header, c.backoff<<attempt)
 			if ce.Kind == "throttled" {
 				c.throttle(delay)
@@ -301,6 +324,9 @@ func (c *Client) request(ctx context.Context, method string, u *url.URL, body []
 		err = consume(resp)
 		resp.Body.Close()
 		c.release()
+		if write {
+			c.wrote(method, u, resp.StatusCode, err != nil)
+		}
 		if err != nil && write {
 			return &Error{Kind: "uncertain", Uncertain: true}
 		}
@@ -487,6 +513,57 @@ func (c *Client) Write(ctx context.Context, method, path string, body any, out a
 		return &Error{Kind: "validation"}
 	}
 	return c.request(ctx, method, u, data, false, func(resp *http.Response) error { return readJSON(resp, out) })
+}
+
+const setPostManuallyMutation = `mutation($id: ID!) {
+  setAssignmentPostPolicy(input: {assignmentId: $id, postManually: true}) {
+    postPolicy { postManually }
+    errors { attribute message }
+  }
+}`
+
+// SetAssignmentPostManually makes Canvas hold an assignment's grades until the
+// teacher posts them. It succeeds only when Canvas confirms manual posting.
+func (c *Client) SetAssignmentPostManually(ctx context.Context, assignmentID int64) error {
+	var out struct {
+		Data struct {
+			Set *struct {
+				PostPolicy *struct {
+					PostManually bool `json:"postManually"`
+				} `json:"postPolicy"`
+				Errors []struct {
+					Message string `json:"message"`
+				} `json:"errors"`
+			} `json:"setAssignmentPostPolicy"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	body := map[string]any{"query": setPostManuallyMutation, "variables": map[string]string{"id": strconv.FormatInt(assignmentID, 10)}}
+	if err := c.Write(ctx, http.MethodPost, "/api/graphql", body, &out); err != nil {
+		return err
+	}
+	fail := func(msg string) error {
+		if len(msg) > 200 {
+			msg = msg[:200]
+		}
+		return &Error{Kind: "validation", Body: msg}
+	}
+	if len(out.Errors) > 0 {
+		return fail(out.Errors[0].Message)
+	}
+	set := out.Data.Set
+	if set == nil {
+		return fail("no post policy in response")
+	}
+	if len(set.Errors) > 0 {
+		return fail(set.Errors[0].Message)
+	}
+	if set.PostPolicy == nil || !set.PostPolicy.PostManually {
+		return fail("manual posting was not confirmed")
+	}
+	return nil
 }
 
 // WriteAccepted preserves an accepted HTTP write even if Canvas omits or

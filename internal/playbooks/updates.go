@@ -49,7 +49,21 @@ func seedBytes(rel string) ([]byte, error) {
 
 func SeedBytes(rel string) ([]byte, error) { return seedBytes(rel) }
 
+// ManagedBy names what delivers this UserInstall's playbooks when it is not the
+// Engine: "git" for a clone of the userinstall branch, otherwise "".
+func ManagedBy(root string) string {
+	if workspace.IsGitInstall(root) {
+		return "git"
+	}
+	return ""
+}
+
+const gitManagedNote = "Playbooks and AGENTS.md/CLAUDE.md come from git (git pull), not from the Engine. Teacher choices belong in Teacher_Override.md and context/."
+
 func Status(root string) []StatusRow {
+	if ManagedBy(root) == "git" {
+		return nil
+	}
 	var rows []StatusRow
 	for _, rel := range seedPaths() {
 		row := StatusRow{Path: rel}
@@ -85,6 +99,9 @@ func Status(root string) []StatusRow {
 // "missing" for an explicit add. An empty precondition is reserved for the
 // Settings UI's existing confirm flow.
 func Replace(root, rel, expectedSHA256 string, now time.Time) error {
+	if ManagedBy(root) == "git" {
+		return fmt.Errorf("%s is managed by git; %s", rel, gitManagedNote)
+	}
 	rel = path.Clean(strings.ReplaceAll(rel, "\\", "/"))
 	known := false
 	for _, p := range seedPaths() {

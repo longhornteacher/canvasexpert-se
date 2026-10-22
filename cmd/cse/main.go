@@ -19,6 +19,8 @@ import (
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/doctor"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/gitupdate"
+	"canvasexpertse/internal/hubcoord"
 	"canvasexpertse/internal/installation"
 	"canvasexpertse/internal/installlog"
 	"canvasexpertse/internal/localui"
@@ -44,11 +46,13 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   link                          Record this program's location for workspace cse.cmd
   rules-location                Show teacher-rules authority; use --sync PATH or --local to set it
   playbooks status              Compare active teacher rules with this Engine's seed
+  update status|stage [--if-due]|apply [--archive-edits]
+                                Git install: check, stage (no live change) or apply an update
   playbooks replace PATH --expected-sha256 HASH
                                 Explicitly archive and replace one seed-managed file (HASH may be 'missing')
   setup                         Connect Canvas privately on this machine
   students                      Edit student aliases and monitored status
-  courses                       Discover authorized teacher courses
+  courses [--as TEAMMATE]       Discover authorized teacher courses (a teammate's with --as)
   modules COURSE                List a configured course's modules
   external-resources COURSE [--group ID]  Read collaboration and conference metadata
   groups COURSE [--set ID] [--members GROUP_ID] [--groups] [--group ID]
@@ -64,11 +68,18 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   pull-item COURSE TITLE|ID|LINK Pull actual assignment HTML for editing
   prepare-audience COURSE FILE [--refresh] Prepare individual club audience without Canvas writes
   pull-assignment-dates COURSE ASSIGNMENT_ID Pull exact audience override baselines for editing
+  tags COURSE                   List differentiation tag sets and tags with member counts (no students)
+  assign-to FILE [--preview]    Set Assign To (module, page, quiz, assignment, discussion) to tags from an assign-to document; --preview shows current -> new audience
+  assign-modules COURSE (--pattern "Book Club: {tag}" | --map "Module=Tag" ...) [--tag-set NAME] [--preview]
+                                Assign each module to its same-named tag
+  audience-report COURSE [--module TITLE|ID] Show who can see each module and item; flags items in several modules
+  set-file-access COURSE FILE_ID --access course|hidden|locked Change an existing course file's access
   pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
   prepare-late-timing FILE  Check first-genuine choices against pulled work and propose timing changes; never writes to Canvas
   parent-report COURSE [REF ...] Read parent-update facts (missing, corrections, due soon, history) into courses/COURSE/parent-updates/
+  copy-module SOURCE "MODULE" COURSE [COURSE ...] Copy one module by exact title, once, into each course (each teacher's own key); never re-copies
   family-contact-prepare RUN_FOLDER Resolve a free-form contact.json audience against Canvas
   parent-review RUN_FOLDER      Open the private page to review and send a grade-update or family-contact run (Outlook)
   student-report RUN_FOLDER     Save one PDF of student reports (one per page) from a parent-update run and open it
@@ -77,6 +88,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   quiz-points COURSE QUIZ [N=PTS ...] List a New Quiz's questions, or set question N to PTS points
   api PATH                      Read-only Canvas API GET when no command fits; prints the JSON
   validate FILE                 Validate a workspace document locally
+  results-init PACKET           Start a results file for a pulled packet (attempts and evidence filled in)
   doctor [--json] [--offline]   Check this UserInstall; authenticated Canvas and hub checks unless offline
   version [--json]              Print version and build information
   review FILE [COURSE]  Open a local page where the teacher reviews scores (results file), a new assignment (create document) or a quiz (QuizForge file plus COURSE), revises some, and posts or creates the approved ones; exits when finished and prints what was posted, revised and held
@@ -163,9 +175,10 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			location, locErr := workspace.GetRulesLocation(root)
 			status := struct {
 				Location          workspace.RulesLocation `json:"location"`
+				ManagedBy         string                  `json:"managed_by,omitempty"`
 				AvailabilityError string                  `json:"availability_error,omitempty"`
 				Files             []playbooks.StatusRow   `json:"files"`
-			}{Location: location, Files: playbooks.Status(root)}
+			}{Location: location, ManagedBy: playbooks.ManagedBy(root), Files: playbooks.Status(root)}
 			if locErr != nil {
 				status.AvailabilityError = locErr.Error()
 			}
@@ -205,6 +218,33 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return 0
 		}
 		return fail(inputError(fmt.Errorf("use playbooks status, playbooks update, or playbooks replace PATH --expected-sha256 HASH")), progress)
+	}
+	if cmd == "update" {
+		root, e := runtimeRoot(*rootOpt)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		u := gitupdate.New(root, hubcoord.OpenPages)
+		var report gitupdate.Report
+		switch {
+		case len(args) == 1 && args[0] == "status":
+			report, e = u.Status()
+		case len(args) >= 1 && args[0] == "stage" && (len(args) == 1 || len(args) == 2 && args[1] == "--if-due"):
+			report, e = u.Stage(len(args) == 2)
+		case len(args) >= 1 && args[0] == "apply" && (len(args) == 1 || len(args) == 2 && args[1] == "--archive-edits"):
+			report, e = u.Apply(len(args) == 2)
+		default:
+			return fail(inputError(fmt.Errorf("use update status, update stage [--if-due], or update apply [--archive-edits]")), progress)
+		}
+		if e != nil {
+			return fail(e, progress)
+		}
+		b, e := json.MarshalIndent(report, "", "  ")
+		if e != nil {
+			return fail(e, progress)
+		}
+		fmt.Fprintln(out, string(b))
+		return 0
 	}
 	if cmd == "rules-location" {
 		root, e := runtimeRoot(*rootOpt)
@@ -249,13 +289,15 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		return fail(mcpserver.Run(ctx, root), progress)
 	}
 	if cmd == "version" {
+		install := installInfoFor(*rootOpt)
 		if len(args) == 1 && args[0] == "--json" {
 			data, _ := json.Marshal(struct {
 				Version   string `json:"version"`
 				Revision  string `json:"revision"`
 				BuiltAt   string `json:"built_at"`
 				BuildKind string `json:"build_kind"`
-			}{version, revision, builtAt, buildKind})
+				installInfo
+			}{version, revision, builtAt, buildKind, install})
 			fmt.Fprintln(out, string(data))
 			return 0
 		}
@@ -263,6 +305,9 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return fail(inputError(fmt.Errorf("use version [--json]")), progress)
 		}
 		fmt.Fprintf(out, "CanvasExpert-SE %s (SE = %s)\nrevision %s\nbuilt %s\nbuild_kind %s\n%s %s/%s\n", version, localui.SEExpansion(), revision, builtAt, buildKind, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		if install.InstallKind != "" {
+			fmt.Fprintf(out, "install_kind %s\nmanifest %s (engine %s)\n", install.InstallKind, install.ManifestIdentity, map[bool]string{true: "matches", false: "differs"}[install.EngineMatchesManifest != nil && *install.EngineMatchesManifest])
+		}
 		if info, ok := debug.ReadBuildInfo(); ok {
 			for _, dep := range info.Deps {
 				fmt.Fprintf(out, "dependency %s %s\n", dep.Path, dep.Version)
@@ -451,7 +496,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "api": true, "quiz-points": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -465,11 +510,25 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return fail(localui.Students(ctx, root, progress), progress)
 	}
+	if cmd == "results-init" {
+		if len(args) != 1 {
+			return fail(inputError(fmt.Errorf("results-init requires one packet path")), progress)
+		}
+		rel, e := workflow.InitResults(root, args[0], time.Now())
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		fmt.Fprintf(out, "Results scaffold: %s\nFill interpretation, each student's components and feedback, then validate.\n", rel)
+		return 0
+	}
 	if cmd == "validate" {
 		if len(args) != 1 {
 			return fail(inputError(fmt.Errorf("validate requires one file")), progress)
 		}
 		p, e := documentPath(root, args[0])
+		if e == nil {
+			e = workflow.FillResultsAssignment(root, p)
+		}
 		if e == nil {
 			e = validateDocument(p, root)
 		}
@@ -562,6 +621,8 @@ func validateDocument(path string, roots ...string) error {
 		target = &domain.AssignmentDocument{}
 	case "assignment-dates":
 		target = &domain.AssignmentDatesDocument{}
+	case "assign-to":
+		target = &domain.AssignToDocument{}
 	case "group-set":
 		target = &domain.GroupSetDocument{}
 	case "group-memberships":
@@ -599,7 +660,7 @@ func validateDocument(path string, roots ...string) error {
 		case "students.md":
 			target = &domain.StudentNotes{}
 		default:
-			return fmt.Errorf("unsupported document kind %q; expected assignment, assignment-dates, group-set, group-memberships, group-packet, group-work, page, discussion, discussion-packet, discussion-reply, module, results, group-results, packet, or student-work", kind)
+			return fmt.Errorf("unsupported document kind %q; expected assignment, assignment-dates, assign-to, group-set, group-memberships, group-packet, group-work, page, discussion, discussion-packet, discussion-reply, module, results, group-results, packet, or student-work", kind)
 		}
 	}
 	if kindErr != nil && kind != "" {
@@ -621,7 +682,10 @@ func validateDocument(path string, roots ...string) error {
 		if d, ok := target.(*domain.AssignmentDatesDocument); ok {
 			e = domain.ValidateAssignmentDates(*d)
 		}
-		if d, ok := target.(*domain.GroupSetDocument); ok {
+		if d, ok := target.(*domain.AssignToDocument); ok {
+				e = d.Validate()
+			}
+			if d, ok := target.(*domain.GroupSetDocument); ok {
 			e = d.Validate()
 		}
 		if d, ok := target.(*domain.GroupMembershipDocument); ok {

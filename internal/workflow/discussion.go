@@ -49,31 +49,35 @@ func discussionPath(courseID, groupID, topicID int64) string {
 	return discussionBase(courseID, groupID) + fmt.Sprintf("/%d", topicID)
 }
 
-func (s *Service) verifyDiscussionScope(ctx context.Context, nickname string, setID, groupID int64) (domain.Course, error) {
+func (s *Service) verifyDiscussionScope(ctx context.Context, nickname string, setID, groupID int64) (*Service, domain.Course, error) {
 	if setID > 0 && groupID > 0 {
-		return domain.Course{}, fmt.Errorf("choose a course, group_category_id, or group_id discussion scope")
+		return s, domain.Course{}, fmt.Errorf("choose a course, group_category_id, or group_id discussion scope")
 	}
 	c, err := s.Course(nickname)
 	if err != nil {
-		return c, err
+		return s, c, err
+	}
+	if s, err = s.ForCourse(ctx, c); err != nil {
+		return s, c, err
 	}
 	if setID > 0 {
 		_, err = s.groupCategory(ctx, c.ID, setID)
 	}
 	if groupID > 0 {
-		_, err = s.verifyPageGroup(ctx, nickname, groupID)
+		_, _, err = s.verifyPageGroup(ctx, nickname, groupID)
 	}
-	return c, err
+	return s, c, err
 }
 
 func (s *Service) PullDiscussion(ctx context.Context, nickname string, topicID, groupID int64) (string, error) {
 	if topicID <= 0 || groupID < 0 {
 		return "", fmt.Errorf("topic ID must be positive and group ID cannot be negative")
 	}
-	c, err := s.verifyDiscussionScope(ctx, nickname, 0, groupID)
+	scoped, c, err := s.verifyDiscussionScope(ctx, nickname, 0, groupID)
 	if err != nil {
 		return "", err
 	}
+	s = scoped
 	var topic NativeDiscussion
 	err = s.Client.Get(ctx, discussionPath(c.ID, groupID, topicID), &topic)
 	if err != nil {
@@ -127,10 +131,11 @@ func (s *Service) PushDiscussion(ctx context.Context, path string) (report Discu
 	if err != nil {
 		return report, err
 	}
-	c, err := s.verifyDiscussionScope(ctx, d.Course, d.GroupCategoryID, d.GroupID)
+	scoped, c, err := s.verifyDiscussionScope(ctx, d.Course, d.GroupCategoryID, d.GroupID)
 	if err != nil {
 		return report, err
 	}
+	s = scoped
 	if (d.Instance != "" && d.Instance != s.Client.Origin()) || (d.CourseID != 0 && d.CourseID != c.ID) {
 		return report, fmt.Errorf("discussion identity differs from configured Canvas/course")
 	}

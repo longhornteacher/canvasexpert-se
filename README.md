@@ -4,11 +4,11 @@
 
 CanvasExpert-SE (CE-SE) helps teachers draft assignments and New Quizzes, organize course content, assess student work, prepare feedback and contact families. Your chosen agent follows editable teaching playbooks and your preferences; the Engine handles Canvas access, student/attempt identity, exact score arithmetic and supported writes.
 
-**Published release: 1.0 (`1.0.0`) · Source: 1.1 beta 1 (`1.1.0-beta.1`, the Groups update) · Windows 11 · MIT**
+**Published release: 1.1 beta 4 (`1.1.0-beta.4`, the Groups update) · Windows 11 · MIT**
 
 [Get started](#get-started) · [Changelog](CHANGELOG.md) · [Release policy](docs/releasing.md) · [Contribute](.github/CONTRIBUTING.md)
 
-The download links below install the published 1.0 release. The source on `main` and `dev` is 1.1 beta 1, which adds book-club group work, Family Contact emails, parent reports and school-calendar late timing; it is not yet a published release.
+The links below install the published 1.1 beta 4 release, which adds book-club group work, Family Contact emails, parent reports, school-calendar late timing, targeted scoring sessions, installation and quiet updates by git, and lighter scoring files for the agent. Development continues on `dev`.
 
 This is an independent open-source project. The teacher-first installation mechanics have local fixture and package checks; the complete fresh-user Cowork/Work installation and teaching example still need a destination-client pilot. See the [capability record](docs/engine-capabilities.md) for the distinction between Canvas Live evidence, local tests and pending human validation.
 
@@ -18,26 +18,29 @@ The easiest way: paste this into Claude Code or Codex on your Windows PC and let
 
 > Install CanvasExpert for me from https://github.com/longhornteacher/canvasexpert-se
 
-Later, "Update CanvasExpert from https://github.com/longhornteacher/canvasexpert-se" gets the newest version without touching your settings or choices.
+Later, "Update CanvasExpert from https://github.com/longhornteacher/canvasexpert-se" gets the newest version without touching your settings or choices. You normally do not need to ask: your assistant stages updates quietly and offers to install them when your work is done.
 
 ### For AI agents installing or updating CanvasExpert for a teacher
 
-Do not clone or build this repository; teachers need no developer tools. Use the published Windows build:
+Teachers need no developer tools. Do not build this repository, and do not clone its default branch: the teacher-facing folder is the `userinstall` branch, which holds only the playbooks and launchers. It does not contain the program; `get-engine.cmd` downloads that from the matching release and checks its checksum.
 
-1. Download https://github.com/longhornteacher/canvasexpert-se/releases/latest/download/CanvasExpert-SE-windows.zip (always the newest release; the same ZIP is also attached to each [release](https://github.com/longhornteacher/canvasexpert-se/releases) under its versioned name). Ask the teacher before downloading and running it.
-2. **Install:** extract it to a local folder that is not synced by OneDrive or Google Drive (for example `%USERPROFILE%\CanvasExpert-SE`); some district sync folders block programs. **Update:** extract it over the teacher's existing CanvasExpert folder. The ZIP contains no playbooks, settings or teacher files, so nothing of theirs is overwritten. If `engine\cse.exe` is in use, ask the teacher to close the apps using CanvasExpert first, never during an active review.
-3. Run that folder's `cse.cmd playbooks update`, then read its `AGENTS.md` and follow `playbooks/install.md` (for a new install, together with `playbooks/setup.md`). The playbooks own the rest: app connections, the private Canvas form and courses, or reconciling any playbook the teacher edited.
-4. Tell the teacher to open the CanvasExpert folder itself when they use Claude Code or Codex for teaching work, so its instructions and privacy rules apply.
+1. **Ask the teacher first**, then choose a local folder that OneDrive and Google Drive do not sync (for example `%USERPROFILE%\CanvasExpert-SE`); some district sync folders block programs. Never overwrite an existing folder.
+2. `git clone --branch userinstall --single-branch https://github.com/longhornteacher/canvasexpert-se.git "<folder>"`
+3. In that folder run `.\get-engine.cmd` (needs only Windows' `curl.exe` and `certutil`; no admin rights, no PATH changes). Then `.\cse.cmd version`.
+4. Read that folder's `AGENTS.md` and follow `playbooks/install.md` (for a new install, together with `playbooks/setup.md`). The playbooks own the rest: app connections, the private Canvas form and courses, and quiet updates.
+5. Tell the teacher to open the CanvasExpert folder itself when they use Claude Code or Codex for teaching work, so its instructions and privacy rules apply.
+
+To update an existing folder, follow "Updates" in its `playbooks/install.md`. If git or github.com is blocked on the teacher's computer, say so plainly and use the ZIP fallback: download https://github.com/longhornteacher/canvasexpert-se/releases/latest/download/CanvasExpert-SE-windows.zip (ask the teacher first), extract it to the chosen folder, and follow the same playbooks.
 
 ### Install it yourself
 
-1. Download [the Windows ZIP](https://github.com/longhornteacher/canvasexpert-se/releases/latest/download/CanvasExpert-SE-windows.zip) (not GitHub's source-code ZIP) and unzip it into the local folder where you want to keep it. That folder is UserInstall; run directly there, with no second install folder.
+1. Paste the prompt above into Claude Code or Codex and let your agent install it, or download [the Windows ZIP](https://github.com/longhornteacher/canvasexpert-se/releases/latest/download/CanvasExpert-SE-windows.zip) (not GitHub's source-code ZIP) and unzip it into the local folder where you want to keep it. That folder is UserInstall; run directly there, with no second install folder.
 2. Open that folder in Code/Codex and say **“Set this all up.”** The setup assistant connects every supported app it finds (Claude, ChatGPT, Antigravity), checks the Engine, opens the private Canvas form, helps configure your classes and checks that your teaching assistant can read them.
 3. Enter your Canvas address and access token in the private form. Approve the install prompt in your app (restart it only if it asks and you are not mid-review), then use the included `TEACHING-ASSISTANT.md` starter to begin teaching there.
 
 Teachers do not need Dev, Go, Node, a separate Codex CLI, terminal commands or client configuration edits. If the form does not open, the assistant shows its local address, or double-click the included `webui.cmd`. You need the Claude or ChatGPT app on this PC; a website alone cannot reach your UserInstall, and app or organization controls can require additional actions. Saving connection settings or passing a local MCP check does not prove the destination app can use the tools.
 
-Use the [Setup guide](workspace-template/README.md) for the shipped folder and the [MCP adapter guide](docs/mcp-adapter.md) for connection details. See [build and package instructions](docs/build.md) to produce the release ZIP from Dev.
+Use the [Setup guide](workspace-template/README.md) for the shipped folder and the [MCP adapter guide](docs/mcp-adapter.md) for connection details. See [build and package instructions](docs/build.md) and [releasing](docs/releasing.md) to produce the release from Dev.
 
 ## What you can do
 

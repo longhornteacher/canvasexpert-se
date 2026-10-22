@@ -28,7 +28,7 @@ func TestRenderFeedbackShowsAssessmentScoresThenConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Overall: 4.67/20\nCriterion scores:\n- Response 1: Evidence 3/4; Reasoning 4/6\n- Response 2: Evidence 0/4; Reasoning 0/6\n\n" + feedback
+	want := "Overall: 4.67/20\nResponse 1: 4.67/6.67\nResponse 2: 0/13.33\n\nResponse 1\n- Evidence 3/4\n- Reasoning 4/6\n\nResponse 2\n- Evidence 0/4\n- Reasoning 0/6\n\n" + feedback
 	if got != want {
 		t.Fatalf("unexpected rendering\n got: %s\nwant: %s", got, want)
 	}
@@ -51,7 +51,7 @@ func TestRenderFeedbackDirectMappingAndXSS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Overall: 7/10\nCriterion scores:\n- Prompt A: Read <carefully> 4/5\n- Prompt B: Write 3/5\n\n<script>alert(1)</script>"
+	want := "Overall: 7/10\nPrompt A: 4/5\nPrompt B: 3/5\n\nPrompt A\n- Read <carefully> 4/5\n\nPrompt B\n- Write 3/5\n\n<script>alert(1)</script>"
 	if got != want {
 		t.Fatalf("plain text criteria or exact feedback preservation incorrect:\n got: %s\nwant: %s", got, want)
 	}
@@ -65,9 +65,30 @@ func TestRenderCommentOnlyOmitsAggregateAssessment(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(got, "Assessment:") || !strings.HasPrefix(got, "Criterion scores:\n") || !strings.HasSuffix(got, "\n\nGood evidence.") {
+		if strings.Contains(got, "Assessment:") || !strings.HasPrefix(got, "Response: 4/5\n\nResponse\n- Evidence 4/5\n\n") || !strings.HasSuffix(got, "\n\nGood evidence.") {
 			t.Fatalf("header %q: comment-only text included an aggregate grade or lost feedback: %q", header, got)
 		}
+	}
+}
+
+func TestRenderNewQuizLeadsWithAutoScoredSubtotal(t *testing.T) {
+	rubric := domain.Rubric{Title: "R", Criteria: []domain.Criterion{{ID: "a", Description: "Evidence", Points: domain.MustDecimal("5")}}}
+	interpretation := domain.Interpretation{Mapping: "repeated", Rationale: "private", Components: []domain.Component{{Key: "one", Label: "Response", Weight: domain.MustDecimal("1")}}}
+	auto := &domain.AutoScored{Earned: domain.MustDecimal("6.50"), Possible: domain.MustDecimal("9.00"), Items: 2}
+	in := FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: []domain.ComponentScore{{Key: "one", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal("4")}}}}, Assessment: domain.MustDecimal("16"), AssignmentPoints: domain.MustDecimal("20"), Feedback: "Good evidence.", OmitAssessment: true, AutoScored: auto, PartPoints: map[string]domain.Decimal{"one": domain.MustDecimal("15.0")}}
+	for _, header := range []string{"", "full", "score"} {
+		in.Header = header
+		got, err := RenderFeedback(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "Questions Canvas scored: 6.5/9\nResponse: 12/15\n\nResponse\n- Evidence 4/5\n\nGood evidence." {
+			t.Fatalf("header %q: %q", header, got)
+		}
+	}
+	in.Header = "none"
+	if got, _ := RenderFeedback(in); got != "Good evidence." {
+		t.Fatalf("header none must post the feedback exactly: %q", got)
 	}
 }
 
@@ -80,8 +101,23 @@ func TestMarkdownHTMLSafeSubsetAndHTMLText(t *testing.T) {
 	if got != want {
 		t.Fatalf("got %s, want %s", got, want)
 	}
-	if text := HTMLText(`<p>Use &amp; compare</p><ul><li>One</li><li>Two</li></ul>`); text != "Use & compare\nOne\nTwo" {
+	if text := HTMLText(`<p>Use &amp; compare</p><ul><li>One</li><li>Two</li></ul>`); text != "Use & compare\n- One\n- Two" {
 		t.Fatalf("unexpected HTML text %q", text)
+	}
+}
+
+func TestHTMLTextKeepsCodeLinksAndImages(t *testing.T) {
+	source := `<p>See <a href="https://example.test/guide">the guide</a> and <a href="https://example.test/x">https://example.test/x</a>.</p>` +
+		`<pre><code>def f(x):
+    if x &lt; 2:
+        return 1</code></pre>` +
+		`<p><img src="/files/9/preview" alt="Reference code"><img src="/files/10/preview"></p>` +
+		`<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table><script>alert(1)</script><p>End<br>line</p>`
+	want := "See the guide (https://example.test/guide) and https://example.test/x.\n" +
+		"```\ndef f(x):\n    if x < 2:\n        return 1\n```\n" +
+		"[image: Reference code] [image]\nA | B\n1 | 2\nEnd\nline"
+	if got := HTMLText(source); got != want {
+		t.Fatalf("got %q\nwant %q", got, want)
 	}
 }
 
@@ -149,7 +185,7 @@ func TestHeaderLetsTheTeacherControlWhatLeadsTheComment(t *testing.T) {
 	}
 	for _, h := range []string{"", "full"} {
 		in.Header = h
-		if got, err := RenderFeedback(in); err != nil || got != "Overall: 3/4\nCriterion scores:\n- Response 1: Evidence 3/4\n\n32/40\nGreat work." {
+		if got, err := RenderFeedback(in); err != nil || got != "Overall: 3/4\n\nResponse 1\n- Evidence 3/4\n\n32/40\nGreat work." {
 			t.Fatalf("header %q must lead with the overall and item lines: %q %v", h, got, err)
 		}
 	}

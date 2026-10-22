@@ -13,8 +13,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"gopkg.in/yaml.v3"
-
 	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/render"
@@ -44,19 +42,30 @@ type PullWorkOptions struct {
 // packet workload. Late/missing can overlap other states; attachments count
 // unreadable or failed files across current and retrieved preceding attempts.
 type PullAssignmentSummary struct {
-	Course                string
-	AssignmentID          int64
-	Title                 string
-	Students              int
-	Late                  int
-	Missing               int
-	Excused               int
-	Inactive              int
-	Unsupported           int
-	Handled               int
-	UnreadableAttachments int
-	Packets               []string
-	SkipReason            string
+	Course                   string
+	AssignmentID             int64
+	Title                    string
+	Students                 int
+	Late                     int
+	Missing                  int
+	Excused                  int
+	Inactive                 int
+	Unsupported              int
+	Handled                  int
+	UnreadableAttachments    int
+	Packets                  []string
+	SkipReason               string
+	AssignmentGroupName      string
+	AssignmentGroupWeight    json.Number
+	DueState                 string
+	NeedsGradingCount        *int
+	NeedsGradingCountUnknown bool
+	NotVisible               int
+	Undated                  int
+	DueUnavailable           int
+	CommentOnlyCompleted     int
+	TimingCandidates         int
+	ClosedGradingPeriod      bool
 }
 
 // PullWork with empty scope considers configured current courses only. Explicit
@@ -91,11 +100,14 @@ func (s *Service) PullWorkGroup(ctx context.Context, nickname, query string, gro
 // using the same packet/download mechanisms for exactly that single student.
 func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, assignmentID, builtinID int64) (PullReport, error) {
 	start := time.Now()
-	requests := s.Client.Requests()
 	course, e := s.Course(nickname)
 	if e != nil {
 		return PullReport{}, e
 	}
+	if s, e = s.ForCourse(ctx, course); e != nil {
+		return PullReport{}, e
+	}
+	requests := s.requestCount()
 	if assignmentID <= 0 || builtinID <= 0 {
 		return PullReport{}, fmt.Errorf("positive explicit probe assignment and built-in student IDs required")
 	}
@@ -113,23 +125,35 @@ func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, a
 	if !strings.HasPrefix(a.Name, "[CSE 0.1b DISPOSABLE]") && !strings.HasPrefix(a.Name, "[CSE UNATTENDED] ") {
 		return PullReport{}, fmt.Errorf("developer pull requires conspicuously disposable assignment prefix")
 	}
+	if owner, owned, e := s.Owned(course); e != nil {
+		return PullReport{}, e
+	} else if owned && !domain.HasConsentTag(a.Name) {
+		return PullReport{}, untaggedError(a.Name, course, owner)
+	}
 	probeElapsed := time.Since(start)
-	probeRequests := s.Client.Requests() - requests
+	probeRequests := s.requestCount() - requests
 	report, e := s.pullWork(ctx, course.Nickname, fmt.Sprint(assignmentID), &user, nil, PullWorkOptions{})
 	report.DiscoveryElapsed += probeElapsed
 	report.DiscoveryRequests += probeRequests
 	report.Elapsed = time.Since(start)
-	report.Requests = s.Client.Requests() - requests
+	report.Requests = s.requestCount() - requests
 	return report, e
 }
 
+// untaggedError is the refusal for work in a teammate's course that the
+// teammate hasn't opted in with (CE) in the assignment name.
+func untaggedError(name string, course domain.Course, owner workspace.Teammate) error {
+	return fmt.Errorf("%s in %s isn't tagged (CE), so %s hasn't opted it in to CE-SE scoring. Ask %s to add (CE) to its name in Canvas.", name, course.Nickname, owner.Name, owner.Name)
+}
+
 func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin *CanvasUser, groupFilter *int64, options PullWorkOptions) (report PullReport, err error) {
+	s = s.withResultsIndex()
 	start := time.Now()
-	requests := s.Client.Requests()
-	defer func() { report.Elapsed = time.Since(start); report.Requests = s.Client.Requests() - requests }()
+	requests := s.requestCount()
+	defer func() { report.Elapsed = time.Since(start); report.Requests = s.requestCount() - requests }()
 	phase, phaseStart, phaseRequests := "discovery", start, requests
 	setPhase := func(next string) {
-		now, count := time.Now(), s.Client.Requests()
+		now, count := time.Now(), s.requestCount()
 		if phase == "discovery" {
 			report.DiscoveryElapsed += now.Sub(phaseStart)
 			report.DiscoveryRequests += count - phaseRequests
@@ -155,31 +179,14 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 		courses = []domain.Course{c}
 	} else {
 		for _, c := range s.Config.Courses {
-			if c.Current {
+			// A teammate's courses are pulled only when named.
+			if c.Current && c.Owner == "" {
 				courses = append(courses, c)
 			}
 		}
 	}
 	if len(courses) == 0 {
 		return report, fmt.Errorf("no current courses configured")
-	}
-	var currentPeriod *workspace.GradingPeriod
-	var schoolCalendar *workspace.SchoolCalendar
-	if options.Session && query == "" && builtin == nil {
-		calendar, e := workspace.ReadSchoolCalendar(s.Root)
-		if e != nil {
-			return report, fmt.Errorf("scoring-session discovery needs the active school calendar: %w", e)
-		}
-		period, e := calendar.CurrentPeriod(time.Now())
-		if e != nil {
-			return report, fmt.Errorf("scoring-session discovery needs one current grading period: %w", e)
-		}
-		currentPeriod, schoolCalendar = &period, &calendar
-	}
-	if options.Session && schoolCalendar == nil {
-		if calendar, e := workspace.ReadSchoolCalendar(s.Root); e == nil {
-			schoolCalendar = &calendar
-		}
 	}
 	students, err := workspace.OpenStudents(s.Root)
 	if err != nil {
@@ -197,8 +204,18 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 	} else if !os.IsNotExist(e) {
 		return report, e
 	}
+	outer := s
 	for _, course := range courses {
 		setPhase("discovery")
+		scoped, scopeErr := outer.ForCourse(ctx, course)
+		if scopeErr != nil {
+			return report, scopeErr
+		}
+		s := scoped
+		owner, owned, ownErr := outer.Owned(course)
+		if ownErr != nil {
+			return report, ownErr
+		}
 		var enrollments []Enrollment
 		var e error
 		if builtin != nil {
@@ -238,22 +255,71 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			if e != nil {
 				return report, e
 			}
+			if owned && !domain.HasConsentTag(a.Name) {
+				return report, untaggedError(a.Name, course, owner)
+			}
 			assignments = []Assignment{a}
 		} else {
 			assignments, err = Assignments(ctx, s.Client, course.ID)
 			if err != nil {
 				return report, err
 			}
+			if owned {
+				tagged := assignments[:0:0]
+				for _, a := range assignments {
+					if domain.HasConsentTag(a.Name) {
+						tagged = append(tagged, a)
+					}
+				}
+				if n := len(assignments) - len(tagged); n > 0 {
+					report.Warnings = append(report.Warnings, fmt.Sprintf("%s: %d assignments not tagged (CE) were skipped.", course.Nickname, n))
+				}
+				assignments = tagged
+			}
+		}
+		groups := map[int64]AssignmentGroup{}
+		if options.Session {
+			listedGroups, groupErr := AssignmentGroups(ctx, s.Client, course.ID)
+			if groupErr != nil {
+				report.Warnings = append(report.Warnings, fmt.Sprintf("%s: assignment group names unavailable: %v", course.Nickname, groupErr))
+			} else {
+				for _, group := range listedGroups {
+					groups[group.ID] = group
+				}
+			}
+		}
+		var sessionLists map[int64][]Submission
+		if options.Session {
+			sessionLists, e = detailedSessionSubmissions(ctx, s.Client, course.ID, assignments, query == "")
+			if e != nil {
+				return report, e
+			}
 		}
 		for _, a := range assignments {
 			setPhase("discovery")
-			report.Assignments = append(report.Assignments, PullAssignmentSummary{Course: course.Nickname, AssignmentID: a.ID, Title: a.Name})
+			row := PullAssignmentSummary{Course: course.Nickname, AssignmentID: a.ID, Title: a.Name, NeedsGradingCount: a.NeedsGradingCount, DueState: assignmentDueState(a, time.Now())}
+			row.NeedsGradingCountUnknown = options.Session && a.NeedsGradingCount == nil
+			if a.AssignmentGroupID != nil {
+				group := groups[*a.AssignmentGroupID]
+				row.AssignmentGroupName, row.AssignmentGroupWeight = group.Name, group.Weight
+			}
+			report.Assignments = append(report.Assignments, row)
 			summary := &report.Assignments[len(report.Assignments)-1]
+			if options.Session && query == "" {
+				if a.NeedsGradingCount != nil && *a.NeedsGradingCount == 0 {
+					continue
+				}
+				if a.InClosedGradingPeriod {
+					summary.ClosedGradingPeriod = true
+					summary.SkipReason = "closed grading period, not pulled"
+					continue
+				}
+			}
 			if groupFilter != nil && (a.GroupCategoryID == nil || *a.GroupCategoryID <= 0) {
 				return report, fmt.Errorf("assignment %d is not a collaborative group assignment", a.ID)
 			}
 			if builtin == nil && a.GroupCategoryID != nil && *a.GroupCategoryID > 0 {
-				paths, count, skipped, e := s.pullGroupAssignment(ctx, course, a, groupFilter, active, students, summary, query != "", options, currentPeriod, schoolCalendar)
+				paths, count, skipped, e := s.pullGroupAssignment(ctx, course, a, groupFilter, active, students, summary, query != "", options)
 				if e != nil {
 					return report, e
 				}
@@ -269,7 +335,10 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, reason))
 				continue
 			}
-			basic, e := Submissions(ctx, s.Client, course.ID, a.ID, false)
+			basic := sessionLists[a.ID]
+			if !options.Session {
+				basic, e = Submissions(ctx, s.Client, course.ID, a.ID, false)
+			}
 			if e != nil {
 				return report, e
 			}
@@ -283,11 +352,12 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 					report.Skipped = append(report.Skipped, fmt.Sprintf("assignment %d: inactive/nonstudent enrollment skipped", a.ID))
 					continue
 				}
-				if currentPeriod != nil && !submissionDueInPeriod(sub, a, *currentPeriod, schoolCalendar.Timezone) {
-					if due, known := submissionEffectiveDue(sub, a); !known || due == "" {
-						report.Skipped = append(report.Skipped, fmt.Sprintf("assignment %d student %d: effective due date is unavailable; omitted from current-term session discovery", a.ID, sub.UserID))
+				if options.Session {
+					if due, known := submissionEffectiveDue(sub, a); !known {
+						summary.DueUnavailable++
+					} else if due == "" {
+						summary.Undated++
 					}
-					continue
 				}
 				if sub.Late {
 					summary.Late++
@@ -302,19 +372,25 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				if why != "" {
 					if sub.Excused {
 						summary.Excused++
+					} else if sub.AssignmentVisible != nil && !*sub.AssignmentVisible {
+						summary.NotVisible++
+						if !options.Session {
+							summary.Unsupported++
+						}
 					} else if sub.SubmittedAt != nil && sub.Attempt >= 1 {
 						summary.Unsupported++
 					}
 					report.Skipped = append(report.Skipped, fmt.Sprintf("assignment %d: %s", a.ID, why))
 					continue
 				}
-				if query == "" && liveHandled(sub) {
+				if options.Session || query == "" {
 					ref := studentRefByCanvasID(students, s.Client.Origin(), sub.UserID)
-					if !options.Session || !s.sessionTimingCandidate(course.ID, a.ID, ref, sub) || a.NewQuiz {
-						summary.Handled++
+					identity := domain.AssignmentSnapshot{Instance: s.Client.Origin(), CourseID: course.ID, AssignmentID: a.ID}
+					if options.Session && a.NewQuiz && !liveHandled(sub) && s.indexedResults().completedCommentOnlyHint(a.ID, ref, sub, identity) {
+						summary.CommentOnlyCompleted++
 						continue
 					}
-					if s.completedTimingHint(a.ID, course.ID, ref, sub, a, schoolCalendar) {
+					if liveHandled(sub) || options.Session && s.completedHint(a.ID, ref, sub, identity) {
 						summary.Handled++
 						continue
 					}
@@ -329,6 +405,14 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			a, e = GetAssignment(ctx, s.Client, course.ID, a.ID)
 			if e != nil {
 				return report, e
+			}
+			if owned && !domain.HasConsentTag(a.Name) {
+				if query != "" {
+					return report, untaggedError(a.Name, course, owner)
+				}
+				summary.SkipReason = "not tagged (CE)"
+				report.Skipped = append(report.Skipped, fmt.Sprintf("%s assignment %d: %s", course.Nickname, a.ID, untaggedError(a.Name, course, owner)))
+				continue
 			}
 			if reason := unpullableAssignment(a); reason != "" {
 				summary.SkipReason = reason
@@ -347,14 +431,17 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			packet := domain.PacketDocument{Schema: 1, Kind: "packet", Course: course.Nickname, Assignment: snapshot}
 			var detailed []Submission
 			var roster []workspace.Student
-			fetched, e := fetchSubmissions(ctx, s.Client, course.ID, a.ID, candidates)
+			fetched := candidates
+			if !options.Session {
+				fetched, e = fetchSubmissions(ctx, s.Client, course.ID, a.ID, candidates)
+			}
 			if e != nil {
 				return report, e
 			}
 			var newQuizRows map[int64]newQuizRow
 			var newQuizDownloadBudget int64
 			if a.NewQuiz {
-				newQuizRows, e = newQuizResponses(ctx, s.Client, course.ID, a.ID)
+				newQuizRows, packet.WrittenItems, e = newQuizResponses(ctx, s.Client, course.ID, a.ID)
 				if e != nil {
 					return report, fmt.Errorf("read New Quiz written responses: %w", e)
 				}
@@ -383,28 +470,36 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			var discussion *discussionAssignmentEvidence
 			if len(detailed) > 0 {
 				discussion = s.readAssignmentDiscussion(ctx, course, a, snapshot, relDir)
+				packet.DirectionImages = s.downloadDirectionImages(ctx, relDir, a.Description)
+			}
+			handled := make([]bool, len(detailed))
+			var downloads []attemptDownload
+			for i, sub := range detailed {
+				handled[i] = liveHandled(sub) || (options.Session || query == "") && s.completedHint(a.ID, roster[i].Ref, sub, snapshot)
+				if (options.Session || query == "") && handled[i] {
+					continue
+				}
+				for _, attempt := range append([]Submission{sub}, priorAttempts(sub)...) {
+					downloads = append(downloads, attemptDownload{roster[i].Ref, attempt})
+				}
+			}
+			attachments, e := s.prefetchAttachments(ctx, relDir, downloads)
+			if e != nil {
+				return report, e
 			}
 			for i, sub := range detailed {
 				st := roster[i]
-				gradeHandled := liveHandled(sub)
-				if query == "" && s.completedHint(a.ID, st.Ref, sub, snapshot) {
-					gradeHandled = true
-				}
-				needsTiming := options.Session && !a.NewQuiz && s.sessionTimingCandidate(course.ID, a.ID, st.Ref, sub)
-				if query == "" && gradeHandled && !needsTiming {
-					summary.Handled++
-					continue
-				}
-				if query == "" && gradeHandled && needsTiming && s.completedTimingHint(a.ID, course.ID, st.Ref, sub, a, schoolCalendar) {
+				gradeHandled := handled[i]
+				needsTiming := options.Session && !gradeHandled && !a.NewQuiz && s.sessionTimingCandidate(course.ID, a.ID, st.Ref, sub)
+				if (options.Session || query == "") && gradeHandled {
 					summary.Handled++
 					continue
 				}
 				doc := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: st.Ref, Alias: st.Alias, AssignmentID: a.ID, AssignmentVisible: sub.AssignmentVisible, Excused: sub.Excused, Monitored: st.Monitored, ExtraTime: &st.ExtraTime}
 				if options.Session {
 					switch {
-					case gradeHandled && needsTiming:
-						doc.WorkPurpose = "late-only"
 					case needsTiming:
+						summary.TimingCandidates++
 						doc.WorkPurpose = "score-and-late"
 					default:
 						doc.WorkPurpose = "score"
@@ -420,10 +515,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				doc.ObservedEnteredScore = decimalPointer(sub.EnteredScore)
 				doc.ObservedScore = decimalPointer(sub.Score)
 				doc.ObservedPointsDeducted = decimalPointer(sub.PointsDeducted)
-				doc.Current, e = s.attemptWork(ctx, relDir, st.Ref, sub)
-				if e != nil {
-					return report, e
-				}
+				doc.Current = s.attemptWork(sub, attachments[attemptKey{st.Ref, sub.Attempt}])
 				if a.NewQuiz {
 					row, ok := newQuizRows[sub.UserID]
 					if !ok || row.Attempt != sub.Attempt {
@@ -431,19 +523,11 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 						continue
 					}
 					doc.Current.WrittenResponses = row.Responses
+					doc.Current.AutoScored, doc.Current.AutoScoredNote = row.AutoScored, row.AutoScoredNote
 					doc.Current.WrittenFiles = s.downloadNewQuizFiles(ctx, relDir, st.Ref, sub.UserID, course.ID, a.ID, sub.Attempt, row, &newQuizDownloadBudget)
 				}
-				seen := map[int]bool{sub.Attempt: true}
-				for _, prior := range sub.History {
-					if prior.Attempt <= 0 || prior.Attempt >= sub.Attempt || prior.SubmittedAt == nil || seen[prior.Attempt] {
-						continue
-					}
-					seen[prior.Attempt] = true
-					work, e := s.attemptWork(ctx, relDir, st.Ref, prior)
-					if e != nil {
-						return report, e
-					}
-					doc.Prior = append(doc.Prior, work)
+				for _, prior := range priorAttempts(sub) {
+					doc.Prior = append(doc.Prior, s.attemptWork(prior, attachments[attemptKey{st.Ref, prior.Attempt}]))
 				}
 				sort.Slice(doc.Prior, func(i, j int) bool { return doc.Prior[i].Ref.Attempt < doc.Prior[j].Ref.Attempt })
 				attempts := append([]domain.AttemptWork{doc.Current}, doc.Prior...)
@@ -460,6 +544,13 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				privateNotes, warnings := workspace.NotesFor(notes, course.Nickname, st, courseRoster)
 				doc.Notes = privateNotes
 				report.Warnings = append(report.Warnings, warnings...)
+				bodies := []*domain.AttemptWork{&doc.Current}
+				for p := range doc.Prior {
+					bodies = append(bodies, &doc.Prior[p])
+				}
+				if e = s.moveAttemptHTML(relDir, st.Ref, bodies...); e != nil {
+					return report, e
+				}
 				file, e := workspace.ConstrainPath(s.Root, filepath.Join(relDir, "students", st.Ref+".md"))
 				if e != nil {
 					return report, e
@@ -479,7 +570,11 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			if e != nil {
 				return report, e
 			}
-			if e = workspace.WriteDocument(file, packet, a.Description); e != nil {
+			var directions string
+			if packet.DirectionsHTML, directions, e = s.packetDirections(relDir, &packet.Assignment); e != nil {
+				return report, e
+			}
+			if e = workspace.WriteDocument(file, packet, directions); e != nil {
 				return report, e
 			}
 			report.Packets = append(report.Packets, file)
@@ -559,30 +654,6 @@ func submissionEffectiveDue(s Submission, a Assignment) (string, bool) {
 	return "", false
 }
 
-func submissionDueInPeriod(s Submission, a Assignment, p workspace.GradingPeriod, timezone string) bool {
-	due, known := submissionEffectiveDue(s, a)
-	if !known || due == "" {
-		return false
-	}
-	instant, err := time.Parse(time.RFC3339Nano, due)
-	if err != nil {
-		return false
-	}
-	localDate := instant.In(mustLoadLocation(timezone)).Format("2006-01-02")
-	return localDate >= p.StartDate && localDate <= p.EndDate
-}
-
-func mustLoadLocation(timezone string) *time.Location {
-	loc, _ := time.LoadLocation(timezone)
-	return loc
-}
-
-func calendarTimezone(calendar *workspace.SchoolCalendar) string {
-	if calendar == nil {
-		return ""
-	}
-	return calendar.Timezone
-}
 func decimalPointer(n *json.Number) *domain.Decimal {
 	if n == nil {
 		return nil
@@ -615,7 +686,68 @@ func attemptRef(sub Submission) domain.AttemptRef {
 	}
 	return ref
 }
-func (s *Service) attemptWork(ctx context.Context, relDir, ref string, sub Submission) (domain.AttemptWork, error) {
+
+// priorAttempts returns each earlier genuine attempt in the submission history once.
+func priorAttempts(sub Submission) []Submission {
+	var out []Submission
+	seen := map[int]bool{sub.Attempt: true}
+	for _, prior := range sub.History {
+		if prior.Attempt <= 0 || prior.Attempt >= sub.Attempt || prior.SubmittedAt == nil || seen[prior.Attempt] {
+			continue
+		}
+		seen[prior.Attempt] = true
+		out = append(out, prior)
+	}
+	return out
+}
+
+type attemptKey struct {
+	ref     string
+	attempt int
+}
+
+type attemptDownload struct {
+	ref string
+	sub Submission
+}
+
+// Attachment downloads dominate fetch time. Run attempts concurrently, at the
+// client's in-flight cap, so a temp file is open only while its download runs;
+// each attempt keeps its own attachment order.
+func (s *Service) prefetchAttachments(ctx context.Context, relDir string, downloads []attemptDownload) (map[attemptKey][]domain.Attachment, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	results := make([][]domain.Attachment, len(downloads))
+	slots := make(chan struct{}, 4)
+	var once sync.Once
+	var first error
+	var wg sync.WaitGroup
+	for i, d := range downloads {
+		if len(d.sub.Attachments) == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			items, e := s.downloadAttachments(ctx, relDir, d.ref, d.sub.Attempt, d.sub.Attachments)
+			if e != nil {
+				once.Do(func() { first = e; cancel() })
+				return
+			}
+			results[i] = items
+		}()
+	}
+	wg.Wait()
+	out := map[attemptKey][]domain.Attachment{}
+	for i, d := range downloads {
+		out[attemptKey{d.ref, d.sub.Attempt}] = results[i]
+	}
+	return out, first
+}
+
+func (s *Service) attemptWork(sub Submission, attachments []domain.Attachment) domain.AttemptWork {
 	w := domain.AttemptWork{Ref: attemptRef(sub), BodyHTML: sub.Body, ReadableText: render.HTMLText(sub.Body), Late: sub.Late}
 	w.ObservedTiming = observedTiming(sub)
 	if sub.CachedDueDate != nil {
@@ -660,9 +792,8 @@ func (s *Service) attemptWork(ctx context.Context, relDir, ref string, sub Submi
 	case "student_annotation":
 		w.Note = "Student annotation; the Engine cannot read it. Open it in SpeedGrader."
 	}
-	var e error
-	w.Attachments, e = s.downloadAttachments(ctx, relDir, ref, sub.Attempt, sub.Attachments)
-	return w, e
+	w.Attachments = attachments
+	return w
 }
 
 func (s *Service) downloadAttachments(ctx context.Context, relDir, ref string, attempt int, attachments []Attachment) ([]domain.Attachment, error) {
@@ -742,70 +873,7 @@ func plainTextExtension(name string) bool {
 
 // Completed actions belong to an identity/attempt, even after teacher output edits.
 func (s *Service) completedHint(id int64, ref string, sub Submission, snapshot domain.AssignmentSnapshot) bool {
-	matched := false
-	// Post accepts results anywhere in the workspace. Completion follows the
-	// assignment/student/attempt identity, not the author's folder choice.
-	_ = walkResultFiles(s.Root, func(path string) error {
-		if groupResultsContainCompletedGrade(s.Root, path, snapshot, id, ref, sub) {
-			matched = true
-			return filepath.SkipAll
-		}
-		var results domain.ResultsDocument
-		if _, e := workspace.ReadDocument(path, &results); e != nil {
-			return nil
-		}
-		if results.Schema != 1 || results.Kind != "results" || results.Assignment.Instance != snapshot.Instance || results.Assignment.CourseID != snapshot.CourseID || results.Assignment.AssignmentID != id {
-			return nil
-		}
-		for _, row := range results.Students {
-			g := row.Grade
-			if row.Operation == "grade" && row.StudentRef == ref && academicGradeComplete(g) && sameAttempt(g.Attempt, attemptRef(sub)) {
-				matched = true
-				return filepath.SkipAll
-			}
-		}
-		return nil
-	})
-	return matched
-}
-
-// groupResultsContainCompletedGrade reads academic completion independently
-// of unrelated group actions. Header identity, student ref and exact packet
-// attempt must match before a completed result suppresses a pull.
-func groupResultsContainCompletedGrade(root, path string, snapshot domain.AssignmentSnapshot, assignmentID int64, studentRef string, sub Submission) bool {
-	var doc map[string]any
-	if _, err := workspace.ReadDocument(path, &doc); err != nil || yamlInt(doc["schema"]) != 1 || yamlString(doc["kind"]) != "group-results" {
-		return false
-	}
-	assignment := yamlMap(doc["assignment"])
-	if yamlString(assignment["instance"]) != snapshot.Instance || yamlInt64(assignment["course_id"]) != snapshot.CourseID || yamlInt64(assignment["assignment_id"]) != assignmentID {
-		return false
-	}
-	for _, rawGroup := range yamlSlice(doc["groups"]) {
-		group := yamlMap(rawGroup)
-		if yamlString(group["operation"]) == "grade" {
-			encoded, err := yaml.Marshal(group["grade"])
-			var grade domain.GroupGradeOperation
-			if err == nil && yaml.Unmarshal(encoded, &grade) == nil && definite(grade.Outcomes.Comment) && definite(grade.Outcomes.Rubric) && definite(grade.Outcomes.Grade) && containsString(yamlStrings(group["member_refs"]), studentRef) && groupResultCurrentAttempt(root, yamlString(doc["packet"]), yamlInt64(group["group_id"]), studentRef, attemptRef(sub)) {
-				return true
-			}
-		}
-		for _, rawStudent := range yamlSlice(group["students"]) {
-			row := yamlMap(rawStudent)
-			if yamlString(row["operation"]) != "grade" || yamlString(row["student_ref"]) != studentRef {
-				continue
-			}
-			encoded, err := yaml.Marshal(row["grade"])
-			if err != nil {
-				continue
-			}
-			var grade domain.GradeOperation
-			if yaml.Unmarshal(encoded, &grade) == nil && academicGradeComplete(&grade) && sameAttempt(grade.Attempt, attemptRef(sub)) {
-				return true
-			}
-		}
-	}
-	return false
+	return s.indexedResults().completedHint(id, ref, sub, snapshot)
 }
 
 func yamlMap(value any) map[string]any {

@@ -42,3 +42,16 @@ func TestValidateAttachmentAvailabilityAndCID(t *testing.T) {
 		t.Fatal("missing attachment accepted")
 	}
 }
+
+func TestValidateRejectsMalformedReplyTo(t *testing.T) {
+	m := Message{To: []string{"a@example.org"}, Subject: "S", TextBody: "x", ReplyTo: []string{"turner@school.org"}}
+	if err := validate(m); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"not an address", "a@b.org;c@d.org", "Name <a@b.org>"} {
+		m.ReplyTo = []string{bad}
+		if validate(m) == nil {
+			t.Fatalf("accepted Reply-To %q", bad)
+		}
+	}
+}

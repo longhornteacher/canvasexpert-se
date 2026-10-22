@@ -706,3 +706,29 @@ func TestRegressionSubmittedWorkOnLaterPageHoldsOnlyStructure(t *testing.T) {
 		t.Fatalf("later submitted work must protect structure and allow title: pages=%d report=%+v patch=%v", pages, report, patch)
 	}
 }
+
+func TestRubricCommentFactsNameCriteriaAndKeepText(t *testing.T) {
+	rubric := &domain.Rubric{Criteria: []domain.Criterion{{ID: "c1", Description: "Evidence"}, {ID: "c2", Description: "Voice"}}}
+	a := &domain.Assessment{Criteria: []domain.AggregateCriterion{{CriterionID: "c1", Comment: "a: Specific.\nb: Cite a line."}, {CriterionID: "c2"}}}
+	got := rubricCommentFacts(rubric, a)
+	if len(got) != 1 || got[0].Label != "Evidence" || got[0].Value != "a: Specific.\nb: Cite a line." {
+		t.Fatalf("%+v", got)
+	}
+	if rubricCommentFacts(nil, a) != nil {
+		t.Fatal("no Canvas rubric means no rubric comments are posted")
+	}
+}
+
+func TestPartPointsUseTheNamedWrittenItem(t *testing.T) {
+	doc := &domain.ResultsDocument{Assignment: domain.AssignmentSnapshot{NewQuiz: true}}
+	items := []domain.WrittenItem{{ItemID: "21", EntryID: "121", Type: "essay", Points: domain.MustDecimal("15")}}
+	interp := domain.Interpretation{Components: []domain.Component{{Key: "a", ItemID: "121"}, {Key: "b"}}}
+	parts, err := partPoints(doc, items, interp)
+	if err != nil || len(parts) != 1 || parts["a"].String() != "15" {
+		t.Fatalf("%v %v", parts, err)
+	}
+	interp.Components[1].ItemID = "99"
+	if _, err = partPoints(doc, items, interp); err == nil {
+		t.Fatal("an item_id the quiz does not have must stop that comment")
+	}
+}

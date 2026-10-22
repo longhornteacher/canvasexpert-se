@@ -39,31 +39,6 @@ func TestSubmissionNullableTimingAndDueFieldsPreservePresence(t *testing.T) {
 	}
 }
 
-func TestSessionDueFilterUsesEffectiveStudentDateAndTermLocalDate(t *testing.T) {
-	period := workspace.GradingPeriod{Name: "Term 2", StartDate: "2026-10-13", EndDate: "2026-12-18"}
-	assignment := Assignment{DueAt: str("2026-10-08T23:00:00-05:00")}
-	var absent Submission
-	if submissionDueInPeriod(absent, assignment, period, "America/Chicago") {
-		t.Fatal("assignment fallback in the preceding term should be excluded")
-	}
-	assignment.DueAt = str("2026-10-13T00:30:00Z") // still Oct 12 in Chicago
-	if submissionDueInPeriod(absent, assignment, period, "America/Chicago") {
-		t.Fatal("term membership must use local calendar date")
-	}
-	if err := json.Unmarshal([]byte(`{"cached_due_date":"2026-10-13T00:30:00-05:00"}`), &absent); err != nil {
-		t.Fatal(err)
-	}
-	if !submissionDueInPeriod(absent, assignment, period, "America/Chicago") {
-		t.Fatal("student-effective due date on inclusive term start should be included")
-	}
-	if err := json.Unmarshal([]byte(`{"cached_due_date":null}`), &absent); err != nil {
-		t.Fatal(err)
-	}
-	if submissionDueInPeriod(absent, assignment, period, "America/Chicago") {
-		t.Fatal("explicitly undated student override must not use assignment fallback")
-	}
-}
-
 func TestPrepareLateTimingAcceptsExactPacketAndOnTimeNeedsNoCalendar(t *testing.T) {
 	service, file, submitted := studentTimingFixture(t, &domain.ObservedTiming{StatusKnown: true, LateKnown: true, SecondsLateKnown: true, SecondsLate: 3600}, false)
 	prepared, err := service.PrepareLateTiming(file)
@@ -159,7 +134,7 @@ func TestCompletedTimingHintSkipsAcceptedNoneAfterCanvasKeepsElapsedSeconds(t *t
 		_, readErr := workspace.ReadDocument(resultPath, &decoded)
 		t.Fatalf("accepted CE none result should be reconsiderable on future material input changes; read=%v decoded=%+v yaml=%s", readErr, decoded.Students, encoded)
 	}
-	if !service.completedTimingHint(10, 2, "stu_a", sub, assignment, nil) {
+	if !service.indexedResults().completedTimingHint(service.Client.Origin(), 10, 2, "stu_a", sub, assignment, nil) {
 		var decoded domain.ResultsDocument
 		_, readErr := workspace.ReadDocument(resultPath, &decoded)
 		timing := decoded.Students[0].LateOnly.LateTiming
@@ -174,7 +149,7 @@ func TestCompletedTimingHintSkipsAcceptedNoneAfterCanvasKeepsElapsedSeconds(t *t
 			t.Fatal(err)
 		}
 		resultPath = next
-		if !service.sessionTimingCandidate(2, 10, "stu_a", sub) || !service.completedTimingHint(10, 2, "stu_a", sub, assignment, nil) {
+		if !service.sessionTimingCandidate(2, 10, "stu_a", sub) || !service.indexedResults().completedTimingHint(service.Client.Origin(), 10, 2, "stu_a", sub, assignment, nil) {
 			t.Fatalf("accepted none provenance/reconsideration disappeared from %s", name)
 		}
 	}
@@ -249,6 +224,8 @@ func TestSessionPullSkipsAcceptedNormalizedTimingOnSecondRun(t *testing.T) {
 	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case r.URL.Path == "/api/v1/courses/1/assignment_groups":
+			_ = json.NewEncoder(w).Encode([]AssignmentGroup{})
 		case r.URL.Path == "/api/v1/courses/1/enrollments":
 			_ = json.NewEncoder(w).Encode([]Enrollment{{UserID: 5, Type: "StudentEnrollment", State: "active", User: CanvasUser{ID: 5, Name: "Synthetic Student"}}})
 		case r.URL.Path == "/api/v1/courses/1/assignments":
@@ -308,12 +285,14 @@ func TestSessionPullSkipsAcceptedNormalizedTimingOnSecondRun(t *testing.T) {
 	}
 }
 
-func TestSessionPullCreatesLateOnlyPacketAndPreparationConsumesIt(t *testing.T) {
+func TestSessionPullDoesNotReReadOrRetimeAlreadyScoredWork(t *testing.T) {
 	var assignment Assignment
 	var live Submission
 	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/api/v1/courses/1/assignment_groups":
+			_ = json.NewEncoder(w).Encode([]AssignmentGroup{})
 		case "/api/v1/courses/1/enrollments":
 			_ = json.NewEncoder(w).Encode([]Enrollment{{UserID: 5, Type: "StudentEnrollment", State: "active", User: CanvasUser{ID: 5, Name: "Synthetic Student"}}})
 		case "/api/v1/courses/1/assignments":
@@ -358,35 +337,19 @@ func TestSessionPullCreatesLateOnlyPacketAndPreparationConsumesIt(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pull.Students != 1 || len(pull.Packets) != 1 {
-		t.Fatalf("expected one timing-only evidence packet: %+v", pull)
+	if pull.Students != 0 || len(pull.Packets) != 0 || pull.Assignments[0].Handled != 1 || pull.FetchRequests != 0 {
+		t.Fatalf("already-scored work must not create timing-only packets or detailed per-student reads: %+v", pull)
 	}
-	var packet domain.PacketDocument
-	if _, err := workspace.ReadDocument(pull.Packets[0], &packet); err != nil {
-		t.Fatal(err)
-	}
-	var work domain.StudentWorkDocument
-	studentPath, err := workspace.ConstrainPath(s.Root, filepath.FromSlash(packet.Students[0]))
+	// A teacher edit to the live output does not undo an accepted academic
+	// result for this attempt, even when its timing action was held.
+	live.State = "submitted"
+	live.GradeMatchesCurrentSubmission = boolPtr(false)
+	pull, err = s.PullWorkWithOptions(context.Background(), "TEST", "", PullWorkOptions{Session: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := workspace.ReadDocument(studentPath, &work); err != nil {
-		t.Fatal(err)
-	}
-	if work.WorkPurpose != "late-only" || work.Current.ObservedTiming == nil || !work.Current.ObservedTiming.StatusKnown || len(work.Prior) != 1 {
-		t.Fatalf("session packet lost timing-only purpose or history: %+v", work)
-	}
-	decision := LateTimingDecisionsDocument{Schema: 1, Kind: "late-timing-decisions", Packet: filepath.ToSlash(mustRel(t, s.Root, pull.Packets[0])), Students: []LateTimingStudentDecision{{StudentRef: work.StudentRef, FirstGenuine: work.Prior[0].Ref}}}
-	decisionPath := filepath.Join(filepath.Dir(studentPath), "late-timing-decisions.md")
-	if err := workspace.WriteDocument(decisionPath, &decision, "First genuine attempt confirmed from submission history."); err != nil {
-		t.Fatal(err)
-	}
-	prepared, err := s.PrepareLateTiming(mustRel(t, s.Root, decisionPath))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(prepared.Students) != 1 || prepared.Students[0].Status != "proposed" || prepared.Students[0].Timing == nil || prepared.Students[0].Timing.Status != "late" || prepared.Students[0].Timing.SecondsLate != 3600 {
-		t.Fatalf("preparation did not calculate the first-genuine school-time interval: %+v", prepared)
+	if pull.Students != 0 || pull.Assignments[0].Handled != 1 || pull.FetchRequests != 0 {
+		t.Fatalf("accepted local academic result recurred after a live output edit: %+v", pull)
 	}
 }
 

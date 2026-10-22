@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,8 @@ import (
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/doctor"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/gitupdate"
+	"canvasexpertse/internal/hubcoord"
 	"canvasexpertse/internal/outlook"
 	"canvasexpertse/internal/playbooks"
 	"canvasexpertse/internal/workflow"
@@ -24,6 +27,30 @@ type PrepareAudienceInput struct {
 	Course  string `json:"course" jsonschema:"Configured course nickname"`
 	Path    string `json:"path" jsonschema:"Course-local assignment or assignment-dates draft"`
 	Refresh bool   `json:"refresh,omitempty" jsonschema:"Explicitly prepare additions and work-preserving removals for an existing audience"`
+}
+
+type AssignToInput struct {
+	Path    string `json:"path" jsonschema:"Course-local kind: assign-to document"`
+	Preview bool   `json:"preview,omitempty" jsonschema:"Resolve every name and show each target's current -> new audience without writing"`
+}
+
+type AssignModulesInput struct {
+	Course        string            `json:"course" jsonschema:"Configured course nickname"`
+	TagSet        string            `json:"tag_set,omitempty" jsonschema:"Optional tag set name to take tag names from (matched ignoring case and a trailing s)"`
+	ModulePattern string            `json:"module_pattern,omitempty" jsonschema:"Module title pattern containing {tag}, for example Book Club: {tag}"`
+	Map           map[string]string `json:"map,omitempty" jsonschema:"Alternative to module_pattern: module title to tag name or Set/Tag"`
+	Preview       bool              `json:"preview,omitempty" jsonschema:"Show the changes without writing"`
+}
+
+type AudienceReportInput struct {
+	Course string `json:"course" jsonschema:"Configured course nickname"`
+	Module string `json:"module,omitempty" jsonschema:"Optional module title or ID to report on"`
+}
+
+type SetFileAccessInput struct {
+	Course string `json:"course" jsonschema:"Configured course nickname"`
+	FileID int64  `json:"file_id" jsonschema:"Existing course file ID"`
+	Access string `json:"access" jsonschema:"course, hidden (links still work), or locked"`
 }
 
 type QuizInput struct {
@@ -67,15 +94,16 @@ type ExternalResourcesInput struct {
 }
 
 type EngineInfoInput struct {
-	Operation      string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, or replace-playbook"`
+	Operation      string `json:"operation,omitempty" jsonschema:"version (default), doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, replace-playbook, update-status, update-stage, or update-apply"`
 	SyncRoot       string `json:"sync_root,omitempty" jsonschema:"Explicit teacher-rules directory for set-rules-location; empty selects local UserInstall mode"`
 	Path           string `json:"path,omitempty" jsonschema:"Seed-managed workspace-relative file for replace-playbook"`
 	ExpectedSHA256 string `json:"expected_sha256,omitempty" jsonschema:"Current hash from playbooks-status, or missing when explicitly adding an absent file"`
 	Offline        bool   `json:"offline,omitempty" jsonschema:"For doctor only: skip Canvas and local hub network checks; those results are not_verified"`
+	ArchiveEdits   bool   `json:"archive_edits,omitempty" jsonschema:"For update-apply only: after moving the teacher's edits into Teacher_Override.md, archive the edited shipped files under playbook-old/ and apply"`
 }
 
 func (s *Server) registerOperationTools(server *mcp.Server) {
-	addActionTool(server, "prepare_audience", "Prepare a dated individual audience from selected collaborative clubs into the draft. Reads Canvas and saves stable refs, completeness and ownership state; makes no Canvas writes. Prepare before assignment review. Membership changes require explicit preparation. With refresh, returns the new assignment-dates action path with additions, removals, protected work and manual exceptions; review/push that returned path.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PrepareAudienceInput) (TextOutput, error) {
+	addActionTool(server, "prepare_audience", "Prepare a dated individual audience from selected collaborative clubs into an assignment, course Page or New Quiz draft. Reads Canvas and saves stable refs, completeness and ownership state; makes no Canvas writes. Prepare before assignment review. Membership changes require explicit preparation. With refresh, returns the new assignment-dates action path with additions, removals, protected work and manual exceptions; review/push that returned path.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PrepareAudienceInput) (TextOutput, error) {
 		if err := requireCourse(in.Course); err != nil {
 			return TextOutput{}, err
 		}
@@ -90,6 +118,69 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		return s.command(ctx, args...)
 	})
 
+	addReadTool(server, "list_tags", "List a course's differentiation tag sets and tags with IDs and member counts. Counts only: no students are returned. Tags are teacher-owned; this Engine never creates or edits them.", func(ctx context.Context, _ *mcp.CallToolRequest, in CourseInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		return s.command(ctx, "tags", in.Course)
+	})
+	addActionTool(server, "assign_to", "Set Canvas Assign To on existing modules, pages, New Quizzes, assignments or discussions to differentiation tags, from a kind: assign-to document (names or IDs; Set/Tag, a unique bare tag name, or tag ID; a trailing s on the set name is ignored). preview:true resolves every name read-only and shows current -> new audience per target; do that first and show the teacher. Replace mode sets exactly the listed tags; add merges. Reads back after every write, never replays an accepted change, holds removals of access from work already submitted unless allow_remove_with_submissions is set, refuses native group assignments, warns when a module's items also sit in a broader module, and never creates or edits tags or publishes anything. Report held targets by name.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in AssignToInput) (TextOutput, error) {
+		path, err := s.coursePath(in.Path)
+		if err != nil {
+			return TextOutput{}, err
+		}
+		args := []string{"assign-to", path}
+		if in.Preview {
+			args = append(args, "--preview")
+		}
+		return s.command(ctx, args...)
+	})
+	addActionTool(server, "assign_modules_by_tag", "Assign each module to its same-named differentiation tag in one call, from module_pattern (such as Book Club: {tag}) with an optional tag_set, or from an explicit module-to-tag map. Builds and saves an assign-to document under the course's drafts folder, then applies it (or only previews it). Same safety rules as assign_to.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in AssignModulesInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		args := []string{"assign-modules", in.Course}
+		if in.ModulePattern != "" {
+			args = append(args, "--pattern", in.ModulePattern)
+		}
+		if in.TagSet != "" {
+			args = append(args, "--tag-set", in.TagSet)
+		}
+		keys := make([]string, 0, len(in.Map))
+		for module := range in.Map {
+			keys = append(keys, module)
+		}
+		sort.Strings(keys)
+		for _, module := range keys {
+			args = append(args, "--map", module+"="+in.Map[module])
+		}
+		if in.Preview {
+			args = append(args, "--preview")
+		}
+		return s.command(ctx, args...)
+	})
+	addReadTool(server, "audience_report", "Show who can see each module and item (Everyone, tags with counts, sections, student counts) and flag items that sit in more than one module, since an item is visible if any of its modules grants access. Counts only; no students are listed.", func(ctx context.Context, _ *mcp.CallToolRequest, in AudienceReportInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		args := []string{"audience-report", in.Course}
+		if in.Module != "" {
+			args = append(args, "--module", in.Module)
+		}
+		return s.command(ctx, args...)
+	})
+	addActionTool(server, "set_file_access", "Change the access of an existing course file, including files copied by copy_module: course (everyone in the course), hidden (not listed in Files, links still work), or locked. Files cannot be assigned to tags; hidden is how to keep a file out of the Files list while tagged pages link to it. Reads the file back and reports its actual access.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in SetFileAccessInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		if in.FileID <= 0 {
+			return TextOutput{}, errors.New("file_id must be positive")
+		}
+		if in.Access != "course" && in.Access != "hidden" && in.Access != "locked" {
+			return TextOutput{}, errors.New("access must be course, hidden, or locked")
+		}
+		return s.command(ctx, "set-file-access", in.Course, strconv.FormatInt(in.FileID, 10), "--access", in.Access)
+	})
 	addReadTool(server, "list_external_resources", "Read collaboration and conference metadata for a configured course or exact collaborative group. Returns safe supplied links and known participant refs only; it does not create or open provider resources or read their contents.", func(ctx context.Context, _ *mcp.CallToolRequest, in ExternalResourcesInput) (TextOutput, error) {
 		if err := requireCourse(in.Course); err != nil {
 			return TextOutput{}, err
@@ -162,13 +253,13 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		return s.command(ctx, args...)
 	})
-	addReadTool(server, "canvas_get", "Read-only Canvas API GET for data no specific Engine tool covers. Returns raw JSON, potentially including real student names; keep teacher-only data out of feedback. Returns one page; supply page/per_page for more. Cannot issue arbitrary HTTP writes.", func(ctx context.Context, _ *mcp.CallToolRequest, in CanvasGetInput) (TextOutput, error) {
+	addReadTool(server, "canvas_get", "Read-only Canvas API GET for data no specific Engine tool covers. Returns raw JSON, potentially including real student names; keep teacher-only data out of feedback. Returns one page; supply page/per_page for more. Uses your own Canvas key, so it cannot reach a teammate's course. Cannot issue arbitrary HTTP writes.", func(ctx context.Context, _ *mcp.CallToolRequest, in CanvasGetInput) (TextOutput, error) {
 		if !strings.HasPrefix(in.Path, "/api/v1/") && !strings.HasPrefix(in.Path, "/api/quiz/v1/") {
 			return TextOutput{}, errors.New("path must begin /api/v1/ or /api/quiz/v1/")
 		}
 		return s.command(ctx, "api", in.Path)
 	})
-	addActionTool(server, "engine_info", "Read Engine build/version; run doctor with bounded authenticated read-only Canvas and same-UserInstall hub checks (or offline:true to skip network checks); inspect/set teacher-rules authority; outlook-status reports whether classic Outlook can send parent updates (a boolean and reason, never an address); or compare and explicitly replace one seed-managed playbook. Doctor reports categorized results and never returns Canvas identity, credentials, or raw responses, and does not inspect client settings. playbooks-status returns active-rule paths and hashes; replace-playbook requires path plus expected_sha256 (current hash or missing). Replacement archives the prior file and never replaces context preferences. update-playbooks adopts this Engine's seed on install/update: it replaces only playbooks still identical to the previous shipped copy, keeps teacher-edited ones (reported kept, for agent reconciliation against shipped/<version>/), and never touches context/ or Teacher_Override.md.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
+	addActionTool(server, "engine_info", "Read Engine build/version; run doctor with bounded authenticated read-only Canvas and same-UserInstall hub checks (or offline:true to skip network checks); inspect/set teacher-rules authority; outlook-status reports whether classic Outlook can send parent updates (a boolean and reason, never an address); or compare and explicitly replace one seed-managed playbook. Doctor reports categorized results and never returns Canvas identity, credentials, or raw responses, and does not inspect client settings. playbooks-status returns active-rule paths and hashes; replace-playbook requires path plus expected_sha256 (current hash or missing). Replacement archives the prior file and never replaces context preferences. update-playbooks adopts this Engine's seed on install/update: it replaces only playbooks still identical to the previous shipped copy, keeps teacher-edited ones (reported kept, for agent reconciliation against shipped/<version>/), and never touches context/ or Teacher_Override.md. In a git install, update-stage checks at most once a day and downloads a newer verified Engine without changing anything live; update-status reports a waiting update; update-apply installs it, holding while a review, setup or students page is open or shipped files have local edits.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in EngineInfoInput) (TextOutput, error) {
 		op := in.Operation
 		if op == "" {
 			op = "version"
@@ -218,9 +309,10 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 			location, locErr := workspace.GetRulesLocation(s.root)
 			status := struct {
 				Location          workspace.RulesLocation `json:"location"`
+				ManagedBy         string                  `json:"managed_by,omitempty"`
 				AvailabilityError string                  `json:"availability_error,omitempty"`
 				Files             []playbooks.StatusRow   `json:"files"`
-			}{Location: location, Files: playbooks.Status(s.root)}
+			}{Location: location, ManagedBy: playbooks.ManagedBy(s.root), Files: playbooks.Status(s.root)}
 			if locErr != nil {
 				status.AvailabilityError = locErr.Error()
 			}
@@ -236,6 +328,24 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 			}
 			return TextOutput{Text: in.Path + " replaced with this Engine's seed; previous copy archived under playbook-old."}, nil
 		}
+		if op == "update-status" || op == "update-stage" || op == "update-apply" {
+			u := gitupdate.New(s.root, hubcoord.OpenPages)
+			var report gitupdate.Report
+			var err error
+			switch op {
+			case "update-status":
+				report, err = u.Status()
+			case "update-stage":
+				report, err = u.Stage(true)
+			default:
+				report, err = u.Apply(in.ArchiveEdits)
+			}
+			if err != nil {
+				return TextOutput{}, err
+			}
+			b, err := json.Marshal(report)
+			return TextOutput{Text: string(b)}, err
+		}
 		if op == "update-playbooks" {
 			report, err := playbooks.Update(s.root, time.Now())
 			if err != nil {
@@ -245,7 +355,7 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 			return TextOutput{Text: string(b)}, err
 		}
 		if op != "version" && op != "doctor" && op != "link" {
-			return TextOutput{}, errors.New("operation must be version, doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, or replace-playbook")
+			return TextOutput{}, errors.New("operation must be version, doctor, link, outlook-status, rules-location, set-rules-location, playbooks-status, update-playbooks, replace-playbook, update-status, update-stage, or update-apply")
 		}
 		result, err := s.command(ctx, op)
 		if op == "version" {

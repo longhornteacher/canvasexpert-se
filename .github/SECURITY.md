@@ -7,6 +7,7 @@ CanvasExpert-SE is an independent, locally installed tool. It uses a teacher's C
 | Information | Location and access |
 | --- | --- |
 | Canvas address and PAT | Windows Credential Manager on the local computer. Enter the PAT only in the private local setup form. It is not placed in client registration, workspace files or agent output. |
+| Teammates' Canvas keys (team PC only) | Windows Credential Manager under `CanvasExpert-SE/Canvas/v1/teammate/<canvas_user_id>`. CE-SE looks a key up only by the Canvas user IDs listed in `context/team.md`; it never enumerates stored credentials, and keys never appear in files, logs, page responses or agent context. |
 | Student identity mapping, roster and private contacts | The active setup authority's `.cse/` directory: UserInstall by default, configured UserSync otherwise. Excluded from ordinary MCP file tools. |
 | Machine and session runtime state | Local UserInstall; credentials remain in Windows Credential Manager. |
 | Pulled student work, attachments and drafts | Local UserInstall. Task evidence read by an AI assistant enters that client's context and is handled under that provider's settings and policies. |

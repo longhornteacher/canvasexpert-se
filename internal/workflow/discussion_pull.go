@@ -415,6 +415,10 @@ func (s *Service) PushDiscussionReply(ctx context.Context, path string) (Discuss
 	if err != nil {
 		return report, err
 	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return report, err
+	}
 	if (d.Instance != "" && d.Instance != s.Client.Origin()) || (d.CourseID != 0 && d.CourseID != course.ID) || d.ContextID != course.ID && d.ContextType == "Course" {
 		return report, fmt.Errorf("discussion reply identity differs from configured Canvas/course")
 	}
@@ -427,7 +431,7 @@ func (s *Service) PushDiscussionReply(ctx context.Context, path string) (Discuss
 		return report, nil
 	}
 	if d.ContextType == "Group" {
-		if _, err = s.verifyPageGroup(ctx, d.Course, d.GroupID); err != nil {
+		if _, _, err = s.verifyPageGroup(ctx, d.Course, d.GroupID); err != nil {
 			return report, err
 		}
 	}

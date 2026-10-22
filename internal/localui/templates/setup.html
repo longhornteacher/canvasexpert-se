@@ -11,7 +11,7 @@
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <form method="post" action="/setup" autocomplete="off">
 <input type="hidden" name="request_secret" value="{{.Secret}}">
-<label for="origin">Canvas address</label><input id="origin" name="origin" type="url" value="{{.Origin}}" placeholder="https://your-school.instructure.com" required autocomplete="off">
+<label for="origin">Canvas address</label><input id="origin" name="origin" type="text" inputmode="url" value="{{.Origin}}" placeholder="https://your-school.instructure.com" required autocomplete="off">
 <label for="token">Access token</label><input id="token" name="token" type="password" required autocomplete="off" spellcheck="false">
 <button type="submit">Connect</button></form>
 </main>

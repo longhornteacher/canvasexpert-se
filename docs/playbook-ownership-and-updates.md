@@ -292,3 +292,7 @@ different correction window and their own Skyward link) unzips a newer CE-SE,
 points their agent at it and starts working. Every saved preference still
 applies, new shipped improvements apply where they don't conflict, and the
 teacher was not asked to merge anything.
+
+## Git installs (decided 2026-10-21)
+
+A git install inverts the ownership above: git owns the shipped playbooks, `TEACHER.md` and the root `AGENTS.md`/`CLAUDE.md`, and an update replaces them. A teacher's choices live in `Teacher_Override.md`, `context/` and their own root guides, which git never tracks. An agent never edits a shipped file in a git install; a preference goes in `Teacher_Override.md`. An edit that is found at update time is converted into an override once, the old file is kept under `playbook-old/<date>/`, and the file is reset to the shipped text. The `shipped/` copies and the `kept` merge belong to ZIP installs only. UserSync carries `context/` and `Teacher_Override.md`, not playbooks. See [the migration plan](../handoffs/retired/GIT-INSTALL-MIGRATION.md).

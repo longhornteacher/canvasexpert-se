@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -237,7 +238,15 @@ func (s *Service) resolveFamilyAudience(ctx context.Context, doc FamilyContact) 
 		if roster, ok := rosters[course.ID]; ok {
 			return course, roster, nil
 		}
-		enrollments, e := StudentEnrollments(ctx, s.Client, course.ID)
+		scoped, e := s.ForCourse(ctx, course)
+		if e != nil {
+			return course, nil, e
+		}
+		enrollments, e := StudentEnrollments(ctx, scoped.Client, course.ID)
+		var rejected *teammateAuthError
+		if errors.As(e, &rejected) {
+			return course, nil, e
+		}
 		if e != nil {
 			return course, nil, fmt.Errorf("could not read student enrollments for %s; check Canvas access and try preparing again", course.Nickname)
 		}
@@ -350,8 +359,15 @@ func (s *Service) resolveFamilyAudience(ctx context.Context, doc FamilyContact) 
 		}
 		for _, ref := range m.Audience.Students {
 			found := false
+			var unreadable []string
 			for _, configured := range s.Config.Courses {
 				course, roster, e := loadCourse(configured.Nickname)
+				if e != nil && configured.Owner != "" {
+					// A teammate's course this PC can't read must not stop a
+					// message to students found elsewhere; a miss names it below.
+					unreadable = append(unreadable, configured.Nickname)
+					continue
+				}
 				if e != nil {
 					return out, e
 				}
@@ -359,6 +375,9 @@ func (s *Service) resolveFamilyAudience(ctx context.Context, doc FamilyContact) 
 					add(st, course.Nickname, "", m.Key)
 					found = true
 				}
+			}
+			if !found && len(unreadable) > 0 {
+				return out, fmt.Errorf("student_ref %q was not found in the courses CE-SE could read; teammates' courses it couldn't read: %s", ref, strings.Join(unreadable, ", "))
 			}
 			if !found {
 				return out, fmt.Errorf("student_ref %q is not currently enrolled in a configured course", ref)

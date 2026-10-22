@@ -4,6 +4,7 @@ package outlook
 
 import (
 	"errors"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,7 @@ type Attachment struct {
 type Message struct {
 	To          []string
 	Cc          []string
+	ReplyTo     []string // optional Reply-To addresses
 	Subject     string
 	HTMLBody    string
 	TextBody    string
@@ -51,6 +53,11 @@ func validate(m Message) error {
 	}
 	if m.HTMLBody == "" && m.TextBody == "" {
 		return errors.New("message has no body")
+	}
+	for _, addr := range m.ReplyTo {
+		if a, err := mail.ParseAddress(addr); err != nil || a.Address != addr {
+			return errors.New("message has an invalid Reply-To address")
+		}
 	}
 	seen := map[string]bool{}
 	for _, a := range m.Attachments {

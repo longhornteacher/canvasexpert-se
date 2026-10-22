@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/hubcoord"
+	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 )
 
@@ -231,7 +234,9 @@ func TestInvalidReviewRejectedBeforeAllocatingSession(t *testing.T) {
 	}
 }
 
-func TestCallCancellationKeepsReviewUntilServerShutdown(t *testing.T) {
+// A review page outlives both the tool call and the adapter, so a teacher's
+// approval still lands when the agent app restarts the connection.
+func TestReviewSurvivesCallCancellationAndServerShutdown(t *testing.T) {
 	s, cancel, _ := sessionFixture(t)
 	callCtx, callCancel := context.WithCancel(context.Background())
 	callCancel()
@@ -243,10 +248,44 @@ func TestCallCancellationKeepsReviewUntilServerShutdown(t *testing.T) {
 	}
 	awaitSession(t, task, false)
 	cancel()
+	s.stopSessions()
 	select {
 	case <-task.done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("child survived MCP shutdown")
+		t.Fatal("review page stopped with the adapter")
+	case <-time.After(time.Second):
+	}
+	_ = task.process.Kill()
+	<-task.done
+}
+
+func TestStartReviewReconnectsToPageLeftOpenByEarlierAdapter(t *testing.T) {
+	s, _, _ := sessionFixture(t)
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pageURL := "http://" + listener.Addr().String()
+	results := filepath.Join(s.root, "courses", "results.md")
+	release := hubcoord.MarkPage(s.root, "review", pageURL, results)
+	defer release()
+	s.newSessionCommand = func([]string) *exec.Cmd { t.Fatal("started a second review page"); return nil }
+	out, err := s.startReview(context.Background(), ReviewInput{Path: "courses/results.md"})
+	if err != nil || out.State != "pending" || out.URL != pageURL+"/review" || !strings.Contains(out.Text, "Reconnected") {
+		t.Fatalf("%+v %v", out, err)
+	}
+	if status, _ := s.reviewStatus(out.ReviewID); status.State != "pending" || status.URL != pageURL+"/review" {
+		t.Fatalf("open page status: %+v", status)
+	}
+	if err = workflow.SaveReviewState(results, workflow.ReviewState{Items: map[string]workflow.ReviewItem{"s-a": {Status: "revise", Note: "clarify"}, "s-b": {Status: "approved"}}}); err != nil {
+		t.Fatal(err)
+	}
+	_ = listener.Close()
+	status, _ := s.reviewStatus(out.ReviewID)
+	if status.State != "finished" || status.URL != "" || len(status.RevisionNotes) != 1 || status.RevisionNotes[0].Ref != "s-a" {
+		t.Fatalf("closed page status: %+v", status)
+	}
+	if _, err = s.reviewStatus("from-before-restart"); err == nil || !strings.Contains(err.Error(), "call start_review") {
+		t.Fatalf("unknown id guidance: %v", err)
 	}
 }
 

@@ -88,6 +88,11 @@ func (s *Service) postLateTiming(ctx context.Context, assignment domain.Assignme
 	if live.UserID != userID || (live.AssignmentID != 0 && live.AssignmentID != assignment.AssignmentID) {
 		return hold("live submission identity disagrees with the requested student and assignment")
 	}
+	if s.scoring != nil {
+		if reason := gradeVisibleHold(*s.scoring, live); reason != "" {
+			return hold(reason)
+		}
+	}
 	if !sameAttempt(attempt, attemptRef(live)) {
 		return hold("new submission before late timing adjustment")
 	}

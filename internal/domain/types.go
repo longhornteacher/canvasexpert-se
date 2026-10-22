@@ -15,6 +15,8 @@ type Course struct {
 	ID       int64  `yaml:"id" json:"id"`
 	Current  bool   `yaml:"current" json:"current"`
 	Timezone string `yaml:"timezone,omitempty" json:"timezone,omitempty"`
+	// Owner is the label of the teammate whose course this is; empty means yours.
+	Owner string `yaml:"owner,omitempty" json:"owner,omitempty"`
 }
 type CourseConfig struct {
 	Schema     int      `yaml:"schema"`
@@ -185,6 +187,25 @@ type PacketDocument struct {
 	Course     string             `yaml:"course"`
 	Assignment AssignmentSnapshot `yaml:"assignment"`
 	Students   []string           `yaml:"students"`
+	// DirectionsHTML is the workspace-relative file holding the assignment's
+	// directions HTML. New packets keep readable directions in the document
+	// body and leave assignment.description_html empty.
+	DirectionsHTML string `yaml:"directions_html,omitempty"`
+	// DirectionImages are Canvas images embedded in the assignment directions,
+	// downloaded beside the packet so reference images can be read.
+	DirectionImages []Attachment `yaml:"direction_images,omitempty"`
+	// WrittenItems lists a New Quiz's written items with their Canvas points.
+	WrittenItems []WrittenItem `yaml:"written_items,omitempty"`
+}
+
+// WrittenItem is one New Quiz essay or file-upload item. Responses may name
+// it by either id.
+type WrittenItem struct {
+	ItemID  string  `yaml:"item_id"`
+	EntryID string  `yaml:"entry_id,omitempty"`
+	Type    string  `yaml:"type"`
+	Prompt  string  `yaml:"prompt,omitempty"`
+	Points  Decimal `yaml:"points"`
 }
 type AttemptRef struct {
 	Attempt     int    `yaml:"attempt" json:"attempt"`
@@ -209,7 +230,8 @@ type AttemptWork struct {
 	SubmissionType   string            `yaml:"submission_type,omitempty"`
 	URL              string            `yaml:"url,omitempty"`
 	Note             string            `yaml:"note,omitempty"`
-	BodyHTML         string            `yaml:"body_html,omitempty"`
+	BodyHTML         string            `yaml:"body_html,omitempty"` // older pulls only
+	BodyHTMLPath     string            `yaml:"body_html_path,omitempty"`
 	ReadableText     string            `yaml:"readable_text,omitempty"`
 	WrittenResponses []WrittenResponse `yaml:"written_responses,omitempty"`
 	WrittenFiles     []WrittenFile     `yaml:"written_files,omitempty"`
@@ -219,6 +241,18 @@ type AttemptWork struct {
 	EffectiveDueAt   string            `yaml:"effective_due_at,omitempty"`
 	EnteredGrade     *Decimal          `yaml:"entered_grade,omitempty"`
 	RubricAssessment []CriterionScore  `yaml:"rubric_assessment,omitempty"`
+	// AutoScored is the New Quiz auto-scored subtotal from Canvas's Student
+	// Analysis report at pull time. Absent when unknown; AutoScoredNote says why.
+	AutoScored     *AutoScored `yaml:"auto_scored,omitempty"`
+	AutoScoredNote string      `yaml:"auto_scored_note,omitempty"`
+}
+
+// AutoScored totals the auto-scored items (everything but written items) of
+// one New Quiz attempt. It is Engine-owned evidence, never agent input.
+type AutoScored struct {
+	Earned   Decimal `yaml:"earned"`
+	Possible Decimal `yaml:"possible"`
+	Items    int     `yaml:"items"`
 }
 type WrittenResponse struct {
 	ItemID string `yaml:"item_id"`
@@ -238,7 +272,7 @@ type WrittenFile struct {
 type StudentWorkDocument struct {
 	Schema                 int               `yaml:"schema"`
 	Kind                   string            `yaml:"kind"`
-	WorkPurpose            string            `yaml:"work_purpose,omitempty"` // score, late-only, or score-and-late
+	WorkPurpose            string            `yaml:"work_purpose,omitempty"` // score or score-and-late; late-only appears only in older packets
 	StudentRef             string            `yaml:"student_ref"`
 	Alias                  string            `yaml:"alias"`
 	AssignmentID           int64             `yaml:"assignment_id"`
@@ -265,6 +299,9 @@ type Component struct {
 	Label        string   `yaml:"label"`
 	Weight       Decimal  `yaml:"weight"`
 	CriterionIDs []string `yaml:"criterion_ids,omitempty"`
+	// ItemID names the New Quiz written item this part scores (from the
+	// packet's written_items), so the comment shows it in quiz points.
+	ItemID string `yaml:"item_id,omitempty"`
 }
 type Interpretation struct {
 	Mapping    string      `yaml:"mapping"` // repeated or direct
@@ -463,3 +500,7 @@ func DiscussionEvidenceDigest(entries []DiscussionEntry) string {
 	sum := sha256.Sum256([]byte(strings.Join(lines, "\n")))
 	return hex.EncodeToString(sum[:])
 }
+
+// HasConsentTag reports whether an assignment name carries (CE), the mark a
+// teammate adds to opt that assignment in to CE-SE scoring.
+func HasConsentTag(name string) bool { return strings.Contains(strings.ToLower(name), "(ce)") }

@@ -11,7 +11,7 @@ func TestQuizReviewKeepsAnswerKeyOutOfStudentFrame(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "quiz.json")
 	quiz := `{"version":"3.0-json","title":"Cells","instructions":"<p>Read <a href=\"{{tier:Silver}}\">help</a></p>","differentiation":"hub","tiers":[{"label":"Silver","tag":"Silver","supports":"<p>x</p>"}],"items":[
 	 {"id":"q1","type":"MC","prompt":"<p>Which organelle makes energy?</p><script>alert(1)</script>","points":2,"choices":[{"id":"A","text":"Nucleus"},{"id":"B","text":"Mitochondrion","correct":true}]},
-	 {"id":"q2","type":"TF","prompt":"<p>Cells are alive.</p>","points":1,"answer":true}]}`
+	 {"id":"q2","type":"TF","prompt":"<p>Cells are alive.</p>","points":1,"answer":true}],"rationales":[{"item_id":"q1","choices":[{"id":"A","rationale":"Not the nucleus."},{"id":"B","rationale":"Mitochondria make energy."}]},{"item_id":"q2","rationale":"Cells are alive."}]}`
 	if err := os.WriteFile(path, []byte(quiz), 0o644); err != nil {
 		t.Fatal(err)
 	}

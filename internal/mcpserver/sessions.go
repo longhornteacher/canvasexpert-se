@@ -25,6 +25,7 @@ import (
 
 type reviewTask struct {
 	id, url, kind    string
+	subject          string // reviewed file or folder, for a review that outlives its adapter
 	done             chan struct{}
 	external, reused bool
 	mu               sync.Mutex
@@ -60,6 +61,28 @@ func (s *Server) startReview(ctx context.Context, in ReviewInput) (TextOutput, e
 	args := []string{"review", path}
 	if in.Course != "" {
 		args = append(args, in.Course)
+	}
+	return s.startReviewSession(ctx, path, args)
+}
+
+// startReviewSession reconnects to a review page for the same file that is
+// still open (for example after the agent app restarted this adapter) instead
+// of starting a second page; otherwise it starts one.
+func (s *Server) startReviewSession(ctx context.Context, subject string, args []string) (TextOutput, error) {
+	if rec, ok := hubcoord.FindPage(s.root, "review", subject); ok {
+		pageURL := rec.URL + "/review"
+		var nonce [16]byte
+		if _, err := rand.Read(nonce[:]); err != nil {
+			return TextOutput{}, err
+		}
+		task := &reviewTask{id: hex.EncodeToString(nonce[:]), kind: "review", url: pageURL, subject: subject, done: make(chan struct{}), external: true}
+		s.mu.Lock()
+		if s.reviews == nil {
+			s.reviews = make(map[string]*reviewTask)
+		}
+		s.reviews[task.id] = task
+		s.mu.Unlock()
+		return TextOutput{State: "pending", ReviewID: task.id, URL: pageURL, Text: "Reconnected to the review page that is still open for this file: " + pageURL + ". review_id: " + task.id + ". No Canvas changes occur unless the teacher approves on the page."}, nil
 	}
 	return s.startSession(ctx, "review", args)
 }
@@ -204,13 +227,17 @@ func (s *Server) startSession(ctx context.Context, kind string, args []string) (
 		task.mu.Unlock()
 		close(task.done)
 	}()
-	go func() {
-		select {
-		case <-s.ctx.Done():
-			_ = cmd.Process.Kill()
-		case <-task.done:
-		}
-	}()
+	if kind != "review" {
+		// Setup and student pages close with the adapter. A review page keeps
+		// running so a teacher's approval still lands if the app restarts.
+		go func() {
+			select {
+			case <-s.ctx.Done():
+				_ = cmd.Process.Kill()
+			case <-task.done:
+			}
+		}()
+	}
 	wait := s.sessionReadyWait
 	if wait <= 0 {
 		wait = 30 * time.Second
@@ -344,7 +371,10 @@ func (s *Server) reviewStatus(id string) (TextOutput, error) {
 	task := s.reviews[id]
 	s.mu.Unlock()
 	if task == nil {
-		return TextOutput{}, errors.New("unknown review_id")
+		return TextOutput{}, errors.New("unknown review_id; if the app restarted, call start_review (or start_parent_review) again for the same file: it reconnects to a page that is still open, and a closed page has already saved its outcomes in the results file")
+	}
+	if task.external {
+		return s.externalReviewStatus(task)
 	}
 	return task.status()
 }
@@ -442,10 +472,33 @@ func (s *Server) stopSessions() {
 			select {
 			case <-task.done:
 			default:
-				if task.process != nil && !task.external {
+				if task.process != nil && !task.external && task.kind != "review" {
 					_ = task.process.Kill()
 				}
 			}
 		}
 	}
+}
+
+// externalReviewStatus follows a review page started by an earlier adapter.
+// Its outcome is not on this adapter's pipes; the page saves outcomes in the
+// results file (or outcomes.json for family email) and revision notes in
+// <results>.review.json.
+func (s *Server) externalReviewStatus(task *reviewTask) (TextOutput, error) {
+	result := TextOutput{State: "pending", ReviewID: task.id, URL: task.url}
+	if hubcoord.PageOpen(s.root, task.url) {
+		result.Text = "The review page is still open at " + task.url + ". review_id: " + task.id + ". No Canvas changes occur unless the teacher approves on the page."
+		return result, nil
+	}
+	result.State, result.URL = "finished", ""
+	result.ResultPath = task.subject
+	if st, err := workflow.LoadReviewState(task.subject); err == nil {
+		for ref, item := range st.Items {
+			if item.Status == "revise" {
+				result.RevisionNotes = append(result.RevisionNotes, ReviewRevision{Ref: ref, Note: item.Note})
+			}
+		}
+	}
+	result.Text = "The review page that outlived the previous connection has closed. review_id: " + task.id + ". Read the outcomes saved in " + task.subject + " (outcomes.json for family email) for what was approved and posted; revision notes, if any, are listed here."
+	return result, nil
 }

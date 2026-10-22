@@ -41,6 +41,10 @@ func (s *Service) groupRosterLive(ctx context.Context, nickname string, setID in
 	if err != nil {
 		return nil, err
 	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return nil, err
+	}
 	set, err := s.groupCategory(ctx, course.ID, setID)
 	if err != nil {
 		return nil, err
@@ -221,6 +225,10 @@ func (s *Service) PushGroupMemberships(ctx context.Context, path string) (report
 		return report, err
 	}
 	course, err := s.Course(doc.Course)
+	if err != nil {
+		return report, err
+	}
+	s, err = s.ForCourse(ctx, course)
 	if err != nil {
 		return report, err
 	}

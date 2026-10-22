@@ -49,6 +49,10 @@ func (s *Service) ListGroupSets(ctx context.Context, nickname string) ([]domain.
 	if err != nil {
 		return nil, err
 	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return nil, err
+	}
 	var cats []canvasGroupCategory
 	if err = s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/group_categories?collaboration_state=collaborative&per_page=100", course.ID), &cats); err != nil {
 		return nil, err
@@ -77,6 +81,10 @@ func (s *Service) ListGroupSets(ctx context.Context, nickname string) ([]domain.
 
 func (s *Service) ListGroups(ctx context.Context, nickname string, setID, groupID int64, includeMembers bool) ([]domain.GroupSummary, error) {
 	course, err := s.Course(nickname)
+	if err != nil {
+		return nil, err
+	}
+	s, err = s.ForCourse(ctx, course)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +172,10 @@ func (s *Service) PullGroupSet(ctx context.Context, nickname string, setID int64
 	if err != nil {
 		return "", err
 	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return "", err
+	}
 	if setID <= 0 {
 		return "", fmt.Errorf("group-set ID must be positive")
 	}
@@ -214,6 +226,10 @@ func (s *Service) PushGroupSet(ctx context.Context, path string) (report GroupSe
 		return report, err
 	}
 	course, err := s.Course(doc.Course)
+	if err != nil {
+		return report, err
+	}
+	s, err = s.ForCourse(ctx, course)
 	if err != nil {
 		return report, err
 	}

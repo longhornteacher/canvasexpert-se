@@ -68,8 +68,99 @@ func (s *Service) assetFolder(ctx context.Context, courseID, folderID int64) (co
 	return folder, err
 }
 
+// fileVisibilityOK accepts the course-scoped levels Canvas reports. A file
+// that follows its course reports "inherit" (or nothing), which is as private
+// as "course"; only institution/public widen access.
+func fileVisibilityOK(level string) bool {
+	return level == "" || level == "inherit" || level == "course"
+}
+
 func fileAccessMatches(file canvas.File, access string) bool {
-	return file.Locked != nil && file.Hidden != nil && *file.Locked == (access == "locked") && *file.Hidden == (access != "course") && file.VisibilityLevel == "course" && file.LockAt == "" && file.UnlockAt == ""
+	return file.Locked != nil && file.Hidden != nil && *file.Locked == (access == "locked") && *file.Hidden == (access != "course") && fileVisibilityOK(file.VisibilityLevel) && file.LockAt == "" && file.UnlockAt == ""
+}
+
+// fileAccessPayload sends only what differs from the live file. Canvas rejects
+// some combinations (for example null dates alongside hidden), so an ordinary
+// hidden/locked flip carries just those two booleans.
+func fileAccessPayload(live canvas.File, access string) map[string]any {
+	body := map[string]any{"locked": access == "locked", "hidden": access != "course"}
+	if !fileVisibilityOK(live.VisibilityLevel) {
+		body["visibility_level"] = "course"
+	}
+	if live.LockAt != "" {
+		body["lock_at"] = nil
+	}
+	if live.UnlockAt != "" {
+		body["unlock_at"] = nil
+	}
+	return body
+}
+
+// canvasDetail adds Canvas's own explanation to a rejected request so the
+// teacher or developer can see why, without echoing long bodies.
+func canvasDetail(err error) string {
+	var ce *canvas.Error
+	if errors.As(err, &ce) && strings.TrimSpace(ce.Body) != "" {
+		body := strings.Join(strings.Fields(ce.Body), " ")
+		if len(body) > 240 {
+			body = body[:240]
+		}
+		return err.Error() + " (Canvas said: " + body + ")"
+	}
+	return err.Error()
+}
+
+// FileAccessReport describes one set-file-access outcome.
+type FileAccessReport struct {
+	Status  string // completed, held
+	Message string
+	File    canvas.File
+}
+
+// SetFileAccess changes the access of an existing course file (one uploaded
+// earlier or copied by copy_module) and confirms it by reading it back.
+func (s *Service) SetFileAccess(ctx context.Context, nickname string, fileID int64, access string) (report FileAccessReport, err error) {
+	if access != "course" && access != "hidden" && access != "locked" {
+		return report, fmt.Errorf("access must be course, hidden (links still work), or locked")
+	}
+	if fileID <= 0 {
+		return report, fmt.Errorf("file ID must be positive")
+	}
+	course, err := s.Course(nickname)
+	if err != nil {
+		return report, err
+	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return report, err
+	}
+	live, err := s.readCourseAsset(ctx, course.ID, fileID)
+	if err != nil {
+		return report, err
+	}
+	report.File = live
+	if fileAccessMatches(live, access) {
+		report.Status, report.Message = "completed", "file already has this access; nothing written"
+		return report, nil
+	}
+	var updated canvas.File
+	if err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/files/%d", fileID), fileAccessPayload(live, access), &updated); err != nil {
+		report.Status = "held"
+		report.Message = "access not changed or not confirmed: " + canvasDetail(err)
+		return report, fmt.Errorf("%s", report.Message)
+	}
+	live, err = s.readCourseAsset(ctx, course.ID, fileID)
+	if err != nil {
+		return report, err
+	}
+	report.File = live
+	if !fileAccessMatches(live, access) {
+		report.Status = "held"
+		report.Message = "Canvas accepted the change but still reports different access; check the file in Canvas"
+		return report, fmt.Errorf("held: %s", report.Message)
+	}
+	report.Status, report.Message = "completed", "file access set and read back from Canvas"
+	return report, nil
 }
 
 func fileUploadReady(file canvas.File) bool {
@@ -99,6 +190,10 @@ func (s *Service) UploadCourseFile(ctx context.Context, nickname, sourcePath str
 		return report, fmt.Errorf("folder ID must be positive")
 	}
 	course, err := s.Course(nickname)
+	if err != nil {
+		return report, err
+	}
+	s, err = s.ForCourse(ctx, course)
 	if err != nil {
 		return report, err
 	}
@@ -287,9 +382,9 @@ func (s *Service) UploadCourseFile(ctx context.Context, nickname, sourcePath str
 			return report, err
 		}
 		var updated canvas.File
-		err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/files/%d", rec.File.ID), map[string]any{"locked": rec.Access == "locked", "hidden": rec.Access != "course", "visibility_level": "course", "lock_at": nil, "unlock_at": nil}, &updated)
+		err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/files/%d", rec.File.ID), fileAccessPayload(live, rec.Access), &updated)
 		if err != nil {
-			rec.Message = "uploaded file exists; access settings not confirmed: " + err.Error()
+			rec.Message = "uploaded file exists; access settings not confirmed: " + canvasDetail(err)
 			if e := save(); e != nil {
 				return report, e
 			}

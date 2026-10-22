@@ -2,6 +2,7 @@
 schema: 1
 kind: results
 packet: packets/synthetic-research-44.md
+# Normally omit the `assignment:` block below: the Engine fills it from the packet. It is shown so this example validates on its own.
 assignment:
   instance: https://canvas.example.edu
   course_id: 11

@@ -23,17 +23,28 @@ type PostReport struct {
 	Students []StudentPostReport
 	Requests int64
 	Elapsed  time.Duration
+	// Set for a teammate's course: the teammate's name, whether Canvas was
+	// confirmed to hide grades this run, and students held because their grade
+	// was already visible.
+	Owner, Course, Assignment string
+	Hidden                    bool
+	HeldVisible               int
 }
 type postSource struct {
-	student workspace.Student
-	work    domain.StudentWorkDocument
+	student      workspace.Student
+	work         domain.StudentWorkDocument
+	writtenItems []domain.WrittenItem // New Quiz written items from the packet
 }
 
 func (s *Service) Post(ctx context.Context, path string) (report PostReport, err error) {
 	start := time.Now()
-	requests := s.Client.Requests()
+	outer := s // requests are counted across whichever key each course used
+	requests := outer.requestCount()
 	report.Path = path
-	defer func() { report.Elapsed = time.Since(start); report.Requests = s.Client.Requests() - requests }()
+	defer func() { report.Elapsed = time.Since(start); report.Requests = outer.requestCount() - requests }()
+	if err = FillResultsAssignment(s.Root, path); err != nil {
+		return report, err
+	}
 	var doc domain.ResultsDocument
 	body, err := workspace.ReadDocument(path, &doc)
 	if err != nil {
@@ -50,18 +61,31 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		for _, row := range doc.Students {
 			report.Students = append(report.Students, postReport(row))
 		}
+		report.HeldVisible = countVisibleHolds(report.Students)
 	}()
 	if doc.Assignment.Instance != s.Client.Origin() {
 		return report, fmt.Errorf("results target a different Canvas instance")
 	}
 	configured := false
+	var course domain.Course
 	for _, c := range s.Config.Courses {
 		if c.ID == doc.Assignment.CourseID {
-			configured = true
+			configured, course = true, c
 		}
 	}
 	if !configured {
 		return report, fmt.Errorf("results course is not configured")
+	}
+	owner, owned, err := s.Owned(course)
+	if err != nil {
+		return report, err
+	}
+	if s, err = s.ForCourse(ctx, course); err != nil {
+		return report, err
+	}
+	if owned {
+		s = s.forScoring(owner)
+		report.Owner, report.Course, report.Assignment = owner.Name, course.Nickname, doc.Assignment.Title
 	}
 	allComplete := true
 	for _, r := range doc.Students {
@@ -70,6 +94,7 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		}
 	}
 	if allComplete {
+		report.Hidden = owned // nothing needed writing
 		for _, r := range doc.Students {
 			report.Students = append(report.Students, postReport(r))
 		}
@@ -117,6 +142,25 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		}
 	}
 	save := func() error { return workspace.WriteDocument(path, &doc, body) }
+	if owned {
+		// A teammate's grades are written only for an assignment tagged (CE) right
+		// now, and only after Canvas confirms it will hide them from students.
+		hold := ""
+		if !domain.HasConsentTag(liveAssignment.Name) {
+			hold = notTaggedHold
+		} else if e := s.hideGrades(ctx, doc.Assignment.AssignmentID); e != nil {
+			hold = cantHideHold
+		}
+		if hold != "" {
+			for i := range doc.Students {
+				if r := &doc.Students[i]; !resultComplete(*r) && !s.Skip[r.StudentRef] {
+					holdStudentResult(r, hold)
+				}
+			}
+			return report, save()
+		}
+		report.Hidden = true
+	}
 	for i := range doc.Students {
 		r := &doc.Students[i]
 		v := validated[i]
@@ -183,6 +227,16 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		}
 		if live.UserID != source.student.UserID || live.AssignmentID != doc.Assignment.AssignmentID {
 			return report, fmt.Errorf("live submission identity disagrees with requested target")
+		}
+		if owned {
+			if reason := gradeVisibleHold(owner, live); reason != "" {
+				holdStudentResult(r, reason)
+				if err = save(); err != nil {
+					return report, err
+				}
+				report.Students = append(report.Students, postReport(*r))
+				continue
+			}
 		}
 		if r.Operation == "revise-feedback" {
 			err = s.postRevision(ctx, &doc, r, v, source, live, save)
@@ -256,7 +310,11 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 	if err != nil {
 		return err
 	}
-	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: doc.Assignment.NewQuiz, Header: c.Header})
+	parts, err := partPoints(doc, source.writtenItems, v.Interpretation)
+	if err != nil {
+		return err
+	}
+	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(doc, source.work, c.Attempt.Attempt), PartPoints: parts, Header: c.Header})
 	if err != nil {
 		return err
 	}
@@ -369,7 +427,7 @@ func (s *Service) postSources(doc domain.ResultsDocument) (map[string]postSource
 	}
 	for _, row := range doc.Students {
 		if row.Operation != "late-only" && !SameGradingBasis(packet.Assignment, doc.Assignment) {
-			return nil, fmt.Errorf("results grading basis differs from source packet")
+			return nil, fmt.Errorf("results grading basis differs from source packet in %s", strings.Join(GradingBasisDiff(packet.Assignment, doc.Assignment), ", "))
 		}
 	}
 	store, e := workspace.OpenStudents(s.Root)
@@ -445,7 +503,7 @@ func (s *Service) postSources(doc domain.ResultsDocument) (map[string]postSource
 				return nil, fmt.Errorf("revision comment ID is absent from pulled comments")
 			}
 		}
-		sources[r.StudentRef] = postSource{student: st, work: work}
+		sources[r.StudentRef] = postSource{student: st, work: work, writtenItems: packet.WrittenItems}
 	}
 	return sources, nil
 }
@@ -789,8 +847,11 @@ func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument,
 	}
 	text := workspace.ReplaceStudentName(r.Feedback, source.student)
 	if r.Assessment != nil {
-		var e error
-		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text, OmitAssessment: doc.Assignment.NewQuiz, Header: r.Header})
+		parts, e := partPoints(doc, source.writtenItems, v.Interpretation)
+		if e != nil {
+			return e
+		}
+		text, e = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Assessment.Components, Assessment: r.Assessment.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: text, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(doc, source.work, r.Attempt.Attempt), PartPoints: parts, Header: r.Header})
 		if e != nil {
 			return e
 		}

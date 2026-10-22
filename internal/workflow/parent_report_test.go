@@ -562,3 +562,32 @@ func TestParentReportWritesResolvedClassificationAndConfiguredSkip(t *testing.T)
 		}
 	}
 }
+
+func TestCorrectionDaysSettingDrivesDeadlineAndRejectsBadValues(t *testing.T) {
+	loc := time.UTC
+	due := time.Date(2026, 10, 1, 15, 0, 0, 0, loc)
+	if got := correctionDeadlineDays(due, loc, 10); got.Day() != 11 {
+		t.Fatalf("10-day deadline = %v", got)
+	}
+	if got := correctionDeadlineDays(due, loc, 0); got.Day() != 15 {
+		t.Fatalf("default deadline = %v", got)
+	}
+	root := t.TempDir()
+	write := func(days string) error {
+		body := "---\nschema: 1\ncorrection_days: " + days + "\n---\n"
+		if err := os.MkdirAll(filepath.Join(root, "context"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "context", "parent-updates.md"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := loadParentConfig(root)
+		return err
+	}
+	if err := write("21"); err != nil {
+		t.Fatal(err)
+	}
+	if err := write("90"); err == nil {
+		t.Fatal("90 days accepted")
+	}
+}

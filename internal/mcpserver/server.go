@@ -18,6 +18,7 @@ import (
 
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 
@@ -75,13 +76,19 @@ type PullWorkInput struct {
 	Course     string `json:"course,omitempty" jsonschema:"Configured course nickname; omit to pull current courses"`
 	Assignment string `json:"assignment,omitempty" jsonschema:"Optional assignment title or ID"`
 	GroupID    *int64 `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID; requires course and assignment"`
-	Session    bool   `json:"session,omitempty" jsonschema:"Prepare this pull for a scoring session, including current-term discovery and timing-only evidence"`
+	Session    bool   `json:"session,omitempty" jsonschema:"Pull unscored submitted work for a scoring session, including not-yet-due work; timing applies only to work being scored"`
 }
 
 type PrepareLateTimingInput struct {
 	Packet   string                               `json:"packet" jsonschema:"Workspace-relative packet or group-packet path under courses/"`
 	Students []workflow.LateTimingStudentDecision `json:"students,omitempty" jsonschema:"First-genuine choices for individual packet members"`
 	Groups   []workflow.LateTimingGroupDecision   `json:"groups,omitempty" jsonschema:"Per-member first-genuine choices for group-packet entries"`
+}
+
+type CopyModuleInput struct {
+	SourceCourse string   `json:"source_course" jsonschema:"Configured nickname of the course the module is copied from, usually Collab"`
+	Module       string   `json:"module" jsonschema:"Exact title of the module in the source course"`
+	Courses      []string `json:"courses" jsonschema:"Configured course nicknames to copy into"`
 }
 
 type ParentReportInput struct {
@@ -180,7 +187,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	}
 	s := &Server{root: root, ctx: ctx, reviews: map[string]*reviewTask{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: "canvasexpert-se", Version: AdapterVersion()}, &mcp.ServerOptions{Instructions: "Before any teacher task, read AGENTS.md using read_workspace_file, then read the relevant playbook. Commands and grading/planning session files remain in UserInstall. Reusable teacher setup, including course configuration, student settings/notes, instructions, playbooks, guides and preferences, uses UserInstall by default or the explicitly configured UserSync authority. Private roster and contact files also use that authority but are never model context; UserSync is a provider-synchronized local directory, and reads always use its current contents. Check engine_info operation rules-location if the active authority is unclear. Read list_courses with its default configured source for saved nicknames and current selections; request source canvas only for connection testing or additional course discovery. Treat the structured courses list as setup status and ignore obsolete starter text in a preserved document body. Use engine_reference for Engine commands and file contracts. Keep .cse files and private teacher-only browser pages out of model context. Preserve honest computed grades, unsent work, and the teacher's requested scope. Review is the default for scores, assignment creation/edits, and quiz creation; direct writes follow an explicit teacher request to skip review."})
-	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
+	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection. A course with an owner belongs to that teammate; the team list says whether their Canvas key is on this PC.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
 		return s.listCourses(ctx, in)
 	})
 	addReadTool(server, "engine_reference", "Read CE-SE command help, document formats, Canvas field limits, or synthetic examples.", func(ctx context.Context, _ *mcp.CallToolRequest, in HelpInput) (TextOutput, error) {
@@ -192,7 +199,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "help", in.Topic)
 	})
-	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Set session for current-term scoring discovery and timing-only evidence. Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
+	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Set session for targeted scoring discovery (Canvas needs-grading counts) Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
 		args := []string{"pull-work"}
 		if in.Course != "" {
 			args = append(args, in.Course)
@@ -232,6 +239,9 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates (course score, missing work, correction candidates, due soon, grade history) into courses/<course>/parent-updates/<run>/report.json. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
 		return s.longCommand(ctx, append(append([]string{"parent-report"}, in.Courses...), in.Students...)...)
 	})
+	addActionTool(server, "copy_module", "Copies one Collab module, by exact title, once into each listed course, using each course's teacher key. Never re-copies. State the module and the course list to the teacher before calling.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CopyModuleInput) (TextOutput, error) {
+		return s.longCommand(ctx, append([]string{"copy-module", in.SourceCourse, in.Module}, in.Courses...)...)
+	})
 	addActionTool(server, "prepare_family_contact", "Resolve a free-form contact.json audience against current Canvas courses and collaborative groups. Save audience.json and return pseudonymized recipients, message counts, warnings and blocking conflicts. Refreshing preserves outcomes. No email is sent and no addresses or Canvas user IDs are returned.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in FamilyContactInput) (TextOutput, error) {
 		dir, err := s.coursePath(in.Folder)
 		if err != nil {
@@ -244,7 +254,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		if err != nil {
 			return TextOutput{}, err
 		}
-		return s.startSession(ctx, "review", []string{"parent-review", dir})
+		return s.startReviewSession(ctx, dir, []string{"parent-review", dir})
 	})
 	addActionTool(server, "print_student_reports", "Save one PDF of student reports from a parent-update run folder (report.json and drafts.json), one student per page, in the teacher's Downloads folder, and open it for printing. Every student gets a page. Returns the file path and count only; the PDF holds student names and is outside the workspace. Nothing is sent or written to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
 		dir, err := s.coursePath(in.Folder)
@@ -256,7 +266,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addReadTool(server, "list_modules", "List a configured course's Canvas modules through the CE-SE Engine.", func(ctx context.Context, _ *mcp.CallToolRequest, in CourseInput) (TextOutput, error) {
 		return s.command(ctx, "modules", in.Course)
 	})
-	addReadTool(server, "list_group_sets", "List collaborative group sets in a configured course. Differentiation tags are excluded.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupSetsInput) (TextOutput, error) {
+	addReadTool(server, "list_group_sets", "List collaborative group sets in a configured course. Differentiation tags are excluded; use list_tags for those.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupSetsInput) (TextOutput, error) {
 		return s.command(ctx, "groups", in.Course)
 	})
 	addReadTool(server, "list_groups", "List collaborative clubs. An exact group-set read includes stable-ref memberships and unassigned students; an exact group read includes memberships only when requested. Private names, logins and contact data are never returned.", func(ctx context.Context, _ *mcp.CallToolRequest, in GroupsInput) (TextOutput, error) {
@@ -340,6 +350,12 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addActionTool(server, "write_draft", "Create or update a draft under courses/. Existing files require their current SHA-256 to prevent overwriting newer unsent work. This tool never writes to Canvas.", true, func(_ context.Context, _ *mcp.CallToolRequest, in WriteFileInput) (TextOutput, error) {
 		return s.writeDraft(in)
 	})
+	addActionTool(server, "init_results", "Start a results file for a pulled individual packet under its assignment's scoring/ folder: the packet path, each student's exact current attempt, the operation the assignment allows and any discussion-evidence digest, with an earlier results file's interpretation and scoring_basis reused. Interpretation, components and feedback are left blank and fail validation until filled. Never writes to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
+		if _, err := s.coursePath(in.Path); err != nil {
+			return TextOutput{}, err
+		}
+		return s.command(ctx, "results-init", in.Path)
+	})
 	addReadTool(server, "validate_document", "Validate a CE-SE workspace document without writing to Canvas.", func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
 		if _, err := s.coursePath(in.Path); err != nil {
 			return TextOutput{}, err
@@ -368,7 +384,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false
@@ -422,6 +438,40 @@ type configuredCourses struct {
 	Mode        string          `json:"mode"`
 	Instance    string          `json:"instance"`
 	Courses     []domain.Course `json:"courses"`
+	Team        []teamStatus    `json:"team"`
+}
+
+// teamStatus tells the agent who the teammates are and whether their keys are
+// saved here. It never carries a key.
+type teamStatus struct {
+	Label       string `json:"label"`
+	Name        string `json:"name"`
+	Email       string `json:"email,omitempty"`
+	KeyOnThisPC bool   `json:"key_on_this_pc"`
+	KeyExpires  string `json:"key_expires"`
+	ExpiresSoon bool   `json:"expires_soon"`
+}
+
+func (s *Server) teamStatuses() ([]teamStatus, error) {
+	out := []teamStatus{}
+	path, err := s.readablePath("context/team.md")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return out, nil
+	}
+	var team workspace.TeamConfig
+	if _, err := workspace.ReadDocument(path, &team); err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	for _, t := range team.Teammates {
+		credential, keyErr := platform.LoadTeammateCredential(t.CanvasUserID)
+		credential.Token = ""
+		out = append(out, teamStatus{Label: t.Label, Name: t.Name, Email: t.Email, KeyOnThisPC: keyErr == nil, KeyExpires: t.KeyExpires, ExpiresSoon: t.ExpiryState(now) != workspace.KeyOK})
+	}
+	return out, nil
 }
 
 func (s *Server) listCourses(ctx context.Context, in ListCoursesInput) (TextOutput, error) {
@@ -440,8 +490,12 @@ func (s *Server) listCourses(ctx context.Context, in ListCoursesInput) (TextOutp
 		if config.Courses == nil {
 			config.Courses = []domain.Course{}
 		}
+		team, err := s.teamStatuses()
+		if err != nil {
+			return TextOutput{}, err
+		}
 		location, _ := workspace.GetRulesLocation(s.root)
-		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, InstallRoot: location.InstallRoot, RulesRoot: location.RulesRoot, Mode: location.Mode, Instance: config.Instance, Courses: config.Courses})
+		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, InstallRoot: location.InstallRoot, RulesRoot: location.RulesRoot, Mode: location.Mode, Instance: config.Instance, Courses: config.Courses, Team: team})
 		return TextOutput{Text: string(b)}, err
 	default:
 		return TextOutput{}, errors.New("source must be configured or canvas")

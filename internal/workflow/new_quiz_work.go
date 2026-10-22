@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/url"
 	"os"
 	"path"
@@ -34,13 +35,15 @@ type quizReportRow struct {
 		ItemID   json.Number     `json:"item_id"`
 		ItemType string          `json:"item_type"`
 		Answer   json.RawMessage `json:"answer"`
+		Score    *json.Number    `json:"score"`
 	} `json:"item_responses"`
 }
 // writtenQuizItem is one entry of the New Quizzes items list. Canvas nests the
 // question type and body under "entry"; the outer id is the quiz-entry id and
 // entry.id is the item id, so either may be the id other reports use.
 type writtenQuizItem struct {
-	ID    json.Number `json:"id"`
+	ID     json.Number `json:"id"`
+	Points json.Number `json:"points_possible"`
 	Entry struct {
 		ID   json.Number `json:"id"`
 		Type string      `json:"interaction_type_slug"`
@@ -55,12 +58,14 @@ type newQuizRow struct {
 	Responses   []domain.WrittenResponse
 	Files       []domain.WrittenFile
 	FileItemIDs []string
+	AutoScored     *domain.AutoScored
+	AutoScoredNote string
 }
 
 // newQuizResponses reads Canvas's Student Analysis report and joins only the
 // requested assignment's written items. The signed result file is fetched by
 // the Canvas client's credential-free Download path.
-func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmentID int64) (map[int64]newQuizRow, error) {
+func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmentID int64) (map[int64]newQuizRow, []domain.WrittenItem, error) {
 	var launched struct {
 		Progress struct {
 			URL string `json:"url"`
@@ -68,55 +73,65 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 	}
 	path := fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes/%d/reports", courseID, assignmentID)
 	if err := c.Write(ctx, "POST", path, map[string]any{"quiz_report": map[string]string{"report_type": "student_analysis", "format": "json"}}, &launched); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	progressURL, err := canvasAPIPath(c, launched.Progress.URL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var progress quizReportProgress
 	deadline := time.Now().Add(5 * time.Minute)
 	for {
 		if err = c.Get(ctx, progressURL, &progress); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if progress.WorkflowState == "completed" {
 			break
 		}
 		if progress.WorkflowState == "failed" || progress.WorkflowState == "error" {
-			return nil, fmt.Errorf("Student Analysis report failed")
+			return nil, nil, fmt.Errorf("Student Analysis report failed")
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("Student Analysis report did not complete")
+			return nil, nil, fmt.Errorf("Student Analysis report did not complete")
 		}
 		t := time.NewTimer(time.Second)
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		case <-t.C:
 		}
 	}
 	if progress.Results.URL == "" {
-		return nil, fmt.Errorf("Student Analysis report has no results URL")
+		return nil, nil, fmt.Errorf("Student Analysis report has no results URL")
 	}
 	var buf bytes.Buffer
 	if err = c.DownloadUnauthenticated(ctx, progress.Results.URL, &buf); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var rows []quizReportRow
 	if err = json.Unmarshal(buf.Bytes(), &rows); err != nil {
-		return nil, fmt.Errorf("invalid Student Analysis results")
+		return nil, nil, fmt.Errorf("invalid Student Analysis results")
 	}
 	var items []writtenQuizItem
 	if err = c.List(ctx, fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes/%d/items?per_page=100", courseID, assignmentID), &items); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	prompts := map[string]writtenQuizItem{}
 	fileItemIDs := []string{}
+	var autoItems []writtenQuizItem
+	var written []domain.WrittenItem
 	for _, item := range items {
 		item.Type, item.Body = item.Entry.Type, item.Entry.Body
 		typ := strings.ToLower(item.Type)
+		points, pointsErr := domain.ParseDecimal(item.Points.String())
+		if typ != "essay" && typ != "file-upload" && typ != "file_upload" {
+			if pointsErr == nil && points.Sign() > 0 {
+				autoItems = append(autoItems, item)
+			}
+		} else if pointsErr == nil {
+			written = append(written, domain.WrittenItem{ItemID: item.ID.String(), EntryID: item.Entry.ID.String(), Type: typ, Prompt: render.HTMLText(item.Body), Points: points})
+		}
 		for _, id := range []json.Number{item.ID, item.Entry.ID} {
 			if id == "" {
 				continue
@@ -139,6 +154,7 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 		if entry.Attempt != row.Student.Attempt { entry = newQuizRow{} }
 		entry.Attempt, entry.SubmittedAt = row.Student.Attempt, row.Student.SubmittedAt
 		entry.FileItemIDs = append([]string(nil), fileItemIDs...)
+		entry.AutoScored, entry.AutoScoredNote = autoScoredTotal(autoItems, row)
 		for _, response := range row.Responses {
 			id := response.ItemID.String()
 			item, ok := prompts[id]
@@ -159,7 +175,40 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 		}
 		out[row.Student.ID] = entry
 	}
-	return out, nil
+	return out, written, nil
+}
+
+// autoScoredTotal sums one report row's auto-scored items. Any item without a
+// numeric score leaves the total unknown rather than guessed.
+func autoScoredTotal(items []writtenQuizItem, row quizReportRow) (*domain.AutoScored, string) {
+	if len(items) == 0 {
+		return nil, ""
+	}
+	scores := map[string]string{}
+	for _, response := range row.Responses {
+		if response.Score != nil {
+			scores[response.ItemID.String()] = response.Score.String()
+		}
+	}
+	earned, possible := new(big.Rat), new(big.Rat)
+	missing := 0
+	for _, item := range items {
+		score, ok := scores[item.ID.String()]
+		if !ok {
+			score, ok = scores[item.Entry.ID.String()]
+		}
+		d, e := domain.ParseDecimal(score)
+		if !ok || e != nil {
+			missing++
+			continue
+		}
+		earned.Add(earned, d.Rat())
+		possible.Add(possible, domain.MustDecimal(item.Points.String()).Rat())
+	}
+	if missing > 0 {
+		return nil, fmt.Sprintf("%d of %d auto-scored items have no score in Canvas's report", missing, len(items))
+	}
+	return &domain.AutoScored{Earned: domain.RoundRat(earned, 2), Possible: domain.RoundRat(possible, 2), Items: len(items)}, ""
 }
 
 func (s *Service) downloadNewQuizFiles(ctx context.Context, relDir, studentRef string, userID int64, courseID, assignmentID int64, attempt int, row newQuizRow, budget *int64) []domain.WrittenFile {

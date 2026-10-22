@@ -128,6 +128,7 @@ func (s *Service) BuildParentReview(dir string) (ReviewModel, error) {
 	if e != nil {
 		return ReviewModel{}, e
 	}
+	s.applyReplyNotes(run)
 	m := ReviewModel{Kind: "Parent updates", Title: strings.Join(run.Report.Courses, ", ") + " · run " + run.Report.RunID, PostLabel: "Send approved emails", Actions: []ReviewAction{{Value: "drafts", Label: "Fill Outlook Drafts only"}}, Test: true, Email: true}
 	for _, sd := range run.Drafts.Students {
 		rs := run.students[sd.Ref]
@@ -155,6 +156,9 @@ func (s *Service) BuildParentReview(dir string) (ReviewModel, error) {
 			if len(cc) > 0 {
 				card.Facts = append(card.Facts, ReviewFact{Label: "Cc", Value: strings.Join(cc, ", ")})
 			}
+		}
+		if l, v := replyFact(s.replyFor(parentCourseNicknames(rs), nil)); l != "" {
+			card.Facts = append(card.Facts, ReviewFact{Label: l, Value: v})
 		}
 		if sd.Reason != "" {
 			card.Facts = append(card.Facts, ReviewFact{Label: "Why send", Value: sd.Reason})
@@ -187,9 +191,11 @@ func (s *Service) SendParentUpdates(ctx context.Context, dir string, skip map[st
 	if e != nil {
 		return "held", "", e
 	}
+	s.applyReplyNotes(run)
 	tasks := make([]familyMailTask, 0, len(run.Drafts.Students))
 	for _, sd := range run.Drafts.Students {
-		tasks = append(tasks, familyMailTask{Ref: sd.Ref, Send: sd.Decision == "send", Render: func(st workspace.Student) (outlook.Message, error) {
+		courses := parentCourseNicknames(run.students[sd.Ref])
+		tasks = append(tasks, familyMailTask{Ref: sd.Ref, Send: sd.Decision == "send", Courses: func(workspace.Student) []string { return courses }, Render: func(st workspace.Student) (outlook.Message, error) {
 			r := run.Render(sd, st)
 			return outlook.Message{Subject: r.Subject, HTMLBody: r.HTML}, nil
 		}})
@@ -202,6 +208,9 @@ type familyMailTask struct {
 	Ref    string
 	Send   bool
 	Render func(workspace.Student) (outlook.Message, error)
+	// Courses names the course nicknames this student's email concerns, for
+	// reply routing; nil means only your own courses.
+	Courses func(workspace.Student) []string
 }
 
 func (s *Service) deliverFamilyMail(ctx context.Context, dir string, tasks []familyMailTask, parentsOnly bool, skip map[string]bool, draftsOnly bool, sender MailSender) (string, string, error) {
@@ -222,6 +231,7 @@ func (s *Service) deliverFamilyMail(ctx context.Context, dir string, tasks []fam
 	}
 	var sent, drafted, failed, uncertain int
 	var reasons []string
+	held := false
 	for _, task := range tasks {
 		switch out.Students[task.Ref].State {
 		case "sent", "uncertain":
@@ -260,6 +270,20 @@ func (s *Service) deliverFamilyMail(ctx context.Context, dir string, tasks []fam
 		msg, e := task.Render(st)
 		if e != nil {
 			return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), e
+		}
+		if task.Courses != nil {
+			route := s.replyFor(task.Courses(st), sender.SelfAddress)
+			if route.Hold != "" {
+				// Same state as a student with no contact: a later run retries it.
+				out.Students[task.Ref] = ParentDelivery{State: "skipped", Reason: route.Hold, At: time.Now().UTC().Format(time.RFC3339)}
+				if e := saveParentOutcomes(dir, out); e != nil {
+					return "partial", summarizeParent(sent, drafted, failed, uncertain, reasons), e
+				}
+				reasons = append(reasons, task.Ref+": "+route.Hold)
+				held = true
+				continue
+			}
+			msg.ReplyTo = route.ReplyTo
 		}
 		msg.To, msg.Cc = to, cc
 		// Persist the hold before calling Outlook. A process exit or a failed
@@ -304,7 +328,7 @@ func (s *Service) deliverFamilyMail(ctx context.Context, dir string, tasks []fam
 		}
 	}
 	status := "completed"
-	if failed > 0 || uncertain > 0 {
+	if failed > 0 || uncertain > 0 || held {
 		status = "partial"
 	}
 	return status, summarizeParent(sent, drafted, failed, uncertain, reasons), nil
@@ -349,6 +373,8 @@ func (s *Service) SendParentTest(dir string, sender MailSender) (string, error) 
 	if e != nil {
 		return "", e
 	}
+	s.applyReplyNotes(run)
+	held := ""
 	for _, sd := range run.Drafts.Students {
 		if sd.Decision != "send" {
 			continue
@@ -357,11 +383,19 @@ func (s *Service) SendParentTest(dir string, sender MailSender) (string, error) 
 		if e != nil {
 			continue
 		}
+		route := s.replyFor(parentCourseNicknames(run.students[sd.Ref]), sender.SelfAddress)
+		if route.Hold != "" {
+			held = route.Hold
+			continue
+		}
 		r := run.Render(sd, st)
-		if _, e = sender.Send(outlook.Message{To: []string{self}, Subject: "[TEST] " + r.Subject, HTMLBody: r.HTML}); e != nil {
+		if _, e = sender.Send(outlook.Message{To: []string{self}, ReplyTo: route.ReplyTo, Subject: "[TEST] " + r.Subject, HTMLBody: r.HTML}); e != nil {
 			return "", e
 		}
 		return "Sent a test copy of one email to your own address.", nil
+	}
+	if held != "" {
+		return "", fmt.Errorf("no email to test: %s", held)
 	}
 	return "", fmt.Errorf("no email to test: no student is marked send")
 }

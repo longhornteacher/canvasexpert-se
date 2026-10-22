@@ -6,6 +6,10 @@
 
 The source build targets a portable Windows 11 executable. It needs the exact Go version declared in `go.mod` (currently Go 1.27.1) and PowerShell. `scripts/build.ps1` and `scripts/webui.ps1` find that version or install it single-user into `.tools/` (checksum-verified from go.dev; no admin rights, no `PATH` or persistent environment changes). `package.ps1` and `compile.ps1` do not install anything. Teachers need neither: the packaged executable and native UserSync folder chooser run without Go, PowerShell, a separately installed .NET runtime, PATH changes or admin access.
 
+## Git install and ZIP
+
+The teacher distribution is built by `scripts/package-userinstall.ps1` (see [releasing](releasing.md)): the Engine assets, the `userinstall` branch tree with `engine/manifest.txt`, and a fallback ZIP made from the same tree. `scripts/package.ps1` below is the older single-ZIP producer and stays until that ZIP is retired.
+
 ## The one producer
 
 `scripts/package.ps1` is the only script that produces the download. `scripts/build.ps1` is the ordinary entry and simply calls it. `compile.ps1` and `package-mcp.ps1` are internal helpers.

@@ -36,6 +36,10 @@ func (s *Service) BuildEditReview(ctx context.Context, path string) (ReviewModel
 	if e != nil {
 		return ReviewModel{}, e
 	}
+	s, e = s.ForCourse(ctx, course)
+	if e != nil {
+		return ReviewModel{}, e
+	}
 	if doc.Instance != s.Client.Origin() || doc.CourseID != course.ID {
 		return ReviewModel{}, fmt.Errorf("update identity differs from configured Canvas/course")
 	}

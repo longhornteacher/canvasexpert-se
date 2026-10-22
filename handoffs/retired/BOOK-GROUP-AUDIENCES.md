@@ -1,5 +1,7 @@
 # Book-group audiences for individual content: execution brief
 
+> Retired 2026-10-21 at the developer's request. All five implementation slices are recorded as implemented, validated and committed in Dev. This file is history and evidence, not active execution instructions. Live audience/access/student-view observations remain unverified; retirement does not claim release or UserInstall/UserSync adoption.
+
 Prepared 2026-10-19 against Dev branch `dev`, revision `56109c6`. **Slices 1-5 are implemented, validated and committed on `dev`.** The original pause checkpoint at the end is retained as history; its "slice 2 working tree" section is superseded by the slice 2 execution record. This brief does not authorize Canvas Live operations, release, or UserInstall/UserSync adoption.
 
 Source requirements: [original book-group audience handoff](../CSSE_Book_Group_Audiences_Codex_Brief.md). That supplied file is preserved unchanged. This brief supplies the execution sequence and code audit; it does not turn the source's request to implement into authorization to implement during this planning session.

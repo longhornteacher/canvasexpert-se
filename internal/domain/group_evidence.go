@@ -7,13 +7,14 @@ import (
 )
 
 type GroupPacketDocument struct {
-	Schema     int                   `yaml:"schema"`
-	Kind       string                `yaml:"kind"`
-	Course     string                `yaml:"course"`
-	PulledAt   string                `yaml:"pulled_at"`
-	Assignment AssignmentSnapshot    `yaml:"assignment"`
-	Groups     []GroupPacketEntry    `yaml:"groups,omitempty"`
-	Unassigned []GroupUnassignedWork `yaml:"unassigned,omitempty"`
+	Schema         int                   `yaml:"schema"`
+	Kind           string                `yaml:"kind"`
+	Course         string                `yaml:"course"`
+	PulledAt       string                `yaml:"pulled_at"`
+	Assignment     AssignmentSnapshot    `yaml:"assignment"`
+	DirectionsHTML string                `yaml:"directions_html,omitempty"`
+	Groups         []GroupPacketEntry    `yaml:"groups,omitempty"`
+	Unassigned     []GroupUnassignedWork `yaml:"unassigned,omitempty"`
 }
 
 type GroupPacketEntry struct {
@@ -39,6 +40,7 @@ type GroupUnassignedWork struct {
 	EnteredGrade        *Decimal                 `yaml:"entered_grade,omitempty"`
 	ObservedScore       *Decimal                 `yaml:"observed_score,omitempty"`
 	BodyHTML            string                   `yaml:"body_html,omitempty"`
+	BodyHTMLPath        string                   `yaml:"body_html_path,omitempty"`
 	ReadableText        string                   `yaml:"readable_text,omitempty"`
 	Attachments         []Attachment             `yaml:"attachments,omitempty"`
 	Comments            []ExistingComment        `yaml:"comments,omitempty"`
@@ -50,6 +52,7 @@ type GroupUnassignedAttempt struct {
 	SubmissionGroupID int64        `yaml:"submission_group_id,omitempty"`
 	Attempt           AttemptRef   `yaml:"attempt"`
 	BodyHTML          string       `yaml:"body_html,omitempty"`
+	BodyHTMLPath      string       `yaml:"body_html_path,omitempty"`
 	ReadableText      string       `yaml:"readable_text,omitempty"`
 	Attachments       []Attachment `yaml:"attachments,omitempty"`
 	EnteredGrade      *Decimal     `yaml:"entered_grade,omitempty"`
@@ -88,7 +91,7 @@ type GroupWorkMember struct {
 	StudentRef          string             `yaml:"student_ref"`
 	Alias               string             `yaml:"alias"`
 	ExtraTime           *bool              `yaml:"extra_time,omitempty"`   // private saved fact; absent in older packets
-	WorkPurpose         string             `yaml:"work_purpose,omitempty"` // score, late-only, or score-and-late
+	WorkPurpose         string             `yaml:"work_purpose,omitempty"` // score or score-and-late; late-only appears only in older packets
 	CurrentMember       bool               `yaml:"current_member"`
 	MembershipState     string             `yaml:"membership_state,omitempty"`
 	SubmissionID        int64              `yaml:"submission_id"`
@@ -130,6 +133,7 @@ type GroupArtifact struct {
 	URL            string                `yaml:"url,omitempty"`
 	Note           string                `yaml:"note,omitempty"`
 	BodyHTML       string                `yaml:"body_html,omitempty"`
+	BodyHTMLPath   string                `yaml:"body_html_path,omitempty"`
 	ReadableText   string                `yaml:"readable_text,omitempty"`
 	Attachments    []Attachment          `yaml:"attachments,omitempty"`
 	Sources        []GroupArtifactSource `yaml:"sources"`

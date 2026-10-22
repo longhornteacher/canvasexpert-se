@@ -18,6 +18,7 @@ type courseRow struct {
 	ID                  int64
 	Name, Code, Nick    string
 	State               string
+	Owner               string
 	Active, Unpublished bool
 }
 
@@ -67,7 +68,7 @@ func (h *Hub) coursesPage(w http.ResponseWriter, r *http.Request) {
 		seen[c.ID] = true
 		row := courseRow{ID: c.ID, Name: c.Name, Code: c.Code, State: c.State, Unpublished: c.State == "unpublished", Nick: ""}
 		if known, ok := configured[c.ID]; ok {
-			row.Nick, row.Active = known.Nickname, known.Current
+			row.Nick, row.Active, row.Owner = known.Nickname, known.Current, known.Owner
 		}
 		rows = append(rows, row)
 	}
@@ -77,8 +78,12 @@ func (h *Hub) coursesPage(w http.ResponseWriter, r *http.Request) {
 	})
 	for _, c := range config.Courses {
 		if !seen[c.ID] {
-			rows = append(rows, courseRow{ID: c.ID, Name: c.Nickname, Nick: c.Nickname, Active: c.Current})
+			rows = append(rows, courseRow{ID: c.ID, Name: c.Nickname, Nick: c.Nickname, Active: c.Current, Owner: c.Owner})
 		}
+	}
+	team, _ := workspace.ReadTeam(h.root)
+	for i := range rows {
+		rows[i].Owner = teamOwnerName(rows[i].Owner, team)
 	}
 	h.render(w, 200, tmpl("courses"), coursesData{Appearance: appearanceFor(h.root, h.secret), Secret: h.secret, Message: message, Notice: notice, DraftKey: "courses:" + h.secret, ClearDraft: r.URL.Query().Get("saved") == "1", Rows: rows})
 }

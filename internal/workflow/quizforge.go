@@ -253,6 +253,55 @@ func (q *QuizForge) validate() error {
 			}
 		}
 	}
+	for i := range q.Items {
+		if e := q.Items[i].validateRationale(); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+// validateRationale requires student feedback on every auto-scored item: MC/MA
+// explain every choice (why it is, or isn't, the best answer); other types
+// explain the correct answer.
+func (it *qfItem) validateRationale() error {
+	if !qfScoredTypes[it.Type] {
+		return nil
+	}
+	name := it.ID
+	if name == "" {
+		name = it.Type
+	}
+	if it.ID == "" {
+		return fmt.Errorf("item %s needs an id so its rationales entry can name it; every auto-scored item gets student feedback", name)
+	}
+	if it.Type != "MC" && it.Type != "MA" {
+		if it.rationale == nil || strings.TrimSpace(it.rationale.Rationale) == "" {
+			return fmt.Errorf("item %s needs a rationales entry with a rationale explaining why the correct answer is correct", name)
+		}
+		return nil
+	}
+	have := map[string]bool{}
+	if it.rationale != nil {
+		for _, c := range it.rationale.Choices {
+			if strings.TrimSpace(c.Rationale) != "" {
+				have[c.ID] = true
+			}
+		}
+	}
+	for i, c := range it.Choices {
+		key := c.ID
+		if key == "" {
+			key = string(rune('A' + i))
+		}
+		if !have[key] {
+			why := "why it isn't the best answer"
+			if c.Correct {
+				why = "why it is the best answer"
+			}
+			return fmt.Errorf("item %s choice %s needs a rationale in its rationales entry explaining %s; every choice gets one", name, key, why)
+		}
+	}
 	return nil
 }
 
@@ -470,11 +519,63 @@ func wrap(entry map[string]any) map[string]any {
 	return map[string]any{"item": map[string]any{"entry_type": "Item", "entry": entry}}
 }
 
-func (it qfItem) neutralFeedback() map[string]any {
-	if it.rationale != nil && it.rationale.Rationale != "" {
-		return map[string]any{"neutral": para(it.rationale.Rationale)}
+// Student feedback colors are fixed by the Engine, whatever the rationale text
+// carries: green explains a correct answer, red explains a distractor.
+const (
+	feedbackGreen = "#2e7d32"
+	feedbackRed   = "#c62828"
+)
+
+var (
+	feedbackStyleAttr  = regexp.MustCompile(`(?i)\s+style\s*=\s*("[^"]*"|'[^']*')`)
+	feedbackColorTags  = regexp.MustCompile(`(?i)</?(span|font)\b[^>]*>`)
+	feedbackParaBreak  = regexp.MustCompile(`(?i)</p>\s*<p\b[^>]*>`)
+	feedbackParaOpen   = regexp.MustCompile(`(?i)^<p\b[^>]*>`)
+	feedbackParaClose  = regexp.MustCompile(`(?i)</p>$`)
+	feedbackOldLabel   = regexp.MustCompile(`(?i)^(<(strong|b)>\s*)?why this[^:<]{0,40}:\s*(</(strong|b)>)?\s*`)
+)
+
+// rationaleInner reduces an authored rationale to its explanation: wrappers,
+// colors and an earlier "Why this ..." label are removed so the Engine's own
+// label and color apply.
+func rationaleInner(s string) string {
+	s = strings.TrimSpace(s)
+	s = feedbackStyleAttr.ReplaceAllString(s, "")
+	s = feedbackColorTags.ReplaceAllString(s, "")
+	s = feedbackParaBreak.ReplaceAllString(s, "<br>")
+	s = strings.TrimSpace(feedbackParaOpen.ReplaceAllString(s, ""))
+	s = strings.TrimSpace(feedbackParaClose.ReplaceAllString(s, ""))
+	return strings.TrimSpace(feedbackOldLabel.ReplaceAllString(s, ""))
+}
+
+func feedbackHTML(color, label, text string) string {
+	return `<p style="color: ` + color + `;"><strong>` + label + `</strong> ` + rationaleInner(text) + `</p>`
+}
+
+// choiceFeedback colors one MC/MA choice's rationale by whether it is correct.
+func (it qfItem) choiceFeedback(correct bool, text string) string {
+	switch {
+	case it.Type == "MA" && correct:
+		return feedbackHTML(feedbackGreen, "Why this choice is correct:", text)
+	case it.Type == "MA":
+		return feedbackHTML(feedbackRed, "Why this choice isn't correct:", text)
+	case correct:
+		return feedbackHTML(feedbackGreen, "Why this is the best answer:", text)
 	}
-	return map[string]any{}
+	return feedbackHTML(feedbackRed, "Why this isn't the best answer:", text)
+}
+
+// neutralFeedback is shown whatever the student answered: for MC/MA it is the
+// optional general note beside the per-choice feedback; for other auto-scored
+// items it explains the correct answer, in green.
+func (it qfItem) neutralFeedback() map[string]any {
+	if it.rationale == nil || strings.TrimSpace(it.rationale.Rationale) == "" {
+		return map[string]any{}
+	}
+	if it.Type == "MC" || it.Type == "MA" {
+		return map[string]any{"neutral": "<p>" + rationaleInner(it.rationale.Rationale) + "</p>"}
+	}
+	return map[string]any{"neutral": feedbackHTML(feedbackGreen, "Why this is correct:", it.rationale.Rationale)}
 }
 
 func (it qfItem) title(def string) string {
@@ -559,7 +660,7 @@ func (it qfItem) buildChoice() map[string]any {
 			key = string(rune('A' + i))
 		}
 		if r := rat[key]; r != "" {
-			feedback[id] = para(r)
+			feedback[id] = it.choiceFeedback(c.Correct, r)
 		}
 		if c.Correct {
 			correct = append(correct, id)

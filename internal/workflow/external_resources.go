@@ -61,6 +61,10 @@ func (s *Service) ListExternalResources(ctx context.Context, nickname string, gr
 	if err != nil {
 		return ExternalResourcesReport{}, err
 	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return ExternalResourcesReport{}, err
+	}
 	if groupID < 0 {
 		return ExternalResourcesReport{}, fmt.Errorf("group ID cannot be negative")
 	}
