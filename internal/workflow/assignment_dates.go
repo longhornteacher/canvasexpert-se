@@ -26,6 +26,10 @@ func (s *Service) PullAssignmentDates(ctx context.Context, nickname string, assi
 	if err != nil {
 		return AssignmentDatesReport{}, err
 	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return AssignmentDatesReport{}, err
+	}
 	if assignmentID <= 0 {
 		return AssignmentDatesReport{}, fmt.Errorf("assignment ID must be positive")
 	}
@@ -136,6 +140,10 @@ func (s *Service) PushAssignmentDates(ctx context.Context, path string) (report 
 		return report, err
 	}
 	course, err := s.Course(doc.Course)
+	if err != nil {
+		return report, err
+	}
+	s, err = s.ForCourse(ctx, course)
 	if err != nil {
 		return report, err
 	}

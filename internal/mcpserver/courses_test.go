@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +29,9 @@ func TestConfiguredCoursesEmptyAndInvalidSource(t *testing.T) {
 		}
 		if saved.Courses == nil || len(saved.Courses) != 0 || saved.Source != "configured" || saved.Root != root {
 			t.Fatalf("empty courses: %+v", saved)
+		}
+		if saved.Team == nil || len(saved.Team) != 0 || !strings.Contains(result.Text, `"team":[]`) {
+			t.Fatalf("an empty team must be []: %s", result.Text)
 		}
 	}
 	if _, err := s.listCourses(context.Background(), ListCoursesInput{Source: "unknown"}); err == nil {
@@ -58,5 +62,51 @@ func TestMCPFirstLaunchAddsSeedWithoutOverwritingTeacherFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "playbooks", "score.md")); err != nil {
 		t.Fatal("missing playbook not added")
+	}
+}
+
+func TestListCoursesShowsOwnerAndTeamWithoutKeys(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "context"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	courses := `---
+schema: 1
+instance: https://canvas.example.edu
+courses:
+  - nickname: Turner P2
+    id: 2
+    current: true
+    owner: turner
+---
+`
+	team := `---
+schema: 1
+teammates:
+  - label: turner
+    name: Ms. Turner
+    canvas_user_id: 77
+    email: turner@school.org
+    key_expires: 2000-01-01
+---
+`
+	for name, body := range map[string]string{"courses.md": courses, "team.md": team} {
+		if err := os.WriteFile(filepath.Join(root, "context", name), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result, err := (&Server{root: root}).listCourses(context.Background(), ListCoursesInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved configuredCourses
+	if err := json.Unmarshal([]byte(result.Text), &saved); err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.Courses) != 1 || saved.Courses[0].Owner != "turner" || len(saved.Team) != 1 || saved.Team[0].Label != "turner" || !saved.Team[0].ExpiresSoon || saved.Team[0].KeyOnThisPC {
+		t.Fatalf("unexpected listing: %s", result.Text)
+	}
+	if strings.Contains(strings.ToLower(result.Text), "token") {
+		t.Fatalf("listing mentions a token: %s", result.Text)
 	}
 }

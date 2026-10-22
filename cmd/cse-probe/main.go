@@ -246,7 +246,15 @@ func (p *probe) serviceWorkflow(ctx context.Context, command string, args []stri
 	if e = p.target(ctx); e != nil {
 		return e
 	}
-	service := &workflow.Service{Root: root, Client: p.c, Config: config}
+	team, e := workspace.ReadTeam(root)
+	if e == nil {
+		e = workspace.CheckOwners(config, team)
+	}
+	if e != nil {
+		return e
+	}
+	// Keys stays nil: the probe uses its own key, but ownership rules still apply.
+	service := &workflow.Service{Root: root, Client: p.c, Config: config, Team: team, InstallRoot: root}
 	if command == "pull" {
 		if *results != "" {
 			return fmt.Errorf("pull does not take --results")

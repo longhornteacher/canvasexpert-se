@@ -79,22 +79,27 @@ func normalizeEditingRoles(roles string) string {
 	return strings.Join(ordered, ",")
 }
 
-func (s *Service) verifyPageGroup(ctx context.Context, nickname string, groupID int64) (domain.Course, error) {
+// verifyPageGroup resolves the course and, when groupID is set, checks the group
+// belongs to it. It also returns the Service scoped to that course's key.
+func (s *Service) verifyPageGroup(ctx context.Context, nickname string, groupID int64) (*Service, domain.Course, error) {
 	course, err := s.Course(nickname)
-	if err != nil || groupID == 0 {
-		return course, err
+	if err != nil {
+		return s, course, err
+	}
+	if s, err = s.ForCourse(ctx, course); err != nil || groupID == 0 {
+		return s, course, err
 	}
 	var g canvasGroup
 	if err = s.Client.Get(ctx, fmt.Sprintf("/api/v1/groups/%d", groupID), &g); err != nil {
-		return course, err
+		return s, course, err
 	}
 	if g.ID != groupID || g.ContextType != "Course" || g.CourseID != course.ID || g.GroupCategoryID <= 0 || nonCollaborative(g.NonCollaborative) {
-		return course, fmt.Errorf("group %d does not belong to this course as a collaborative group", groupID)
+		return s, course, fmt.Errorf("group %d does not belong to this course as a collaborative group", groupID)
 	}
 	if _, err = s.groupCategory(ctx, course.ID, g.GroupCategoryID); err != nil {
-		return course, err
+		return s, course, err
 	}
-	return course, nil
+	return s, course, nil
 }
 
 func (s *Service) pageURL(courseID int64, p NativePage) string {
@@ -120,10 +125,11 @@ func (s *Service) PullPage(ctx context.Context, nickname, query string) (string,
 }
 
 func (s *Service) PullPageScoped(ctx context.Context, nickname, query string, groupID int64) (string, error) {
-	course, e := s.verifyPageGroup(ctx, nickname, groupID)
+	scoped, course, e := s.verifyPageGroup(ctx, nickname, groupID)
 	if e != nil {
 		return "", e
 	}
+	s = scoped
 	identifier := ""
 	if id, err := strconv.ParseInt(query, 10, 64); err == nil && id > 0 {
 		identifier = "page_id:" + strconv.FormatInt(id, 10)
@@ -210,10 +216,11 @@ func (s *Service) writePulledPageWithDates(ctx context.Context, course domain.Co
 }
 
 func (s *Service) PageHistory(ctx context.Context, nickname string, pageID, groupID, revisionID int64) ([]NativePageRevision, error) {
-	course, err := s.verifyPageGroup(ctx, nickname, groupID)
+	scoped, course, err := s.verifyPageGroup(ctx, nickname, groupID)
 	if err != nil {
 		return nil, err
 	}
+	s = scoped
 	if pageID <= 0 || revisionID < 0 {
 		return nil, fmt.Errorf("page ID must be positive and revision ID cannot be negative")
 	}
@@ -242,10 +249,11 @@ func (s *Service) PushPage(ctx context.Context, path string) (report PagePushRep
 	if err != nil {
 		return report, err
 	}
-	course, err := s.verifyPageGroup(ctx, d.Course, d.GroupID)
+	scoped, course, err := s.verifyPageGroup(ctx, d.Course, d.GroupID)
 	if err != nil {
 		return report, err
 	}
+	s = scoped
 	if (d.Instance != "" && d.Instance != s.Client.Origin()) || (d.CourseID != 0 && d.CourseID != course.ID) {
 		return report, fmt.Errorf("page identity differs from configured Canvas/course")
 	}

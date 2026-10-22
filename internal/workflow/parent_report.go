@@ -166,6 +166,11 @@ func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []s
 		if e != nil {
 			return "", ParentReportPacket{}, e
 		}
+		scoped, e := s.ForCourse(ctx, course)
+		if e != nil {
+			return "", ParentReportPacket{}, e
+		}
+		s := scoped
 		zone := course.Timezone
 		if zone == "" {
 			zone = "America/Chicago"

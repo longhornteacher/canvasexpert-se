@@ -18,6 +18,7 @@ import (
 
 	embedded "canvasexpertse"
 	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/platform"
 	"canvasexpertse/internal/workflow"
 	"canvasexpertse/internal/workspace"
 
@@ -180,7 +181,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	}
 	s := &Server{root: root, ctx: ctx, reviews: map[string]*reviewTask{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: "canvasexpert-se", Version: AdapterVersion()}, &mcp.ServerOptions{Instructions: "Before any teacher task, read AGENTS.md using read_workspace_file, then read the relevant playbook. Commands and grading/planning session files remain in UserInstall. Reusable teacher setup, including course configuration, student settings/notes, instructions, playbooks, guides and preferences, uses UserInstall by default or the explicitly configured UserSync authority. Private roster and contact files also use that authority but are never model context; UserSync is a provider-synchronized local directory, and reads always use its current contents. Check engine_info operation rules-location if the active authority is unclear. Read list_courses with its default configured source for saved nicknames and current selections; request source canvas only for connection testing or additional course discovery. Treat the structured courses list as setup status and ignore obsolete starter text in a preserved document body. Use engine_reference for Engine commands and file contracts. Keep .cse files and private teacher-only browser pages out of model context. Preserve honest computed grades, unsent work, and the teacher's requested scope. Review is the default for scores, assignment creation/edits, and quiz creation; direct writes follow an explicit teacher request to skip review."})
-	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
+	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection. A course with an owner belongs to that teammate; the team list says whether their Canvas key is on this PC.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
 		return s.listCourses(ctx, in)
 	})
 	addReadTool(server, "engine_reference", "Read CE-SE command help, document formats, Canvas field limits, or synthetic examples.", func(ctx context.Context, _ *mcp.CallToolRequest, in HelpInput) (TextOutput, error) {
@@ -428,6 +429,40 @@ type configuredCourses struct {
 	Mode        string          `json:"mode"`
 	Instance    string          `json:"instance"`
 	Courses     []domain.Course `json:"courses"`
+	Team        []teamStatus    `json:"team"`
+}
+
+// teamStatus tells the agent who the teammates are and whether their keys are
+// saved here. It never carries a key.
+type teamStatus struct {
+	Label       string `json:"label"`
+	Name        string `json:"name"`
+	Email       string `json:"email,omitempty"`
+	KeyOnThisPC bool   `json:"key_on_this_pc"`
+	KeyExpires  string `json:"key_expires"`
+	ExpiresSoon bool   `json:"expires_soon"`
+}
+
+func (s *Server) teamStatuses() ([]teamStatus, error) {
+	out := []teamStatus{}
+	path, err := s.readablePath("context/team.md")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return out, nil
+	}
+	var team workspace.TeamConfig
+	if _, err := workspace.ReadDocument(path, &team); err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	for _, t := range team.Teammates {
+		credential, keyErr := platform.LoadTeammateCredential(t.CanvasUserID)
+		credential.Token = ""
+		out = append(out, teamStatus{Label: t.Label, Name: t.Name, Email: t.Email, KeyOnThisPC: keyErr == nil, KeyExpires: t.KeyExpires, ExpiresSoon: t.ExpiryState(now) != workspace.KeyOK})
+	}
+	return out, nil
 }
 
 func (s *Server) listCourses(ctx context.Context, in ListCoursesInput) (TextOutput, error) {
@@ -446,8 +481,12 @@ func (s *Server) listCourses(ctx context.Context, in ListCoursesInput) (TextOutp
 		if config.Courses == nil {
 			config.Courses = []domain.Course{}
 		}
+		team, err := s.teamStatuses()
+		if err != nil {
+			return TextOutput{}, err
+		}
 		location, _ := workspace.GetRulesLocation(s.root)
-		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, InstallRoot: location.InstallRoot, RulesRoot: location.RulesRoot, Mode: location.Mode, Instance: config.Instance, Courses: config.Courses})
+		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, InstallRoot: location.InstallRoot, RulesRoot: location.RulesRoot, Mode: location.Mode, Instance: config.Instance, Courses: config.Courses, Team: team})
 		return TextOutput{Text: string(b)}, err
 	default:
 		return TextOutput{}, errors.New("source must be configured or canvas")

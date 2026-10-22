@@ -56,6 +56,10 @@ func (s *Service) QuizPoints(ctx context.Context, nickname, query string, change
 	if err != nil {
 		return r, err
 	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return r, err
+	}
 	a, err := FindAssignment(ctx, s.Client, course.ID, query)
 	if err != nil {
 		return r, err

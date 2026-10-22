@@ -316,3 +316,30 @@ func TestListFieldEnvelopePagination(t *testing.T) {
 		}
 	}
 }
+
+func TestOnWriteSeesSentWritesOnly(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/bad") {
+			http.Error(w, `{"errors":[]}`, http.StatusUnprocessableEntity)
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+	c := testClient(t, server)
+	type seen struct {
+		method, path string
+		status       int
+		uncertain    bool
+	}
+	var got []seen
+	c.OnWrite = func(m, p string, s int, u bool) { got = append(got, seen{m, p, s, u}) }
+	_ = c.Write(context.Background(), "PUT", "/api/v1/courses/1/ok", map[string]string{}, nil)
+	_ = c.Write(context.Background(), "PUT", "/api/v1/courses/1/bad", map[string]string{}, nil)
+	_ = c.Get(context.Background(), "/api/v1/courses/1", nil)
+	_ = c.Write(context.Background(), "GET", "/api/v1/courses/1", nil, nil) // refused before sending
+	want := []seen{{"PUT", "/api/v1/courses/1/ok", 200, false}, {"PUT", "/api/v1/courses/1/bad", 422, false}}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("OnWrite saw %+v", got)
+	}
+}

@@ -359,7 +359,7 @@ func (h *Hub) fetchTags(ctx context.Context, courseID int64) (map[int64][]string
 	if h.tagsFn != nil {
 		return h.tagsFn(ctx, courseID)
 	}
-	c, err := h.canvasClient()
+	c, err := h.clientForCourse(ctx, courseID)
 	if err != nil {
 		return nil, "", err
 	}

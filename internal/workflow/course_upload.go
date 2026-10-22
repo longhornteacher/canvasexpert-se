@@ -102,6 +102,10 @@ func (s *Service) UploadCourseFile(ctx context.Context, nickname, sourcePath str
 	if err != nil {
 		return report, err
 	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return report, err
+	}
 	sourcePath, err = filepath.Abs(sourcePath)
 	if err != nil {
 		return report, err

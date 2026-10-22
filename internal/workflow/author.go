@@ -77,9 +77,10 @@ func (s *Service) deliverHub(ctx context.Context, path string, doc *domain.Assig
 
 func (s *Service) Push(ctx context.Context, path string) (report PushReport, err error) {
 	start := time.Now()
-	requests := s.Client.Requests()
+	outer := s // requests are counted across whichever key each course used
+	requests := outer.requestCount()
 	report.Path = path
-	defer func() { report.Elapsed = time.Since(start); report.Requests = s.Client.Requests() - requests }()
+	defer func() { report.Elapsed = time.Since(start); report.Requests = outer.requestCount() - requests }()
 	var doc domain.AssignmentDocument
 	body, err := workspace.ReadDocument(path, &doc)
 	if err != nil {
@@ -104,6 +105,10 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		}
 	}()
 	course, err := s.Course(doc.Course)
+	if err != nil {
+		return report, err
+	}
+	s, err = s.ForCourse(ctx, course)
 	if err != nil {
 		return report, err
 	}

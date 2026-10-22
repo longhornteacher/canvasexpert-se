@@ -10,6 +10,10 @@ Team teaching: teammates' Canvas keys on one team PC.
 
 - The hub has a Team page under Classroom. On the team PC, a teammate pastes their own Canvas key and the date it expires; CE-SE checks it, saves it in Windows Credential Manager (never in a file) and lists the teammate in `context/team.md`. You then choose which of the teammate's Canvas courses to add to `context/courses.md`, each marked with an `owner`. The page can also test a key, rename a teammate, remove one, and shows expiry warnings (also on Home) and each teammate's recent actions from `.cse/team-log.jsonl`. Nothing uses a teammate's key yet. Local tests only.
 
+### Per-course key routing (2026-10-22)
+
+- Courses marked with an `owner` now use the right Canvas key. Your own courses behave exactly as before, with no extra requests. For a teammate's course CE-SE asks Canvas once, with your key, whether you are an active teacher there: if so it keeps using your key; if Canvas says you are not (or refuses), it uses the teammate's saved key. Any other answer (Canvas busy, network trouble) stops that course instead of guessing. This covers the commands, the agent tools and the hub's roster and tag reads. A missing key says "Ms. Turner's Canvas key isn't on this PC. Add it on the Team page, or run this on the team PC."; a rejected key names the teammate and course. Every write made with a teammate's key is appended to `.cse/team-log.jsonl` without student names or comments, and the status line notes a key that expires soon. A scoring session with no course pulls only your own courses; a teammate's course is pulled only when named. `cse courses --as turner` lists that teammate's courses, and `list_courses` shows each course's `owner` and a `team` list (key on this PC, expiry) without any key. `cse api` and `canvas_get` still use only your key. Local tests only.
+
 ## 1.1.0-beta.4 (2026-10-21)
 
 Review pages stay open when the agent app restarts, and CI fixes.

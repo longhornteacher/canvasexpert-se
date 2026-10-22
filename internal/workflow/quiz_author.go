@@ -227,6 +227,10 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 	if e != nil {
 		return report, e
 	}
+	s, e = s.ForCourse(ctx, course)
+	if e != nil {
+		return report, e
+	}
 	items := q.itemPayloads()
 	report.ItemsTotal = len(items)
 	base := fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes", course.ID)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -18,6 +19,19 @@ type Service struct {
 	Root   string
 	Client *canvas.Client
 	Config domain.CourseConfig
+	// Team lists teammates; every Service that writes loads it so ownership
+	// rules hold even when Keys is nil.
+	Team workspace.TeamConfig
+	// Keys routes owned courses to their owner's key. Nil routes every course
+	// to Client; ownership still applies.
+	Keys KeySource
+	// InstallRoot is the UserInstall root for the teammate action log; empty
+	// disables logging.
+	InstallRoot string
+	// Status receives one-line notes such as a key expiring soon.
+	Status io.Writer
+	route  *routeState
+	team   *workspace.Teammate
 	// Skip lists student refs post must leave untouched (review: not approved).
 	Skip map[string]bool
 	// privateGroupComments marks comments written for individual group results.
@@ -118,6 +132,10 @@ func TimingSnapshot(a Assignment, origin string) (domain.AssignmentSnapshot, err
 // PullItem writes a fresh file every time; an earlier unsent edit remains intact.
 func (s *Service) PullItem(ctx context.Context, nickname, query string) (string, error) {
 	course, err := s.Course(nickname)
+	if err != nil {
+		return "", err
+	}
+	s, err = s.ForCourse(ctx, course)
 	if err != nil {
 		return "", err
 	}

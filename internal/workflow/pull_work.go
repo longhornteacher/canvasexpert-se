@@ -100,11 +100,14 @@ func (s *Service) PullWorkGroup(ctx context.Context, nickname, query string, gro
 // using the same packet/download mechanisms for exactly that single student.
 func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, assignmentID, builtinID int64) (PullReport, error) {
 	start := time.Now()
-	requests := s.Client.Requests()
 	course, e := s.Course(nickname)
 	if e != nil {
 		return PullReport{}, e
 	}
+	if s, e = s.ForCourse(ctx, course); e != nil {
+		return PullReport{}, e
+	}
+	requests := s.requestCount()
 	if assignmentID <= 0 || builtinID <= 0 {
 		return PullReport{}, fmt.Errorf("positive explicit probe assignment and built-in student IDs required")
 	}
@@ -123,23 +126,23 @@ func (s *Service) PullBuiltinTestStudent(ctx context.Context, nickname string, a
 		return PullReport{}, fmt.Errorf("developer pull requires conspicuously disposable assignment prefix")
 	}
 	probeElapsed := time.Since(start)
-	probeRequests := s.Client.Requests() - requests
+	probeRequests := s.requestCount() - requests
 	report, e := s.pullWork(ctx, course.Nickname, fmt.Sprint(assignmentID), &user, nil, PullWorkOptions{})
 	report.DiscoveryElapsed += probeElapsed
 	report.DiscoveryRequests += probeRequests
 	report.Elapsed = time.Since(start)
-	report.Requests = s.Client.Requests() - requests
+	report.Requests = s.requestCount() - requests
 	return report, e
 }
 
 func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin *CanvasUser, groupFilter *int64, options PullWorkOptions) (report PullReport, err error) {
 	s = s.withResultsIndex()
 	start := time.Now()
-	requests := s.Client.Requests()
-	defer func() { report.Elapsed = time.Since(start); report.Requests = s.Client.Requests() - requests }()
+	requests := s.requestCount()
+	defer func() { report.Elapsed = time.Since(start); report.Requests = s.requestCount() - requests }()
 	phase, phaseStart, phaseRequests := "discovery", start, requests
 	setPhase := func(next string) {
-		now, count := time.Now(), s.Client.Requests()
+		now, count := time.Now(), s.requestCount()
 		if phase == "discovery" {
 			report.DiscoveryElapsed += now.Sub(phaseStart)
 			report.DiscoveryRequests += count - phaseRequests
@@ -165,7 +168,8 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 		courses = []domain.Course{c}
 	} else {
 		for _, c := range s.Config.Courses {
-			if c.Current {
+			// A teammate's courses are pulled only when named.
+			if c.Current && c.Owner == "" {
 				courses = append(courses, c)
 			}
 		}
@@ -189,8 +193,14 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 	} else if !os.IsNotExist(e) {
 		return report, e
 	}
+	outer := s
 	for _, course := range courses {
 		setPhase("discovery")
+		scoped, scopeErr := outer.ForCourse(ctx, course)
+		if scopeErr != nil {
+			return report, scopeErr
+		}
+		s := scoped
 		var enrollments []Enrollment
 		var e error
 		if builtin != nil {

@@ -61,6 +61,13 @@ type Client struct {
 	changed       chan struct{}
 	nextAllowed   time.Time
 	backoff       time.Duration
+	// OnWrite, when set, sees every write attempt that was sent: the HTTP
+	// status of any response, or uncertain with status 0 when the transport
+	// failed. Only teammate clients set it, for the action log.
+	OnWrite func(method, path string, status int, uncertain bool)
+	// MapError, when set, rewrites every error a request returns. Teammate
+	// clients use it to name the teammate and course on a rejected key.
+	MapError func(error) error
 }
 
 type countingTransport struct {
@@ -233,8 +240,22 @@ func statusError(status int, body []byte, write bool) *Error {
 	return &Error{Kind: kind, Status: status, Uncertain: uncertain, Body: string(body)}
 }
 
-// request retries safe reads only. The slot remains occupied through body use.
+func (c *Client) wrote(method string, u *url.URL, status int, uncertain bool) {
+	if c.OnWrite != nil && method != http.MethodGet {
+		c.OnWrite(method, u.Path, status, uncertain)
+	}
+}
+
 func (c *Client) request(ctx context.Context, method string, u *url.URL, body []byte, download bool, consume func(*http.Response) error) error {
+	err := c.send(ctx, method, u, body, download, consume)
+	if err != nil && c.MapError != nil {
+		err = c.MapError(err)
+	}
+	return err
+}
+
+// send retries safe reads only. The slot remains occupied through body use.
+func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byte, download bool, consume func(*http.Response) error) error {
 	write := method != http.MethodGet
 	attempts := 1
 	if !write {
@@ -263,6 +284,7 @@ func (c *Client) request(ctx context.Context, method string, u *url.URL, body []
 		if err != nil {
 			c.release()
 			if write {
+				c.wrote(method, u, 0, true)
 				return &Error{Kind: "uncertain", Uncertain: true}
 			}
 			var ce *Error
@@ -285,6 +307,7 @@ func (c *Client) request(ctx context.Context, method string, u *url.URL, body []
 			resp.Body.Close()
 			c.release()
 			ce := statusError(resp.StatusCode, data, write)
+			c.wrote(method, u, resp.StatusCode, ce.Uncertain)
 			delay := retryDelay(resp.Header, c.backoff<<attempt)
 			if ce.Kind == "throttled" {
 				c.throttle(delay)
@@ -301,6 +324,9 @@ func (c *Client) request(ctx context.Context, method string, u *url.URL, body []
 		err = consume(resp)
 		resp.Body.Close()
 		c.release()
+		if write {
+			c.wrote(method, u, resp.StatusCode, err != nil)
+		}
 		if err != nil && write {
 			return &Error{Kind: "uncertain", Uncertain: true}
 		}

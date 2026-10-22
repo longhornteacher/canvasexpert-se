@@ -25,7 +25,11 @@ func (h *Hub) reqCtx() (context.Context, context.CancelFunc) {
 }
 
 func (h *Hub) canvasClient() (*canvas.Client, error) {
-	credential, err := platform.LoadCredential()
+	load := platform.LoadCredential
+	if h.loadCredentialFn != nil {
+		load = h.loadCredentialFn
+	}
+	credential, err := load()
 	if err != nil {
 		return nil, err
 	}
@@ -48,12 +52,52 @@ func (h *Hub) fetchRoster(ctx context.Context, courseID int64) ([]workflow.Enrol
 	if h.rosterFn != nil {
 		return h.rosterFn(ctx, courseID)
 	}
-	c, err := h.canvasClient()
+	c, err := h.clientForCourse(ctx, courseID)
 	if err != nil {
 		return nil, "", err
 	}
 	list, err := workflow.StudentEnrollments(ctx, c, courseID)
 	return list, c.Origin(), err
+}
+
+// hubKeys lets the workflow router reach the same key seams the Team page uses.
+type hubKeys struct{ h *Hub }
+
+func (k hubKeys) Operator() (platform.Credential, error) {
+	if k.h.loadCredentialFn != nil {
+		return k.h.loadCredentialFn()
+	}
+	return platform.LoadCredential()
+}
+func (k hubKeys) Teammate(id int64) (platform.Credential, error) { return k.h.loadTeammate(id) }
+
+// clientForCourse is your own client for your courses and the owner's key for a
+// teammate's course, by the same rule the commands use.
+func (h *Hub) clientForCourse(ctx context.Context, courseID int64) (*canvas.Client, error) {
+	c, err := h.canvasClient()
+	if err != nil {
+		return nil, err
+	}
+	config, _, err := h.readConfig()
+	if err != nil {
+		return c, nil
+	}
+	for _, course := range config.Courses {
+		if course.ID != courseID || course.Owner == "" {
+			continue
+		}
+		team, err := workspace.ReadTeam(h.root)
+		if err != nil {
+			return nil, err
+		}
+		service := &workflow.Service{Root: h.root, Client: c, Config: config, Team: team, Keys: hubKeys{h}, InstallRoot: h.root}
+		scoped, err := service.ForCourse(ctx, course)
+		if err != nil {
+			return nil, err
+		}
+		return scoped.Client, nil
+	}
+	return c, nil
 }
 
 func (h *Hub) readConfig() (domain.CourseConfig, string, error) {

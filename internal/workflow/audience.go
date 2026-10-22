@@ -152,6 +152,10 @@ func (s *Service) PrepareAudience(ctx context.Context, nickname, path string, re
 	if err != nil {
 		return nil, err
 	}
+	s, err = s.ForCourse(ctx, course)
+	if err != nil {
+		return nil, err
+	}
 	if filepath.IsAbs(path) {
 		path, err = filepath.Rel(s.Root, path)
 		if err != nil {

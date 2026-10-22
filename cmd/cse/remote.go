@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 0}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -97,6 +97,13 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	if _, e := workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
 		return fail(inputError(e), progress)
 	}
+	team, e := workspace.ReadTeam(root)
+	if e == nil {
+		e = workspace.CheckOwners(config, team)
+	}
+	if e != nil {
+		return fail(inputError(e), progress)
+	}
 	if cmd == "prepare-late-timing" {
 		prepared, e := (&workflow.Service{Root: root, Config: config}).PrepareLateTiming(args[0])
 		if e != nil {
@@ -122,11 +129,11 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	if originErr != nil || configuredOrigin.Origin() != c.Origin() {
 		return fail(inputError(errors.New(workspace.OriginMismatchMessage(config.Instance, c.Origin()))), progress)
 	}
-	service := &workflow.Service{Root: root, Client: c, Config: config}
-	start := time.Now()
 	status := statusWriter(progress)
+	service := &workflow.Service{Root: root, Client: c, Config: config, Team: team, Keys: workflow.PlatformKeys(), InstallRoot: root, Status: status}
+	start := time.Now()
 	defer func() {
-		fmt.Fprintf(status, "%s: %s, %d HTTP requests\n", cmd, time.Since(start).Round(time.Millisecond), c.Requests())
+		fmt.Fprintf(status, "%s: %s, %d HTTP requests\n", cmd, time.Since(start).Round(time.Millisecond), c.Requests()+service.RoutedRequests())
 	}()
 	fmt.Fprintf(status, "%s…\n", cmd)
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
@@ -291,7 +298,21 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	case "api":
 		return fail(apiGet(ctx, c, args[0], out), progress)
 	case "courses":
-		list, e := workflow.Courses(ctx, c)
+		client := c
+		if len(args) > 0 {
+			if len(args) != 2 || args[0] != "--as" {
+				return fail(inputError(fmt.Errorf("usage: cse courses [--as TEAMMATE]")), progress)
+			}
+			mate, ok := team.Find(args[1])
+			if !ok {
+				return fail(inputError(fmt.Errorf("%q isn't on the Team page", args[1])), progress)
+			}
+			var e error
+			if client, e = service.TeammateClient(mate); e != nil {
+				return fail(inputError(e), progress)
+			}
+		}
+		list, e := workflow.Courses(ctx, client)
 		if e != nil {
 			return fail(e, progress)
 		}
@@ -305,7 +326,11 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
-		list, e := workflow.Modules(ctx, c, course.ID)
+		scoped, e := service.ForCourse(ctx, course)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		list, e := workflow.Modules(ctx, scoped.Client, course.ID)
 		if e != nil {
 			return fail(e, progress)
 		}

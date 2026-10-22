@@ -3,10 +3,13 @@ package localui
 import (
 	"context"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -247,5 +250,51 @@ func TestExpiryTextAndHomeWarning(t *testing.T) {
 	}
 	if w := h.teamWarnings(); len(w) != 1 || !strings.Contains(w[0], "Ms. Turner's Canvas key expires "+soon.KeyExpires) {
 		t.Fatalf("home warning: %v", w)
+	}
+}
+
+func TestFetchRosterForOwnedCourseUsesTeammateKey(t *testing.T) {
+	f := newTeamFixture(t)
+	f.addTurner(t)
+	var mu sync.Mutex
+	var tokens []string
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		mu.Lock()
+		tokens = append(tokens, r.URL.Path+" "+token)
+		mu.Unlock()
+		switch {
+		case r.URL.Path == "/api/v1/courses/701" && token == "op-token":
+			w.WriteHeader(http.StatusUnauthorized)
+		case token != teamToken:
+			w.WriteHeader(http.StatusUnauthorized)
+		default:
+			_, _ = w.Write([]byte(`[{"user_id":9,"type":"StudentEnrollment","enrollment_state":"active","user":{"id":9,"name":"Sam"}}]`))
+		}
+	}))
+	defer server.Close()
+	previous := http.DefaultTransport
+	http.DefaultTransport = server.Client().Transport
+	defer func() { http.DefaultTransport = previous }()
+	f.h.rosterFn = nil
+	f.h.loadCredentialFn = func() (platform.Credential, error) {
+		return platform.Credential{Origin: server.URL, Token: "op-token"}, nil
+	}
+	f.saved[123456] = platform.Credential{Origin: server.URL, Token: teamToken}
+	config := domain.CourseConfig{Schema: 1, Instance: server.URL, Courses: []domain.Course{{ID: 11, Nickname: "CS8", Current: true}, {ID: 701, Nickname: "Turner P2", Current: true, Owner: "turner"}}}
+	if err := workspace.WriteDocument(filepath.Join(f.root, "context", "courses.md"), config, ""); err != nil {
+		t.Fatal(err)
+	}
+	list, _, err := f.h.fetchRoster(context.Background(), 701)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("roster: %v %v", list, err)
+	}
+	if _, _, err = f.h.fetchRoster(context.Background(), 11); err == nil {
+		t.Fatal("your own course should have used your key, which this server refuses")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if !strings.Contains(strings.Join(tokens, "\n"), "/api/v1/courses/701/enrollments "+teamToken) || strings.Contains(strings.Join(tokens, "\n"), "/courses/11/enrollments "+teamToken) {
+		t.Fatalf("wrong keys used: %v", tokens)
 	}
 }

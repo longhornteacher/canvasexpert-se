@@ -52,7 +52,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
                                 Explicitly archive and replace one seed-managed file (HASH may be 'missing')
   setup                         Connect Canvas privately on this machine
   students                      Edit student aliases and monitored status
-  courses                       Discover authorized teacher courses
+  courses [--as TEAMMATE]       Discover authorized teacher courses (a teammate's with --as)
   modules COURSE                List a configured course's modules
   external-resources COURSE [--group ID]  Read collaboration and conference metadata
   groups COURSE [--set ID] [--members GROUP_ID] [--groups] [--group ID]

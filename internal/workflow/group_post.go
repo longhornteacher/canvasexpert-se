@@ -199,9 +199,10 @@ func groupReport(r domain.GroupResult) GroupRowReport {
 
 func (s *Service) PostGroupResults(ctx context.Context, path string) (report GroupPostReport, err error) {
 	start := time.Now()
-	requests := s.Client.Requests()
+	outer := s // requests are counted across whichever key each course used
+	requests := outer.requestCount()
 	report.Path = path
-	defer func() { report.Elapsed = time.Since(start); report.Requests = s.Client.Requests() - requests }()
+	defer func() { report.Elapsed = time.Since(start); report.Requests = outer.requestCount() - requests }()
 	if err = FillResultsAssignment(s.Root, path); err != nil {
 		return report, err
 	}
@@ -225,13 +226,17 @@ func (s *Service) PostGroupResults(ctx context.Context, path string) (report Gro
 		return report, fmt.Errorf("group results target a different Canvas instance")
 	}
 	configured := false
+	var course domain.Course
 	for _, c := range s.Config.Courses {
 		if c.ID == doc.Assignment.CourseID {
-			configured = true
+			configured, course = true, c
 		}
 	}
 	if !configured {
 		return report, fmt.Errorf("group results course is not configured")
+	}
+	if s, err = s.ForCourse(ctx, course); err != nil {
+		return report, err
 	}
 	allComplete := true
 	for _, r := range doc.Groups {
