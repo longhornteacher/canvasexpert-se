@@ -6,6 +6,10 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 Team teaching: teammates' Canvas keys on one team PC.
 
+### Slice 07 live checks, Part A so far (2026-10-22)
+
+- Checked live: operator-key routing on an owned course (A1), the untagged-assignment refusal (A2), and copy-once from Collab to CS8 (A7): all three items and the file arrived unpublished, the assignment and New Quiz landed in a new "Imported Assignments" group, a repeat copy and a (CE)-tagged item were refused. Hidden grades, the already-visible hold, the New Quiz comment and family Reply-To (A3-A6) are not yet run.
+
 ### Assign To by differentiation tag (2026-10-22)
 
 - `cse tags COURSE` lists a course's differentiation tag sets and tags with member counts (no students). A `kind: assign-to` document sets Assign To on modules, pages, New Quizzes, assignments, discussions and classic quizzes by tag, by name or ID, with replace or add, per-target dates for assignments and quizzes, and a `--preview` that shows each target's current -> new audience. `cse assign-modules` assigns each module to its same-named tag in one call, and `cse audience-report` shows who can see each module and item and flags items in more than one module. MCP: `list_tags`, `assign_to`, `assign_modules_by_tag`, `audience_report`.
