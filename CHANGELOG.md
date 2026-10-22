@@ -18,6 +18,13 @@ Team teaching: teammates' Canvas keys on one team PC.
 
 - In a teammate's course, CE-SE pulls and posts only assignments whose name contains `(CE)`: an explicit pull of an untagged assignment is refused, a session skips untagged assignments with a count line, and posting re-checks the live name. Before writing anything, posting sets the assignment to manual posting through Canvas GraphQL and posts nothing unless Canvas confirms it. A student whose grade is already visible (or whose visibility Canvas doesn't report) is held, for grades, comments, rubrics, late timing and group posts alike. The post result and review page say the grades are hidden and that the teammate posts them. Your own courses are unchanged. Local tests only; whether Canvas accepts the assignment ID, hides comments and handles re-grades of posted work as expected is pending live check (07).
 
+### Copy a Collab module (2026-10-22)
+
+- `cse copy-module SOURCE "MODULE TITLE" COURSE [COURSE...]` (MCP `copy_module`) copies one module, matched by exact title, with its items into each listed course using Canvas's selective course copy and each course's own teacher key. Dates and published state are copied as Collab has them. If any item in the module is tagged `(CE)`, the whole command stops before any copy, because each teacher adds `(CE)` in their own course.
+- A module is copied into a course only once. CE-SE keeps a record by Canvas IDs under `courses/_team-copies/` and refuses any course that already has an entry (succeeded, failed, uncertain or interrupted). It saves the entry before asking Canvas to copy, never retries a copy, and holds a lock so two runs can't overlap. Copies run from the team PC; the records are not synced. A course whose teacher's key isn't on this PC is reported and skipped while the others proceed.
+- The result is one line per course with its status, Canvas's copy warnings and any message; the command exits 3 when any course didn't succeed.
+- Local tests only; the selective-copy property shape, New Quiz and file behavior, and assignment-group placement are pending live check (07).
+
 ## 1.1.0-beta.4 (2026-10-21)
 
 Review pages stay open when the agent app restarts, and CI fixes.

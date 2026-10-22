@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
+	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "copy-module": {3, 200}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -519,6 +519,24 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 		if e != nil {
 			return fail(workflowError(e), progress)
+		}
+	case "copy-module":
+		outcomes, e := service.CopyModule(ctx, args[0], args[1], args[2:])
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(table, "Course\tTeacher\tStatus\tIssues\tMessage")
+		code := 0
+		for _, o := range outcomes {
+			fmt.Fprintf(table, "%s\t%s\t%s\t%d\t%s\n", compact(o.Course), compact(o.Teacher), o.Status, o.Issues, compact(o.Message))
+			if o.Status != "succeeded" {
+				code = 3
+			}
+		}
+		_ = table.Flush()
+		fmt.Fprintln(out, "Copied as in Collab: due dates and published state are unchanged.")
+		if code != 0 {
+			return code
 		}
 	case "parent-report":
 		courseList, refList := splitParentArgs(args)

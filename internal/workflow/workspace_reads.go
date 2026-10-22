@@ -31,6 +31,8 @@ type Service struct {
 	// Status receives one-line notes such as a key expiring soon.
 	Status io.Writer
 	route  *routeState
+	// copyTiming shortens CopyModule polling in tests; zero means the defaults.
+	copyTiming copyTiming
 	team   *workspace.Teammate
 	// scoring is the owner when this Service writes grades in a teammate's course.
 	scoring *workspace.Teammate

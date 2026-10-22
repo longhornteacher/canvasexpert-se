@@ -85,6 +85,12 @@ type PrepareLateTimingInput struct {
 	Groups   []workflow.LateTimingGroupDecision   `json:"groups,omitempty" jsonschema:"Per-member first-genuine choices for group-packet entries"`
 }
 
+type CopyModuleInput struct {
+	SourceCourse string   `json:"source_course" jsonschema:"Configured nickname of the course the module is copied from, usually Collab"`
+	Module       string   `json:"module" jsonschema:"Exact title of the module in the source course"`
+	Courses      []string `json:"courses" jsonschema:"Configured course nicknames to copy into"`
+}
+
 type ParentReportInput struct {
 	Courses  []string `json:"courses" jsonschema:"Configured course nicknames; one email can cover several courses"`
 	Students []string `json:"students,omitempty" jsonschema:"Optional student refs; omit for every active student"`
@@ -233,6 +239,9 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates (course score, missing work, correction candidates, due soon, grade history) into courses/<course>/parent-updates/<run>/report.json. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
 		return s.longCommand(ctx, append(append([]string{"parent-report"}, in.Courses...), in.Students...)...)
 	})
+	addActionTool(server, "copy_module", "Copies one Collab module, by exact title, once into each listed course, using each course's teacher key. Never re-copies. State the module and the course list to the teacher before calling.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CopyModuleInput) (TextOutput, error) {
+		return s.longCommand(ctx, append([]string{"copy-module", in.SourceCourse, in.Module}, in.Courses...)...)
+	})
 	addActionTool(server, "prepare_family_contact", "Resolve a free-form contact.json audience against current Canvas courses and collaborative groups. Save audience.json and return pseudonymized recipients, message counts, warnings and blocking conflicts. Refreshing preserves outcomes. No email is sent and no addresses or Canvas user IDs are returned.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in FamilyContactInput) (TextOutput, error) {
 		dir, err := s.coursePath(in.Folder)
 		if err != nil {
@@ -375,7 +384,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false
