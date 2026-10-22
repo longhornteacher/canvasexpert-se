@@ -45,7 +45,7 @@ var familyMarkdown = goldmark.New(goldmark.WithExtensions(extension.Table, exten
 func ValidateFamilyContent(dir string, doc FamilyContact) ([]string, error) {
 	var warnings []string
 	for _, msg := range doc.Messages {
-		_, notes, err := renderFamily(dir, msg, "Student", "Group", "")
+		_, notes, err := renderFamily(dir, msg, "Student", "Group", "", "")
 		for _, note := range notes {
 			warnings = append(warnings, fmt.Sprintf("message %s: %s", msg.Key, note))
 		}
@@ -57,7 +57,13 @@ func ValidateFamilyContent(dir string, doc FamilyContact) ([]string, error) {
 }
 
 func RenderFamilyMessage(dir string, msg FamilyMessage, studentName, groupName, signOff string) (FamilyRendered, error) {
-	rendered, _, err := renderFamily(dir, msg, studentName, groupName, signOff)
+	return RenderFamilyMessageNote(dir, msg, studentName, groupName, signOff, "")
+}
+
+// RenderFamilyMessageNote also places a reply-to note (HTML, may be empty)
+// just before the sign-off.
+func RenderFamilyMessageNote(dir string, msg FamilyMessage, studentName, groupName, signOff, noteHTML string) (FamilyRendered, error) {
+	rendered, _, err := renderFamily(dir, msg, studentName, groupName, signOff, noteHTML)
 	return rendered, err
 }
 
@@ -66,7 +72,7 @@ type familyAsset struct {
 	data       []byte
 }
 
-func renderFamily(dir string, msg FamilyMessage, studentName, groupName, signOff string) (FamilyRendered, []string, error) {
+func renderFamily(dir string, msg FamilyMessage, studentName, groupName, signOff, noteHTML string) (FamilyRendered, []string, error) {
 	var out FamilyRendered
 	var notes []string
 	dir, err := filepath.Abs(dir)
@@ -106,6 +112,7 @@ func renderFamily(dir string, msg FamilyMessage, studentName, groupName, signOff
 	default:
 		return out, notes, errors.New("family message format must be markdown or html")
 	}
+	body += noteHTML
 	if signOff = strings.TrimSpace(signOff); signOff != "" && !familyHasSignOff(source, signOff) {
 		body += "<p>" + strings.ReplaceAll(stdhtml.EscapeString(signOff), "\n", "<br>") + "</p>"
 	}

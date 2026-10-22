@@ -51,18 +51,51 @@ func (s *Service) buildFamilyReview(dir string) (ReviewModel, error) {
 	notices = append(notices, audience.Blocking...)
 	m := ReviewModel{Kind: "Family contact", Title: doc.Title, Email: true, PostLabel: "Send approved emails", Actions: []ReviewAction{{Value: "drafts", Label: "Fill Outlook Drafts only"}}, Notice: strings.Join(notices, " · ")}
 	for _, message := range doc.Messages {
-		rendered, e := RenderFamilyMessage(dir, message, "{{student_name}}", "{{group_name}}", config.SignOff)
-		if e != nil {
-			return ReviewModel{}, e
+		// One shared preview per reply routing: your students and each
+		// teammate's students get different notes. Own-only messages keep one
+		// preview, labeled as before.
+		type group struct {
+			label, note string
+			refs        map[string]bool
 		}
-		frame := ReviewFrame{Label: fmt.Sprintf("%s · %d students · %s", message.Key, audience.Counts[message.Key], rendered.Subject), HTML: rendered.PreviewHTML}
-		for _, attachment := range rendered.Attachments {
-			if attachment.ContentID == "" {
-				frame.Files = append(frame.Files, attachment.Name)
+		var groups []*group
+		byNote := map[string]*group{}
+		anyOwned := false
+		for _, row := range audience.Students {
+			if row.Message != message.Key {
+				continue
 			}
+			route := s.replyFor([]string{row.Course}, nil)
+			anyOwned = anyOwned || route.NoteHTML != "" || route.Hold != ""
+			g := byNote[route.Label+"|"+route.NoteHTML]
+			if g == nil {
+				g = &group{label: route.Label, note: route.NoteHTML, refs: map[string]bool{}}
+				byNote[route.Label+"|"+route.NoteHTML] = g
+				groups = append(groups, g)
+			}
+			g.refs[row.Ref] = true
 		}
-		m.Frames = append(m.Frames, frame)
-		m.ContentDigest += rendered.Digest
+		if len(groups) == 0 {
+			groups = []*group{{label: "Your students"}}
+		}
+		for _, g := range groups {
+			rendered, e := RenderFamilyMessageNote(dir, message, "{{student_name}}", "{{group_name}}", config.SignOff, g.note)
+			if e != nil {
+				return ReviewModel{}, e
+			}
+			label := fmt.Sprintf("%s · %d students · %s", message.Key, audience.Counts[message.Key], rendered.Subject)
+			if anyOwned {
+				label = fmt.Sprintf("%s · %s · %d students · %s", message.Key, g.label, len(g.refs), rendered.Subject)
+			}
+			frame := ReviewFrame{Label: label, HTML: rendered.PreviewHTML}
+			for _, attachment := range rendered.Attachments {
+				if attachment.ContentID == "" {
+					frame.Files = append(frame.Files, attachment.Name)
+				}
+			}
+			m.Frames = append(m.Frames, frame)
+			m.ContentDigest += rendered.Digest
+		}
 	}
 	seen := map[string]bool{}
 	for _, row := range audience.Students {
@@ -74,6 +107,9 @@ func (s *Service) buildFamilyReview(dir string) (ReviewModel, error) {
 		card.Facts = []ReviewFact{{Label: "Message", Value: row.Message}, {Label: "Course", Value: row.Course}}
 		if row.Group != "" {
 			card.Facts = append(card.Facts, ReviewFact{Label: "Group", Value: row.Group})
+		}
+		if l, v := replyFact(s.replyFor([]string{row.Course}, nil)); l != "" {
+			card.Facts = append(card.Facts, ReviewFact{Label: l, Value: v})
 		}
 		st, e := s.parentStudent(store, row.Ref)
 		if e != nil {
@@ -133,8 +169,10 @@ func (s *Service) sendFamilyContact(ctx context.Context, dir string, skip map[st
 		if !ok {
 			return "held", "", fmt.Errorf("audience references an unknown message; prepare again")
 		}
-		tasks = append(tasks, familyMailTask{Ref: row.Ref, Send: true, Render: func(st workspace.Student) (outlook.Message, error) {
-			r, e := RenderFamilyMessage(dir, message, st.FirstName, row.Group, config.SignOff)
+		courses := []string{row.Course}
+		note := s.replyFor(courses, nil).NoteHTML
+		tasks = append(tasks, familyMailTask{Ref: row.Ref, Send: true, Courses: func(workspace.Student) []string { return courses }, Render: func(st workspace.Student) (outlook.Message, error) {
+			r, e := RenderFamilyMessageNote(dir, message, st.FirstName, row.Group, config.SignOff, note)
 			return outlook.Message{Subject: r.Subject, HTMLBody: r.HTML, Attachments: r.Attachments}, e
 		}})
 	}

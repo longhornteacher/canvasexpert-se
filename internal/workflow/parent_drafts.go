@@ -94,6 +94,9 @@ type ParentRun struct {
 	Config   ParentConfig
 	Root     string
 	students map[string]ParentReportStudent
+	// ReplyNotes holds each student's reply-to note (HTML) for the email footer;
+	// set by the Service for students in teammates' courses. Never printed.
+	ReplyNotes map[string]string
 }
 
 // LoadParentRun reads report.json and drafts.json from a run folder and
@@ -575,6 +578,7 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 	if r.Config.BobcatHourURL != "" {
 		fmt.Fprintf(&b, `<p style="margin:4px 0"><b>%s:</b> <a href="%s">%s</a>.</p>`, esc(r.Config.BobcatHourLabel), esc(r.Config.BobcatHourURL), esc(r.Config.BobcatHourTxt))
 	}
+	b.WriteString(r.ReplyNotes[sd.Ref])
 	if r.Config.SignOff != "" {
 		fmt.Fprintf(&b, `<p style="margin:14px 0 0">%s</p>`, esc(r.Config.SignOff))
 	}

@@ -25,6 +25,13 @@ Team teaching: teammates' Canvas keys on one team PC.
 - The result is one line per course with its status, Canvas's copy warnings and any message; the command exits 3 when any course didn't succeed.
 - Local tests only; the selective-copy property shape, New Quiz and file behavior, and assignment-group placement are pending live check (07).
 
+### Family replies go to the actual teacher (2026-10-22)
+
+- Family Contact messages and parent grade updates for a student in a teammate's course now set the Outlook Reply-To to that teammate's Team page email and add one plain note just before the sign-off, for example "Please reply to Ms. Turner, your child's teacher, at turner@school.org. Replies to this email go to Ms. Turner." When one parent update covers courses with different teachers, Reply-To lists each teacher (plus you if one course is yours) and the note has one line per course.
+- Emails about only your own courses are unchanged. The note appears in emails and on the review page, never on printed student report sheets, and the parent-update grade content and playbook are untouched. The test email to yourself shows the same note and Reply-To a family would get.
+- If a teammate has no email on the Team page, that student's email is not sent and is recorded as skipped ("Ms. Turner has no email on the Team page, so replies couldn't be routed."); a later run sends it once the email is added. Review cards show "Replies go to" or "Held", and Family Contact previews are grouped as "Your students" / "Ms. Turner's students" when a message reaches both.
+- Local tests only; Reply-To on a real Outlook draft is pending live check (07). No family email was sent.
+
 ## 1.1.0-beta.4 (2026-10-21)
 
 Review pages stay open when the agent app restarts, and CI fixes.
