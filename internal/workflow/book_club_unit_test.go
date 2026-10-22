@@ -51,7 +51,8 @@ const bookClubQuiz = `{
   "metadata": {"canvas": {"published": true, "module_id": 4, "audience": {"mode": "individual", "policy": "snapshot", "source": {"group_category_id": 50, "group_ids": [60]}}}},
   "items": [
     {"id": "Q1", "type": "MC", "points": 2, "prompt": "Which?", "choices": [{"id":"A","text":"Lantern","correct":true},{"id":"B","text":"Sun","correct":false}]}
-  ]
+  ],
+  "rationales": [{"item_id": "Q1", "choices": [{"id":"A","rationale":"The lantern is the detail."},{"id":"B","rationale":"The sun is not in the story."}]}]
 }`
 
 func newBookClubUnit(t *testing.T) *bookClubUnit {

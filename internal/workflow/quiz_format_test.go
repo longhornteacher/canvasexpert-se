@@ -42,7 +42,7 @@ func TestHighlightNamesAndAngleBrackets(t *testing.T) {
 func TestTeksLabelOnlyOnPromptItems(t *testing.T) {
 	q, e := ReadQuizForge(writeQF(t, `{"title":"x","items":[
 	  {"id":"a","type":"TF","points":1,"prompt":"<p>q</p>","answer":true,"metadata":{"teks":["126.34(c)(4)(A)","126.34(c)(5)(B)"]}},
-	  {"id":"b","type":"ORDERING","points":1,"header":"Order","items":["x","y"],"metadata":{"teks":"126.34(c)(4)(A)"}}]}`))
+	  {"id":"b","type":"ORDERING","points":1,"header":"Order","items":["x","y"],"metadata":{"teks":"126.34(c)(4)(A)"}}],"rationales":[{"item_id":"a","rationale":"It is true."},{"item_id":"b","rationale":"x comes before y."}]}`))
 	if e != nil {
 		t.Fatal(e)
 	}

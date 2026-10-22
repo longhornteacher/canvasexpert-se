@@ -10,7 +10,7 @@ import (
 )
 
 func TestQuizForgeUnknownKeysAndInlineRationales(t *testing.T) {
-	base := `{"quizforge_version":"3.0-json","notes":"teacher","title":"Check","items":[{"id":"q1","type":"MC","points":2,"prompt":"Choose.","metadata":{"author":"synthetic"},"rubric_hint":"teacher","notes":"teacher","length_guidance":"teacher","guessed_item":"ignored","choices":[{"id":"a","text":"A","correct":true,"metadata":{},"notes":"teacher","guessed_choice":"ignored"},{"id":"b","text":"B"}]}]}`
+	base := `{"quizforge_version":"3.0-json","notes":"teacher","title":"Check","items":[{"id":"q1","type":"MC","points":2,"prompt":"Choose.","metadata":{"author":"synthetic"},"rubric_hint":"teacher","notes":"teacher","length_guidance":"teacher","guessed_item":"ignored","choices":[{"id":"a","text":"A","correct":true,"metadata":{},"notes":"teacher","guessed_choice":"ignored"},{"id":"b","text":"B"}]}],"rationales":[{"item_id":"q1","choices":[{"id":"a","rationale":"Right."},{"id":"b","rationale":"Not it."}]}]}`
 	q, err := ReadQuizForge(writeQF(t, base))
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func TestQuizForgeUnknownKeysAndInlineRationales(t *testing.T) {
 
 func TestQuizForgeSettingsValidationAndEffectiveReview(t *testing.T) {
 	quiz := func(settings string) string {
-		return `{"title":"Settings","metadata":{"canvas":` + settings + `},"items":[{"id":"q","type":"TF","points":1,"prompt":"True?","answer":true}]}`
+		return `{"title":"Settings","metadata":{"canvas":` + settings + `},"items":[{"id":"q","type":"TF","points":1,"prompt":"True?","answer":true}],"rationales":[{"item_id":"q","rationale":"It is true."}]}`
 	}
 	for _, settings := range []string{
 		`{"allowed_atempts":2}`, `{"allowed_attempts":1}`, `{"allowed_attempts":2}`,
@@ -73,7 +73,7 @@ func TestEmbeddedQuizForgeExampleRationalesInPayloadAndReview(t *testing.T) {
 		t.Fatalf("canonical example warnings: %v", q.Warnings)
 	}
 	items := q.itemPayloads()
-	if len(items) != 3 || len(entryOf(items[0])["answer_feedback"].(map[string]any)) != 2 || entryOf(items[1])["feedback"].(map[string]any)["neutral"] != "<p>Setting gives the time and place of events.</p>" {
+	if len(items) != 3 || len(entryOf(items[0])["answer_feedback"].(map[string]any)) != 2 || entryOf(items[1])["feedback"].(map[string]any)["neutral"] != `<p style="color: #2e7d32;"><strong>Why this is correct:</strong> Setting gives the time and place of events.</p>` {
 		t.Fatalf("canonical feedback payloads: %v", items)
 	}
 	m, err := buildQuizReview(path)
@@ -134,7 +134,7 @@ func TestPushQuizModuleFailureKeepsUnpublishedAndResumes(t *testing.T) {
 			w.WriteHeader(404)
 		}
 	})
-	path := writeQF(t, `{"title":"Module check","metadata":{"canvas":{"published":true,"module_id":9}},"items":[{"type":"TF","prompt":"True?","points":1,"answer":true}]}`)
+	path := writeQF(t, `{"title":"Module check","metadata":{"canvas":{"published":true,"module_id":9}},"items":[{"id":"TF","type":"TF","prompt":"True?","points":1,"answer":true}],"rationales":[{"item_id":"TF","rationale":"It is true."}]}`)
 	report, err := s.PushQuiz(t.Context(), "TEST", path)
 	if err == nil || report.Status != "partial" || report.Published || publishes != 0 || report.Path != sidecarPath(path) || readSidecar(path).AssignmentID != 55 {
 		t.Fatalf("failed module result: %+v %v, publishes=%d", report, err, publishes)

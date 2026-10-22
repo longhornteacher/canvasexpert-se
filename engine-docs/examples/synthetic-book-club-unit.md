@@ -90,6 +90,12 @@ and published last.
      "prompt": "<p>Describe how a setting can influence a character's decision.</p>",
      "word_limit_max": 150,
      "rubric_hint": "Assess a clear explanation and a relevant example."}
+  ],
+  "rationales": [
+    {"item_id": "q1", "choices": [
+      {"id": "a", "rationale": "A library at sunset describes a place and time."},
+      {"id": "b", "rationale": "A decision is an action rather than a setting."}
+    ]}
   ]
 }
 </QUIZFORGE_JSON>

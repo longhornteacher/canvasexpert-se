@@ -40,6 +40,10 @@ Team teaching: teammates' Canvas keys on one team PC.
 - New seed playbook `playbooks/team.md` explains team courses to the agent: how a request maps to teammates' courses, the `(CE)` scoring rule and hidden grades, copying a Collab module once, and family replies. Short routing sentences in `AGENTS.md`, `score.md`, `family-contact.md`, `setup.md` (Add a teammate, on the team PC) and `authoring.md` point to it. `parent-updates.md` is unchanged.
 - Developer docs (`AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/PRIVACY.md`, `.github/SECURITY.md`) describe the team storage locations, key routing, consent and family-reply behavior, and the 1.2b1 handoffs. The WebUI Capabilities page and `docs/engine-capabilities.md` add a Team teaching group, status yellow, with local tests and pending live checks kept separate. Local tests only.
 
+### Quiz feedback colors set by the Engine (2026-10-22)
+
+- New Quiz student feedback is now formatted by the Engine: every auto-scored item must have a rationale (MC/MA for every choice, correct and distractor; TF, NUMERICAL, FITB, MATCHING, ORDERING and CATEGORIZATION a `rationale`), so those items need an `id`, and validation refuses a quiz without them. The Engine renders correct MC choices green ("Why this is the best answer:") and distractors red ("Why this isn't the best answer:"), MA with "Why this choice is correct / isn't correct:", other items as green "Why this is correct:", and keeps an MC/MA general rationale uncolored; authored wrappers, styles, color tags and an earlier "Why this ...:" label are stripped so authors write plain text. Local tests only; rendering in the quiz player not yet viewed.
+
 ## 1.1.0-beta.4 (2026-10-21)
 
 Review pages stay open when the agent app restarts, and CI fixes.

@@ -12,7 +12,7 @@ For curriculum conversion, student file assets and placing an existing quiz into
 
 ## Standards
 
-Apply `TEACHER.md`: items sum to 100 points unless the teacher chooses otherwise, depth at DOK 2-3, distractors that are real misconceptions, and about two sentences of "why this is correct" per auto-scored item. After shaping the quiz, offer tiered Hub support (see the Hub section below) once.
+Apply `TEACHER.md`: items sum to 100 points unless the teacher chooses otherwise, depth at DOK 2-3, distractors that are real misconceptions, and student feedback on every auto-scored item: about two sentences for every MC/MA choice (why the correct answer is the best choice, why each distractor isn't) and for each other auto-scored item (why the correct answer is correct). After shaping the quiz, offer tiered Hub support (see the Hub section below) once.
 
 ## Write the quiz in QuizForge format
 
@@ -24,7 +24,7 @@ Read `engine_reference` formats and examples (CLI `help formats` / `help example
 - Quiz settings (time limit, attempts, due date, publication, module) go in `metadata.canvas`.
 - For a quiz only selected book clubs should see, add `metadata.canvas.audience` with `mode: individual`, `policy: snapshot` and the exact `source` set/club IDs, then run `prepare_audience` before review or push. The quiz stays one gradebook column and each student answers independently; the clubs are only the audience. See `group-work.md`'s quiz instructions.
 - For one attempt, omit `allowed_attempts` and multiple-attempt settings. For two or more set `allow_multiple_attempts: true` and the desired `allowed_attempts`; omit the limit or use `"unlimited"` for unlimited attempts.
-- TF uses a boolean `answer`. Feedback goes in root `rationales`, keyed by `item_id`; MC/MA entries contain `choices` with matching choice `id` and `rationale` (and may also carry a top-level `rationale` as general feedback for the whole question), while TF and other auto-scored entries contain `rationale`. Never put `rationale` inside an item or its choices. Write the explanation in green as `TEACHER.md` shows (`<p style="color: #2e7d32;"><strong>Why this is correct:</strong> ...</p>`).
+- TF uses a boolean `answer`. Feedback goes in root `rationales`, keyed by `item_id`; MC/MA entries contain `choices` with matching choice `id` and `rationale` (and may also carry a top-level `rationale` as general feedback for the whole question), while TF and other auto-scored entries contain `rationale`. Never put `rationale` inside an item or its choices. Every auto-scored item needs an `id` and a `rationales` entry, and an MC/MA entry needs a rationale for every choice; `validate_quiz` refuses the quiz otherwise. Write plain explanation text with no colors or labels: the Engine adds "Why this is the best answer" in green to the correct choice and "Why this isn't the best answer" in red to each distractor (MA: "Why this choice is correct" / "isn't correct"), and "Why this is correct" in green to other auto-scored items. It removes any colors or labels written into a rationale, so a preference can't change them.
 - Written items: `ESSAY` takes optional `word_limit_min`/`word_limit_max`; `FILEUPLOAD` takes optional `accepted_formats`. Write a `rubric_hint` for each ECR/SCR as private guidance for later rubric authoring and scoring. It is not sent to Canvas and does not automatically create a rubric; put anything students must see in `prompt`.
 
 ## Review and create
