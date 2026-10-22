@@ -47,7 +47,7 @@ Team teaching: teammates' Canvas keys on one team PC.
 ### Quizzes tell students their feedback is there (2026-10-22)
 
 - The quizzes playbook has the agent end each quiz's instructions with one plain line saying every question explains why the correct answer is best and why the others aren't.
-- Quiz corrections for points are a default: the instructions also say students earn points back by copying the correct answer's rationale for every question they missed. On a teacher's first quiz the agent mentions it once and asks the points and how corrections are turned in, saving both in `Teacher_Override.md`; a teacher can turn it off there. Listed on the Capabilities page. Playbook only.
+- Quiz corrections for points are a default: the instructions also say students earn points back by copying the correct answer's rationale for every question they missed. Quizzes default to one attempt with no retakes. The agent follows both defaults without asking; a teacher's later choice (retakes, points amount, turn-in method, no corrections) is saved in `Teacher_Override.md`. Listed on the Capabilities page. Playbook only.
 
 ## 1.1.0-beta.4 (2026-10-21)
 
