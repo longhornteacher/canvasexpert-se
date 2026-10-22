@@ -19,11 +19,7 @@ Students use 11-14 inch Chromebooks and laptops in landscape. Do not build narro
 ## Exemplars and quiz rationales
 
 - **Writing assignments** include a grade-representative exemplar (a mentor text showing what top work looks like) in the directions or rubric overview.
-- **Every auto-scored quiz item** gets a root `rationales` entry (see `playbooks/quizzes.md`) of about two sentences saying why the correct answer is correct, shown in green so a student reviewing an attempt gets positive reinforcement. Written items (essay, file upload) take no rationale entry; their feedback comes from scoring:
-
-  ```html
-  <p style="color: #2e7d32;"><strong>Why this is correct:</strong> two sentences naming the idea and the evidence.</p>
-  ```
+- **Every auto-scored quiz item** gets student feedback in a root `rationales` entry (see `playbooks/quizzes.md`), about two sentences each, naming the idea and the evidence. For multiple choice and multiple answer, write one for **every choice**: for the correct answer, why it is the best choice; for each distractor, why it isn't, naming the misconception it reflects. Other auto-scored items get one explaining why the correct answer is correct. Write plain explanation text: the Engine shows correct-answer feedback in green and distractor feedback in red with its own labels, and those colors can't be changed by a preference or a playbook. Written items (essay, file upload) take no rationale entry; their feedback comes from scoring.
 
 ## Student-facing structure
 
@@ -44,4 +40,6 @@ Do not interview the teacher about style or grading during setup. On the first p
 
 ## Corrections
 
-Corrections are available as soon as a student finishes an assignment, not when feedback is posted. The default correction deadline is 14 calendar days after that student's due date; a teacher who wants a different number of calendar days sets `correction_days` in `context/parent-updates.md`, which also sets the parent-report window. When creating an assignment, say "Corrections available" in it and point students to their feedback for rationales and exemplars. Don't prescribe a correction method or promise points back; teachers develop their own correction norms, and once a teacher states one, save it in `Teacher_Override.md`.
+Corrections are available as soon as a student finishes an assignment, not when feedback is posted. The default correction deadline is 14 calendar days after that student's due date; a teacher who wants a different number of calendar days sets `correction_days` in `context/parent-updates.md`, which also sets the parent-report window. When creating an assignment, say "Corrections available" in it and point students to their feedback for rationales and exemplars. For other assignments, don't prescribe a correction method or promise points back; teachers develop their own correction norms, and once a teacher states one, save it in `Teacher_Override.md`.
+
+**Quizzes** default to one attempt, with no retakes, and **quiz corrections for points** are on. A student earns points back by copying the correct answer's rationale for every question they missed, by the correction deadline above. The quiz instructions say so (see `playbooks/quizzes.md`). Don't ask the teacher about either default; follow it. When a teacher later states a different choice (retakes, a points amount, a turn-in method, or no corrections for points), save it in `Teacher_Override.md` and follow that from then on.
