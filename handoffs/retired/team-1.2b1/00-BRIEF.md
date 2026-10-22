@@ -1,5 +1,7 @@
 # Team teaching 1.2.0-beta.1: execution brief
 
+Retired 2026-10-22: slices 01-06 are built in Dev and the developer-run live checks in 07 were run (A1, A2, A3, A4, A7 passed; evidence in [docs/team/README.md](../../../docs/team/README.md)). Left to happen organically: A5 (New Quiz comment, needs a real enrolled student), A6 (family Reply-To, needs a report with work to send), Part B (a willing teammate) and Part C (co-teacher enrollment). Nothing here is open execution work. This folder is history, not instructions.
+
 Prepared 2026-10-22 by Opus against Dev branch `dev`, revision `ff6f48a`. Decisions are final; they were confirmed with the developer on 2026-10-22. The product plan and status table are in [docs/team/README.md](../../../docs/team/README.md).
 
 This brief does **not** authorize any of the following:
