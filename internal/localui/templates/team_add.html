@@ -20,6 +20,7 @@
 <input type="hidden" name="request_secret" value="{{.Secret}}">
 <p><label>Token<br><input type="password" name="token" autocomplete="off" required></label></p>
 <p><label>Key expires<br><input type="date" name="key_expires" value="{{.Expires}}" required></label></p>
+<p><label>School email (optional)<br><input type="email" name="email" value="{{.Email}}" maxlength="120" autocomplete="off"></label><br><small>Families' replies about your students go here. Leave it blank to use the email in your Canvas profile.</small></p>
 <button type="submit">Save key</button>
 </form>
 </main>

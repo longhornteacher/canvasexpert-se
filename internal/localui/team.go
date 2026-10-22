@@ -41,8 +41,8 @@ type teamData struct {
 }
 
 type teamAddData struct {
-	Appearance               appearanceData
-	Secret, Message, Expires string
+	Appearance                      appearanceData
+	Secret, Message, Expires, Email string
 }
 
 type teamCourseRow struct {
@@ -66,6 +66,7 @@ func init() {
 		page{Path: "/team/test", Methods: post, Handle: (*Hub).teamTest},
 		page{Path: "/team/remove", Methods: post, Handle: (*Hub).teamRemove},
 		page{Path: "/team/name", Methods: post, Handle: (*Hub).teamRename},
+		page{Path: "/team/email", Methods: post, Handle: (*Hub).teamEmail},
 	)
 }
 
@@ -214,8 +215,8 @@ func (h *Hub) teamExpiryDefault() string {
 	return cal.EndDate
 }
 
-func (h *Hub) teamAddForm(w http.ResponseWriter, status int, message, expires string) {
-	h.render(w, status, tmpl("team_add"), teamAddData{Appearance: appearanceFor(h.root, h.secret), Secret: h.secret, Message: message, Expires: expires})
+func (h *Hub) teamAddForm(w http.ResponseWriter, status int, message, expires, email string) {
+	h.render(w, status, tmpl("team_add"), teamAddData{Appearance: appearanceFor(h.root, h.secret), Secret: h.secret, Message: message, Expires: expires, Email: email})
 }
 
 func (h *Hub) teamAddPage(w http.ResponseWriter, r *http.Request) {
@@ -223,7 +224,7 @@ func (h *Hub) teamAddPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		h.teamAddForm(w, 200, "", h.teamExpiryDefault())
+		h.teamAddForm(w, 200, "", h.teamExpiryDefault(), "")
 		return
 	}
 	h.addTeammate(w, r)
@@ -264,7 +265,8 @@ func (h *Hub) addTeammate(w http.ResponseWriter, r *http.Request) {
 	r.Form.Del("token")
 	defer func() { token = "" }()
 	expires := strings.TrimSpace(r.PostForm.Get("key_expires"))
-	fail := func(msg string) { h.teamAddForm(w, 400, msg, expires) }
+	typedEmail := strings.TrimSpace(r.PostForm.Get("email"))
+	fail := func(msg string) { h.teamAddForm(w, 400, msg, expires, typedEmail) }
 	config, _, err := h.readConfig()
 	instance := teamInstance(config)
 	if err != nil || instance == "" {
@@ -273,6 +275,10 @@ func (h *Hub) addTeammate(w http.ResponseWriter, r *http.Request) {
 	}
 	if token == "" {
 		fail("Paste the Canvas token.")
+		return
+	}
+	if typedEmail != "" && !validTeamEmail(typedEmail) {
+		fail("That email doesn't look like an address. Leave it blank to use the email in Canvas.")
 		return
 	}
 	if _, err = time.Parse("2006-01-02", expires); err != nil {
@@ -334,9 +340,12 @@ func (h *Hub) addTeammate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	email := strings.TrimSpace(who.Email)
-	if !strings.Contains(email, "@") || strings.ContainsAny(email, " \t") {
-		email = ""
+	// An email typed here wins: it is where families' replies should go.
+	email := typedEmail
+	if email == "" {
+		if email = strings.TrimSpace(who.Email); !validTeamEmail(email) {
+			email = ""
+		}
 	}
 	mate := workspace.Teammate{Label: teamLabelFor(name, team), Name: name, CanvasUserID: who.ID, Email: email, KeyExpires: expires}
 	if err = h.saveTeammate(who.ID, cred); err != nil {
@@ -559,6 +568,42 @@ func (h *Hub) teamRename(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.redirect(w, r, "/team", "Saved "+name+".", "")
+}
+
+// teamEmail saves where families' replies about a teammate's students go.
+func (h *Hub) teamEmail(w http.ResponseWriter, r *http.Request) {
+	if h.needWorkspace(w) || !h.checkPost(w, r) {
+		return
+	}
+	team, mate, ok := h.teamFromRequest(w, r, r.PostForm.Get("label"))
+	if !ok {
+		return
+	}
+	email := strings.TrimSpace(r.PostForm.Get("email"))
+	if email != "" && !validTeamEmail(email) {
+		h.redirect(w, r, "/team", "", "That email doesn't look like an address, so "+mate.Name+"'s email was not changed.")
+		return
+	}
+	for i := range team.Teammates {
+		if team.Teammates[i].Label == mate.Label {
+			team.Teammates[i].Email = email
+		}
+	}
+	if err := workspace.WriteTeam(h.root, team); err != nil {
+		h.redirect(w, r, "/team", "", "Not saved: "+err.Error())
+		return
+	}
+	if email == "" {
+		h.redirect(w, r, "/team", "Removed "+mate.Name+"'s email. Family emails about "+mate.Name+"'s students are held until one is added.", "")
+		return
+	}
+	h.redirect(w, r, "/team", "Family replies about "+mate.Name+"'s students now go to "+email+".", "")
+}
+
+// validTeamEmail accepts one plain address, the form Outlook needs for Reply-To.
+func validTeamEmail(email string) bool {
+	at := strings.Index(email, "@")
+	return at > 0 && at < len(email)-1 && strings.Count(email, "@") == 1 && !strings.ContainsAny(email, " \t<>,;")
 }
 
 // teamOwnerName shows a course owner's display name, or "" for your own courses.

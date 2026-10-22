@@ -298,3 +298,40 @@ func TestFetchRosterForOwnedCourseUsesTeammateKey(t *testing.T) {
 		t.Fatalf("wrong keys used: %v", tokens)
 	}
 }
+
+func TestTeammateEmailTypedOnAddAndSavedOnCard(t *testing.T) {
+	f := newTeamFixture(t)
+	w := hubPost(f.h, "/team/add", url.Values{"request_secret": {"nonce"}, "token": {teamToken}, "key_expires": {"2027-06-04"}, "email": {"bad address"}}, f.h.origin)
+	if w.Code != 400 || len(f.saved) != 0 {
+		t.Fatalf("bad typed email: %d, keys %d", w.Code, len(f.saved))
+	}
+	w = hubPost(f.h, "/team/add", url.Values{"request_secret": {"nonce"}, "token": {teamToken}, "key_expires": {"2027-06-04"}, "email": {"m.turner@school.org"}}, f.h.origin)
+	if w.Code != 303 {
+		t.Fatalf("add: %d %s", w.Code, w.Body.String())
+	}
+	email := func() string {
+		team, _ := workspace.ReadTeam(f.root)
+		return team.Teammates[0].Email
+	}
+	if got := email(); got != "m.turner@school.org" {
+		t.Fatalf("typed email should win over Canvas profile, got %q", got)
+	}
+	save := func(v string) {
+		hubPost(f.h, "/team/email", url.Values{"request_secret": {"nonce"}, "label": {"turner"}, "email": {v}}, f.h.origin)
+	}
+	save("turner@school.org")
+	if got := email(); got != "turner@school.org" {
+		t.Fatalf("saved email: %q", got)
+	}
+	save("Turner <turner@school.org>")
+	if got := email(); got != "turner@school.org" {
+		t.Fatalf("invalid email replaced the saved one: %q", got)
+	}
+	save("")
+	if got := email(); got != "" {
+		t.Fatalf("clearing email: %q", got)
+	}
+	if body := hubGet(f.h, "/team").Body.String(); !strings.Contains(body, "Family emails about Ms. Turner") {
+		t.Fatal("card does not warn that family emails are held without an email")
+	}
+}
