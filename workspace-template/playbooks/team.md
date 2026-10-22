@@ -16,13 +16,28 @@ Score exactly as for the teacher's own courses, using the teammate's preferences
 
 ## Posting to Collab and copying to teachers
 
-To share material with the team, build it in the Collab course like any other course, using the normal authoring, quiz and module playbooks; review rules are unchanged. Put everything to be shared in one module.
+To share material with the team, build it in the Collab course like any other course, using the normal authoring, quiz and module playbooks; review rules are unchanged. Build it for the whole class, because Collab has no students and anything tied to particular students doesn't survive a copy:
+
+- Put everything to be shared in one module, including every file a page links to, as its own module item (unpublish that item if students shouldn't see it separately). A link to anything outside the module keeps pointing at Collab, where students can't open it.
+- Use "Everyone" dates and no restricted audiences (no sections, students, tags or clubs). Those are set per teacher after the copy.
+- A group assignment or discussion can stay a group activity, but each teacher's clubs are made in that teacher's course afterward.
 
 To send that module into teachers' courses, use `copy_module` with the Collab nickname, the exact module title and the course list. Before calling, say in one line: the module, the courses (grouped by teacher), and whether the Collab module and its items are published. If they are published, say they will be visible to students as soon as each copy finishes. The copy keeps Collab's due dates and published state.
 
 Run copies from the team PC: it keeps the record of what was already copied. A module is copied into each course only once. If a copy failed, is uncertain, or was already done, the Engine refuses to repeat it. Tell the teacher what happened and that the remaining step is done by hand in Canvas (Import Course Content in that course) or by editing that course's copy. Never try to copy again some other way.
 
-After copying, apply each teammate's preferences (due times, published state) with the ordinary date and edit tools, course by course, only when the teacher asks or the preferences file says so.
+### After the copy
+
+The copy result ends with a "Check after copy" report for each course: item counts, published and unpublished, any item assigned to no one, and any item that still links to Collab. Work through it course by course, reading that teacher's preferences file first:
+
+1. **Assigned to no one.** Tell the teacher which item, in which course, and offer to assign it to everyone or to the intended students or club with the audience tools. Students can't see it until this is done.
+2. **Links to Collab.** Name the item and say the link points at something that wasn't in the module. Offer to fix the page with the page edit tools, pointing the link at that course's own copy if one exists, or removing it.
+3. **Dates.** Set that teacher's dates with the assignment-date tools when the teacher asks or the preferences file says how (for example, due times or a day offset). Otherwise say the dates match Collab.
+4. **Published or hidden.** Say how many items arrived published. Change it only when the teacher asks or the preferences file says so.
+5. **Clubs and audiences.** For group activities, or work meant for some students only, build that teacher's clubs or set audiences in that teacher's course with the group and audience tools. Differentiation tags are made by the teacher in Canvas; CE-SE can then target work at them.
+6. **Gradebook placement.** CE-SE can't move an assignment into a different assignment group yet. If one landed in the wrong group, say so and tell the teacher it's a quick drag in Canvas's Assignments page.
+
+Report what was done per course in a line each, and what still needs the teacher.
 
 ## Other work in teammates' courses
 

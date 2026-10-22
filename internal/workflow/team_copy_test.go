@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,6 +32,8 @@ type copyFake struct {
 	posts       map[int64]string
 	selected    map[int64]bool
 	onPost      func(dest int64)
+	destItems   string            // items of the copied module in every destination
+	reads       map[string]string // other destination reads by path; absent paths 404
 }
 
 var copyPath = regexp.MustCompile(`^/api/v1/courses/(\d+)/content_migrations(?:/(\d+))?(?:/(\w+))?$`)
@@ -46,6 +49,7 @@ func newCopyFake() *copyFake {
 		puts:        map[int64]string{},
 		posts:       map[int64]string{},
 		selected:    map[int64]bool{},
+		reads:       map[string]string{},
 	}
 }
 
@@ -59,6 +63,16 @@ func (f *copyFake) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	case path == "/api/v1/courses/1/modules/10/items":
 		_, _ = w.Write([]byte(f.items))
+		return
+	case regexp.MustCompile(`^/api/v1/courses/\d+/modules/7788/items$`).MatchString(path):
+		if f.destItems == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(f.destItems))
+		return
+	case f.reads[path] != "":
+		_, _ = w.Write([]byte(f.reads[path]))
 		return
 	case regexp.MustCompile(`^/api/v1/courses/\d+/modules$`).MatchString(path):
 		_, _ = w.Write([]byte(`[{"id":7788,"name":"Unit 3: Argument"}]`))
@@ -430,5 +444,97 @@ func TestSelectionBuildsNestedJSON(t *testing.T) {
 	}
 	if addSelection(map[string]any{}, "wiki_pages[x]") {
 		t.Fatal("a property outside copy[...] must be rejected")
+	}
+}
+
+const checkItems = `[
+{"id":1,"type":"Assignment","title":"Essay 3","content_id":50,"published":true},
+{"id":2,"type":"Page","title":"Unit 3 overview","page_url":"unit-3-overview","published":false},
+{"id":3,"type":"Discussion","title":"Talk","content_id":70,"published":true},
+{"id":4,"type":"SubHeader","title":"Week 1","published":true}]`
+
+func checkFake() *copyFake {
+	f := newCopyFake()
+	f.destItems = checkItems
+	f.reads["/api/v1/courses/2/assignments/50"] = `{"description":"<p>fine</p>","only_visible_to_overrides":true,"overrides":[]}`
+	f.reads["/api/v1/courses/2/pages/unit-3-overview"] = `{"body":"<a href=\"/courses/1/pages/x\">a</a> <a href=\"https://x.instructure.com/courses/1/pages/x\">b</a> /courses/12/ /courses/2/pages/ok"}`
+	f.reads["/api/v1/courses/2/discussion_topics/70"] = `{"message":"hello","assignment":{"only_visible_to_overrides":true}}`
+	return f
+}
+
+func TestCopyModuleAfterCopyCheck(t *testing.T) {
+	f := checkFake()
+	k := copyKit(t, f, true)
+	out, err := k.CopyModule(context.Background(), "Collab", "Unit 3: Argument", []string{"Turner P2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out[0].Status != "succeeded" || out[0].Message != "" {
+		t.Fatalf("outcome: %+v", out[0])
+	}
+	want := []CopyItemCheck{
+		{Type: "Assignment", Title: "Essay 3", ID: "50", Published: true, AssignedToNobody: true},
+		{Type: "Page", Title: "Unit 3 overview", ID: "unit-3-overview", CollabLinks: 2},
+		{Type: "Discussion", Title: "Talk", ID: "70", Published: true, AssignedToNobody: true},
+		{Type: "SubHeader", Title: "Week 1", ID: "0", Published: true},
+	}
+	if got := entryFor(readCopyRecord(t, k), 2).Items; !reflect.DeepEqual(got, want) || !reflect.DeepEqual(out[0].Items, want) {
+		t.Fatalf("items: %+v / %+v", got, out[0].Items)
+	}
+	lines := CopyCheckLines(out[0])
+	wantLines := []string{
+		`Turner P2: "Essay 3" is assigned to no one; "Unit 3 overview" still links to Collab (2); "Talk" is assigned to no one.`,
+		`Turner P2: 4 items, 3 published, 1 unpublished.`,
+	}
+	if !reflect.DeepEqual(lines, wantLines) {
+		t.Fatalf("lines: %q", lines)
+	}
+}
+
+func TestCopyModuleAfterCopyCheckOverridesAndCleanDestination(t *testing.T) {
+	f := checkFake()
+	f.reads["/api/v1/courses/2/assignments/50"] = `{"only_visible_to_overrides":true,"overrides":[{"id":1}]}`
+	f.reads["/api/v1/courses/2/pages/unit-3-overview"] = `{"body":"ok"}`
+	f.reads["/api/v1/courses/2/discussion_topics/70"] = `{"message":"hello"}`
+	k := copyKit(t, f, true)
+	out, _ := k.CopyModule(context.Background(), "Collab", "Unit 3: Argument", []string{"Turner P2"})
+	if lines := CopyCheckLines(out[0]); !reflect.DeepEqual(lines, []string{"Turner P2: 4 items, 3 published, 1 unpublished."}) {
+		t.Fatalf("lines: %q", lines)
+	}
+}
+
+func TestCopyModuleAfterCopyCheckReadFailureAddsNote(t *testing.T) {
+	f := checkFake()
+	delete(f.reads, "/api/v1/courses/2/pages/unit-3-overview")
+	k := copyKit(t, f, true)
+	out, _ := k.CopyModule(context.Background(), "Collab", "Unit 3: Argument", []string{"Turner P2"})
+	if out[0].Status != "succeeded" || !strings.Contains(out[0].Message, "Some copied items couldn't be checked.") || len(out[0].Items) != 4 {
+		t.Fatalf("outcome: %+v", out[0])
+	}
+}
+
+func TestCopyModuleNoCheckWhenDestinationModuleNotUnique(t *testing.T) {
+	// Two same-titled modules in the destination: no unique module, no check.
+	f2 := newCopyFake()
+	f2.destItems = checkItems
+	k2 := newTeamKit(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/courses/3/modules" {
+			_, _ = w.Write([]byte(`[{"id":7788,"name":"Unit 3: Argument"},{"id":7789,"name":"Unit 3: Argument"}]`))
+			return
+		}
+		f2.handle(w, r)
+	}, []domain.Course{{Nickname: "Collab", ID: 1, Current: true}, {Nickname: "Turner P2", ID: 2, Current: true, Owner: "turner"}, {Nickname: "MINE P1", ID: 3, Current: true}}, 2, true)
+	k2.copyTiming = copyTiming{every: func(time.Duration) time.Duration { return time.Millisecond }, selectDeadline: 60 * time.Millisecond, doneDeadline: 60 * time.Millisecond}
+	out, err := k2.CopyModule(context.Background(), "Collab", "Unit 3: Argument", []string{"MINE P1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out[0].Status != "succeeded" || out[0].Items != nil || CopyCheckLines(out[0]) != nil {
+		t.Fatalf("outcome: %+v", out[0])
+	}
+	for _, r := range k2.seen() {
+		if strings.Contains(r.path, "/items") && strings.Contains(r.path, "/courses/3/") {
+			t.Errorf("check ran: %+v", r)
+		}
 	}
 }

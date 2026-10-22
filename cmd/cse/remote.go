@@ -535,6 +535,16 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 		_ = table.Flush()
 		fmt.Fprintln(out, "Copied as in Collab: due dates and published state are unchanged.")
+		var checks []string
+		for _, o := range outcomes {
+			checks = append(checks, workflow.CopyCheckLines(o)...)
+		}
+		if len(checks) > 0 {
+			fmt.Fprintln(out, "Check after copy")
+			for _, l := range checks {
+				fmt.Fprintln(out, l)
+			}
+		}
 		if code != 0 {
 			return code
 		}

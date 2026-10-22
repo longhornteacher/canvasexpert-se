@@ -158,3 +158,26 @@ Use the fake Canvas from 02's token-aware fixture, with the source course as ope
 ## Acceptance
 
 The tests pass, plus full tests, vet, the diff check and the MCP smoke with the new count. CHANGELOG `### Copy a Collab module`, ending: "Local tests only; the selective-copy property shape, New Quiz and file behavior, and assignment-group placement are pending live check (07)."
+
+## Addendum (2026-10-22): after-copy check
+
+The developer's rule: deterministic work belongs in the Engine. After a destination reaches `succeeded` **and** exactly one destination module was found, run a read-only check of the copied items, using the destination's routed client. It reports facts; it fixes nothing. The playbook decides what to do with them.
+
+1. **List the items.** `GET /api/v1/courses/:dest/modules/:dest_module_id/items?per_page=100` (paginated). Keep `id`, `type`, `title`, `content_id`, `page_url` and `published`.
+2. **Inspect each item:**
+   - **`Assignment`** (New Quizzes appear as `Assignment`):
+     - `GET /api/v1/courses/:dest/assignments/:content_id?include[]=overrides`.
+     - `assigned_to_nobody` = `only_visible_to_overrides == true` and no overrides.
+     - Scan `description`.
+   - **`Page`:** `GET /api/v1/courses/:dest/pages/:page_url`, then scan `body`.
+   - **`Discussion`:** `GET /api/v1/courses/:dest/discussion_topics/:content_id`, then scan `message`. If it has a linked `assignment`, apply the same `assigned_to_nobody` rule to that embedded assignment.
+   - **Other types:** listed only.
+3. **Collab links.** `collab_links` counts occurrences in the scanned HTML of `/courses/<source course id>/` (relative, or under the configured origin). Canvas rewrites links for copied items, so any left point at Collab, where students can't open them.
+4. **Record.** Store in the destination entry as `items: [{type, title, id, published, assigned_to_nobody, collab_links}]`. `id` is the content ID, or the page URL for pages. No student data.
+5. **Failed reads.** If a read fails, add the note `Some copied items couldn't be checked.` The status stays `succeeded`.
+6. **CLI output.** After the table, print a `Check after copy` block: one line per destination listing only items that need attention:
+   ```
+   Turner P2: "Essay 3" is assigned to no one; "Unit 3 overview" still links to Collab (2).
+   ```
+   Then one count line per destination: `Turner P2: 5 items, 3 published, 2 unpublished.` Destinations with nothing flagged show only the count line.
+7. **Requests.** One GET per item. No retries beyond the client's normal read retries.

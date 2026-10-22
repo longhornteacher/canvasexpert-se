@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -102,6 +103,19 @@ type CopyDestination struct {
 	DestModuleID int64    `json:"dest_module_id,omitempty"`
 	Issues       []string `json:"issues"`
 	Message      string   `json:"message"`
+	// Items is the read-only after-copy check; absent when it didn't run.
+	Items []CopyItemCheck `json:"items,omitempty"`
+}
+
+// CopyItemCheck is what the after-copy check found for one copied item. ID is
+// the content ID, or the page URL for a page.
+type CopyItemCheck struct {
+	Type             string `json:"type"`
+	Title            string `json:"title"`
+	ID               string `json:"id"`
+	Published        bool   `json:"published"`
+	AssignedToNobody bool   `json:"assigned_to_nobody"`
+	CollabLinks      int    `json:"collab_links"`
 }
 
 type CopyRecord struct {
@@ -117,6 +131,7 @@ type CopyOutcome struct {
 	Status  string
 	Issues  int
 	Message string
+	Items   []CopyItemCheck // nil when the after-copy check didn't run
 }
 
 type copyStore struct {
@@ -301,6 +316,11 @@ func (s *Service) CopyModule(ctx context.Context, source, moduleTitle string, de
 			defer func() { <-sem }()
 			status, message, issues := j.scoped.copyOne(ctx, store, timing, srcCourse, module, moduleTitle, j.course, j.label)
 			outcomes[j.idx].Status, outcomes[j.idx].Message, outcomes[j.idx].Issues = status, message, issues
+			store.mu.Lock()
+			if d := store.find(j.course.ID); d != nil {
+				outcomes[j.idx].Items = d.Items
+			}
+			store.mu.Unlock()
 		}(j)
 	}
 	wg.Wait()
@@ -459,7 +479,107 @@ func (s *Service) copyOne(ctx context.Context, store *copyStore, timing copyTimi
 			notes = append(notes, fmt.Sprintf("%s now has %d modules titled %q.", dest.Nickname, len(ids), title))
 		}
 	}
-	return finish(copySucceeded, strings.Join(notes, " "), func(d *CopyDestination) { d.DestModuleID = destModule })
+	var checked []CopyItemCheck
+	if destModule != 0 {
+		var ok bool
+		if checked, ok = s.checkCopiedItems(ctx, id, destModule, srcCourse.ID); !ok {
+			notes = append(notes, "Some copied items couldn't be checked.")
+		}
+	}
+	return finish(copySucceeded, strings.Join(notes, " "), func(d *CopyDestination) {
+		d.DestModuleID = destModule
+		d.Items = checked
+	})
+}
+
+// checkCopiedItems reads each item of the copied module (one GET per item) and
+// reports facts only. ok is false when any read failed.
+func (s *Service) checkCopiedItems(ctx context.Context, courseID, moduleID, sourceID int64) ([]CopyItemCheck, bool) {
+	c := s.Client
+	var listed []struct {
+		ID        int64  `json:"id"`
+		Type      string `json:"type"`
+		Title     string `json:"title"`
+		ContentID int64  `json:"content_id"`
+		PageURL   string `json:"page_url"`
+		Published bool   `json:"published"`
+	}
+	if err := c.List(ctx, fmt.Sprintf("/api/v1/courses/%d/modules/%d/items?per_page=100", courseID, moduleID), &listed); err != nil {
+		return nil, false
+	}
+	type assignment struct {
+		Description         string            `json:"description"`
+		OnlyToOverrides bool              `json:"only_visible_to_overrides"`
+		Overrides           []json.RawMessage `json:"overrides"`
+		AssignmentOverrides []json.RawMessage `json:"assignment_overrides"`
+	}
+	nobody := func(a assignment) bool {
+		return a.OnlyToOverrides && len(a.Overrides) == 0 && len(a.AssignmentOverrides) == 0
+	}
+	marker := fmt.Sprintf("/courses/%d/", sourceID)
+	ok := true
+	out := make([]CopyItemCheck, 0, len(listed))
+	for _, it := range listed {
+		r := CopyItemCheck{Type: it.Type, Title: it.Title, ID: strconv.FormatInt(it.ContentID, 10), Published: it.Published}
+		var text string
+		var err error
+		switch it.Type {
+		case "Assignment":
+			var a assignment
+			err = c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d?include[]=overrides", courseID, it.ContentID), &a)
+			r.AssignedToNobody, text = nobody(a), a.Description
+		case "Page":
+			r.ID = it.PageURL
+			var p struct {
+				Body string `json:"body"`
+			}
+			err = c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/pages/%s", courseID, url.PathEscape(it.PageURL)), &p)
+			text = p.Body
+		case "Discussion":
+			var d struct {
+				Message    string      `json:"message"`
+				Assignment *assignment `json:"assignment"`
+			}
+			err = c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/discussion_topics/%d", courseID, it.ContentID), &d)
+			text = d.Message
+			if d.Assignment != nil {
+				r.AssignedToNobody = nobody(*d.Assignment)
+			}
+		}
+		if err != nil {
+			ok = false
+		}
+		r.CollabLinks = strings.Count(text, marker)
+		out = append(out, r)
+	}
+	return out, ok
+}
+
+// CopyCheckLines formats one destination's after-copy check: a line of items
+// needing attention (omitted when none) and a count line. It returns nil when
+// the check didn't run.
+func CopyCheckLines(o CopyOutcome) []string {
+	if o.Items == nil {
+		return nil
+	}
+	var flags []string
+	published := 0
+	for _, it := range o.Items {
+		if it.Published {
+			published++
+		}
+		if it.AssignedToNobody {
+			flags = append(flags, fmt.Sprintf("%q is assigned to no one", it.Title))
+		}
+		if it.CollabLinks > 0 {
+			flags = append(flags, fmt.Sprintf("%q still links to Collab (%d)", it.Title, it.CollabLinks))
+		}
+	}
+	var lines []string
+	if len(flags) > 0 {
+		lines = append(lines, o.Course+": "+strings.Join(flags, "; ")+".")
+	}
+	return append(lines, fmt.Sprintf("%s: %d items, %d published, %d unpublished.", o.Course, len(o.Items), published, len(o.Items)-published))
 }
 
 type migrationFailed struct{}
