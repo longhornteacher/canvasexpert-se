@@ -55,7 +55,10 @@ func (r audRow) key() string {
 
 type liveAud struct {
 	Everyone bool
-	Rows     []audRow // never includes the Everyone row
+	Rows     []audRow // the item's own rows; never the Everyone row or inherited rows
+	// Inherited are rows an item shows only because its module grants them.
+	// They are never rewritten or deleted through the item.
+	Inherited []audRow
 }
 
 func (a liveAud) keys() map[string]bool {
@@ -71,12 +74,16 @@ func (a liveAud) restricted() bool { return !a.Everyone }
 // hasOwn reports whether an item carries an audience of its own rather than
 // only the rows it inherits from a module.
 func (a liveAud) hasOwn() bool {
-	for _, r := range a.Rows {
-		if !r.Inherited {
-			return true
-		}
+	return len(a.Rows) > 0 || (a.restricted() && len(a.Inherited) == 0)
+}
+
+// addRow files a row as the item's own or as inherited from its module.
+func (a *liveAud) addRow(r audRow) {
+	if r.Inherited {
+		a.Inherited = append(a.Inherited, r)
+		return
 	}
-	return len(a.Rows) == 0 && a.restricted()
+	a.Rows = append(a.Rows, r)
 }
 
 func (a liveAud) describe(cat TagCatalog) string {
@@ -110,6 +117,18 @@ func (a liveAud) describe(cat TagCatalog) string {
 	}
 	if other > 0 {
 		parts = append(parts, fmt.Sprintf("%d other row(s)", other))
+	}
+	if len(a.Inherited) > 0 {
+		var via []string
+		for _, r := range a.Inherited {
+			if r.GroupID > 0 {
+				via = append(via, cat.label(r.GroupID))
+			} else {
+				via = append(via, "other")
+			}
+		}
+		sort.Strings(via)
+		parts = append(parts, "via module: "+strings.Join(via, ", "))
 	}
 	if len(parts) == 0 {
 		return "nobody"
@@ -280,7 +299,7 @@ func (a *assignmentSurface) Read(ctx context.Context) (liveAud, error) {
 		if row.GroupID == 0 && row.SectionID == 0 && len(row.StudentIDs) == 0 {
 			row.Unknown = true
 		}
-		out.Rows = append(out.Rows, row)
+		out.addRow(row)
 	}
 	return out, nil
 }
@@ -414,7 +433,7 @@ func (d *dateDetailsSurface) Read(ctx context.Context) (liveAud, error) {
 		if row.GroupID == 0 && row.SectionID == 0 && len(row.StudentIDs) == 0 {
 			row.Unknown = true
 		}
-		out.Rows = append(out.Rows, row)
+		out.addRow(row)
 	}
 	return out, nil
 }
@@ -708,6 +727,10 @@ type applyOptions struct {
 }
 
 func sameAudience(live liveAud, want wantAud, surf assignSurface) bool {
+	if len(live.Rows) == 0 && len(live.Inherited) > 0 && !live.Everyone && want.Everyone && len(want.Rows) == 0 {
+		// The item has no restriction of its own; it only follows its module.
+		return true
+	}
 	if live.Everyone != want.Everyone {
 		return false
 	}

@@ -296,3 +296,19 @@ func TestSetFileAccessSendsMinimalPayloadAndReadsBack(t *testing.T) {
 		t.Fatalf("second call should write nothing: %v %#v", err, again)
 	}
 }
+
+func TestInheritedModuleRowsAreNotAnItemsOwn(t *testing.T) {
+	inherited := audRow{GroupID: 21203, Inherited: true}
+	var live liveAud
+	live.addRow(inherited)
+	if len(live.Rows) != 0 || len(live.Inherited) != 1 || live.hasOwn() {
+		t.Fatalf("inherited row filed as own: %#v", live)
+	}
+	// Following a restricted module satisfies "everyone" for the item itself.
+	if !sameAudience(live, wantAud{Everyone: true}, &assignmentSurface{}) {
+		t.Fatal("an item with only inherited rows should already match an everyone request")
+	}
+	if sameAudience(live, wantAud{Rows: []audRow{{GroupID: 21203}}}, &assignmentSurface{}) {
+		t.Fatal("a tag request needs the item's own row")
+	}
+}
