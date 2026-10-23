@@ -3,10 +3,12 @@
 package platform
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -123,6 +125,15 @@ func assertDesktopShortcutProperties(t *testing.T, path, root string) {
 			if !os.SameFile(gotInfo, wantInfo) {
 				t.Errorf("%s = %q, want the same file as %q", property.name, got, property.want)
 			}
+		}
+		buffer := make([]uint16, 32768)
+		var index int32
+		if err := comCall(&link.IUnknown, 16, uintptr(unsafe.Pointer(&buffer[0])), uintptr(len(buffer)), uintptr(unsafe.Pointer(&index))); err != nil {
+			return err
+		}
+		icon := windows.UTF16ToString(buffer)
+		if data, err := os.ReadFile(icon); err != nil || !bytes.Equal(data, shortcutIcon) || index != 0 {
+			t.Errorf("IconLocation = %q,%d, want the embedded icon: %v", icon, index, err)
 		}
 		return nil
 	}); err != nil {

@@ -3,6 +3,8 @@
 package platform
 
 import (
+	"bytes"
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +15,27 @@ import (
 	"github.com/go-ole/go-ole"
 	"golang.org/x/sys/windows"
 )
+
+// Drawn by scripts/make-shortcut-icon.ps1.
+//
+//go:embed assets/CanvasExpert.ico
+var shortcutIcon []byte
+
+// shortcutIconFile writes the icon beside the Engine, which git and the ZIP leave
+// to the Engine. A missing icon only costs the shortcut its picture.
+func shortcutIconFile(root string) (string, bool) {
+	path := filepath.Join(root, "engine", "CanvasExpert.ico")
+	if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, shortcutIcon) {
+		return path, true
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", false
+	}
+	if err := os.WriteFile(path, shortcutIcon, 0o644); err != nil {
+		return "", false
+	}
+	return path, true
+}
 
 // CreateDesktopShortcut uses the current user's actual Desktop, including a
 // redirected Desktop. Windows handles the link without an external script.
@@ -86,6 +109,11 @@ func createDesktopShortcutAt(root, desktop string) (string, error) {
 				return fmt.Errorf("set shortcut %s: %w", property.name, err)
 			}
 		}
+		if icon, ok := shortcutIconFile(root); ok {
+			if err := link.setIcon(icon); err != nil {
+				return fmt.Errorf("set shortcut icon: %w", err)
+			}
+		}
 		if err := file.save(path); err != nil {
 			return fmt.Errorf("save desktop shortcut: %w", err)
 		}
@@ -156,6 +184,16 @@ func (link *shellLink) setText(method int, text string) error {
 		return err
 	}
 	err = comCall(&link.IUnknown, method, uintptr(unsafe.Pointer(value)))
+	runtime.KeepAlive(value)
+	return err
+}
+
+func (link *shellLink) setIcon(path string) error { // IShellLinkW.SetIconLocation
+	value, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	err = comCall(&link.IUnknown, 17, uintptr(unsafe.Pointer(value)), 0)
 	runtime.KeepAlive(value)
 	return err
 }
