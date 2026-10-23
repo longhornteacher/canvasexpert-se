@@ -253,7 +253,7 @@ func (s *Server) writeWorkspaceBytes(path string, b []byte, expected string) (Te
 		}
 		h := sha256.Sum256(existing)
 		if !strings.EqualFold(expected, hex.EncodeToString(h[:])) {
-			return TextOutput{}, errors.New("file changed since it was read; reread it before editing")
+			return TextOutput{}, fmt.Errorf("file changed since it was read; current sha256: %x; reread it before editing", h)
 		}
 	} else if !os.IsNotExist(err) {
 		return TextOutput{}, err

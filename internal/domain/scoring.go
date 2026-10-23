@@ -448,17 +448,19 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			if e := validateEvidence(doc.Assignment, c.Evidence); e != nil {
 				return fail(e)
 			}
-			if basis == nil {
-				return fail(fmt.Errorf("comment-only scores require a Canvas rubric or scoring_basis"))
-			}
-			if _, e := ComputeAssessment(*basis, v.Interpretation, c.Components, doc.Assignment.Points); e != nil {
-				var unknown *UnknownEvidenceError
-				if errors.As(e, &unknown) {
-					v.Hold = "unreadable work for component " + unknown.Component + "; not scored"
-					validated = append(validated, v)
-					continue
+			if !c.FeedbackOnly() {
+				if basis == nil {
+					return fail(fmt.Errorf("comment-only scores require a Canvas rubric or scoring_basis; for feedback without scores use header: none and omit components"))
 				}
-				return fail(e)
+				if _, e := ComputeAssessment(*basis, v.Interpretation, c.Components, doc.Assignment.Points); e != nil {
+					var unknown *UnknownEvidenceError
+					if errors.As(e, &unknown) {
+						v.Hold = "unreadable work for component " + unknown.Component + "; not scored"
+						validated = append(validated, v)
+						continue
+					}
+					return fail(e)
+				}
 			}
 			if !validHeader(c.Header) {
 				return fail(fmt.Errorf("header must be score, full or none"))

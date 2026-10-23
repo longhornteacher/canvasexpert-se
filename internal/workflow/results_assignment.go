@@ -10,27 +10,47 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
-// FillResultsAssignment lets a results or group-results file omit its
-// `assignment` block: the snapshot is copied from the named packet into the
-// file, so every later reader sees a complete document. A file that already has
-// the block is left alone, but a results file whose grading basis differs from
-// its packet is rejected with the differing field named.
-func FillResultsAssignment(root, path string) error {
+// ReadResultsDocument resolves an omitted assignment from the packet in memory.
+// Validation and review never rewrite unsent work or invalidate its file hash.
+// Posting persists the resolved snapshot together with its action outcomes.
+func ReadResultsDocument(root, path string, out any) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return "", err
 	}
+	b, snapshot, err := resultsAssignmentData(root, b)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", path, err)
+	}
+	body, err := workspace.ParseDocument(b, out)
+	if err == nil && snapshot != nil {
+		if doc, ok := out.(*domain.ResultsDocument); ok {
+			for _, row := range doc.Students {
+				if row.Operation != "late-only" {
+					err = checkResultsBasis(*snapshot, doc.Assignment)
+					break
+				}
+			}
+		}
+	}
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", path, err)
+	}
+	return body, nil
+}
+
+func resultsAssignmentData(root string, b []byte) ([]byte, *domain.AssignmentSnapshot, error) {
 	kind, err := workspace.DocumentKind(b)
 	if err != nil || (kind != "results" && kind != "group-results") {
-		return nil // the ordinary read reports a malformed or other-kind file
+		return b, nil, nil // the ordinary parse reports malformed or other-kind data
 	}
 	packetRel, ok, err := workspace.HeaderScalar(b, "packet")
 	if err != nil || !ok || strings.TrimSpace(packetRel) == "" {
-		return nil
+		return b, nil, nil
 	}
 	packetPath, err := workspace.ConstrainPath(root, packetRel)
 	if err != nil {
-		return fmt.Errorf("packet: %w", err)
+		return nil, nil, fmt.Errorf("packet: %w", err)
 	}
 	present := workspace.HeaderHas(b, "assignment")
 	var snapshot domain.AssignmentSnapshot
@@ -38,46 +58,28 @@ func FillResultsAssignment(root, path string) error {
 		var packet domain.PacketDocument
 		if _, err = workspace.ReadDocument(packetPath, &packet); err != nil {
 			if present {
-				return nil // posting reports an unreadable packet
+				return b, nil, nil // posting reports an unreadable packet
 			}
-			return err
+			return nil, nil, err
 		}
 		snapshot = packet.Assignment
 	} else {
 		var packet domain.GroupPacketDocument
 		if _, err = workspace.ReadDocument(packetPath, &packet); err != nil {
 			if present {
-				return nil
+				return b, nil, nil
 			}
-			return err
+			return nil, nil, err
 		}
 		snapshot = packet.Assignment
 	}
-	out, inserted, err := workspace.InsertHeaderKey(b, "assignment", snapshot)
-	if err != nil {
-		return err
-	}
-	if inserted {
-		return workspace.WriteFile(path, out, 0644)
-	}
-	if kind != "results" {
-		return nil
-	}
-	var doc domain.ResultsDocument
-	if _, err = workspace.ParseDocument(b, &doc); err != nil {
-		return nil // reported by the ordinary read
-	}
-	for _, row := range doc.Students {
-		if row.Operation != "late-only" {
-			return checkResultsBasis(snapshot, doc.Assignment)
-		}
-	}
-	return nil
+	out, _, err := workspace.InsertHeaderKey(b, "assignment", snapshot)
+	return out, &snapshot, err
 }
 
 func checkResultsBasis(packet, results domain.AssignmentSnapshot) error {
 	if diff := GradingBasisDiff(packet, results); len(diff) > 0 {
-		return fmt.Errorf("results assignment differs from the packet in %s; remove the assignment block and the Engine fills it from the packet", strings.Join(diff, ", "))
+		return fmt.Errorf("results assignment differs from the packet in %s; remove the assignment block and the Engine resolves it from the packet without changing the draft", strings.Join(diff, ", "))
 	}
 	return nil
 }

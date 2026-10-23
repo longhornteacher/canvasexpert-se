@@ -41,13 +41,14 @@ func TestScoringUnknownFieldsExplainCanonicalLocations(t *testing.T) {
 		strings.Replace(canonical, "kind: results", "kind: results\nmapping: repeated", 1),
 		strings.Replace(canonical, "attempt: {attempt: 1,", "attempt: {mapping: repeated, attempt: 1,", 1),
 		strings.Replace(canonical, "      components:", "      compnents:", 1),
+		strings.Replace(canonical, "          evidence: present", "          points: 3", 1),
 	} {
 		doc := domain.ResultsDocument{Packet: "original"}
 		_, err := ParseDocument([]byte(bad), &doc)
 		if err == nil {
 			t.Fatal("invalid scoring field accepted")
 		}
-		for _, detail := range []string{"not found in type", "interpretation.mapping", "grade.components", "engine_reference", "formats", "examples"} {
+		for _, detail := range []string{"not found in type", "interpretation.mapping", "grade.components", "criteria: [{criterion_id:", "header: none", "engine_reference", "formats", "examples"} {
 			if !strings.Contains(err.Error(), detail) {
 				t.Fatalf("missing actionable detail %q: %v", detail, err)
 			}

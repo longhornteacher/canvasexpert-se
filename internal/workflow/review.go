@@ -52,9 +52,9 @@ type ReviewFrame struct {
 type ReviewCard struct {
 	Ref, Alias, Operation string
 	Attempt               int
-	Total                 string // computed assessment, e.g. "18.5 / 20"
-	Comment               string // exact plain text that will be posted (ordinary results)
-	Submission            string // the student's work for this attempt, so feedback is judged against it
+	Total                 string       // computed assessment, e.g. "18.5 / 20"
+	Comment               string       // exact plain text that will be posted (ordinary results)
+	Submission            string       // the student's work for this attempt, so feedback is judged against it
 	RubricComments        []ReviewFact // criterion comments sent with the rubric assessment, exact text
 	Facts                 []ReviewFact
 	Frames                []ReviewFrame
@@ -162,9 +162,6 @@ func ownerReviewNotice(root string, a domain.AssignmentSnapshot) string {
 
 // BuildReview renders a results file without credentials or any Canvas call.
 func BuildReview(root, path string) (ReviewModel, error) {
-	if e := FillResultsAssignment(root, path); e != nil {
-		return ReviewModel{}, e
-	}
 	kind, e := ReviewInputKind(path)
 	if e != nil {
 		return ReviewModel{}, e
@@ -222,9 +219,6 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 	if e != nil {
 		return "", e
 	}
-	if e = FillResultsAssignment(root, path); e != nil {
-		return "", e
-	}
 	var nickname string
 	var courseID int64
 	switch kind {
@@ -257,11 +251,11 @@ func ValidateReviewInput(root, path, course string) (string, error) {
 		_, e = ReadQuizForge(path)
 	case "results":
 		var d domain.ResultsDocument
-		_, e = workspace.ReadDocument(path, &d)
+		_, e = ReadResultsDocument(root, path, &d)
 		courseID = d.Assignment.CourseID
 	case "group-results":
 		var d domain.GroupResultsDocument
-		_, e = workspace.ReadDocument(path, &d)
+		_, e = ReadResultsDocument(root, path, &d)
 		courseID = d.Assignment.CourseID
 	case "discussion":
 		var d domain.DiscussionDocument
@@ -372,7 +366,7 @@ func buildDiscussionReview(path string) (ReviewModel, error) {
 
 func buildResultsReview(root, path string) (ReviewModel, error) {
 	var doc domain.ResultsDocument
-	if _, e := workspace.ReadDocument(path, &doc); e != nil {
+	if _, e := ReadResultsDocument(root, path, &doc); e != nil {
 		return ReviewModel{}, e
 	}
 	validated, e := domain.ValidateResults(&doc)
@@ -477,6 +471,8 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 					c.Comment = text
 				}
 			}
+		} else if r.CommentOnly != nil && r.CommentOnly.FeedbackOnly() {
+			c.Comment = feedback
 		} else if r.CommentOnly != nil && doc.Basis() != nil {
 			computed, e := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, r.CommentOnly.Components, doc.Assignment.Points)
 			parts, pe := partPoints(&doc, writtenItems, v.Interpretation)

@@ -2,6 +2,12 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
+## 1.2.0-beta.2 (2026-10-23, Dev)
+
+- Results validation and review resolve omitted assignment metadata in memory without rewriting drafts or invalidating their hashes. New results scaffolds include the packet's assignment snapshot, exact component/criterion examples and per-student work paths. Reuse of an earlier scoring interpretation also resolves omitted metadata, preserving handwritten results compatibility.
+- Feedback-only comments use `comment-only` with `header: none` and no components, rubric or scoring basis. Review/post retain identity, attempt, evidence and duplicate checks; these comments do not suppress unscored New Quiz work. Supplied scores still require valid arithmetic.
+- Results schema errors explain where criterion points belong and show the feedback-only form. Draft conflicts report the current hash while requiring a fresh read.
+
 ## 1.2.0 (2026-10-22)
 
 Team teaching: teammates' Canvas keys on one team PC.

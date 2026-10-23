@@ -206,11 +206,8 @@ func (s *Service) PostGroupResults(ctx context.Context, path string) (report Gro
 	requests := outer.requestCount()
 	report.Path = path
 	defer func() { report.Elapsed = time.Since(start); report.Requests = outer.requestCount() - requests }()
-	if err = FillResultsAssignment(s.Root, path); err != nil {
-		return report, err
-	}
 	var doc domain.GroupResultsDocument
-	body, err := workspace.ReadDocument(path, &doc)
+	body, err := ReadResultsDocument(s.Root, path, &doc)
 	if err != nil {
 		return report, err
 	}
@@ -1214,7 +1211,7 @@ func (s *Service) postGroupPrivate(ctx context.Context, doc domain.GroupResultsD
 // indivisible card per group's shared action and one card per private comment.
 func buildGroupResultsReview(root, path string) (ReviewModel, error) {
 	var doc domain.GroupResultsDocument
-	if _, e := workspace.ReadDocument(path, &doc); e != nil {
+	if _, e := ReadResultsDocument(root, path, &doc); e != nil {
 		return ReviewModel{}, e
 	}
 	validated, e := domain.ValidateGroupResults(&doc)
@@ -1628,7 +1625,9 @@ func individualReviewCards(root string, doc domain.GroupResultsDocument, row dom
 				feedback = workspace.ReplaceStudentName(feedback, st)
 			}
 		}
-		if c.Hold == "" && basis != nil {
+		if c.Hold == "" && r.CommentOnly != nil && r.CommentOnly.FeedbackOnly() {
+			c.Comment = feedback
+		} else if c.Hold == "" && basis != nil {
 			if r.Grade != nil {
 				text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *basis, Interpretation: vs.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Late: isLate(r.Grade.LateTiming), Header: r.Grade.Header})
 				if err != nil {

@@ -23,6 +23,38 @@ func TestHelpAndVersionNeedNoWorkspaceOrCanvas(t *testing.T) {
 	}
 }
 
+func TestValidateResultsResolvesSnapshotWithoutChangingDraft(t *testing.T) {
+	root := t.TempDir()
+	config := domain.CourseConfig{Schema: 1, Instance: "https://canvas.example", Courses: []domain.Course{{Nickname: "TEST", ID: 1}}}
+	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := domain.AssignmentSnapshot{Instance: "https://canvas.example", CourseID: 1, AssignmentID: 10, Title: "Reflection", Points: domain.MustDecimal("20"), SubmissionTypes: []string{"online_text_entry"}, GradingType: "points"}
+	packet := domain.PacketDocument{Schema: 1, Kind: "packet", Course: "TEST", Assignment: snapshot}
+	if err := workspace.WriteDocument(filepath.Join(root, "packet.md"), packet, ""); err != nil {
+		t.Fatal(err)
+	}
+	text := "---\nschema: 1\nkind: results\npacket: packet.md\nstudents:\n  - student_ref: s1\n    operation: comment-only\n    comment_only:\n      attempt: {attempt: 1, submitted_at: '2026-10-23T12:00:00Z'}\n      header: none\n      feedback: Explain your evidence.\n---\nPreserve my unsent draft.\n"
+	path := filepath.Join(root, "results.md")
+	for _, tc := range []struct {
+		text  string
+		valid bool
+	}{{text, true}, {strings.Replace(text, "header: none", "header: full", 1), false}} {
+		if err := os.WriteFile(path, []byte(tc.text), 0600); err != nil {
+			t.Fatal(err)
+		}
+		var out, progress bytes.Buffer
+		code := run(context.Background(), []string{"--workspace", root, "validate", "results.md"}, &out, &progress)
+		if (code == 0) != tc.valid {
+			t.Fatalf("validate exit=%d valid=%v: %s %s", code, tc.valid, out.String(), progress.String())
+		}
+		after, err := os.ReadFile(path)
+		if err != nil || string(after) != tc.text {
+			t.Fatalf("validate changed draft bytes: %v", err)
+		}
+	}
+}
+
 func TestInstallUIEnabled(t *testing.T) {
 	if installUIEnabled(true, false) || installUIEnabled(false, true) || !installUIEnabled(false, false) {
 		t.Fatal("check-only or no-UI must never launch the private hub/browser")

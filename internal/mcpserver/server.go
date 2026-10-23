@@ -350,7 +350,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addActionTool(server, "write_draft", "Create or update a draft under courses/. Existing files require their current SHA-256 to prevent overwriting newer unsent work. This tool never writes to Canvas.", true, func(_ context.Context, _ *mcp.CallToolRequest, in WriteFileInput) (TextOutput, error) {
 		return s.writeDraft(in)
 	})
-	addActionTool(server, "init_results", "Start a results file for a pulled individual packet under its assignment's scoring/ folder: the packet path, each student's exact current attempt, the operation the assignment allows and any discussion-evidence digest, with an earlier results file's interpretation and scoring_basis reused. Interpretation, components and feedback are left blank and fail validation until filled. Never writes to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
+	addActionTool(server, "init_results", "Start a results file for a pulled individual packet under its assignment's scoring/ folder: the packet path and assignment snapshot, component/criterion field examples, each student's work-file path, exact current attempt, allowed operation and any discussion-evidence digest. An earlier interpretation and scoring_basis are reused; remaining judgment is blank and must be filled. For feedback without scores use comment-only with header none and omit components. Never writes to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
 		if _, err := s.coursePath(in.Path); err != nil {
 			return TextOutput{}, err
 		}
