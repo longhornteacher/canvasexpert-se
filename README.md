@@ -4,11 +4,11 @@
 
 CanvasExpert-SE (CE-SE) helps teachers draft assignments and New Quizzes, organize course content, assess student work, prepare feedback and contact families. Your chosen agent follows editable teaching playbooks and your preferences; the Engine handles Canvas access, student/attempt identity, exact score arithmetic and supported writes.
 
-**Published release: 1.1 beta 4 (`1.1.0-beta.4`, the Groups update) · Windows 11 · MIT**
+**Windows 11 · MIT** · [Latest release](https://github.com/longhornteacher/canvasexpert-se/releases/latest)
 
 [Get started](#get-started) · [Changelog](CHANGELOG.md) · [Release policy](docs/releasing.md) · [Contribute](.github/CONTRIBUTING.md)
 
-The links below install the published 1.1 beta 4 release, which adds book-club group work, Family Contact emails, parent reports, school-calendar late timing, targeted scoring sessions, installation and quiet updates by git, and lighter scoring files for the agent. Development continues on `dev`.
+The links below install the latest published release; the [changelog](CHANGELOG.md) lists what each release adds. Development continues on `dev`.
 
 This is an independent open-source project. The teacher-first installation mechanics have local fixture and package checks; the complete fresh-user Cowork/Work installation and teaching example still need a destination-client pilot. See the [capability record](docs/engine-capabilities.md) for the distinction between Canvas Live evidence, local tests and pending human validation.
 
@@ -22,15 +22,19 @@ Later, "Update CanvasExpert from https://github.com/longhornteacher/canvasexpert
 
 ### For AI agents installing or updating CanvasExpert for a teacher
 
-Teachers need no developer tools. Do not build this repository, and do not clone its default branch: the teacher-facing folder is the `userinstall` branch, which holds only the playbooks and launchers. It does not contain the program; `get-engine.cmd` downloads that from the matching release and checks its checksum.
+CanvasExpert runs on Windows only; on a Mac or Chromebook, tell the teacher and stop. Teachers need no developer tools. Do not build this repository, and do not clone its default branch (`dev` is the development source): the teacher-facing folder is the `userinstall` branch, which holds only the playbooks and launchers. It does not contain the program; `get-engine.cmd` downloads that from the matching release and checks its checksum.
 
 1. **Ask the teacher first**, then choose a local folder that OneDrive and Google Drive do not sync (for example `%USERPROFILE%\CanvasExpert-SE`); some district sync folders block programs. Never overwrite an existing folder.
-2. `git clone --branch userinstall --single-branch https://github.com/longhornteacher/canvasexpert-se.git "<folder>"`
-3. In that folder run `.\get-engine.cmd` (needs only Windows' `curl.exe` and `certutil`; no admin rights, no PATH changes). Then `.\cse.cmd version`.
+2. If `where git` finds git: `git clone --branch userinstall --single-branch https://github.com/longhornteacher/canvasexpert-se.git "<folder>"`, then in that folder run `.\get-engine.cmd` (needs only Windows' `curl.exe` and `certutil`; no admin rights, no PATH changes).
+   If git is missing, don't install it. Download and unpack the release ZIP with Windows' own tools instead: `curl.exe -fL -o "%TEMP%\CanvasExpert-SE-windows.zip" https://github.com/longhornteacher/canvasexpert-se/releases/latest/download/CanvasExpert-SE-windows.zip`, then `mkdir "<folder>"` and `tar -xf "%TEMP%\CanvasExpert-SE-windows.zip" -C "<folder>"`.
+   On school networks curl can fail with `CRYPT_E_NO_REVOCATION_CHECK`. Retry that download once with `--ssl-revoke-best-effort`; `get-engine.cmd` does this itself.
+3. Run `.\cse.cmd version`. If Windows answers "Access is denied", district security is blocking the program. Do not try other folders or work around it: follow "If Windows blocks the program" in [the install playbook](https://github.com/longhornteacher/canvasexpert-se/blob/userinstall/playbooks/install.md), which confirms the cause from the Windows log and gives the teacher a note for IT. A ZIP install has no playbooks until the program can run, so use that link.
 4. Read that folder's `AGENTS.md` and follow `playbooks/install.md` (for a new install, together with `playbooks/setup.md`). The playbooks own the rest: app connections, the private Canvas form and courses, and quiet updates.
 5. Tell the teacher to open the CanvasExpert folder itself when they use Claude Code or Codex for teaching work, so its instructions and privacy rules apply.
 
-To update an existing folder, follow "Updates" in its `playbooks/install.md`. If git or github.com is blocked on the teacher's computer, say so plainly and use the ZIP fallback: download https://github.com/longhornteacher/canvasexpert-se/releases/latest/download/CanvasExpert-SE-windows.zip (ask the teacher first), extract it to the chosen folder, and follow the same playbooks.
+Check what your own session allows: downloading needs network access from your shell, and connecting apps writes settings outside the folder. Ask for approval where your agent needs it.
+
+To update an existing folder, follow "Updates" in its `playbooks/install.md`. If github.com itself is blocked on the teacher's network, say so plainly: the git install and the ZIP both come from GitHub.
 
 ### Install it yourself
 

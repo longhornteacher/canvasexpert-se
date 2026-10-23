@@ -1,5 +1,7 @@
 # Dev development
 
+**Installing CanvasExpert for a teacher?** Stop: this is the development source, not the teacher's folder. Don't build it. Follow "For AI agents installing or updating CanvasExpert for a teacher" in [README.md](README.md).
+
 Distribution is **Dev → userinstall branch (git) → UserInstall**, with a ZIP as the fallback and optional **UserInstall ↔ UserSync**. `scripts/package-userinstall.ps1` builds the teacher-facing tree; a teacher's clone of the `userinstall` branch (or the extracted fallback ZIP) is already UserInstall and runs in place. In a git install git owns the playbooks and `AGENTS.md`/`CLAUDE.md`, and the teacher's choices live in `Teacher_Override.md` and `context/`. Setup connects apps and Canvas without creating a second product folder. These are role names, not mandatory directory names. Keep existing CLI/API/storage spellings (`install`, `--workspace`, `install_root`, `sync_root`, `local`/`sync`) compatible.
 
 **Developer or teacher?** If the user is writing code, fixing bugs, building the Engine, running tests or discussing architecture, follow this file. If they ask for classroom work (an assignment, a page, a quiz, scoring, class setup), stop acting as a software engineer: read [workspace-template/TEACHER.md](workspace-template/TEACHER.md) and the matching playbook, and speak in plain classroom terms. Real teacher work belongs in UserInstall, not Dev.

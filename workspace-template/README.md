@@ -1,12 +1,12 @@
 # CanvasExpert-SE
 
-**1.1 beta 4 · `1.1.0-beta.4` · Windows 11**
+**Windows 11** · this folder's version is in its `VERSION` file
 
 This folder is your local CanvasExpert-SE **UserInstall**. An AI agent (Claude or ChatGPT, for example) does the work here: scoring student work and creating or editing Canvas assignments and quizzes. Review is the default for scoring, new assignments, new quizzes and assignment edits; you can explicitly skip it for a task.
 
 ## Start here
 
-1. Ask your agent (Claude Code or Codex) to install CanvasExpert from `https://github.com/longhornteacher/canvasexpert-se` into a folder on your computer's local drive. It downloads the program with Windows' own tools, with no admin rights. If your school blocks that, use the ZIP from the project's releases page instead.
+1. Ask your agent (Claude Code or Codex) to install CanvasExpert from `https://github.com/longhornteacher/canvasexpert-se` into a folder on your computer's local drive. It downloads the program with Windows' own tools, with no admin rights or extra software. If your district's security blocks the program, the agent explains what happened and writes a short note you can send to IT.
 2. Open that folder in Code/Codex and say **"Set this all up."** The agent connects every supported app it finds on your computer (Claude, ChatGPT, Antigravity), opens the private Canvas form, helps configure your classes and checks that your teaching assistant can read them.
 3. Enter your Canvas address and access token in the private form. Approve the install prompt in your app (restart it only if it asks and you are not mid-review), then use the short message in `TEACHING-ASSISTANT.md` to start teaching there.
 

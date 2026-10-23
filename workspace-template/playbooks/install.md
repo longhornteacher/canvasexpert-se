@@ -36,7 +36,9 @@ The helper also creates the teacher's **CanvasExpert WebUI** desktop shortcut fo
 
 Report app connection results in the teacher's terms:
 
-> "I found {Claude, ChatGPT, Antigravity} on your computer and prepared {it / them} to use CanvasExpert! CanvasExpert can also work in {the ones not found}, so if you ever install one, just come back here and I'll connect it too."
+> "I've set up CanvasExpert for {Claude, ChatGPT, Antigravity} on this computer. It can also work in {the others}, so if you ever start using one, just come back here and I'll connect it too."
+
+The helper picks apps by their settings folders, which is a hint, not proof that an app is installed or in use. Don't say you "found" an app; if the teacher says they don't use one, drop it.
 
 Then give what each app still needs:
 
@@ -50,9 +52,9 @@ Then give what each app still needs:
 
 **ChatGPT or Antigravity:**
 
-> "{App} is set up. When we're done here, close it and open it again so it notices. I'll tell you when."
+> "{App} is set up. When we're done here, quit it completely and open it again so it notices. I'll tell you when."
 
-Do not ask anyone to close an app during an active CE-SE review. If nothing supported was found, say so and ask which app they plan to use.
+When you ask for a restart, say how to quit fully: "Closing the window can leave it running near the clock. Right-click its icon there (click the ^ arrow if you don't see it) and choose Quit, then open it again." If you are running inside that app, ask for the restart only as the very last step, after everything else is done, because quitting ends this conversation. Do not ask anyone to close an app during an active CE-SE review. If nothing supported was found, say so and ask which app they plan to use.
 
 ### 3. The Canvas form
 
@@ -64,15 +66,19 @@ Do not ask anyone to close an app during an active CE-SE review. If nothing supp
 
 If the page did not open, give the address the helper returned (never invent one) or say: "Double-click **webui.cmd** in your CanvasExpert folder."
 
-> "In the form you'll type your **Canvas address**. That's the web address you see when you're signed into Canvas, like `yourschool.instructure.com`. Then paste your key. Here's how to make one:
+> "In the form you'll type your **Canvas address**. Open Canvas the way you normally do (a school portal like ClassLink or Clever is fine), then look at the address bar: it's the part like `yourschool.instructure.com`. Then paste your key. Here's how to make one:
 > 1. Sign in to Canvas.
 > 2. Click **Account**, then **Settings**.
-> 3. Scroll to **Approved Integrations** and click **+ New Access Token**. (Once you tell me your Canvas address I can give you a direct link: `https://<your-address>/profile/settings#access_tokens`.)
+> 3. Scroll to **Approved Integrations** and click **+ New Access Token**. (Once you tell me your Canvas address I can give you a direct link to that page: `https://<your-address>/profile/settings`.)
 > 4. For the purpose, type CanvasExpert. For the expiration, choose the end of the school year, or the longest your school allows, so you don't have to redo this mid-semester.
 > 5. Click Generate and **copy the long code Canvas shows you.** It only shows it once.
 > 6. Paste it into the form and click **Connect**.
 >
 > Please don't paste the code here in our chat. Tell me when you've clicked Connect."
+
+**No + New Access Token button:** some districts turn off token creation for teachers. Say: "Your district has turned off access tokens for teacher accounts, so CanvasExpert can't connect to Canvas yet. Your Canvas administrator can turn it back on for you. Here's a note you can send them:" and give a short note in the teacher's voice: they'd like a Canvas personal access token for a local teaching assistant that runs on their own computer; the token stays in Windows Credential Manager and reaches only the district's Canvas; they choose the expiry and can delete it any time. Meanwhile you can still help them draft, and nothing else needs redoing later.
+
+**Code pasted into the chat:** if the teacher pastes the token here anyway, don't use it, repeat it or save it anywhere. Say: "Thanks, but please don't use that one: anything typed in our chat may be kept. In Canvas, go back to Approved Integrations, delete the CanvasExpert token you just made, make a new one, and paste the new one into the form instead." Then carry on with the form.
 
 If the teacher says their school limits token life, add: "Canvas will stop accepting this key when it expires. When that happens, I'll tell you and we'll make a new one the same way. Nothing else needs redoing."
 
@@ -98,7 +104,7 @@ Save what they confirm as `setup.md` describes: "Saved. You can change these any
 
 Only ask for a restart, approval or new chat when that app still needs it. If the current assistant already has working CE-SE tools for this folder, verify the saved courses here and continue teaching.
 
-> "Canvas and your classes are set up. To finish connecting {the app(s)}, {approve the pop-up / close it and open it again}. Then start a new chat there and paste this:"
+> "Canvas and your classes are set up. To finish connecting {the app(s)}, {approve the pop-up / quit it completely and open it again}. Then start a new chat there and paste this:"
 
 Give the starter message from `TEACHING-ASSISTANT.md`. After they say they have done it:
 
@@ -121,16 +127,39 @@ Do not ask about visual style, grading scale or teaching philosophy now. Ask on 
 
 Do not narrate this to the teacher.
 
-### Get CanvasExpert onto the computer (git install)
+### Get CanvasExpert onto the computer
 
-Use this only when there is no CanvasExpert folder yet. Ask before downloading anything, and never overwrite an existing folder.
+Use this only when there is no CanvasExpert folder yet. CanvasExpert runs on Windows 10 or 11 only; on a Mac or Chromebook, say so and stop. Ask before downloading anything, and never overwrite an existing folder.
+
+Check what your own session allows before you start. Downloading needs network access from your shell, and connecting apps writes their settings outside this folder (for example `%APPDATA%\Claude` and `%USERPROFILE%\.codex`). Some agents need approval for each; ask for it when needed and explain it in a sentence. Web search access does not mean your shell can download.
 
 1. Choose a local folder that OneDrive and Google Drive do not sync (for example `%USERPROFILE%\CanvasExpert-SE`); district sync folders can block programs.
-2. `git clone --branch userinstall --single-branch https://github.com/longhornteacher/canvasexpert-se.git "<folder>"`. That folder is UserInstall.
-3. In it, run `.\get-engine.cmd`. It downloads the Engine, checks it against the checksum recorded in `engine\manifest.txt`, and installs it in `engine\`. It needs only `curl.exe` and `certutil`, which Windows includes, and no admin rights. Exit codes: 3 the download did not match its checksum (it was discarded), 4 a needed Windows tool or the manifest is missing, 5 the download failed, 6 the running Engine could not be replaced.
-4. Run `.\cse.cmd version`; the first Engine run adds the teacher's starter files under `context/` and `Teacher_Override.md`. Then continue with the script at the top.
+2. Check for git with `where git`. Use git when it is present; when it is not, use the release ZIP in step 2b. Never install git, or anything else, just to install CanvasExpert.
+   - **2a, git present:** `git clone --branch userinstall --single-branch https://github.com/longhornteacher/canvasexpert-se.git "<folder>"`. In the folder, run `.\get-engine.cmd`. It downloads the Engine, checks it against the checksum recorded in `engine\manifest.txt`, and installs it in `engine\`. It needs only `curl.exe` and `certutil`, which Windows includes, and no admin rights. Exit codes: 3 the download did not match its checksum (it was discarded), 4 a needed Windows tool or the manifest is missing, 5 the download failed, 6 the running Engine could not be replaced.
+   - **2b, no git:** download and unpack the release ZIP with Windows' own tools: `curl.exe -fL -o "%TEMP%\CanvasExpert-SE-windows.zip" https://github.com/longhornteacher/canvasexpert-se/releases/latest/download/CanvasExpert-SE-windows.zip`, then `mkdir "<folder>"` and `tar -xf "%TEMP%\CanvasExpert-SE-windows.zip" -C "<folder>"`, then delete the downloaded ZIP. This is a ZIP install; follow "ZIP fallback" below for its playbooks and updates.
+   - If curl fails with `CRYPT_E_NO_REVOCATION_CHECK` or `CRYPT_E_REVOCATION_OFFLINE`, the network cannot reach the certificate revocation servers (seen on school networks). Retry that download once with `--ssl-revoke-best-effort`; `get-engine.cmd` does this itself. Treat any other curl error as an ordinary download failure.
+3. Run `.\cse.cmd version`; the first Engine run adds the teacher's starter files under `context/` and `Teacher_Override.md`. If it fails with "Access is denied", follow "If Windows blocks the program" below. Then continue with the script at the top.
 
-If git or github.com is blocked on this computer, or `get-engine.cmd` fails with 4 or 5, say so plainly and offer the ZIP fallback below. Do not work around a district block.
+If github.com is blocked on this computer, say so plainly: the git install and the ZIP come from the same place, so neither will work on this network. The teacher can try from another network, or ask IT to allow github.com. Do not work around a district block.
+
+### If Windows blocks the program
+
+District security can stop `engine\cse.exe` from running. The usual signs are "Access is denied" when `cse.cmd` starts it (exit code 5; `get-engine.cmd` downloads the file but never runs it) and a Windows Security pop-up at the bottom right of the screen. Moving the folder or downloading again will not help, and you must not try to get around it.
+
+Confirm the cause from the Windows log, which the teacher's own account can read:
+
+`Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Windows Defender/Operational'; Id=1121; StartTime=(Get-Date).AddHours(-1)} | Where-Object Message -match 'cse\.exe' | Select-Object -First 1 -ExpandProperty Message`
+
+Event 1121 with rule ID `01443614-cd74-433a-b99e-2ecdc07bfc25` means the district's Microsoft Defender blocks programs that are not yet widely used ("prevalence, age or trusted list"). Every CanvasExpert release is a new file, so time alone will not fix it, and allowing one file by its checksum stops working at the next update. If the log shows a different rule, or no event, report what you see and do not guess.
+
+Tell the teacher: "Your district's security software blocks programs it doesn't recognise yet, and it is blocking CanvasExpert. That's a district setting, so your IT team needs to allow it. Here's a note you can send them:" Then give a short note in the teacher's voice with:
+
+- what it is: CanvasExpert-SE, an open-source teaching assistant for Canvas (https://github.com/longhornteacher/canvasexpert-se), running on their own computer without admin rights
+- what blocked it: Microsoft Defender attack surface reduction rule 01443614-cd74-433a-b99e-2ecdc07bfc25, Defender event 1121, and the blocked path from the event
+- the request: an exclusion for the folder `<folder>\engine\` (it keeps working across updates), rather than a checksum allowance that each update would undo
+- that it talks only to the district's Canvas and to GitHub for updates, and stores the Canvas token in Windows Credential Manager
+
+Setup can't continue on this computer until IT acts. Say so plainly, and offer to help with drafting in the meantime.
 
 ### Updates: stage quietly, apply with the teacher's yes
 
@@ -156,11 +185,13 @@ The teacher's own choices live in `Teacher_Override.md`, `context/` and the othe
 
 ### ZIP fallback
 
-Use this only when the teacher cannot use git on their computer. The folder is an extracted ZIP and `install_kind` is `zip` or empty (any value other than `git`). On every "set up", "install" or "update", run `.\cse.cmd playbooks update` (MCP: `engine_info` operation `update-playbooks`) before anything else. The ZIP carries the Engine and the bootstrap files (`AGENTS.md`, `CLAUDE.md`, `README.md`, `TEACHING-ASSISTANT.md`, `cse.cmd`, `webui.cmd`); this command lays down the playbooks, `TEACHER.md`, `Teacher_Override.md` and the `context/` starter files from the Engine, and on an update adopts the new versions without overriding the teacher. It keeps each shipped version under `shipped/<version>/` for comparison; those copies are inactive, never current rules.
+Use this when the folder came from the release ZIP: no git on the computer, or the teacher downloaded it themselves. The folder is an extracted ZIP and `install_kind` is `zip` or empty (any value other than `git`). On every "set up", "install" or "update", run `.\cse.cmd playbooks update` (MCP: `engine_info` operation `update-playbooks`) before anything else. The ZIP carries the Engine and the bootstrap files (`AGENTS.md`, `CLAUDE.md`, `README.md`, `TEACHING-ASSISTANT.md`, `cse.cmd`, `webui.cmd`); this command lays down the playbooks, `TEACHER.md`, `Teacher_Override.md` and the `context/` starter files from the Engine, and on an update adopts the new versions without overriding the teacher. It keeps each shipped version under `shipped/<version>/` for comparison; those copies are inactive, never current rules.
 
 The report lists each file's state. `added`, `current`, `updated` and `teacher-owned` need nothing from you. For each `kept` file, reconcile it in the background: compare `shipped/<previous_shipped>/<path>` (when there is a previous version), the active file and `shipped/<current_shipped>/<path>`. Every difference between the active file and what shipped before is the teacher's choice; with no previous version, every difference is. Keep those choices, bring in new shipped improvements that don't conflict with them, and write the result to the active file. Where a new shipped default conflicts with a teacher choice, keep the teacher's. Never change `context/` or `Teacher_Override.md` during an update. Don't ask the teacher to merge anything.
 
-To get a newer version, download the Windows ZIP from the latest [GitHub release](https://github.com/longhornteacher/canvasexpert-se/releases) (not GitHub's source-code ZIP) and extract it over this folder, then run the update above. It contains no playbooks, `context/` or other teacher files, but extracting does replace `AGENTS.md` and `CLAUDE.md`. Before extracting, copy those two files into `engine/pre-update-<date>/`; afterwards compare them with the backup and carry the teacher's own additions into the new files. If `engine/cse.exe` is in use, ask the teacher to close the apps using CanvasExpert first, and never during an active review.
+To get a newer version, download the Windows ZIP from the latest [GitHub release](https://github.com/longhornteacher/canvasexpert-se/releases) (not GitHub's source-code ZIP) with the same `curl.exe` and `tar` commands as in "Get CanvasExpert onto the computer", extracting over this folder, then run the update above. It contains no playbooks, `context/` or other teacher files, but extracting does replace `AGENTS.md` and `CLAUDE.md`. Before extracting, copy those two files into `engine/pre-update-<date>/`; afterwards compare them with the backup and carry the teacher's own additions into the new files. If `engine/cse.exe` is in use, ask the teacher to close the apps using CanvasExpert first, and never during an active review.
+
+If the teacher downloaded the ZIP in a browser, Windows marks its files as coming from the internet, and double-clicking `webui.cmd` or the desktop shortcut then shows a security warning every time. With the teacher's OK, clear that mark once before first use, as the file's Properties → Unblock does: `Get-ChildItem -LiteralPath "<folder>" -Recurse -File | Unblock-File`. Files fetched with curl and tar never carry it.
 
 ### Select the correct UserInstall
 
