@@ -348,7 +348,7 @@ func Students(ctx context.Context, root string, output io.Writer) error {
 
 func init() {
 	register(
-		page{Path: "/students", Methods: []string{http.MethodGet, http.MethodPost}, Template: "students", Scripts: []string{"drafts.js", "contacts.js", "appearance.js"},
+		page{Path: "/students", Methods: []string{http.MethodGet, http.MethodPost}, Template: "students", Scripts: []string{"drafts.js", "contacts.js", "appearance.js", "student-reference.js"},
 			Nav:    []navSlot{{Primary: "Classroom", Label: "Students", Order: 22}},
 			Handle: (*Hub).studentsPage},
 		page{Path: "/students/refresh", Methods: []string{http.MethodPost}, Handle: (*Hub).refreshStudents},
