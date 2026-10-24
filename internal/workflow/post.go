@@ -389,6 +389,16 @@ func postReport(r domain.StudentResult) StudentPostReport {
 	}
 	return p
 }
+
+// effortFloor is the course's honest-effort floor, if the teacher set one.
+func (s *Service) effortFloor(courseID int64) *domain.Decimal {
+	for _, c := range s.Config.Courses {
+		if c.ID == courseID {
+			return c.EffortFloor
+		}
+	}
+	return nil
+}
 func holdGrade(g *domain.GradeOperation, message string) {
 	for _, o := range []*domain.ActionOutcome{&g.Outcomes.Rubric, &g.Outcomes.Grade, &g.Outcomes.Comment, &g.Outcomes.Late} {
 		if !definite(*o) {
@@ -585,8 +595,11 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 			g.Outcomes.Rubric.Message = "rubric write completion remains uncertain; inspect current assessment"
 		}
 	}
+	// The course's effort floor may raise the entered grade above the honest
+	// assessment; the rubric and the comment's score lines stay as assessed.
+	entered := domain.EnteredGrade(g.Assessment, doc.Assignment.Points, s.effortFloor(doc.Assignment.CourseID), g.HonestEffort)
 	if ambiguous(g.Outcomes.Grade) {
-		if grade := decimalPointer(live.EnteredScore); grade != nil && grade.Cmp(g.Assessment) == 0 {
+		if grade := decimalPointer(live.EnteredScore); grade != nil && grade.Cmp(entered) == 0 {
 			g.Outcomes.Grade = domain.ActionOutcome{Status: "preserved", Message: "computed assessment is present on intended attempt"}
 		} else {
 			g.Outcomes.Grade.Status = "uncertain"
@@ -632,7 +645,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 			return err
 		}
 		var response Submission
-		err := s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"rubric_assessment": rubricFields(*v.Assessment), "submission": map[string]any{"posted_grade": g.Assessment.String()}}, &response)
+		err := s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"rubric_assessment": rubricFields(*v.Assessment), "submission": map[string]any{"posted_grade": entered.String()}}, &response)
 		if err != nil {
 			g.Outcomes.Rubric, g.Outcomes.Grade = failedOutcome(err), failedOutcome(err)
 		} else {
@@ -661,7 +674,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 				return err
 			}
 			var response Submission
-			e = s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"submission": map[string]any{"posted_grade": g.Assessment.String()}}, &response)
+			e = s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"submission": map[string]any{"posted_grade": entered.String()}}, &response)
 			if e != nil {
 				g.Outcomes.Grade = failedOutcome(e)
 			} else {
@@ -674,7 +687,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		}
 	}
 	if !definite(g.Outcomes.Comment) {
-		text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student), Late: isLate(g.LateTiming), Header: g.Header})
+		text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *rubric, Interpretation: v.Interpretation, Components: g.Components, Assessment: g.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(g.Feedback, source.student), Late: isLate(g.LateTiming), Entered: entered, Header: g.Header})
 		if e != nil {
 			return e
 		}

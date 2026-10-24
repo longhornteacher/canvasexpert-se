@@ -17,6 +17,9 @@ type Course struct {
 	Timezone string `yaml:"timezone,omitempty" json:"timezone,omitempty"`
 	// Owner is the label of the teammate whose course this is; empty means yours.
 	Owner string `yaml:"owner,omitempty" json:"owner,omitempty"`
+	// EffortFloor is the lowest grade the teacher enters for an honest attempt,
+	// as a percent of the assignment's points; nil means no floor.
+	EffortFloor *Decimal `yaml:"effort_floor,omitempty" json:"effort_floor,omitempty"`
 }
 type CourseConfig struct {
 	Schema     int      `yaml:"schema"`
@@ -397,16 +400,19 @@ type EvidenceSelection struct {
 }
 
 type GradeOperation struct {
-	Attempt        AttemptRef         `yaml:"attempt"`
-	Evidence       *EvidenceSelection `yaml:"evidence,omitempty"`
-	Components     []ComponentScore   `yaml:"components"`
-	Assessment     Decimal            `yaml:"assessment"`
-	Feedback       string             `yaml:"feedback"`
-	Header         string             `yaml:"header,omitempty"`
-	TeacherNote    string             `yaml:"teacher_note,omitempty"`
-	StrongestPrior *PriorComparison   `yaml:"strongest_prior,omitempty"`
-	LateTiming     *LateTiming        `yaml:"late_timing,omitempty"`
-	Outcomes       ActionOutcomes     `yaml:"outcomes,omitempty"`
+	Attempt    AttemptRef         `yaml:"attempt"`
+	Evidence   *EvidenceSelection `yaml:"evidence,omitempty"`
+	Components []ComponentScore   `yaml:"components"`
+	Assessment Decimal            `yaml:"assessment"`
+	// HonestEffort is the agent's judgment that this is a genuine attempt, which
+	// lets the course's effort floor raise the entered grade (never the assessment).
+	HonestEffort   bool             `yaml:"honest_effort,omitempty"`
+	Feedback       string           `yaml:"feedback"`
+	Header         string           `yaml:"header,omitempty"`
+	TeacherNote    string           `yaml:"teacher_note,omitempty"`
+	StrongestPrior *PriorComparison `yaml:"strongest_prior,omitempty"`
+	LateTiming     *LateTiming      `yaml:"late_timing,omitempty"`
+	Outcomes       ActionOutcomes   `yaml:"outcomes,omitempty"`
 }
 
 // FeedbackAssessment supplies a preserved display basis, never write instructions.

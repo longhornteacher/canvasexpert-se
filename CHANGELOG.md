@@ -4,6 +4,12 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 1.5.0 (2026-10-24)
+
+Honest-effort floor grades.
+
+- A course can set an honest-effort floor on the WebUI Courses page, as a percent of the assignment's points (`effort_floor` in `context/courses.md`). When the agent judges a submission a genuine attempt (`honest_effort: true` on the grade row) and the earned score is lower, the Engine enters the floor as the Canvas grade. The rubric and earned score stay as assessed, and the comment adds "Entered as N/P (class minimum for an honest attempt)" under the earned overall line. Review previews show the entered grade. Canvas applies any late deduction to the entered grade; shared group grades do not use the floor.
+
 ## 1.4.0 (2026-10-24)
 
 Teacher check-ins move into the conversation, and drafts can be printed.

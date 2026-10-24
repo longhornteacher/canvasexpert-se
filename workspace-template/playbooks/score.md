@@ -48,7 +48,9 @@ The report/file transport and comment-only workflow have local tests; separate o
 
 ## Ordinary assignment grades
 
-For ordinary assignments, post the honest computed score for the current work, even below an existing grade. Never inflate criterion scores or suppress the assessment to preserve a teacher-adjusted grade. Canvas applies late point penalties; you don't. These grade and lateness instructions do not apply to New Quiz comment-only results.
+For ordinary assignments, post the honest computed score for the current work, even below an existing grade. Never inflate criterion scores or suppress the assessment to preserve a teacher-adjusted grade.
+
+If the course has an honest-effort floor (the `effort_floor` on the course in `context/courses.md`), set `honest_effort: true` on each grade row whose work is a genuine try. Leave it off for blank, placeholder or accidental work and for work that is not a real try. Keep the assessment and criteria as earned; the Engine enters the floor when the earned score is lower and adds the "Entered as" line to the comment. In your report, say how many students were entered at the floor. Canvas applies late point penalties; you don't. These grade and lateness instructions do not apply to New Quiz comment-only results.
 
 ### Lateness
 

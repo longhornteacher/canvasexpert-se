@@ -8,12 +8,13 @@
 {{nav "Classroom" "Courses" .Appearance}}
 <h1>Choose your courses</h1>
 <p>Tick each course you teach this term and give it a short name you'll recognize, such as <b>ELA 3rd</b>. Then choose <b>Save courses</b> at the bottom.</p>
+<p><b>Honest-effort floor</b> is optional. If you never enter less than, say, 50% for work a student truly tried, type <b>50</b>. The student's comment still shows the score they earned, plus a line saying what was entered. Leave it blank to enter the earned score.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
-<form method="post" action="/courses" data-draft-key="{{.DraftKey}}" data-draft-fields="active_ nick_" data-clear-draft="{{.ClearDraft}}">
+<form method="post" action="/courses" data-draft-key="{{.DraftKey}}" data-draft-fields="active_ nick_ floor_" data-clear-draft="{{.ClearDraft}}">
 <input type="hidden" name="request_secret" value="{{.Secret}}">
-<div class="table-scroll"><table class="courses"><thead><tr><th>Use</th><th>Course</th><th>Canvas code</th><th>Short name</th><th>Teacher</th></tr></thead><tbody>
-{{range .Rows}}<tr{{if .Unpublished}} class="unpublished"{{end}}><td><input type="hidden" name="id" value="{{.ID}}"><input type="checkbox" name="active_{{.ID}}" {{if .Active}}checked{{end}} aria-label="Use {{.Name}} ({{.ID}})"></td><td>{{.Name}} <span class="course-state">ID {{.ID}}{{if not .State}} · not found in Canvas{{end}}</span>{{if .Unpublished}} <span class="pill off">unpublished</span>{{end}}</td><td><code>{{.Code}}</code></td><td><input type="text" name="nick_{{.ID}}" value="{{.Nick}}" maxlength="40" autocomplete="off" aria-label="Short name for {{.Name}} ({{.ID}})"></td><td>{{if .Owner}}{{.Owner}}{{else}}You{{end}}</td></tr>
-{{else}}<tr><td colspan="5">No courses yet. <a href="/setup">Connect Canvas</a> first, then come back to this page.</td></tr>{{end}}</tbody></table></div>
+<div class="table-scroll"><table class="courses"><thead><tr><th>Use</th><th>Course</th><th>Canvas code</th><th>Short name</th><th>Honest-effort floor</th><th>Teacher</th></tr></thead><tbody>
+{{range .Rows}}<tr{{if .Unpublished}} class="unpublished"{{end}}><td><input type="hidden" name="id" value="{{.ID}}"><input type="checkbox" name="active_{{.ID}}" {{if .Active}}checked{{end}} aria-label="Use {{.Name}} ({{.ID}})"></td><td>{{.Name}} <span class="course-state">ID {{.ID}}{{if not .State}} · not found in Canvas{{end}}</span>{{if .Unpublished}} <span class="pill off">unpublished</span>{{end}}</td><td><code>{{.Code}}</code></td><td><input type="text" name="nick_{{.ID}}" value="{{.Nick}}" maxlength="40" autocomplete="off" aria-label="Short name for {{.Name}} ({{.ID}})"></td><td><input type="text" name="floor_{{.ID}}" value="{{.Floor}}" maxlength="6" size="5" inputmode="decimal" placeholder="none" autocomplete="off" aria-label="Honest-effort floor percent for {{.Name}} ({{.ID}})"> %</td><td>{{if .Owner}}{{.Owner}}{{else}}You{{end}}</td></tr>
+{{else}}<tr><td colspan="6">No courses yet. <a href="/setup">Connect Canvas</a> first, then come back to this page.</td></tr>{{end}}</tbody></table></div>
 {{if .Rows}}<button type="submit">Save courses</button>{{end}}
 </form>
 <script src="/_cse/drafts.js" defer></script>
