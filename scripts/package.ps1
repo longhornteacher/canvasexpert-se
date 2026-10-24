@@ -187,6 +187,8 @@ try {
     $expectedEntries.Add('LICENSE')
     $expectedEntries.Add('engine/THIRD_PARTY_NOTICES.md')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/package-webui.cmd') -Destination (Join-Path $contentRoot 'webui.cmd')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/canvasexpert.ico') -Destination (Join-Path $contentRoot 'engine/canvasexpert.ico')
+    $expectedEntries.Add('engine/canvasexpert.ico')
     & (Join-Path $PSScriptRoot 'package-mcp.ps1') -BinaryPath $binaryPath -OutputPath $mcpbPath
     if (-not $?) { throw 'Extension packaging failed.' }
     Copy-Item -LiteralPath $mcpbPath -Destination (Join-Path $contentRoot 'engine/CanvasExpert-SE-Cowork.mcpb')

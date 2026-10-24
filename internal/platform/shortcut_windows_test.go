@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -91,6 +93,48 @@ func TestDesktopShortcutEquivalentShortAndLongPaths(t *testing.T) {
 		}
 		assertDesktopShortcutProperties(t, path, root)
 	}
+}
+
+func TestDesktopShortcutUsesPackagedIcon(t *testing.T) {
+	desktop, root := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "webui.cmd"), []byte("@echo off\r\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	path, err := createDesktopShortcutAt(root, desktop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := shortcutIcon(t, path); got != "" {
+		t.Fatalf("icon set without a packaged icon: %q", got)
+	}
+	icon := filepath.Join(root, "engine", "canvasexpert.ico")
+	if err := os.MkdirAll(filepath.Dir(icon), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(icon, []byte{0, 0, 1, 0}, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := createDesktopShortcutAt(root, desktop); err != nil {
+		t.Fatal(err)
+	}
+	if got := shortcutIcon(t, path); !strings.EqualFold(got, icon) {
+		t.Fatalf("icon = %q, want %q", got, icon)
+	}
+}
+
+func shortcutIcon(t *testing.T, path string) string {
+	t.Helper()
+	var icon string
+	if err := withShellShortcut(path, true, func(link *shellLink, _ *persistFile) error {
+		buffer := make([]uint16, 32768)
+		var index int32
+		err := comCall(&link.IUnknown, 16, uintptr(unsafe.Pointer(&buffer[0])), uintptr(len(buffer)), uintptr(unsafe.Pointer(&index))) // IShellLinkW.GetIconLocation
+		icon = syscall.UTF16ToString(buffer)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return icon
 }
 
 func assertDesktopShortcutProperties(t *testing.T, path, root string) {

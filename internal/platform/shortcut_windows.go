@@ -86,6 +86,12 @@ func createDesktopShortcutAt(root, desktop string) (string, error) {
 				return fmt.Errorf("set shortcut %s: %w", property.name, err)
 			}
 		}
+		// Packaged installs carry the easel icon; without it Windows shows the .cmd icon.
+		if icon := filepath.Join(root, "engine", "canvasexpert.ico"); fileExists(icon) {
+			if err := link.setIcon(icon); err != nil {
+				return fmt.Errorf("set shortcut icon: %w", err)
+			}
+		}
 		if err := file.save(path); err != nil {
 			return fmt.Errorf("save desktop shortcut: %w", err)
 		}
@@ -158,6 +164,22 @@ func (link *shellLink) setText(method int, text string) error {
 	err = comCall(&link.IUnknown, method, uintptr(unsafe.Pointer(value)))
 	runtime.KeepAlive(value)
 	return err
+}
+
+// setIcon calls IShellLinkW.SetIconLocation with the file's first icon.
+func (link *shellLink) setIcon(path string) error {
+	value, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	err = comCall(&link.IUnknown, 17, uintptr(unsafe.Pointer(value)), 0)
+	runtime.KeepAlive(value)
+	return err
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
 }
 
 func (link *shellLink) text(method int, path bool) (string, error) {

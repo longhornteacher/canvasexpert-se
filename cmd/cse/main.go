@@ -84,6 +84,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   parent-review RUN_FOLDER      Open the private page to review and send a grade-update or family-contact run (Outlook)
   student-report RUN_FOLDER     Save one PDF of student reports (one per page) from a parent-update run and open it
   push-quiz COURSE FILE         Create or resume a New Quiz from a QuizForge file
+  draft-pdf FILE [--handout]    Save a printable PDF of a draft assignment, Page, quiz or results file and open it; --handout keeps only what students see
   post RESULTS_FILE             Post validated grades or selected revisions
   quiz-points COURSE QUIZ [N=PTS ...] List a New Quiz's questions, or set question N to PTS points
   api PATH                      Read-only Canvas API GET when no command fits; prints the JSON
@@ -496,7 +497,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -535,6 +536,25 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		fmt.Fprintf(out, "Valid document: %s\n", p)
 		previewResults(root, p, out)
 		return 0
+	}
+	if cmd == "draft-pdf" {
+		handout := len(args) == 2 && args[1] == "--handout"
+		if len(args) < 1 || len(args) > 2 || len(args) == 2 && !handout {
+			return fail(inputError(fmt.Errorf("draft-pdf requires one file and optional --handout")), progress)
+		}
+		p, e := documentPath(root, args[0])
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		model, e := workflow.BuildReview(root, p)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		saved, e := localui.SaveDraftPDF(ctx, model, handout)
+		if saved != "" {
+			fmt.Fprintf(out, "Saved draft PDF: %s\n", saved)
+		}
+		return fail(e, progress)
 	}
 	return runRemote(ctx, root, cmd, args, out, progress)
 }

@@ -46,6 +46,9 @@ type ReviewFact struct{ Label, Value string }
 type ReviewFrame struct {
 	Label, HTML string
 	Files       []string // local attachment names shown privately, without paths
+	// PrintHTML replaces HTML in a Draft PDF, where escaped source would be
+	// unreadable; the print page blocks scripts and network loads instead.
+	PrintHTML string `json:"-"`
 }
 
 // ReviewCard is one student. Digest changes whenever anything shown changes.

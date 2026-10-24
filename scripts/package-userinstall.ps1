@@ -1,7 +1,7 @@
 # Builds the git-install distribution from one flattened tree.
 #
 # The tree is workspace-template/ flattened to the root (playbooks, TEACHER.md, AGENTS.md,
-# CLAUDE.md, ...) plus VERSION, LICENSE, webui.cmd, get-engine.cmd, a .gitignore for teacher
+# CLAUDE.md, ...) plus VERSION, LICENSE, webui.cmd and its shortcut icon, get-engine.cmd, a .gitignore for teacher
 # and runtime paths, and engine/manifest.txt naming the Engine files and their SHA-256.
 # From that one tree this script writes:
 #   - the Engine release assets (cse.exe, CanvasExpert-SE-Cowork.mcpb) in <OutputDirectory>/assets
@@ -129,6 +129,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $treeRoot 'LICENSE')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD_PARTY_NOTICES.md') -Destination (Join-Path $treeRoot 'engine/THIRD_PARTY_NOTICES.md')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'package-webui.cmd') -Destination (Join-Path $treeRoot 'webui.cmd')
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'canvasexpert.ico') -Destination (Join-Path $treeRoot 'engine/canvasexpert.ico')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'get-engine.cmd') -Destination (Join-Path $treeRoot 'get-engine.cmd')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'userinstall.gitignore') -Destination (Join-Path $treeRoot '.gitignore')
     # Batch files fail on bare-LF line endings; keep them CRLF on any checkout.
@@ -161,7 +162,7 @@ try {
 
     # --- Verify the tree before anything is written ---------------------------------------
     $treeFiles = @(Get-ChildItem -LiteralPath $treeRoot -Force -Recurse -File | ForEach-Object { $_.FullName.Substring($treeRoot.Length + 1).Replace('\', '/') })
-    foreach ($required in 'AGENTS.md', 'CLAUDE.md', 'cse.cmd', 'get-engine.cmd', 'webui.cmd', '.gitignore', 'engine/manifest.txt', '.claude/settings.json') {
+    foreach ($required in 'AGENTS.md', 'CLAUDE.md', 'cse.cmd', 'get-engine.cmd', 'webui.cmd', 'engine/canvasexpert.ico', '.gitignore', 'engine/manifest.txt', '.claude/settings.json') {
         if ($treeFiles -notcontains $required) { throw "Tree is missing $required" }
     }
     if (@($treeFiles | Where-Object { $_ -match '\.(exe|mcpb)$' }).Count -gt 0) { throw 'The tree must not contain the Engine; it is a release asset.' }

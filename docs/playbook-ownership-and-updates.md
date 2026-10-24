@@ -156,8 +156,8 @@ does not need to request a file edit or know the storage layout.
 - Preserve meaningful scope, exceptions and stated reasons. Do not generalize
   "for this assignment" into a permanent default.
 - Honor explicitly stated standing workflow preferences, including "Whenever
-  I explicitly request posting, skip review." If the teacher says skip review,
-  skip review. Persist the teacher's actual authorization and scope rather
+  I explicitly request posting, don't ask me first." If the teacher says not
+  to ask, don't. Persist the teacher's actual authorization and scope rather
   than inferring standing permission from a one-task skip.
 - Perform routine maintenance and incorporate compatible product updates in
   the background. Acknowledge a newly stated preference naturally.
