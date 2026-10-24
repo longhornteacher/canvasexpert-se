@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student name key</title>
+<style>
+@page{size:letter;margin:0.5in}
+body{margin:0;padding:1rem;background:#fff;color:#1f2933;font-family:Segoe UI,Arial,sans-serif;font-size:11pt}
+main{max-width:46rem;margin:0 auto}
+h1{font-size:1.35rem;margin:0 0 .2rem}h2{font-size:1.05rem;margin:1.1rem 0 .35rem}
+.meta{color:#52606d;margin:0 0 .6rem}
+.controls{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.6rem 0 1rem}
+.controls a,.controls button{font:inherit;padding:.35rem .7rem;border:1px solid #9aa5b1;border-radius:.4rem;background:#f5f7fa;color:#1f2933;text-decoration:none;cursor:pointer}
+.controls a[aria-current=page]{background:#1f2933;color:#fff;border-color:#1f2933}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:.28rem .5rem;border-bottom:1px solid #d9e2ec}
+th{font-size:.85rem;color:#52606d;border-bottom:2px solid #9aa5b1}
+tr{break-inside:avoid}
+section{break-inside:auto}
+section+section{break-before:page}
+.private{border-left:3px solid #9aa5b1;padding:.3rem .6rem;color:#52606d}
+@media print{body{padding:0}.controls{display:none}}
+</style>
+<main>
+<h1>Student name key{{if .Title}}: {{.Title}}{{end}}</h1>
+<p class="meta">Printed {{.Printed}}. Made-up names are the ones Claude or ChatGPT uses when Hide student names is on.</p>
+<p class="private">This sheet has real student names. Keep it with you.</p>
+<div class="controls">
+<button type="button" data-print>Print</button>
+<a href="{{.ByName}}"{{if not .ByAlias}} aria-current="page"{{end}}>Sort by student</a>
+<a href="{{.ByAliasHref}}"{{if .ByAlias}} aria-current="page"{{end}}>Sort by made-up name</a>
+<a href="{{.Back}}">Back to Students</a>
+</div>
+{{range .Sections}}<section>
+{{if gt (len $.Sections) 1}}<h2>{{.Course}}</h2>{{end}}
+<table><thead><tr>{{if $.ByAlias}}<th scope="col">Made-up name</th><th scope="col">Student</th>{{else}}<th scope="col">Student</th><th scope="col">Made-up name</th>{{end}}<th scope="col">Goes By</th></tr></thead><tbody>
+{{range .Rows}}<tr>{{if $.ByAlias}}<td>{{.Alias}}</td><td>{{.Name}}</td>{{else}}<td>{{.Name}}</td><td>{{.Alias}}</td>{{end}}<td>{{.FirstName}}</td></tr>
+{{else}}<tr><td colspan="3">No students loaded for this course yet. Choose Refresh from Canvas on the Students page.</td></tr>{{end}}
+</tbody></table>
+</section>
+{{else}}<p>No active courses yet. Pick them on the Courses page first.</p>{{end}}
+</main>
+<script src="/_cse/print.js" defer></script>
+</html>

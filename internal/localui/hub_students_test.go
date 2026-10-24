@@ -305,3 +305,38 @@ func TestSettingsShowInstallationAndSavePreferences(t *testing.T) {
 		}
 	}
 }
+
+func TestStudentNameKeyPrintsSavedRosters(t *testing.T) {
+	h, root := studentsHub(t)
+	config := domain.CourseConfig{Schema: 1, Instance: "https://school.example", Aliases: true, Courses: []domain.Course{{ID: 11, Nickname: "CS8", Current: true}, {ID: 22, Nickname: "ELA7", Current: true}}}
+	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); err != nil {
+		t.Fatal(err)
+	}
+	h.rosterFn = func(_ context.Context, id int64) ([]workflow.Enrollment, string, error) {
+		if id == 22 {
+			return []workflow.Enrollment{{UserID: 4, State: "active", User: workflow.CanvasUser{Name: "Cal Real"}}}, config.Instance, nil
+		}
+		return []workflow.Enrollment{{UserID: 1, State: "active", User: workflow.CanvasUser{Name: "Ana Real"}}}, config.Instance, nil
+	}
+	hubGet(h, "/students?course=11")
+	hubGet(h, "/students?course=22")
+	store, _ := workspace.OpenStudents(root)
+	alias := map[string]string{}
+	for _, v := range store.Rows {
+		alias[v.Name] = v.Alias
+	}
+	one := hubGet(h, "/students/roster?course=11").Body.String()
+	if !strings.Contains(one, "Ana Real") || !strings.Contains(one, alias["Ana Real"]) || strings.Contains(one, "Cal Real") || !strings.Contains(one, `src="/_cse/print.js"`) {
+		t.Fatal("course name key is missing its student or shows another course")
+	}
+	all := hubGet(h, "/students/roster?course=all&sort=alias").Body.String()
+	if !strings.Contains(all, "<h2>CS8</h2>") || !strings.Contains(all, "<h2>ELA7</h2>") || !strings.Contains(all, "Cal Real") || !strings.Contains(all, `aria-current="page">Sort by made-up name`) {
+		t.Fatal("all-course name key is incomplete")
+	}
+	if w := hubGet(h, "/students/roster?course=99"); w.Code != http.StatusNotFound {
+		t.Fatalf("unknown course: %d", w.Code)
+	}
+	if page := hubGet(h, "/students?course=11").Body.String(); !strings.Contains(page, `href="/students/roster?course=11"`) {
+		t.Fatal("Students page does not link the name key")
+	}
+}
