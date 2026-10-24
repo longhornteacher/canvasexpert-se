@@ -62,12 +62,73 @@ func TestLegacyStudentTableGainsExtraTimeWithoutChangingIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	store, err = OpenStudents(root)
-	if err != nil || store.Rows[0].Ref != "s-existing" || store.Rows[0].Alias != "Pikachu" || !store.Rows[0].ExtraTime {
+	want := idAlias("https://school.example", 7, map[string]bool{})
+	if err != nil || store.Rows[0].Ref != "s-existing" || store.Rows[0].Alias != want || !store.Rows[0].ExtraTime {
 		t.Fatalf("migration lost student identity or flag: %v", err)
 	}
 	b, _ := os.ReadFile(path)
 	if !strings.HasPrefix(string(b), strings.Join(studentHeader, ",")) {
 		t.Fatal("new column not saved")
+	}
+}
+
+// The incident: a second install without the shared table gave the same
+// students different names. Canvas-ID aliases make a fresh table agree, the
+// one-time rename keeps typed names, and later teacher renames stick.
+func TestAliasesComeFromCanvasIDOnEveryInstall(t *testing.T) {
+	const school = "https://school.example"
+	ids := []int64{11, 12, 13, 14, 15}
+	root := t.TempDir()
+	rows := strings.Join(extraTimeStudentHeader, ",") + "\n" +
+		"s-a,https://school.example,11,A One,A,Pikachu,,,false,false\n" +
+		"s-b,https://school.example,12,B Two,B,Ninetales,,,true,false\n" +
+		"s-c,https://school.example,13,C Three,C,Captain C,,,false,true\n"
+	if err := WriteFile(filepath.Join(root, ".cse", "students.csv"), []byte(rows), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	migrated, err := OpenStudents(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids[3:] {
+		if _, err = migrated.Upsert(school, id, "New Student", "", "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fresh, _ := OpenStudents(t.TempDir())
+	for i := len(ids) - 1; i >= 0; i-- {
+		if _, err = fresh.Upsert(school, ids[i], "Same Student", "", "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alias := func(s *StudentStore, id int64) Student {
+		for _, v := range s.Rows {
+			if v.UserID == id {
+				return v
+			}
+		}
+		t.Fatalf("student %d missing", id)
+		return Student{}
+	}
+	if v := alias(migrated, 13); v.Alias != "Captain C" || v.AliasSource != AliasFromTeacher {
+		t.Fatalf("typed alias replaced: %+v", v)
+	}
+	for _, id := range []int64{11, 12, 14, 15} {
+		m, f := alias(migrated, id), alias(fresh, id)
+		if m.Alias != f.Alias || m.AliasSource != AliasFromCanvasID {
+			t.Fatalf("student %d: migrated %q, fresh install %q", id, m.Alias, f.Alias)
+		}
+	}
+	if err = migrated.Save(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, _ := OpenStudents(root)
+	reopened.Rows[0].Alias, reopened.Rows[0].AliasSource = "Teacher Pick", AliasFromTeacher
+	if err = reopened.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := OpenStudents(root); again.Rows[0].Alias != "Teacher Pick" || alias(again, 12).Alias != alias(migrated, 12).Alias {
+		t.Fatal("aliases changed after the one-time rename")
 	}
 }
 func TestNotesAmbiguityAndPlaceholder(t *testing.T) {
