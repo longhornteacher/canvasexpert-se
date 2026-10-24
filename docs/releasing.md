@@ -1,8 +1,8 @@
 # Versions and releases
 
-The current Dev target is **1.2 beta 2** (`1.2.0-beta.2`). Pushing this version to `dev` does not publish a release or update UserInstall.
+The current version is **1.3** (`1.3.0`), released from `main` on 2026-10-24 as GitHub's latest release: the teaching-defaults update. The previous release is **1.2** (`1.2.0`, team teaching, 2026-10-22); **1.1 beta 4** (2026-10-21) and **1.0** (`1.0.0`, 2026-10-17) came before it. Pushing to `dev` does not publish a release or update UserInstall.
 
-The published release is **1.1 beta 4** (`1.1.0-beta.4`, the Groups update), released from `main` on 2026-10-21 as GitHub's latest release for all users, ahead of a stable 1.1. Betas 2 and 3 were released the same day. The previous stable release is **1.0** (`1.0.0`, 2026-10-17). Root `VERSION` is the single authority for CLI/help, embedded default builds, loaded MCP adapter identity, generated Cowork manifest and artifact filenames. The source Cowork manifest is a packaging template; `${CE_SE_VERSION}` is replaced before distribution. Do not install that template directly.
+Root `VERSION` is the single authority for CLI/help, embedded default builds, loaded MCP adapter identity, generated Cowork manifest and artifact filenames. The source Cowork manifest is a packaging template; `${CE_SE_VERSION}` is replaced before distribution. Do not install that template directly.
 
 Increment beta releases consecutively (`1.0.0-beta.2`, `1.0.0-beta.3`, …). When the beta is ready for stable release, change VERSION to `1.0.0`. After stable release, use patch versions for compatible corrections, minor versions for compatible capabilities, and major versions for intentional breaking contract or installation changes. Document meaningful changes and migration steps in the release notes; keep historical evidence labels intact.
 
