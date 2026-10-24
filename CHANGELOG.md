@@ -4,6 +4,12 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 1.4.0 (2026-10-24)
+
+Teacher check-ins move into the conversation, and drafts can be printed.
+
+- Scores, new assignments, new quizzes and assignment edits are reported in the chat, and the agent writes to Canvas on the teacher's go-ahead there. Scoring reports give each assignment's score range, general impressions, held students and timing notes; the teacher can ask for changes, see a student's feedback or hold a student back before posting. "Score and post" still posts first and then reports. The review page remains available when the teacher asks for it or saves that as a preference.
+- Draft PDF (`cse draft-pdf FILE [--handout]`, MCP `save_draft_pdf`) prints an assignment, Page, quiz or results file to Downloads, laid out for paper from the review page's rendering. The teacher copy includes settings, answer keys and private notes; the handout keeps only what students see, with one student's posted feedback per page for scores.
 - The CanvasExpert WebUI desktop shortcut shows the original CanvasExpert easel icon. Installs carry `engine/canvasexpert.ico`, and setup sets it on a new shortcut or an existing one for the same folder.
 
 ## 1.3.0 (2026-10-24)

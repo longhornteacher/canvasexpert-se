@@ -1,6 +1,6 @@
 # Versions and releases
 
-The current version is **1.3** (`1.3.0`), released from `main` on 2026-10-24 as GitHub's latest release: the teaching-defaults update. The previous release is **1.2** (`1.2.0`, team teaching, 2026-10-22); **1.1 beta 4** (2026-10-21) and **1.0** (`1.0.0`, 2026-10-17) came before it. Pushing to `dev` does not publish a release or update UserInstall.
+The current version is **1.4** (`1.4.0`), released from `main` on 2026-10-24 as GitHub's latest release: chat check-ins and Draft PDF. The previous releases are **1.3** (`1.3.0`, teaching defaults, 2026-10-24) and **1.2** (`1.2.0`, team teaching, 2026-10-22); **1.1 beta 4** (2026-10-21) and **1.0** (`1.0.0`, 2026-10-17) came before it. Pushing to `dev` does not publish a release or update UserInstall.
 
 Root `VERSION` is the single authority for CLI/help, embedded default builds, loaded MCP adapter identity, generated Cowork manifest and artifact filenames. The source Cowork manifest is a packaging template; `${CE_SE_VERSION}` is replaced before distribution. Do not install that template directly.
 
