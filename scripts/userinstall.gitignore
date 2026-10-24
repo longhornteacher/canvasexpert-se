@@ -9,7 +9,8 @@
 /install-log.jsonl
 *.cse.json
 
-# The Engine is downloaded by get-engine.cmd; only its manifest and notices are tracked.
+# The Engine is downloaded by get-engine.cmd; only its manifest, notices and shortcut icon are tracked.
 /engine/*
 !/engine/manifest.txt
 !/engine/THIRD_PARTY_NOTICES.md
+!/engine/canvasexpert.ico

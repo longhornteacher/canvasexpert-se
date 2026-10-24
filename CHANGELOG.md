@@ -2,6 +2,10 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
+## Unreleased
+
+- The CanvasExpert WebUI desktop shortcut shows the original CanvasExpert easel icon. Installs carry `engine/canvasexpert.ico`, and setup sets it on a new shortcut or an existing one for the same folder.
+
 ## 1.3.0 (2026-10-24)
 
 Teaching defaults a new install starts with, plus scoring and WebUI refinements.
