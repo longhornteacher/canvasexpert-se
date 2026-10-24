@@ -21,7 +21,7 @@ type connectionData struct {
 func init() {
 	register(
 		page{Path: "/connect", Methods: []string{http.MethodGet, http.MethodPost}, Template: "connect", Scripts: []string{"appearance.js"},
-			Nav:    []navSlot{{Primary: "Settings", Label: "Agent", Order: 35}},
+			Nav:    []navSlot{{Primary: "Settings", Label: "AI app", Order: 35}},
 			Handle: (*Hub).connectionPage},
 		page{Path: "/connect/extension", Handle: (*Hub).connectionExtension},
 	)
@@ -79,9 +79,9 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 					h.connection.Message = err.Error()
 					h.connection.Notice = ""
 				case len(results) == 0:
-					h.connection.Message = "No supported app was found on this PC."
+					h.connection.Message = "Neither Claude nor ChatGPT is installed on this PC yet. Install one, then come back and choose Connect."
 				default:
-					h.connection.Notice = "Connection action completed. Follow each app's next action below."
+					h.connection.Notice = "Set up on this PC. Now follow the steps for each app below."
 				}
 				break
 			}
@@ -95,7 +95,7 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 			} else {
 				h.connection.Result = result
 				h.connection.ExistingInstall = ""
-				h.connection.Notice = "Connection action completed. Follow the app's next action below."
+				h.connection.Notice = "Set up on this PC. Now follow the steps below."
 			}
 		case "check":
 			ctx, cancel := h.reqCtx()
@@ -103,7 +103,7 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 			result, err := installation.Check(ctx, h.root)
 			h.connection.Check = result
 			if err != nil {
-				h.connection.Message = "Local MCP check did not pass: " + err.Error()
+				h.connection.Message = "The check didn't pass: " + err.Error()
 			}
 		default:
 			h.connection.Message = "Choose a connection action."
@@ -120,31 +120,31 @@ func (h *Hub) connectionPage(w http.ResponseWriter, r *http.Request) {
 func connectionResultLabel(result installation.Result) string {
 	switch result.State {
 	case "settings-saved":
-		return labelApp(result.Client) + " registration saved"
+		return labelApp(result.Client) + " is set up on this PC"
 	case "settings-already-saved":
-		return labelApp(result.Client) + " already points to this UserInstall"
+		return labelApp(result.Client) + " was already connected to this folder"
 	case "extension-ready":
 		switch result.CoworkLaunchOutcome {
 		case "launch_requested":
-			return "Cowork extension prepared; opening was requested"
+			return "Claude extension ready; Claude should ask you to install it"
 		case "file_revealed":
-			return "Cowork extension prepared; file shown in File Explorer for manual install"
+			return "Claude extension ready; the file is open in File Explorer. Install it from Claude's Settings, Extensions"
 		case "launch_failed":
-			return "Cowork extension prepared; automatic opening did not work"
+			return "Claude extension ready, but it didn't open on its own. Use Download the extension below"
 		default:
-			return "Cowork extension prepared"
+			return "Claude extension ready"
 		}
 	default:
-		return "Local setup action completed"
+		return "Done"
 	}
 }
 
 func connectionCheckLabel(result installation.CheckResult) string {
 	if result.State == "local-check-passed" {
-		return "Local checks passed"
+		return "Check passed"
 	}
 	if result.State == "local-check-failed" {
-		return "Local check did not pass"
+		return "Check didn't pass"
 	}
 	return ""
 }
@@ -167,7 +167,7 @@ func (c connectionData) AppName(client string) string                { return ap
 
 func labelApp(client string) string {
 	if client == "" || client == "work" {
-		return "Work"
+		return "ChatGPT"
 	}
 	return appName(client)
 }

@@ -87,10 +87,10 @@ func (h *Hub) settingsRequest(w http.ResponseWriter, r *http.Request, status int
 		data.SyncRoot = query.Get("sync_root")
 	}
 	if query.Get("browse_cancel") == "1" {
-		notice = "Folder selection canceled. The typed path remains here; the saved location is unchanged."
+		notice = "No folder picked. Nothing changed."
 	}
 	if query.Get("browse_error") == "1" {
-		message = "The folder chooser could not open. Paste the folder path instead."
+		message = "The folder picker didn't open. Type or paste the folder's location in the box instead."
 	}
 	data.Message, data.Notice = message, notice
 	h.render(w, status, tmpl("settings"), data)
@@ -123,12 +123,12 @@ func (h *Hub) saveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	config, body, err := h.readConfig()
 	if err != nil {
-		h.settingsSection(w, 400, "Could not read workspace settings.", "", "preferences")
+		h.settingsSection(w, 400, "Couldn't read your settings. Try again.", "", "preferences")
 		return
 	}
 	config.Aliases = r.PostForm.Get("aliases") == "on"
 	if err = workspace.WriteTeacherDocument(h.root, "context/courses.md", config, body); err != nil {
-		h.settingsSection(w, 400, "Could not save workspace settings.", "", "preferences")
+		h.settingsSection(w, 400, "Couldn't save your settings. Try again.", "", "preferences")
 		return
 	}
 	h.redirect(w, r, "/settings?section=preferences&clear=prefs", "Settings saved.", "")
@@ -144,35 +144,35 @@ func (h *Hub) saveRulesLocation(w http.ResponseWriter, r *http.Request) {
 	if r.PostForm.Get("action") == "local" {
 		loc, err := workspace.SetRulesLocation(h.root, "", embedded.WorkspaceTemplate, "workspace-template")
 		if err != nil {
-			h.redirect(w, r, settingsDraftURL("connections", r.PostForm.Get("sync_root")), "", "Could not change teacher rules location: "+err.Error())
+			h.redirect(w, r, settingsDraftURL("connections", r.PostForm.Get("sync_root")), "", "Couldn't switch folders: "+err.Error())
 			return
 		}
 		if loc.Mode != "local" {
-			h.redirect(w, r, settingsDraftURL("connections", r.PostForm.Get("sync_root")), "", "Teacher rules did not return to UserInstall; check the saved rules location and try again.")
+			h.redirect(w, r, settingsDraftURL("connections", r.PostForm.Get("sync_root")), "", "Couldn't switch back to this PC. Try again.")
 			return
 		}
-		h.redirect(w, r, "/settings?section=connections&clear=sync", "Teacher rules now use UserInstall.", "")
+		h.redirect(w, r, "/settings?section=connections&clear=sync", "Your settings are now saved on this PC only.", "")
 		return
 	}
 	syncRoot := strings.TrimSpace(r.PostForm.Get("sync_root"))
 	if r.PostForm.Get("action") == "save" && syncRoot == "" {
-		h.redirect(w, r, settingsDraftURL("connections", syncRoot), "", "Choose a UserSync folder first, or select Use UserInstall.")
+		h.redirect(w, r, settingsDraftURL("connections", syncRoot), "", "Choose Browse and pick a folder first.")
 		return
 	}
 	loc, err := workspace.SetRulesLocation(h.root, syncRoot, embedded.WorkspaceTemplate, "workspace-template")
 	if err != nil {
-		h.redirect(w, r, settingsDraftURL("connections", syncRoot), "", "Could not change teacher rules location: "+err.Error())
+		h.redirect(w, r, settingsDraftURL("connections", syncRoot), "", "Couldn't switch folders: "+err.Error())
 		return
 	}
 	if loc.Mode == "sync" {
-		notice := "Teacher setup now uses UserSync at " + loc.RulesRoot + ". Saved course setup, student settings, notes and contact details follow you between PCs. Grading and planning session files remain in UserInstall."
+		notice := "Your settings are now saved in " + loc.RulesRoot + ". On your other PC, open Settings, Connections and choose the same folder."
 		if adoption := seedAdoptionNotice(h.root); adoption != "" {
 			notice += " " + adoption
 		}
 		h.redirect(w, r, "/settings?section=connections&clear=sync", notice, "")
 		return
 	}
-	h.redirect(w, r, "/settings?section=connections&clear=sync", "Teacher rules now use UserInstall.", "")
+	h.redirect(w, r, "/settings?section=connections&clear=sync", "Your settings are now saved on this PC only.", "")
 }
 
 func settingsDraftURL(section, candidate string) string {
@@ -183,10 +183,10 @@ func settingsDraftURL(section, candidate string) string {
 func inspectRulesLocation(root string) (workspace.RulesLocation, string, string, error) {
 	loc, err := workspace.GetRulesLocation(root)
 	if err != nil {
-		return loc, "Unavailable", "The saved teacher-rules location is unavailable. CE-SE will not fall back to another copy.", err
+		return loc, "Unavailable", "CanvasExpert can't find where your settings are saved. It won't use this PC's old copy instead. Choose Browse and pick your OneDrive or Google Drive folder again.", err
 	}
 	if loc.Mode != "sync" {
-		return loc, "Local only", "Your teacher setup is kept on this PC. Add a UserSync folder to preserve reusable setup for another PC.", nil
+		return loc, "This PC only", "Your settings are saved on this PC. To use them on another PC, choose a OneDrive or Google Drive folder in Settings, Connections.", nil
 	}
 	directory, err := os.Open(loc.RulesRoot)
 	if err == nil {
@@ -194,9 +194,9 @@ func inspectRulesLocation(root string) (workspace.RulesLocation, string, string,
 		_ = directory.Close()
 	}
 	if err != nil && !errors.Is(err, io.EOF) {
-		return loc, "Unavailable", "The saved UserSync folder cannot be read. CE-SE will not fall back to another copy.", fmt.Errorf("configured UserSync rules directory %s cannot be read: %w", loc.RulesRoot, err)
+		return loc, "Unavailable", "CanvasExpert can't open your settings folder, " + loc.RulesRoot + ". It won't use this PC's old copy instead. Make sure OneDrive or Google Drive is running and signed in, then choose Check the folder.", fmt.Errorf("couldn't open %s: %w", loc.RulesRoot, err)
 	}
-	return loc, "Available", "Your teacher setup is shared through " + loc.RulesRoot + ". Your sync app (OneDrive or Google Drive) keeps other PCs up to date; CE-SE does not check that delivery.", nil
+	return loc, "Available", "Your settings are saved in " + loc.RulesRoot + ". OneDrive or Google Drive copies them to your other PCs. If a change doesn't show up there, check that it's signed in on both PCs.", nil
 }
 
 func (h *Hub) browseRules(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +239,7 @@ func (h *Hub) testRulesLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, state, _, err := inspectRulesLocation(h.root)
-	message := "Saved teacher-rules folder test: " + state + "."
+	message := "Folder check: " + state + "."
 	problem := ""
 	if err != nil {
 		problem = message + " " + err.Error()

@@ -123,7 +123,7 @@ func TestFailedCanvasTestClearsTestedStatus(t *testing.T) {
 func TestConnectionPageExplainsDestinationVerificationAndMissingInstall(t *testing.T) {
 	h := newTestHub()
 	w := hubGet(h, "/connect")
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "does not check the destination app") || !strings.Contains(w.Body.String(), "webui.cmd") || !strings.Contains(w.Body.String(), `aria-current="page">Agent</a>`) {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "itself works on this PC") || !strings.Contains(w.Body.String(), "webui.cmd") || !strings.Contains(w.Body.String(), `aria-current="page">AI app</a>`) {
 		t.Fatal("missing honest destination or UserInstall guidance")
 	}
 }
@@ -133,21 +133,21 @@ func TestConnectionOutcomeLabelsDescribeLocalEvidence(t *testing.T) {
 		result installation.Result
 		want   string
 	}{
-		{installation.Result{State: "settings-saved"}, "Work registration saved"},
-		{installation.Result{State: "settings-already-saved"}, "Work already points to this UserInstall"},
-		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "launch_requested"}, "Cowork extension prepared; opening was requested"},
-		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "file_revealed"}, "Cowork extension prepared; file shown in File Explorer for manual install"},
-		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "launch_failed"}, "Cowork extension prepared; automatic opening did not work"},
+		{installation.Result{State: "settings-saved"}, "ChatGPT is set up on this PC"},
+		{installation.Result{State: "settings-already-saved"}, "ChatGPT was already connected to this folder"},
+		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "launch_requested"}, "Claude extension ready; Claude should ask you to install it"},
+		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "file_revealed"}, "Claude extension ready; the file is open in File Explorer. Install it from Claude's Settings, Extensions"},
+		{installation.Result{State: "extension-ready", CoworkLaunchOutcome: "launch_failed"}, "Claude extension ready, but it didn't open on its own. Use Download the extension below"},
 	}
 	for _, tc := range cases {
 		if got := connectionResultLabel(tc.result); got != tc.want {
 			t.Errorf("connectionResultLabel(%+v) = %q, want %q", tc.result, got, tc.want)
 		}
 	}
-	if got := connectionCheckLabel(installation.CheckResult{State: "local-check-passed"}); got != "Local checks passed" {
+	if got := connectionCheckLabel(installation.CheckResult{State: "local-check-passed"}); got != "Check passed" {
 		t.Fatalf("successful local check label = %q", got)
 	}
-	if got := connectionCheckLabel(installation.CheckResult{State: "local-check-failed"}); got != "Local check did not pass" {
+	if got := connectionCheckLabel(installation.CheckResult{State: "local-check-failed"}); got != "Check didn't pass" {
 		t.Fatalf("failed local check label = %q", got)
 	}
 }

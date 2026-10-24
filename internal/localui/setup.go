@@ -204,7 +204,7 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	credential := platform.Credential{Origin: normalizeCanvasOrigin(r.PostForm.Get("origin")), Token: r.PostForm.Get("token")}
 	client, err := canvas.New(credential.Origin, credential.Token)
 	if err != nil {
-		h.page(w, 400, "Use the HTTPS Canvas address and a nonempty access token.")
+		h.page(w, 400, "Type your Canvas address (it starts with https://) and paste your access token.")
 		return
 	}
 	credential.Origin = client.Origin()
@@ -217,13 +217,13 @@ func (h *setupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.onValidationResult != nil {
 			h.onValidationResult(false)
 		}
-		message := "Canvas could not be reached to validate this token. Check your network or Canvas availability and try again. Your saved credential has not changed."
+		message := "Couldn't reach Canvas to check this token. Check your internet connection and choose Connect again. Nothing was changed."
 		var ce *canvas.Error
 		if errors.As(err, &ce) {
 			if ce.Kind == "authentication" {
-				message = "Canvas rejected this token. Check the Canvas address and that you copied the whole token. Your saved credential has not changed."
+				message = "Canvas didn't accept this token. Check the Canvas address, and make sure you copied the whole token. Nothing was changed."
 			} else {
-				message = ce.Error() + ". Your saved credential has not changed; this does not show that your PAT needs replacing."
+				message = "Canvas sent back an error: " + ce.Error() + ". Your token is probably fine. Check the Canvas address and choose Connect again. Nothing was changed."
 			}
 		}
 		h.page(w, 400, message)

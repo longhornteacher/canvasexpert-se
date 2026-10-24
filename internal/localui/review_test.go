@@ -51,7 +51,7 @@ func TestReviewPageShowsPlainTextAndMarksPrivateNotes(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/review", nil))
 	body := w.Body.String()
-	if w.Code != 200 || !strings.Contains(body, "Nice &lt;b&gt;work&lt;/b&gt;") || !strings.Contains(body, "Teacher only (not posted)") || !strings.Contains(body, "school-day accommodation") || !strings.Contains(body, "Current Canvas timing") || !strings.Contains(body, "Proposed timing") || !strings.Contains(body, "Held, will not post: unreadable evidence") {
+	if w.Code != 200 || !strings.Contains(body, "Nice &lt;b&gt;work&lt;/b&gt;") || !strings.Contains(body, "Teacher only (not posted)") || !strings.Contains(body, "school-day accommodation") || !strings.Contains(body, "Current Canvas timing") || !strings.Contains(body, "Proposed timing") || !strings.Contains(body, "On hold, won't post: unreadable evidence") {
 		t.Fatal(body)
 	}
 	if strings.Index(body, `<pre class="work">student response</pre>`) < 0 || strings.Index(body, `<pre class="work">student response</pre>`) > strings.Index(body, `Feedback to be posted`) {
@@ -60,7 +60,7 @@ func TestReviewPageShowsPlainTextAndMarksPrivateNotes(t *testing.T) {
 	if !strings.Contains(body, "Rubric comments to be posted") || !strings.Contains(body, "<b>Evidence</b><pre>Item 1: Specific.\nItem 2: Cite a line.</pre>") {
 		t.Fatal("rubric criterion comments should show with their line breaks")
 	}
-	for _, want := range []string{"Only approved items can be posted", "prefers-color-scheme:dark", "color:var(--accent-ink)", "summary:focus-visible", "Held"} {
+	for _, want := range []string{"Only approved items are posted", "prefers-color-scheme:dark", "color:var(--accent-ink)", "summary:focus-visible", "On hold"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("review page missing styling or scope detail %q", want)
 		}

@@ -20,40 +20,45 @@
 <a class="go" href="/setup">Replace token</a>
 </div>
 <details class="forget"><summary>Remove the saved token from this PC</summary>
-<p>This deletes the token from Windows Credential Manager on this PC. Your courses, drafts and CE-SE files stay as they are; you can reconnect any time with a new token.</p>
+<p>CanvasExpert stops working with Canvas on this PC until you connect again. Your courses, drafts and notes stay as they are.</p>
 <form method="post" action="/canvas/forget"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="confirm" required> Yes, remove it.</label><button type="submit" class="small danger">Remove token</button></form>
 </details>
 {{else}}<a class="go" href="/setup">Connect Canvas</a>{{end}}
 </section>
 {{if .Root}}
 <section class="settings-section" id="rules">
-<h2>Where your teacher setup lives</h2>
-<p>Keep reusable teacher setup on this PC, or in a UserSync folder (OneDrive or Google Drive) so you can use it on a replacement PC. This includes instructions, playbooks, preferences, course selections, student aliases/settings/notes and private contact details. Credentials and machine connections are set up separately. Grading and planning session files stay on this PC.</p>
-<p>Now: <b>{{if eq .RulesMode "sync"}}shared UserSync folder{{else}}this PC{{end}}</b>{{if .RulesRoot}} · <code>{{.RulesRoot}}</code>{{end}}</p>
+<h2>Use CanvasExpert on more than one PC</h2>
+<p>Your settings, course choices and student notes are saved on this PC. To use them on another PC too:</p>
+<ol class="steps">
+<li>Choose <b>Browse</b> and pick a folder inside OneDrive or Google Drive, such as <code>OneDrive\CanvasExpert</code>.</li>
+<li>Choose <b>Use this folder</b>.</li>
+<li>On the other PC, open this page and choose the same folder.</li>
+</ol>
+<p>Work you're in the middle of scoring or planning stays on the PC where you started it.</p>
 <p><span class="pill {{if eq .SyncHealth "Available"}}on{{else if eq .SyncHealth "Unavailable"}}off{{end}}">{{.SyncHealth}}</span> {{.SyncHealthNote}}</p>
 {{if .RulesError}}<p class="error" role="alert">{{.RulesError}}</p>{{end}}
-<details><summary>How UserInstall and UserSync work</summary>
-<p>Reusable teacher setup uses UserInstall by default or the saved UserSync folder. UserSync is a local folder; its provider carries changes between computers, and CE-SE does not verify delivery. Grading and planning session files stay in UserInstall.</p>
-<p>An empty UserSync folder is initialized from current teacher setup. Existing UserSync data becomes authoritative; newly supported setup files are added only if missing. Local originals are preserved. Use UserInstall copies shared setup back and archives differing local versions.</p>
+<details><summary>What happens when I choose a folder?</summary>
+<p>If the folder is empty, CanvasExpert copies your settings from this PC into it. If it already has CanvasExpert settings from your other PC, those are used, and this PC's copies are kept as a backup.</p>
+<p><b>Keep on this PC</b> copies the settings back to this PC and stops using the shared folder.</p>
 </details>
 <form method="post" action="/rules-location?section=connections">
 <input type="hidden" name="request_secret" value="{{.Secret}}">
-<label for="sync_root">UserSync folder path</label>
+<label for="sync_root">OneDrive or Google Drive folder</label>
 <div class="inline"><input id="sync_root" name="sync_root" value="{{.SyncRoot}}" maxlength="4000" autocomplete="off"><button type="submit" formaction="/rules/browse" formmethod="post" class="secondary">Browse</button></div>
-<div class="inline"><button type="submit" name="action" value="save">Use this UserSync folder</button><button type="submit" name="action" value="local" class="secondary">Keep on this PC</button><button type="submit" formaction="/rules/test" formmethod="post" class="secondary">Test saved folder</button></div>
+<div class="inline"><button type="submit" name="action" value="save">Use this folder</button><button type="submit" name="action" value="local" class="secondary">Keep on this PC</button><button type="submit" formaction="/rules/test" formmethod="post" class="secondary">Check the folder</button></div>
 </form>
 </section>
 {{end}}{{end}}
 {{if eq .SettingsSection "preferences"}}
 <section id="preferences" class="settings-section">
-<h2>Student aliases</h2>
-<form method="post" action="/settings?section=preferences"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="aliases" {{if .Aliases}}checked{{end}}> Use aliases in student work files</label><button type="submit">Save alias preference</button></form>
+<h2>Hide student names</h2>
+<p>When this is on, Claude or ChatGPT sees a made-up name for each student in the work it scores. You can see or change each made-up name on the <a href="/students">Students</a> page.</p>
+<form method="post" action="/settings?section=preferences"><input type="hidden" name="request_secret" value="{{.Secret}}"><label class="check"><input type="checkbox" name="aliases" {{if .Aliases}}checked{{end}}> Hide student names</label><button type="submit">Save</button></form>
 </section>
 {{if .Root}}
 <section class="settings-section voice">
 <h2>Feedback voice</h2>
-<p class="health-note">Teacher rules use {{.RulesMode}}{{if .RulesRoot}} at <code>{{.RulesRoot}}</code>{{end}}. <a href="/settings?section=connections">Manage UserInstall / UserSync</a>.</p>
-<p>The agent reads this when it writes feedback or scores work. Each field allows 8,000 characters.</p>
+<p>Claude or ChatGPT reads this every time it scores work or writes feedback. Write it the way you'd explain it to a student teacher.</p>
 <form method="post" action="/grading"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="section" value="preferences">
 <label for="voice">How feedback should sound</label>
 <textarea id="voice" name="voice" rows="4" maxlength="8000" placeholder="Warm and encouraging, short sentences a 7th grader can read. Start with one glow, then one grow. Use their first name.">{{.Voice}}</textarea>
@@ -64,19 +69,20 @@
 {{end}}{{end}}
 {{if eq .SettingsSection "files"}}
 <section id="files" class="settings-section">
-<h2>Playbooks and context files</h2>
-<p>These are the instruction and context files the agent follows. Existing teacher copies are not updated automatically. Replacement keeps the old copy in <code>playbook-old</code>; grading and student context files cannot be replaced here.</p>
+<h2>Instruction files</h2>
+<p>These files tell Claude or ChatGPT how to do each job. You don't need to open them. If a file says <b>different</b> and you want the newest version, choose <b>Get the new version</b> under it. Your old copy is saved in the <code>playbook-old</code> folder.</p>
 <ul class="playbook">{{range .Playbook}}
-<li><code>{{.Path}}</code> {{if eq .State "same"}}<span class="pill same">same as this version</span>{{else if eq .State "missing"}}<span class="pill off">missing</span>{{else if eq .State "unavailable"}}<span class="pill off">unavailable</span>{{else}}<span class="pill differs">yours / differs</span> <small>differs from this version's starter copy</small>{{end}}{{if .Replaceable}}<details class="forget"><summary>Get the new version</summary><form method="post" action="/playbook/replace?section=files"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="file" value="{{.Path}}"><label class="check"><input type="checkbox" name="confirm" required> Replace my copy. Keep my old one in playbook-old.</label><button type="submit" class="small danger">Replace file</button></form></details>{{end}}</li>
+<li><code>{{.Path}}</code> {{if eq .State "same"}}<span class="pill same">up to date</span>{{else if eq .State "missing"}}<span class="pill off">missing</span>{{else if eq .State "unavailable"}}<span class="pill off">can't open</span>{{else}}<span class="pill differs">different</span> <small>changed by you, or older than this version</small>{{end}}{{if .Replaceable}}<details class="forget"><summary>Get the new version</summary><form method="post" action="/playbook/replace?section=files"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="file" value="{{.Path}}"><label class="check"><input type="checkbox" name="confirm" required> Replace my copy. Save my old one in playbook-old.</label><button type="submit" class="small danger">Replace file</button></form></details>{{end}}</li>
 {{end}}</ul>
 </section>
 {{end}}
 {{if eq .SettingsSection "system"}}
 <section id="system" class="settings-section">
-<h2>Engine</h2>
+<h2>Version</h2>
 <p><span class="pill on">{{.Version}}</span> <code>{{.Program}}</code></p>
-<details><summary>CE-SE installation</summary>{{if .Root}}<p><span class="pill on">Found</span> <code>{{.Root}}</code></p><p>The Engine, pulled work, drafts and grading/planning sessions stay here. Reusable teacher setup uses this folder or your selected UserSync.</p>{{else}}<p><span class="pill off">Not configured</span> Launch with <code>cse --workspace &quot;PATH&quot; ui</code> from a UserInstall.</p>{{end}}</details>
-<form method="post" action="/quit"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" class="secondary">Quit hub</button></form>
+<details><summary>CanvasExpert folder</summary>{{if .Root}}<p><code>{{.Root}}</code></p><p>Your drafts and scoring work are saved here.</p>{{else}}<p><span class="pill off">Not found</span> Launch with <code>cse --workspace &quot;PATH&quot; ui</code> from a UserInstall.</p>{{end}}</details>
+<p>To update, type <b>Update CanvasExpert</b> in Claude or ChatGPT.</p>
+<form method="post" action="/quit"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" class="secondary">Close CanvasExpert</button></form>
 </section>
 {{end}}
 <script src="/_cse/canvas-health.js" defer></script>

@@ -173,7 +173,7 @@ func TestChosenCoursesGetTheOwnerAndNicknamesMustBeUnique(t *testing.T) {
 	if len(got) != 2 || got[0].Nickname != "CS8" || got[0].Owner != "" || got[1].Owner != "turner" || !got[1].Current || got[1].ID != 701 || got[1].Timezone != "" {
 		t.Fatalf("courses: %+v", got)
 	}
-	if body := hubGet(f.h, "/courses").Body.String(); !strings.Contains(body, "<th>Owner</th>") || !strings.Contains(body, "<td>Ms. Turner</td>") || !strings.Contains(body, "<td>You</td>") {
+	if body := hubGet(f.h, "/courses").Body.String(); !strings.Contains(body, "<th>Teacher</th>") || !strings.Contains(body, "<td>Ms. Turner</td>") || !strings.Contains(body, "<td>You</td>") {
 		t.Fatal("courses page should show who owns each course")
 	}
 }
