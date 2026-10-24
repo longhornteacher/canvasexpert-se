@@ -35,6 +35,7 @@ func TestResultsIndexKeepsOneOperationSnapshotAndExactCompletionIdentity(t *test
 		{StudentRef: "graded", Operation: "grade", Grade: &domain.GradeOperation{Attempt: current, Outcomes: domain.ActionOutcomes{Comment: domain.ActionOutcome{Status: "succeeded"}, Grade: domain.ActionOutcome{Status: "succeeded"}, Rubric: domain.ActionOutcome{Status: "not-requested"}, Late: domain.ActionOutcome{Status: "held"}}}},
 		{StudentRef: "quiz", Operation: "comment-only", CommentOnly: &domain.CommentOnlyOperation{Attempt: current, Outcome: domain.ActionOutcome{Status: "succeeded"}}},
 		{StudentRef: "pending", Operation: "comment-only", CommentOnly: &domain.CommentOnlyOperation{Attempt: current, Outcome: domain.ActionOutcome{Status: "pending"}}},
+		{StudentRef: "feedback", Operation: "comment-only", CommentOnly: &domain.CommentOnlyOperation{Attempt: current, Header: "none", Feedback: "Keep revising.", Outcome: domain.ActionOutcome{Status: "succeeded"}}},
 		{StudentRef: "timed", Operation: "late-only", LateOnly: &domain.LateOnlyOperation{Attempt: current, LateTiming: timing, Outcome: domain.ActionOutcome{Status: "succeeded"}}},
 	}}
 	path := filepath.Join(root, "drafts", "accepted")
@@ -51,6 +52,9 @@ func TestResultsIndexKeepsOneOperationSnapshotAndExactCompletionIdentity(t *test
 	}
 	if !index.completedHint(10, "graded", sub, snapshot) || !index.completedCommentOnlyHint(10, "quiz", sub, snapshot) || index.completedCommentOnlyHint(10, "pending", sub, snapshot) {
 		t.Fatal("accepted grade/comment completion was lost or a pending comment was counted")
+	}
+	if index.completedCommentOnlyHint(10, "feedback", sub, snapshot) {
+		t.Fatal("feedback without scores must not suppress unscored quiz work")
 	}
 	if !index.completedTimingHint(snapshot.Instance, 10, 2, "timed", sub, Assignment{}, nil) || !operation.acceptedTimingRecordExists(2, 10, "timed", current) || !operation.acceptedTimingOrigin(2, 10, "timed", current, source, domain.ObservedTiming{}) {
 		t.Fatal("timing completion/provenance must use the indexed operation snapshot")

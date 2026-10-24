@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,6 +13,92 @@ import (
 	"canvasexpertse/internal/render"
 	"canvasexpertse/internal/workspace"
 )
+
+func TestFeedbackOnlyReviewAndPostWithoutScores(t *testing.T) {
+	live := fixtureSubmission(5)
+	assignment := fixtureAssignment()
+	assignment.Rubric, assignment.RubricAssociation = nil, nil
+	assignment.RubricSettings.ID = 0
+	writes, reads := 0, 0
+	var posted string
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" {
+			reads++
+			if strings.HasSuffix(r.URL.Path, "/submissions/5") {
+				_ = json.NewEncoder(w).Encode(live)
+			} else {
+				_ = json.NewEncoder(w).Encode(assignment)
+			}
+			return
+		}
+		writes++
+		var payload map[string]map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Error(err)
+		}
+		comment := payload["comment"]
+		if r.Method != "PUT" || !strings.HasSuffix(r.URL.Path, "/submissions/5") || len(payload) != 1 || len(comment) != 2 || comment["attempt"] != float64(live.Attempt) {
+			t.Errorf("unexpected feedback-only write: %s %s %#v", r.Method, r.URL.Path, payload)
+		}
+		posted, _ = comment["text_comment"].(string)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	path := scoringFiles(t, s, 5)
+	var doc domain.ResultsDocument
+	if _, err := workspace.ReadDocument(path, &doc); err != nil {
+		t.Fatal(err)
+	}
+	doc.Assignment.Rubric = nil
+	doc.Interpretation = domain.Interpretation{}
+	doc.Students[0].Operation = "comment-only"
+	doc.Students[0].CommentOnly = &domain.CommentOnlyOperation{Attempt: doc.Students[0].Grade.Attempt, Header: "none", Feedback: "{{student_name}}, explain your evidence.\n\nKeep revising."}
+	doc.Students[0].Grade = nil
+	packetPath := filepath.Join(s.Root, filepath.FromSlash(doc.Packet))
+	var packet domain.PacketDocument
+	if _, err := workspace.ReadDocument(packetPath, &packet); err != nil {
+		t.Fatal(err)
+	}
+	packet.Assignment = doc.Assignment
+	if err := workspace.WriteDocument(packetPath, packet, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := workspace.WriteDocument(path, doc, "Teacher draft body"); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(path)
+	review, err := BuildReview(s.Root, path)
+	want := "Jordan, explain your evidence.\n\nKeep revising."
+	if err != nil || len(review.Cards) != 1 || review.Cards[0].Hold != "" || review.Cards[0].Comment != want || review.Cards[0].Total != "" {
+		t.Fatalf("feedback-only review: %+v %v", review, err)
+	}
+	after, _ := os.ReadFile(path)
+	if string(before) != string(after) || reads != 0 || writes != 0 {
+		t.Fatal("review changed the draft or contacted Canvas")
+	}
+	if _, err = s.Post(context.Background(), path); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 1 || reads != 2 || posted != want {
+		t.Fatalf("feedback-only post: writes=%d reads=%d text=%q", writes, reads, posted)
+	}
+	if _, err = s.Post(context.Background(), path); err != nil || writes != 1 || reads != 2 {
+		t.Fatalf("accepted comment replayed: writes=%d reads=%d err=%v", writes, reads, err)
+	}
+	if _, err = workspace.ReadDocument(path, &doc); err != nil || doc.Students[0].CommentOnly.Outcome.Status != "succeeded" {
+		t.Fatalf("feedback-only outcome not saved: %+v %v", doc, err)
+	}
+	// A new attempt holds a fresh comment without any write.
+	doc.Students[0].CommentOnly.Outcome = domain.ActionOutcome{}
+	if err = workspace.WriteDocument(path, doc, "Teacher draft body"); err != nil {
+		t.Fatal(err)
+	}
+	live.Attempt++
+	report, err := s.Post(context.Background(), path)
+	if err != nil || writes != 1 || len(report.Students) != 1 || report.Students[0].Revision.Status != "held" {
+		t.Fatalf("changed attempt was not held: %+v writes=%d err=%v", report, writes, err)
+	}
+}
 
 func TestHistoryCommentsPreserveAttemptAndRejectConflictingContexts(t *testing.T) {
 	sub := fixtureSubmission(5)

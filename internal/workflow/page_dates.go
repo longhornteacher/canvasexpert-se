@@ -23,6 +23,7 @@ type pageDateDetails struct {
 }
 
 type pageDateOverride struct {
+	ContextModuleID int64   `json:"context_module_id"`
 	ID              int64   `json:"id"`
 	Title           string  `json:"title"`
 	GroupID         int64   `json:"group_id"`

@@ -1,5 +1,7 @@
 # Targeted scoring session: execution brief
 
+Retired 2026-10-22: implementation and local validation are complete in Dev. What remains is observation of real work when it arises (New Quiz pending counts around a comment, a graded discussion, a resubmission, a group assignment, a teacher-run session); none is a prerequisite for ordinary use and no classroom work should be created to manufacture it. Record any such observation in `docs/engine-capabilities.md` and `internal/localui/capabilities.go`. This file is history and evidence, not instructions.
+
 Prepared 2026-10-21 against Dev branch `dev`, revision `8551564`. Decisions confirmed by the developer on 2026-10-21. Engine work and matching seed-playbook/rule/capability updates are implemented in the current Dev working tree; local validation passed. This brief does not authorize Canvas writes, release, or UserInstall/UserSync adoption.
 
 ## Resume here (updated 2026-10-21)

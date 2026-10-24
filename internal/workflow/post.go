@@ -42,11 +42,8 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 	requests := outer.requestCount()
 	report.Path = path
 	defer func() { report.Elapsed = time.Since(start); report.Requests = outer.requestCount() - requests }()
-	if err = FillResultsAssignment(s.Root, path); err != nil {
-		return report, err
-	}
 	var doc domain.ResultsDocument
-	body, err := workspace.ReadDocument(path, &doc)
+	body, err := ReadResultsDocument(s.Root, path, &doc)
 	if err != nil {
 		return report, err
 	}
@@ -306,17 +303,20 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 		c.Outcome.Status, c.Outcome.Message = "uncertain", "comment completion remains uncertain; inspect Canvas before repeating it"
 		return save()
 	}
-	computed, err := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, c.Components, doc.Assignment.Points)
-	if err != nil {
-		return err
-	}
-	parts, err := partPoints(doc, source.writtenItems, v.Interpretation)
-	if err != nil {
-		return err
-	}
-	text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: workspace.ReplaceStudentName(c.Feedback, source.student), OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(doc, source.work, c.Attempt.Attempt), PartPoints: parts, Header: c.Header})
-	if err != nil {
-		return err
+	text := workspace.ReplaceStudentName(c.Feedback, source.student)
+	if !c.FeedbackOnly() {
+		computed, err := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, c.Components, doc.Assignment.Points)
+		if err != nil {
+			return err
+		}
+		parts, err := partPoints(doc, source.writtenItems, v.Interpretation)
+		if err != nil {
+			return err
+		}
+		text, err = render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: c.Components, Assessment: computed.Posted, AssignmentPoints: doc.Assignment.Points, Feedback: text, OmitAssessment: doc.Assignment.NewQuiz, AutoScored: autoScoredFor(doc, source.work, c.Attempt.Attempt), PartPoints: parts, Header: c.Header})
+		if err != nil {
+			return err
+		}
 	}
 	var matches int
 	for _, existing := range commentsForAttempt(live, c.Attempt.Attempt) {
@@ -329,10 +329,10 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 		return save()
 	}
 	c.Outcome = domain.ActionOutcome{Status: "pending", PostedText: text}
-	if err = save(); err != nil {
+	if err := save(); err != nil {
 		return err
 	}
-	err = s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"comment": s.commentFields(text, c.Attempt.Attempt)}, nil)
+	err := s.Client.Write(ctx, "PUT", submissionPath(*doc, source.student.UserID), map[string]any{"comment": s.commentFields(text, c.Attempt.Attempt)}, nil)
 	if err != nil {
 		c.Outcome = failedOutcome(err)
 		c.Outcome.PostedText = text

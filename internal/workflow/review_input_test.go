@@ -16,7 +16,7 @@ func TestReviewInputContentAndOptionalCourse(t *testing.T) {
 	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct{ example, kind string }{{"synthetic-assignment-create.md", "assignment"}, {"synthetic-results-two.md", "results"}} {
+	for _, tc := range []struct{ example, kind string }{{"synthetic-assignment-create.md", "assignment"}, {"synthetic-results-two.md", "results"}, {"synthetic-results-feedback-only.md", "results"}} {
 		data, err := os.ReadFile(filepath.Join("..", "..", "engine-docs", "examples", tc.example))
 		if err != nil {
 			t.Fatal(err)

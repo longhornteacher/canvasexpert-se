@@ -197,7 +197,7 @@ func ParseDocument(b []byte, out any) (string, error) {
 					hint := "Check accepted fields with engine_reference (formats and examples)."
 					for i := 0; i < len(node.Content[0].Content); i += 2 {
 						if node.Content[0].Content[i].Value == "kind" && node.Content[0].Content[i+1].Value == "results" {
-							hint = "For results, use interpretation.mapping and students[].grade.components; attempt accepts only attempt and submitted_at. See engine_reference formats and examples."
+							hint = "For results, use interpretation.mapping and grade.components (or comment_only.components): [{key: response_key, evidence: present, criteria: [{criterion_id: criterion_id_from_basis, points: 0}]}]. Points belong under criteria, never directly on a component. attempt accepts only attempt and submitted_at. For feedback without scores use operation: comment-only with comment_only: {attempt: {attempt: 1, submitted_at: RFC3339}, header: none, feedback: text} and omit components. See engine_reference formats and examples."
 							break
 						}
 					}

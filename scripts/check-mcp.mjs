@@ -56,7 +56,7 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 42);
+  assert.equal(names.length, 47);
   assert.ok(names.includes('init_results'), 'missing init_results');
   const familyContactTool = discovered.result.tools.find(t => t.name === 'prepare_family_contact');
   assert.ok(familyContactTool?.inputSchema.properties.folder, 'prepare_family_contact must expose folder');

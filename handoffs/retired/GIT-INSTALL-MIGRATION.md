@@ -1,5 +1,7 @@
 # Git install migration: handoff
 
+Retired 2026-10-22: steps 1 to 4 are done and released (1.1.0-beta.2 to beta.4, first install migrated, `cse update` in the Engine). The district-PC trial (step 5) and the other "Not verified" items are observations to record when they happen on a real install, not open execution work. This file is history and evidence, not instructions.
+
 Written 2026-10-21 on the developer's main PC against Dev branch `dev`. Read this first when continuing the git-install work on another PC. It is self-contained: decisions, what was built and where, how it was verified, what is still unverified, and the exact next steps. It does not authorize a release, a push of the `userinstall` branch, a GitHub release, or any change to a teacher's UserInstall or UserSync.
 
 ## Resume here

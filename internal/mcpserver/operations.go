@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,30 @@ type PrepareAudienceInput struct {
 	Course  string `json:"course" jsonschema:"Configured course nickname"`
 	Path    string `json:"path" jsonschema:"Course-local assignment or assignment-dates draft"`
 	Refresh bool   `json:"refresh,omitempty" jsonschema:"Explicitly prepare additions and work-preserving removals for an existing audience"`
+}
+
+type AssignToInput struct {
+	Path    string `json:"path" jsonschema:"Course-local kind: assign-to document"`
+	Preview bool   `json:"preview,omitempty" jsonschema:"Resolve every name and show each target's current -> new audience without writing"`
+}
+
+type AssignModulesInput struct {
+	Course        string            `json:"course" jsonschema:"Configured course nickname"`
+	TagSet        string            `json:"tag_set,omitempty" jsonschema:"Optional tag set name to take tag names from (matched ignoring case and a trailing s)"`
+	ModulePattern string            `json:"module_pattern,omitempty" jsonschema:"Module title pattern containing {tag}, for example Book Club: {tag}"`
+	Map           map[string]string `json:"map,omitempty" jsonschema:"Alternative to module_pattern: module title to tag name or Set/Tag"`
+	Preview       bool              `json:"preview,omitempty" jsonschema:"Show the changes without writing"`
+}
+
+type AudienceReportInput struct {
+	Course string `json:"course" jsonschema:"Configured course nickname"`
+	Module string `json:"module,omitempty" jsonschema:"Optional module title or ID to report on"`
+}
+
+type SetFileAccessInput struct {
+	Course string `json:"course" jsonschema:"Configured course nickname"`
+	FileID int64  `json:"file_id" jsonschema:"Existing course file ID"`
+	Access string `json:"access" jsonschema:"course, hidden (links still work), or locked"`
 }
 
 type QuizInput struct {
@@ -93,6 +118,69 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		return s.command(ctx, args...)
 	})
 
+	addReadTool(server, "list_tags", "List a course's differentiation tag sets and tags with IDs and member counts. Counts only: no students are returned. Tags are teacher-owned; this Engine never creates or edits them.", func(ctx context.Context, _ *mcp.CallToolRequest, in CourseInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		return s.command(ctx, "tags", in.Course)
+	})
+	addActionTool(server, "assign_to", "Set Canvas Assign To on existing modules, pages, New Quizzes, assignments or discussions to differentiation tags, from a kind: assign-to document (names or IDs; Set/Tag, a unique bare tag name, or tag ID; a trailing s on the set name is ignored). preview:true resolves every name read-only and shows current -> new audience per target; do that first and show the teacher. Replace mode sets exactly the listed tags; add merges. Reads back after every write, never replays an accepted change, holds removals of access from work already submitted unless allow_remove_with_submissions is set, refuses native group assignments, warns when a module's items also sit in a broader module, and never creates or edits tags or publishes anything. Report held targets by name.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in AssignToInput) (TextOutput, error) {
+		path, err := s.coursePath(in.Path)
+		if err != nil {
+			return TextOutput{}, err
+		}
+		args := []string{"assign-to", path}
+		if in.Preview {
+			args = append(args, "--preview")
+		}
+		return s.command(ctx, args...)
+	})
+	addActionTool(server, "assign_modules_by_tag", "Assign each module to its same-named differentiation tag in one call, from module_pattern (such as Book Club: {tag}) with an optional tag_set, or from an explicit module-to-tag map. Builds and saves an assign-to document under the course's drafts folder, then applies it (or only previews it). Same safety rules as assign_to.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in AssignModulesInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		args := []string{"assign-modules", in.Course}
+		if in.ModulePattern != "" {
+			args = append(args, "--pattern", in.ModulePattern)
+		}
+		if in.TagSet != "" {
+			args = append(args, "--tag-set", in.TagSet)
+		}
+		keys := make([]string, 0, len(in.Map))
+		for module := range in.Map {
+			keys = append(keys, module)
+		}
+		sort.Strings(keys)
+		for _, module := range keys {
+			args = append(args, "--map", module+"="+in.Map[module])
+		}
+		if in.Preview {
+			args = append(args, "--preview")
+		}
+		return s.command(ctx, args...)
+	})
+	addReadTool(server, "audience_report", "Show who can see each module and item (Everyone, tags with counts, sections, student counts) and flag items that sit in more than one module, since an item is visible if any of its modules grants access. Counts only; no students are listed.", func(ctx context.Context, _ *mcp.CallToolRequest, in AudienceReportInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		args := []string{"audience-report", in.Course}
+		if in.Module != "" {
+			args = append(args, "--module", in.Module)
+		}
+		return s.command(ctx, args...)
+	})
+	addActionTool(server, "set_file_access", "Change the access of an existing course file, including files copied by copy_module: course (everyone in the course), hidden (not listed in Files, links still work), or locked. Files cannot be assigned to tags; hidden is how to keep a file out of the Files list while tagged pages link to it. Reads the file back and reports its actual access.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in SetFileAccessInput) (TextOutput, error) {
+		if err := requireCourse(in.Course); err != nil {
+			return TextOutput{}, err
+		}
+		if in.FileID <= 0 {
+			return TextOutput{}, errors.New("file_id must be positive")
+		}
+		if in.Access != "course" && in.Access != "hidden" && in.Access != "locked" {
+			return TextOutput{}, errors.New("access must be course, hidden, or locked")
+		}
+		return s.command(ctx, "set-file-access", in.Course, strconv.FormatInt(in.FileID, 10), "--access", in.Access)
+	})
 	addReadTool(server, "list_external_resources", "Read collaboration and conference metadata for a configured course or exact collaborative group. Returns safe supplied links and known participant refs only; it does not create or open provider resources or read their contents.", func(ctx context.Context, _ *mcp.CallToolRequest, in ExternalResourcesInput) (TextOutput, error) {
 		if err := requireCourse(in.Course); err != nil {
 			return TextOutput{}, err

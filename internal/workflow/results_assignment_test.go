@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,7 +12,7 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
-func TestFillResultsAssignmentFromPacket(t *testing.T) {
+func TestReadResultsAssignmentFromPacketLeavesDraftUnchanged(t *testing.T) {
 	root := t.TempDir()
 	data, err := os.ReadFile(filepath.Join("..", "..", "engine-docs", "examples", "synthetic-results-two.md"))
 	if err != nil {
@@ -33,20 +34,35 @@ func TestFillResultsAssignmentFromPacket(t *testing.T) {
 	if err = os.WriteFile(path, bare, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err = FillResultsAssignment(root, path); err != nil {
-		t.Fatal(err)
-	}
 	var filled domain.ResultsDocument
-	if _, err = workspace.ReadDocument(path, &filled); err != nil {
+	if _, err = ReadResultsDocument(root, path, &filled); err != nil {
 		t.Fatalf("filled file does not validate: %v", err)
 	}
 	if filled.Assignment.AssignmentID != example.Assignment.AssignmentID || filled.Packet != example.Packet {
 		t.Fatalf("assignment not copied from the packet: %+v", filled.Assignment)
 	}
-	// A present block is left alone, and drift names the differing field.
-	if err = FillResultsAssignment(root, path); err != nil {
+	if _, err = ValidateReviewInput(root, path, ""); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = BuildReview(root, path); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(bare, after) {
+		t.Fatalf("validation/review changed the draft: %v", err)
+	}
+	invalid := bytes.Replace(bare, []byte("points: 3"), []byte("score: 3"), 1)
+	if err = os.WriteFile(path, invalid, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = ReadResultsDocument(root, path, &filled); err == nil {
+		t.Fatal("invalid component schema accepted")
+	}
+	after, err = os.ReadFile(path)
+	if err != nil || !bytes.Equal(invalid, after) {
+		t.Fatalf("failed validation changed the draft: %v", err)
+	}
+	// Drift in a supplied snapshot still names the differing field.
 	drifted := filled.Assignment
 	drifted.Points = domain.MustDecimal("999")
 	if diff := GradingBasisDiff(packet.Assignment, drifted); len(diff) != 1 || diff[0] != "points" {
@@ -64,5 +80,30 @@ func TestGradedDiscussionExampleValidates(t *testing.T) {
 	}
 	if doc.Assignment.DiscussionTopicID == nil || doc.Students[0].Grade.Evidence == nil {
 		t.Fatal("example lacks the discussion topic or evidence")
+	}
+}
+
+func TestGroupResultsReviewResolvesSnapshotWithoutChangingDraft(t *testing.T) {
+	env := newGroupPostEnv(t, false)
+	original, err := os.ReadFile(env.results)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bare := regexp.MustCompile(`(?m)^assignment:\r?\n(?:[ \t].*\r?\n|\r?\n)*`).ReplaceAll(original, nil)
+	if bytes.Equal(original, bare) {
+		t.Fatal("fixture has no assignment snapshot")
+	}
+	if err = os.WriteFile(env.results, bare, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = ValidateReviewInput(env.s.Root, env.results, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = BuildReview(env.s.Root, env.results); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(env.results)
+	if err != nil || !bytes.Equal(bare, after) {
+		t.Fatalf("group review changed the draft: %v", err)
 	}
 }

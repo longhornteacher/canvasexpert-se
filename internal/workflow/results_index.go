@@ -172,7 +172,7 @@ func (index *resultsIndex) addStudent(key resultsAssignmentKey, row domain.Stude
 		}
 	case row.Operation == "comment-only" && row.CommentOnly != nil:
 		item.attempt = row.CommentOnly.Attempt
-		item.comment = row.CommentOnly.Outcome.Status == "succeeded"
+		item.comment = row.CommentOnly.Outcome.Status == "succeeded" && !row.CommentOnly.FeedbackOnly()
 	default:
 		return
 	}

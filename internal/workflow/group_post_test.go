@@ -604,6 +604,34 @@ func TestPostGroupResultsIndividualModeGradesEachMemberPrivately(t *testing.T) {
 	}
 }
 
+func TestGroupIndividualFeedbackOnlyKeepsItsPrivateAudience(t *testing.T) {
+	env := newGroupEnv(t, false, true)
+	student := &env.doc.Groups[0].Students[0]
+	student.Operation = "comment-only"
+	student.CommentOnly = &domain.CommentOnlyOperation{Attempt: student.Grade.Attempt, Header: "none", Feedback: "Private feedback without scores."}
+	student.Grade = nil
+	env.save(t)
+	model, err := BuildReview(env.s.Root, env.results)
+	if err != nil || len(model.Cards) == 0 || model.Cards[0].Comment != student.CommentOnly.Feedback || model.Cards[0].Hold != "" || model.Cards[0].Total != "" {
+		t.Fatalf("feedback-only member review: %+v %v", model, err)
+	}
+	if _, err = env.s.PostGroupResults(context.Background(), env.results); err != nil {
+		t.Fatal(err)
+	}
+	var recipient int64
+	for _, p := range env.puts {
+		if c, ok := commentOf(p); ok && c["text_comment"] == student.CommentOnly.Feedback {
+			if c["group_comment"] != false || recipient != 0 {
+				t.Fatalf("feedback audience was not one private student: %+v", env.puts)
+			}
+			recipient = p.user
+		}
+	}
+	if recipient == 0 || len(env.putsTo(recipient)) != 1 {
+		t.Fatalf("feedback-only member received more than a comment: %+v", env.puts)
+	}
+}
+
 func TestPostGroupResultsIndividualAttemptHoldsOnlyThatStudent(t *testing.T) {
 	env := newGroupEnv(t, false, true)
 	env.attempt[11] = 2

@@ -2,9 +2,26 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
-## 1.2.0-beta.1 (unreleased)
+## 1.2.0-beta.2 (2026-10-23, Dev)
+
+- Results validation and review resolve omitted assignment metadata in memory without rewriting drafts or invalidating their hashes. New results scaffolds include the packet's assignment snapshot, exact component/criterion examples and per-student work paths. Reuse of an earlier scoring interpretation also resolves omitted metadata, preserving handwritten results compatibility.
+- Feedback-only comments use `comment-only` with `header: none` and no components, rubric or scoring basis. Review/post retain identity, attempt, evidence and duplicate checks; these comments do not suppress unscored New Quiz work. Supplied scores still require valid arithmetic.
+- Results schema errors explain where criterion points belong and show the feedback-only form. Draft conflicts report the current hash while requiring a fresh read.
+
+## 1.2.0 (2026-10-22)
 
 Team teaching: teammates' Canvas keys on one team PC.
+
+### Slice 07 live checks, Part A so far (2026-10-22)
+
+- Checked live: operator-key routing on an owned course (A1), the untagged-assignment refusal (A2), and copy-once from Collab to CS8 (A7): all three items and the file arrived unpublished, the assignment and New Quiz landed in a new "Imported Assignments" group, a repeat copy and a (CE)-tagged item were refused. Hidden grades (A3) and the already-visible hold (A4) were also checked live with the Test Student: manual posting set through GraphQL with the legacy ID, grade and comment hidden until posted, then visible, and a later post held. The New Quiz comment (A5) waits for first real use because Canvas cannot open a New Quiz as the Test Student; family Reply-To (A6) needs a report with work to send.
+
+### Assign To by differentiation tag (2026-10-22)
+
+- `cse tags COURSE` lists a course's differentiation tag sets and tags with member counts (no students). A `kind: assign-to` document sets Assign To on modules, pages, New Quizzes, assignments, discussions and classic quizzes by tag, by name or ID, with replace or add, per-target dates for assignments and quizzes, and a `--preview` that shows each target's current -> new audience. `cse assign-modules` assigns each module to its same-named tag in one call, and `cse audience-report` shows who can see each module and item and flags items in more than one module. MCP: `list_tags`, `assign_to`, `assign_modules_by_tag`, `audience_report`.
+- Names match across courses ignoring case and a trailing `s`; a missing or ambiguous name holds only that target. Writes are read back, reruns write nothing when Canvas already matches, removing access from submitted work is held unless authorized, native group assignments refuse tags, and tags are never created or edited.
+- `cse set-file-access COURSE FILE_ID --access course|hidden|locked` (MCP `set_file_access`) changes an existing file, including files copied by `copy_module`. Fixed upload `--access hidden`: the access write now sends only what is needed, the readback accepts the `inherit` visibility Canvas reports, and a rejection shows Canvas's reason.
+- Checked live in LANG ARTS 7 on disposable unpublished objects: tag listing, preview, module/page/assignment assignment with read-back and a no-write rerun, hidden upload, and set-file-access. New Quizzes, ungraded and graded discussions, add mode, reset and the apply_to_items cascade were also checked live. Classic quizzes, the group-assignment refusal, the submitted-work hold and clear_item_overrides are not. Live runs fixed tag listing (Canvas omits `non_collaborative` on categories) and the inherited-row report. No review page for assign-to yet; use `--preview`.
 
 ### Teammate keys and Team page (2026-10-22)
 
