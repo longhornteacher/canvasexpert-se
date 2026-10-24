@@ -28,6 +28,10 @@ type FeedbackInput struct {
 	// Late marks the overall line "(late)". The score stays the earned
 	// assessment; Canvas applies any late deduction in the gradebook.
 	Late bool
+	// Entered is the grade entered in Canvas when the course's effort floor
+	// raised it above the assessment; the comment keeps the earned score and
+	// adds one line saying what was entered.
+	Entered domain.Decimal
 	// Header is the teacher's choice of what leads the comment: "" or "full"
 	// (the default: all scores, then each part's rubric lines), "score" (just
 	// the overall line) or "none" (the feedback exactly as written, so the
@@ -58,6 +62,9 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 	overall := fmt.Sprintf("Overall: %s/%s", shortNumber(in.Assessment), shortNumber(in.AssignmentPoints))
 	if in.Late {
 		overall += " (late)"
+	}
+	if in.Entered.IsSet() && in.Entered.Cmp(in.Assessment) != 0 && !in.OmitAssessment {
+		overall += fmt.Sprintf("\nEntered as %s/%s (class minimum for an honest attempt)", shortNumber(in.Entered), shortNumber(in.AssignmentPoints))
 	}
 	switch in.Header {
 	case "none":

@@ -401,6 +401,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 		kind = "New Quiz comments"
 	}
 	m := ReviewModel{Kind: kind, Title: doc.Assignment.Title, Notice: ownerReviewNotice(root, doc.Assignment)}
+	floor := courseEffortFloor(root, doc.Assignment.CourseID)
 	for i, r := range doc.Students {
 		v := validated[i]
 		c := ReviewCard{Ref: r.StudentRef, Alias: aliases[r.StudentRef], Operation: r.Operation, Hold: v.Hold, Done: resultComplete(r)}
@@ -417,6 +418,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			feedback = g.Feedback
 			if v.Assessment != nil {
 				c.Total = v.Assessment.Posted.String() + " / " + doc.Assignment.Points.String()
+				c.Total += enteredNote(g.Assessment, doc.Assignment.Points, floor, g.HonestEffort)
 			}
 			c.RubricComments = rubricCommentFacts(doc.Assignment.Rubric, v.Assessment)
 		case r.ReviseFeedback != nil:
@@ -452,7 +454,7 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			}
 		}
 		if c.Hold == "" && r.Grade != nil && doc.Basis() != nil {
-			text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Late: isLate(r.Grade.LateTiming), Header: r.Grade.Header})
+			text, e := render.RenderFeedback(render.FeedbackInput{Rubric: *doc.Basis(), Interpretation: v.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Late: isLate(r.Grade.LateTiming), Entered: domain.EnteredGrade(r.Grade.Assessment, doc.Assignment.Points, floor, r.Grade.HonestEffort), Header: r.Grade.Header})
 			if e != nil {
 				c.Hold = e.Error()
 			} else {
@@ -579,6 +581,29 @@ func submissionText(w domain.StudentWorkDocument, attempt int) string {
 
 // rubricCommentFacts lists the criterion comments a rubric assessment will
 // carry, so the teacher approves every student-facing text.
+// courseEffortFloor reads the course's honest-effort floor so previews match
+// what posting enters; an unreadable course file previews without a floor.
+func courseEffortFloor(root string, courseID int64) *domain.Decimal {
+	var config domain.CourseConfig
+	if _, e := workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
+		return nil
+	}
+	for _, c := range config.Courses {
+		if c.ID == courseID {
+			return c.EffortFloor
+		}
+	}
+	return nil
+}
+
+// enteredNote tells the teacher when the effort floor will enter a higher grade.
+func enteredNote(assessment, points domain.Decimal, floor *domain.Decimal, honestEffort bool) string {
+	if entered := domain.EnteredGrade(assessment, points, floor, honestEffort); entered.Cmp(assessment) != 0 {
+		return " (entered as " + entered.String() + ", effort floor)"
+	}
+	return ""
+}
+
 func rubricCommentFacts(rubric *domain.Rubric, a *domain.Assessment) []ReviewFact {
 	if rubric == nil || a == nil {
 		return nil

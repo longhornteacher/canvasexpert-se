@@ -1568,6 +1568,7 @@ func individualReviewCards(root string, doc domain.GroupResultsDocument, row dom
 		artifacts[a.Key] = a
 	}
 	basis := doc.Basis()
+	floor := courseEffortFloor(root, doc.Assignment.CourseID)
 	var cards []ReviewCard
 	for i, r := range row.Students {
 		vs := v.Students[i]
@@ -1588,6 +1589,7 @@ func individualReviewCards(root string, doc domain.GroupResultsDocument, row dom
 			}
 			if vs.Assessment != nil {
 				c.Total = vs.Assessment.Posted.String() + " / " + doc.Assignment.Points.String()
+				c.Total += enteredNote(g.Assessment, doc.Assignment.Points, floor, g.HonestEffort)
 			}
 			c.RubricComments = rubricCommentFacts(doc.Assignment.Rubric, vs.Assessment)
 		case r.CommentOnly != nil:
@@ -1629,7 +1631,7 @@ func individualReviewCards(root string, doc domain.GroupResultsDocument, row dom
 			c.Comment = feedback
 		} else if c.Hold == "" && basis != nil {
 			if r.Grade != nil {
-				text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *basis, Interpretation: vs.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Late: isLate(r.Grade.LateTiming), Header: r.Grade.Header})
+				text, err := render.RenderFeedback(render.FeedbackInput{Rubric: *basis, Interpretation: vs.Interpretation, Components: r.Grade.Components, Assessment: r.Grade.Assessment, AssignmentPoints: doc.Assignment.Points, Feedback: feedback, Late: isLate(r.Grade.LateTiming), Entered: domain.EnteredGrade(r.Grade.Assessment, doc.Assignment.Points, floor, r.Grade.HonestEffort), Header: r.Grade.Header})
 				if err != nil {
 					c.Hold = err.Error()
 				}
