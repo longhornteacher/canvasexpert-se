@@ -10,7 +10,9 @@ Grade levels and subjects:
 
 ## Instructional priorities
 
-What students should learn; preferred scaffolds, challenge and lesson structure. Defaults until the teacher says otherwise: 100-point assignments and quizzes; rigor for proficient-to-advanced students at grade level; a Learning Target line and three-step directions; support tiers **Emerging** (frames, organizers, word banks), **On-level** (guiding questions, outline, checklist) and **Extension** (DOK 3-4 challenge), all held to the same standard.
+What students should learn; preferred scaffolds, challenge and lesson structure. Defaults until the teacher says otherwise: 100-point assignments and quizzes; rigor for proficient-to-advanced students at grade level; a Learning Target line and three-step directions; a Green tier (ELPS supports) whenever the course's Green tag has students; Silver, Red and Blue readiness tiers offered; all held to the same standard.
+
+Differentiation tag names (record only if this teacher's tags differ from Green, Silver, Red and Blue):
 
 Visual style for pages (ask on the first page build; clean and academic, or warm and engaging):
 
@@ -22,4 +24,4 @@ Teacher-selected standards, curriculum references or existing teaching instructi
 
 Desired tone, length and emphasis (specific feedback voice also belongs in `grading.md`):
 
-Preserve existing teacher instructions when adding information. Record course-specific differences clearly. Do not import another teacher's course names, ELA7 policies or Silver/Red/Blue tags. Student-specific accommodations belong in the active `context/students.md`; credentials and private identity mappings never belong here. This profile follows the active teacher-rules location, UserInstall by default or configured UserSync.
+Preserve existing teacher instructions when adding information. Record course-specific differences clearly. Do not import another teacher's course names, ELA7 policies or tag names. Student-specific accommodations belong in the active `context/students.md`; credentials and private identity mappings never belong here. This profile follows the active teacher-rules location, UserInstall by default or configured UserSync.

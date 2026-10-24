@@ -7,7 +7,7 @@
 <main class="wide">
 {{nav "Classroom" "Team" .Appearance}}
 <h1>Team</h1>
-<p>Teammates whose Canvas keys are saved on this PC. CE-SE works in each teammate's courses with that teammate's key.</p>
+<p>Team-teaching with a colleague? They add their Canvas key here once, at this PC. Then you can score their assignments tagged (CE), and the scores wait, hidden, for them to post.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <div class="cards">
 {{range .Cards}}<section class="card" aria-label="{{.Name}}">

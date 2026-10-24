@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,34 @@ import (
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/workspace"
 )
+
+func TestInitResultsReusesBasisFromResultsWithOmittedSnapshot(t *testing.T) {
+	s, _ := workflowFixture(t, nil)
+	path := scoringFiles(t, s, 5)
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bare := regexp.MustCompile(`(?m)^assignment:\r?\n(?:[ \t].*\r?\n|\r?\n)*`).ReplaceAll(original, nil)
+	if len(bare) == len(original) {
+		t.Fatal("fixture has no assignment snapshot to omit")
+	}
+	if err = os.WriteFile(path, bare, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var prior domain.ResultsDocument
+	if _, err = ReadResultsDocument(s.Root, path, &prior); err != nil {
+		t.Fatalf("handwritten results should still validate: %v", err)
+	}
+	rel, err := InitResults(s.Root, "courses/TEST/packet.md", time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scaffold, err := os.ReadFile(filepath.Join(s.Root, filepath.FromSlash(rel)))
+	if err != nil || !strings.Contains(string(scaffold), "reused from courses/TEST/results.md") || !strings.Contains(string(scaffold), prior.Interpretation.Rationale) {
+		t.Fatalf("new scaffold lost the existing scoring interpretation: %s %v", scaffold, err)
+	}
+}
 
 func TestInitResultsFillsMechanicsAndLeavesJudgmentBlank(t *testing.T) {
 	live := fixtureSubmission(5)
@@ -45,7 +74,7 @@ func TestInitResultsFillsMechanicsAndLeavesJudgmentBlank(t *testing.T) {
 	path := filepath.Join(s.Root, filepath.FromSlash(rel))
 	b, _ := os.ReadFile(path)
 	text := string(b)
-	for _, want := range []string{"packet: " + filepath.ToSlash(packetRel), "operation: grade", "attempt: {attempt: 2, submitted_at: \"2026-10-07T12:00:00Z\"}", "# criteria: c1 Evidence (100)"} {
+	for _, want := range []string{"packet: " + filepath.ToSlash(packetRel), "assignment:", "assignment_id: 10", "operation: grade", "attempt: {attempt: 2, submitted_at: \"2026-10-07T12:00:00Z\"}", "# criteria: c1 Evidence (100)", "criteria: [{criterion_id:", "# work: courses/", "header: none"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("scaffold lacks %q:\n%s", want, text)
 		}
@@ -54,9 +83,6 @@ func TestInitResultsFillsMechanicsAndLeavesJudgmentBlank(t *testing.T) {
 		t.Fatal("scaffold carried a student name")
 	}
 	var doc domain.ResultsDocument
-	if err = FillResultsAssignment(s.Root, path); err != nil {
-		t.Fatal(err)
-	}
 	if _, err = workspace.ReadDocument(path, &doc); err == nil {
 		t.Fatal("an unfilled scaffold must not validate")
 	}
@@ -69,9 +95,6 @@ func TestInitResultsFillsMechanicsAndLeavesJudgmentBlank(t *testing.T) {
 		"interpretation:\n  mapping: repeated\n  rationale: One response scored with the evidence rubric.\n  components: [{key: answer, label: Answer, weight: 1}]\n", 1)
 	filled = strings.Replace(filled, "      components: []\n      feedback: \"\"\n", "      components: [{key: answer, evidence: present, criteria: [{criterion_id: c1, points: 60}]}]\n      feedback: Name the evidence that supports your claim.\n", 1)
 	if err = os.WriteFile(path, []byte(filled), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err = FillResultsAssignment(s.Root, path); err != nil {
 		t.Fatal(err)
 	}
 	doc = domain.ResultsDocument{}

@@ -7,11 +7,18 @@
 <main>
 {{if .Hub}}{{nav "Settings" "Connections" .Appearance}}{{else}}{{.Appearance.Control}}{{end}}
 <h1>Connect Canvas</h1>
-<p>CE-SE needs an Access token from your Canvas account to work with your courses. It is kept in Windows Credential Manager on this PC and never written to a file.</p>
+<p>CanvasExpert needs an access token from Canvas: a long code that lets it work in your courses. You make one in Canvas in about a minute.</p>
+<ol class="steps">
+<li>In Canvas, choose <b>Account</b> (your picture, far left), then <b>Settings</b>.</li>
+<li>Scroll down to <b>Approved Integrations</b> and choose <b>+ New Access Token</b>.</li>
+<li>For Purpose, type <code>CanvasExpert</code>. For Expires, pick the last day of school. Choose <b>Generate Token</b>.</li>
+<li>Copy the long code Canvas shows and paste it below. Canvas shows it only once.</li>
+</ol>
+<p>Treat the token like a password: don't email it or paste it into Claude or ChatGPT. CanvasExpert keeps it locked on this PC.</p>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <form method="post" action="/setup" autocomplete="off">
 <input type="hidden" name="request_secret" value="{{.Secret}}">
-<label for="origin">Canvas address</label><input id="origin" name="origin" type="text" inputmode="url" value="{{.Origin}}" placeholder="https://your-school.instructure.com" required autocomplete="off">
+<label for="origin">Canvas address (the web address you use to open Canvas)</label><input id="origin" name="origin" type="text" inputmode="url" value="{{.Origin}}" placeholder="https://your-school.instructure.com" required autocomplete="off">
 <label for="token">Access token</label><input id="token" name="token" type="password" required autocomplete="off" spellcheck="false">
 <button type="submit">Connect</button></form>
 </main>

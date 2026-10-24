@@ -83,11 +83,11 @@ func canvasHealthNote(state string) string {
 	case canvasHealthConnected:
 		return canvasConnectedNote("")
 	case canvasHealthRejected:
-		return "Canvas didn't accept the saved token. It may have expired or been deleted in Canvas. Replace it to reconnect; your CE-SE files aren't affected."
+		return "Canvas stopped accepting your access token. It probably expired. Choose Replace token and follow the steps to make a new one."
 	case canvasHealthUnavailable:
-		return "Canvas could not be reached. The saved token may still be valid; try again."
+		return "Couldn't reach Canvas. Check your internet connection, then choose Test."
 	default:
-		return "CE-SE needs a Canvas access token to work with your courses. It's kept in Windows Credential Manager on this PC. Choose Connect Canvas to add one."
+		return "Not connected yet. Choose Connect Canvas and follow the steps."
 	}
 }
 
@@ -124,7 +124,7 @@ func (h *Hub) startCanvasHealthCheck(force, manual bool) {
 	credential, err := h.loadSavedCredential()
 	h.mu.Lock()
 	if err != nil {
-		state, note := canvasHealthUnavailable, "Could not read the saved Access token from Windows Credential Manager. Check credential access on this computer."
+		state, note := canvasHealthUnavailable, "Couldn't open your saved access token on this PC. Choose Replace token and paste a new one."
 		if errors.Is(err, platform.ErrNoCredential) {
 			state, note = canvasHealthNotConnected, canvasHealthNote(canvasHealthNotConnected)
 		}
@@ -214,11 +214,11 @@ func canvasFailureNote(err error) string {
 	var ce *canvas.Error
 	switch {
 	case errors.As(err, &ce) && ce.Status > 0:
-		return fmt.Sprintf("Canvas answered but the check did not pass (%s; HTTP %d). Canvas did not reject the saved token; check the Canvas address or try again.", ce.Error(), ce.Status)
+		return fmt.Sprintf("Canvas sent back an error. Your token is probably fine. Check the Canvas address in Settings, then choose Test. (Details: %s; code %d)", ce.Error(), ce.Status)
 	case errors.Is(err, context.DeadlineExceeded):
-		return "Canvas did not answer in time. The saved token may still be valid; try again."
+		return "Canvas is slow to answer right now. Wait a minute, then choose Test."
 	default:
-		return "Canvas could not be reached (" + err.Error() + "). The saved token may still be valid; try again."
+		return "Couldn't reach Canvas. Check your internet connection, then choose Test. (Details: " + err.Error() + ")"
 	}
 }
 

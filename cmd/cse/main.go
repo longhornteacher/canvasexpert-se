@@ -527,16 +527,13 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		p, e := documentPath(root, args[0])
 		if e == nil {
-			e = workflow.FillResultsAssignment(root, p)
-		}
-		if e == nil {
 			e = validateDocument(p, root)
 		}
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
 		fmt.Fprintf(out, "Valid document: %s\n", p)
-		previewResults(p, out)
+		previewResults(root, p, out)
 		return 0
 	}
 	return runRemote(ctx, root, cmd, args, out, progress)
@@ -571,9 +568,9 @@ func documentPath(root, name string) (string, error) {
 
 // previewResults prints each student's computed assessment and late timing so the
 // agent can show the teacher a preview without posting.
-func previewResults(path string, out io.Writer) {
+func previewResults(root, path string, out io.Writer) {
 	var doc domain.ResultsDocument
-	if _, e := workspace.ReadDocument(path, &doc); e != nil {
+	if _, e := workflow.ReadResultsDocument(root, path, &doc); e != nil {
 		return
 	}
 	rows, e := domain.ValidateResults(&doc)
@@ -666,7 +663,15 @@ func validateDocument(path string, roots ...string) error {
 	if kindErr != nil && kind != "" {
 		return kindErr
 	}
-	_, e = workspace.ReadDocument(path, target)
+	if kind == "results" || kind == "group-results" {
+		root := ""
+		if len(roots) > 0 {
+			root = roots[0]
+		}
+		_, e = workflow.ReadResultsDocument(root, path, target)
+	} else {
+		_, e = workspace.ReadDocument(path, target)
+	}
 	if e == nil {
 		if d, ok := target.(*workflow.LateTimingDecisionsDocument); ok {
 			e = d.Validate()
@@ -683,9 +688,9 @@ func validateDocument(path string, roots ...string) error {
 			e = domain.ValidateAssignmentDates(*d)
 		}
 		if d, ok := target.(*domain.AssignToDocument); ok {
-				e = d.Validate()
-			}
-			if d, ok := target.(*domain.GroupSetDocument); ok {
+			e = d.Validate()
+		}
+		if d, ok := target.(*domain.GroupSetDocument); ok {
 			e = d.Validate()
 		}
 		if d, ok := target.(*domain.GroupMembershipDocument); ok {

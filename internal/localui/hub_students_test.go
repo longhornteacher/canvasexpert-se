@@ -57,16 +57,16 @@ func TestCoursePickerSavesOnlyActiveCourses(t *testing.T) {
 	if strings.Contains(body, `name="nick_11" value="CS8"`) || strings.Contains(body, `name="active_11" checked`) {
 		t.Fatal("new course should start with an empty nickname and unchecked")
 	}
-	if !strings.Contains(body, `ID 11 · available`) || !strings.Contains(body, `ID 33 · unpublished`) || !strings.Contains(body, `<tr class="unpublished">`) {
+	if !strings.Contains(body, `ID 11</span>`) || !strings.Contains(body, `<span class="pill off">unpublished</span>`) || !strings.Contains(body, `<tr class="unpublished">`) {
 		t.Fatal("course ID/state or unpublished styling missing")
 	}
-	if strings.Index(body, `ID 44 · available`) > strings.Index(body, `ID 33 · unpublished`) {
+	if strings.Index(body, `ID 44</span>`) > strings.Index(body, `<span class="pill off">unpublished</span>`) {
 		t.Fatal("available course should be listed before unpublished course")
 	}
 	if strings.Count(body, `Same Title <span class="course-state"`) != 2 {
 		t.Fatal("same-title courses with distinct IDs must both remain visible")
 	}
-	if !strings.Contains(body, `aria-label="Nickname for Same Title (33)"`) || !strings.Contains(body, `aria-label="Active course Same Title (44)"`) {
+	if !strings.Contains(body, `aria-label="Short name for Same Title (33)"`) || !strings.Contains(body, `aria-label="Use Same Title (44)"`) {
 		t.Fatal("course controls need labels that distinguish same-title courses")
 	}
 	form := url.Values{"request_secret": {"nonce"}, "id": {"11", "22"}, "nick_11": {"CS8"}, "active_11": {"on"}, "nick_22": {"OLD"}}
@@ -254,7 +254,7 @@ func TestClassroomKeepsUnsavedEditsInCurrentTab(t *testing.T) {
 
 func TestStudentsNoActiveCoursesAndTagFailure(t *testing.T) {
 	h, root := studentsHub(t)
-	if w := hubGet(h, "/students"); w.Code != 200 || !strings.Contains(w.Body.String(), "No active courses selected") {
+	if w := hubGet(h, "/students"); w.Code != 200 || !strings.Contains(w.Body.String(), "No courses yet") {
 		t.Fatal("missing empty state")
 	}
 	config := domain.CourseConfig{Schema: 1, Instance: "https://school.example", Courses: []domain.Course{{ID: 11, Nickname: "CS8", Current: true}}}

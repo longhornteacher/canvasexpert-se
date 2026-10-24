@@ -157,3 +157,32 @@ func TestScoringBasisRejectedWhenCanvasRubricExists(t *testing.T) {
 		t.Fatalf("expected conflict error, got %v", e)
 	}
 }
+
+func TestFeedbackOnlyNeedsNoScoringBasisButDoesNotBypassSuppliedScores(t *testing.T) {
+	doc := noRubricResults(nil)
+	c := &CommentOnlyOperation{Attempt: doc.Students[0].Grade.Attempt, Header: "none", Feedback: "Explain which detail supports your claim."}
+	doc.Interpretation = Interpretation{}
+	doc.Students = []StudentResult{{StudentRef: "s1", Operation: "comment-only", CommentOnly: c}}
+	if _, err := ValidateResults(doc); err != nil {
+		t.Fatalf("feedback without scores requires no rubric or interpretation: %v", err)
+	}
+	c.Header = "full"
+	if _, err := ValidateResults(doc); err == nil || !strings.Contains(err.Error(), "header: none") {
+		t.Fatalf("score header without scores should explain feedback-only syntax: %v", err)
+	}
+	c.Header = "none"
+	c.Components = []ComponentScore{{Key: "a", Evidence: "present"}}
+	if _, err := ValidateResults(doc); err == nil {
+		t.Fatal("supplied score data bypassed scoring validation")
+	}
+	doc.ScoringBasis, doc.Interpretation = overallBasis(), repeated("1")
+	c.Components = []ComponentScore{{Key: "a", Evidence: "present", Criteria: []CriterionScore{{CriterionID: "overall", Points: MustDecimal("11")}}}}
+	if _, err := ValidateResults(doc); err == nil {
+		t.Fatal("header none accepted invalid criterion scores")
+	}
+	c.Components = nil
+	c.Feedback = " "
+	if _, err := ValidateResults(doc); err == nil {
+		t.Fatal("empty feedback accepted")
+	}
+}

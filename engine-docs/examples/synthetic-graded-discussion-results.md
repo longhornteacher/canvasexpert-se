@@ -3,8 +3,8 @@ schema: 1
 kind: results
 # A graded discussion is an ordinary individual results file. Each row carries `evidence`:
 # the `digest` (and `entry_refs`) copied from that student's `discussion_evidence` in the pulled work.
-# Normally omit the `assignment:` block: the Engine fills it from the packet, including
-# `discussion_topic_id`. It is shown here only so the example validates on its own.
+# results-init supplies the assignment snapshot, including discussion_topic_id.
+# Handwritten files may omit it; it is resolved in memory without changing the draft.
 packet: packets/synthetic-discussion-23.md
 assignment:
   instance: https://canvas.example.edu

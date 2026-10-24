@@ -56,7 +56,8 @@ func InitResults(root, packetRel string, now time.Time) (string, error) {
 	var b strings.Builder
 	b.WriteString("---\nschema: 1\nkind: results\n")
 	fmt.Fprintf(&b, "packet: %s\n", quoteYAML(filepath.ToSlash(packetRel)))
-	b.WriteString("# assignment: omitted; the Engine fills it from the packet.\n")
+	writeYAMLBlock(&b, "assignment", packet.Assignment)
+	b.WriteString("# Scored components (grade or comment_only):\n#   - key: response_key # from interpretation.components\n#     evidence: present # present, missing, or unknown\n#     criteria: [{criterion_id: criterion_id_from_basis, points: 0}] # assess each mapped criterion\n# Feedback without scores: operation: comment-only; comment_only: {attempt: ..., header: none, feedback: ...}; omit components.\n")
 	earlier, interpretation, basis := earlierScoringBasis(root, assignmentDir, packet.Assignment.AssignmentID)
 	if interpretation != nil {
 		fmt.Fprintf(&b, "# interpretation and scoring basis reused from %s; keep them unless the assignment changed.\n", earlier)
@@ -68,7 +69,7 @@ func InitResults(root, packetRel string, now time.Time) (string, error) {
 	case basis != nil:
 		writeYAMLBlock(&b, "scoring_basis", basis)
 	case packet.Assignment.Rubric == nil:
-		b.WriteString("# No Canvas rubric: add scoring_basis (title; criteria with id, description, points).\n")
+		b.WriteString("# No Canvas rubric: for scored results add scoring_basis (title; criteria with id, description, points). Feedback without scores needs no scoring_basis.\n")
 	}
 	if criteria := criteriaHint(packet.Assignment.Rubric, basis); criteria != "" {
 		fmt.Fprintf(&b, "# criteria: %s\n", criteria)
@@ -84,6 +85,7 @@ func InitResults(root, packetRel string, now time.Time) (string, error) {
 			return "", fmt.Errorf("%s: %w", rel, err)
 		}
 		fmt.Fprintf(&b, "  - student_ref: %s\n", quoteYAML(work.StudentRef))
+		fmt.Fprintf(&b, "    # work: %s (use this student_ref; Canvas identity is resolved privately)\n", rel)
 		if hint := studentHint(work); hint != "" {
 			fmt.Fprintf(&b, "    # %s\n", hint)
 		}
@@ -123,7 +125,7 @@ func earlierScoringBasis(root, dir string, assignmentID int64) (string, *domain.
 		if kind, err := workspace.DocumentKind(b); err != nil || kind != "results" {
 			return nil
 		}
-		if _, err = workspace.ParseDocument(b, &doc); err != nil {
+		if _, err = ReadResultsDocument(root, path, &doc); err != nil {
 			return nil
 		}
 		if doc.Assignment.AssignmentID != assignmentID || len(doc.Interpretation.Components) == 0 {

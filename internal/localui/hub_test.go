@@ -90,15 +90,15 @@ func TestUnavailableSyncShowsPathAndKeepsSettingsCorrectionForm(t *testing.T) {
 		t.Fatal("unavailable UserSync path or correction control is missing")
 	}
 	home := hubGet(h, "/").Body.String()
-	if !strings.Contains(home, "Unavailable") || !strings.Contains(home, syncRoot) || !strings.Contains(home, "will not fall back") {
+	if !strings.Contains(home, "Unavailable") || !strings.Contains(home, syncRoot) || !strings.Contains(home, "old copy instead") {
 		t.Fatal("home summary must show unavailable UserSync and its configured path")
 	}
-	if strings.Contains(home, "Local only") {
+	if strings.Contains(home, "This PC only") {
 		t.Fatal("home summary must not imply fallback to local rules")
 	}
 	test := hubPost(h, "/rules/test", url.Values{"request_secret": {h.secret}, "sync_root": {t.TempDir()}}, h.origin)
 	result := hubGet(h, test.Header().Get("Location")).Body.String()
-	if !strings.Contains(result, "Saved teacher-rules folder test: Unavailable") || !strings.Contains(result, syncRoot) || !strings.Contains(result, "will not fall back") {
+	if !strings.Contains(result, "Folder check: Unavailable") || !strings.Contains(result, syncRoot) || !strings.Contains(result, "old copy instead") {
 		t.Fatal("testing an unavailable UserSync folder must preserve its saved authority and explain the failure")
 	}
 	if _, _, err := readGrading(h.root); err == nil || !strings.Contains(err.Error(), "unavailable") {
@@ -116,7 +116,7 @@ func TestHomeShowsResolvedLocalLocations(t *testing.T) {
 	h := newTestHub()
 	h.root = makeWorkspace(t)
 	page := hubGet(h, "/").Body.String()
-	if !strings.Contains(page, "Local only") || !strings.Contains(page, "Your teacher setup is kept on this PC. Add a UserSync folder to preserve reusable setup for another PC.") {
+	if !strings.Contains(page, "This PC only") || !strings.Contains(page, "Your settings are saved on this PC. To use them on another PC") {
 		t.Fatal("home summary missing local rules status")
 	}
 	if strings.Contains(page, `action="/rules-location"`) {
@@ -264,7 +264,7 @@ func TestBindingCustomizedSyncOffersComparisonWithoutReplacing(t *testing.T) {
 	if w := hubPost(h, "/rules-location", form, h.origin); w.Code != 303 {
 		t.Fatalf("bind existing UserSync: %d", w.Code)
 	}
-	if !strings.Contains(h.flash, "seed-managed instructions in UserSync differ") || !strings.Contains(h.flash, "Settings → Files") {
+	if !strings.Contains(h.flash, "newer version of some instruction files") || !strings.Contains(h.flash, "Settings, Files") {
 		t.Fatalf("missing adoption notice: %q", h.flash)
 	}
 	if got := readString(t, custom); got != "teacher setup preferences" {
@@ -274,7 +274,7 @@ func TestBindingCustomizedSyncOffersComparisonWithoutReplacing(t *testing.T) {
 		t.Fatalf("binding replaced existing AGENTS: %q", got)
 	}
 	page := hubGet(h, "/settings?section=files").Body.String()
-	if !strings.Contains(page, "Get the new version") || !strings.Contains(page, "differs from this version's starter copy") {
+	if !strings.Contains(page, "Get the new version") || !strings.Contains(page, "changed by you, or older than this version") {
 		t.Fatal("existing comparison and explicit adoption UI not shown")
 	}
 }
@@ -314,7 +314,7 @@ func TestHowPageShowsPaths(t *testing.T) {
 	h.programDir, h.root, h.version = `C:\Prog`, `C:\Work`, "0.1b"
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, h.origin+"/how", nil))
-	if body := w.Body.String(); w.Code != 200 || !strings.Contains(body, `C:\Prog`) || !strings.Contains(body, `C:\Work`) {
+	if body := w.Body.String(); w.Code != 200 || !strings.Contains(body, `C:\Work`) {
 		t.Fatal("how page missing paths")
 	}
 }
@@ -323,13 +323,13 @@ func TestGuideUsesSixNativeExpandableTopicsAndExplainsStorageScopes(t *testing.T
 	h := newTestHub()
 	w := hubGet(h, "/how")
 	body := w.Body.String()
-	if w.Code != http.StatusOK || strings.Count(body, `class="card guide-topic"`) != 6 {
+	if w.Code != http.StatusOK || strings.Count(body, `class="card guide-topic"`) != 7 {
 		t.Fatalf("guide should render six native expandable topics, status=%d", w.Code)
 	}
 	if strings.Contains(body, `popovertarget=`) || !strings.Contains(body, `<details class="card guide-topic"`) {
 		t.Fatal("guide topics should use native details disclosures")
 	}
-	for _, want := range []string{"Dev", "UserInstall", "UserSync", "provider carries", "Grading and planning session files stay in UserInstall"} {
+	for _, want := range []string{"Update CanvasExpert", "OneDrive or Google Drive", "Hide student names"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("guide missing storage distinction %q", want)
 		}
@@ -340,7 +340,7 @@ func TestHomeShowsCommandsFromTeacherContext(t *testing.T) {
 	h := newTestHub()
 	h.root = makeWorkspace(t)
 	body := hubGet(h, "/").Body.String()
-	for _, want := range []string{`href="/settings?section=connections">Connection details</a>`, "Scoring session", "Start a scoring session for one of my courses."} {
+	for _, want := range []string{`href="/settings?section=connections">Canvas and other PCs</a>`, "Scoring session", "Start a scoring session for one of my courses."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Home without a commands file missing %q", want)
 		}

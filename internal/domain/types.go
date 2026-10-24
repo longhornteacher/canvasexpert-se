@@ -440,16 +440,21 @@ type LateOnlyOperation struct {
 	Outcome    ActionOutcome `yaml:"outcome,omitempty" json:"outcome,omitempty"`
 }
 
-// CommentOnlyOperation carries per-criterion scores into a New Quiz
-// submission comment. It deliberately has no grade, rubric, or late fields.
+// CommentOnlyOperation posts an attempt-scoped comment without grade, rubric,
+// or late writes. Header none with no components sends feedback without scores.
 type CommentOnlyOperation struct {
 	Attempt    AttemptRef         `yaml:"attempt"`
 	Evidence   *EvidenceSelection `yaml:"evidence,omitempty"`
-	Components []ComponentScore   `yaml:"components"`
+	Components []ComponentScore   `yaml:"components,omitempty"`
 	Feedback   string             `yaml:"feedback"`
 	Header     string             `yaml:"header,omitempty"`
 	Outcome    ActionOutcome      `yaml:"outcome,omitempty"`
 }
+
+func (c CommentOnlyOperation) FeedbackOnly() bool {
+	return c.Header == "none" && len(c.Components) == 0
+}
+
 type ResultsDocument struct {
 	Schema         int                `yaml:"schema"`
 	Kind           string             `yaml:"kind"`

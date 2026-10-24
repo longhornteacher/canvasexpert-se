@@ -106,7 +106,7 @@ func seedAdoptionNotice(root string) string {
 	}
 	for _, row := range playbookRows(root) {
 		if row.Replaceable && row.State == "differs" {
-			return "Some seed-managed instructions in UserSync differ from this version. Review them in Settings → Files and choose any files to adopt. Nothing was replaced."
+			return "A newer version of some instruction files is available. To use one, open Settings, Files and choose Get the new version under it. Nothing was changed."
 		}
 	}
 	return ""

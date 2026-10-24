@@ -38,7 +38,7 @@ func TestRulesBrowsePopulatesDraftWithoutBindingAndCancellationKeepsIt(t *testin
 	h.pickFolderFn = func(context.Context) (string, error) { return "", nil }
 	w = hubPost(h, "/rules/browse", url.Values{"request_secret": {h.secret}, "sync_root": {candidate}}, h.origin)
 	page = hubGet(h, w.Header().Get("Location")).Body.String()
-	if !strings.Contains(page, `name="sync_root" value="`+candidate+`"`) || !strings.Contains(page, "Folder selection canceled") {
+	if !strings.Contains(page, `name="sync_root" value="`+candidate+`"`) || !strings.Contains(page, "No folder picked") {
 		t.Fatal("cancel did not preserve the typed draft")
 	}
 	if _, err := os.Stat(filepath.Join(h.root, ".cse", "rules-location.json")); !os.IsNotExist(err) {
@@ -47,7 +47,7 @@ func TestRulesBrowsePopulatesDraftWithoutBindingAndCancellationKeepsIt(t *testin
 	h.pickFolderFn = func(context.Context) (string, error) { return "", os.ErrPermission }
 	w = hubPost(h, "/rules/browse", url.Values{"request_secret": {h.secret}, "sync_root": {candidate}}, h.origin)
 	page = hubGet(h, w.Header().Get("Location")).Body.String()
-	if !strings.Contains(page, `name="sync_root" value="`+candidate+`"`) || !strings.Contains(page, "Paste the folder path instead") {
+	if !strings.Contains(page, `name="sync_root" value="`+candidate+`"`) || !strings.Contains(page, "paste the folder") {
 		t.Fatal("chooser failure did not preserve paste fallback")
 	}
 	w = hubPost(h, "/rules-location", url.Values{"request_secret": {h.secret}, "action": {"save"}, "sync_root": {selected}}, h.origin)
@@ -65,8 +65,8 @@ func TestSettingsSectionsKeepFormsAndUseTabScopedDrafts(t *testing.T) {
 	}{
 		{"connections", `aria-current="page">Connections</a>`, "Canvas connection"},
 		{"preferences", `aria-current="page">Preferences</a>`, "Feedback voice"},
-		{"files", `aria-current="page">Files</a>`, "Playbooks and context files"},
-		{"system", `aria-current="page">System</a>`, "Quit hub"},
+		{"files", `aria-current="page">Files</a>`, "Instruction files"},
+		{"system", `aria-current="page">System</a>`, "Close CanvasExpert"},
 	} {
 		page := hubGet(h, "/settings?section="+section.name).Body.String()
 		if !strings.Contains(page, section.current) || !strings.Contains(page, section.heading) {
@@ -147,7 +147,7 @@ func TestRulesTestChecksSavedAuthorityWithoutWritesOrDraftBinding(t *testing.T) 
 	candidate := t.TempDir()
 	w := hubPost(h, "/rules/test", url.Values{"request_secret": {h.secret}, "sync_root": {candidate}}, h.origin)
 	page := hubGet(h, w.Header().Get("Location")).Body.String()
-	if !strings.Contains(page, "Saved teacher-rules folder test: Available") || !strings.Contains(page, `name="sync_root" value="`+candidate+`"`) {
+	if !strings.Contains(page, "Folder check: Available") || !strings.Contains(page, `name="sync_root" value="`+candidate+`"`) {
 		t.Fatalf("test did not report saved-folder result while preserving the draft: %s", page)
 	}
 	bindingAfter, err := os.ReadFile(bindingPath)
