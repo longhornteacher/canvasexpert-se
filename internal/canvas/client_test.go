@@ -197,14 +197,19 @@ func TestRateLimitSafeReadRetry(t *testing.T) {
 
 func TestWriteTimeoutUncertainAndNeverReplayed(t *testing.T) {
 	var calls atomic.Int32
+	// The handler holds the response until the test ends, so the client times
+	// out after the server received the write however slowly the TLS
+	// handshake runs under full-suite load.
+	release := make(chan struct{})
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		time.Sleep(80 * time.Millisecond)
+		<-release
 		_, _ = io.WriteString(w, `{"id":7}`)
 	}))
 	defer server.Close()
+	defer close(release)
 	c := testClient(t, server)
-	c.http.Timeout = 20 * time.Millisecond
+	c.http.Timeout = 300 * time.Millisecond
 	var got any
 	err := c.Write(context.Background(), "POST", "/api/v1/courses/1/assignments", map[string]any{"assignment": map[string]any{"name": "Synthetic"}}, &got)
 	ce := requireKind(t, err, "uncertain")
