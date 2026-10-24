@@ -16,6 +16,8 @@ For every ordinary scoring session, use `--session`, even when the teacher selec
 
 New Quiz written items (`ESSAY`, `FILEUPLOAD`) are open for regular scoring. Pull the quiz by title or assignment ID with `--session`: `.\cse.cmd pull-work COURSE QUIZ --session` (MCP: `pull_work` with `session: true`); an exact title works, so do not ask the teacher for the ID. `--session` is what keeps students whose comment is already posted out of the pull. Omit it only for a requested reassessment. An explicit assignment is pulled even when its grading period is closed. Broad class pulls include New Quizzes with submitted work. Their results are **comment-only**; follow the New Quiz section below instead of ordinary assignment grade/lateness instructions.
 
+Score every pulled packet yourself in this conversation rather than handing each packet to its own subagent: the packets share students, rules and timing, and a subagent's summary loses that context.
+
 ## Fix the scoring basis
 
 - **Canvas rubric attached**: use it. Never invent a criterion or rating ID, and never pick a rating whose points don't match the score you give. If a rubric was just attached, pull again so the packet has Canvas's real IDs.
