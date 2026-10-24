@@ -45,6 +45,22 @@ For a club unit whose Page, response and quiz are restricted to selected clubs, 
 
 Pages, files and modules have no new universal approval gate. Follow the teacher's requested scope; assignments and quizzes retain their existing review policy. A held or uncertain write needs the specific recovery described by the Engine. Do not erase a receipt or saved create record to make a rerun write again; rerun the same file and report what was adopted or preserved. Continue independent content while an item is held and report which objects exist and what remains.
 
+## Teaching Pages: Green supports and Check yourself
+
+Apply `TEACHER.md` to every new teaching Page: plain, concise wording, accessible images and links, and the tiers it describes.
+
+**Green page.** Pages have no hub `tiers`, so when the course's Green tag has students (`list_tags`), build the Green tier as its own Page: push a `kind: page` titled "<Page title>: Green" with the supports, restrict it to the teacher's Green tag with `assign_to` (preview, then apply), and link it from the main Page with the link text "Green supports". If the restriction does not apply, say so plainly: until it does, every student can open that page. Silver/Red/Blue pages for a Page follow the same steps when the teacher accepts them. Use the same steps when the teacher wants a tier page added to an existing assignment or quiz, linking it through `edit.md`.
+
+**Check yourself.** End a substantial teaching Page (`body_format: html`) with two or three questions on its learning target, each answer in a collapsible box:
+
+```html
+<h3>Check yourself</h3>
+<p>1. What does the narrator want most in chapter 2?</p>
+<details><summary>Show answer</summary><p>To be trusted by her older brother.</p></details>
+```
+
+It is a self-check only: no "write this on paper", no turn-in, and no link to an activity that does not exist. On the first Page with a Check yourself section, read the saved HTML back once to confirm Canvas kept the `<details>` boxes. If Canvas removed them, take the section out, tell the teacher, and record the finding in `context/engine-notes.md`.
+
 ## Verify in Canvas
 
 For an HTML Page conversion only, read the saved HTML back once to see Canvas's normalization (the standing no-read-back rule is for write confirmation). Check links, image alt text, file availability, question keys/points and module order. Open the teacher view and distinguish it from actual student-view evidence. Record both outcomes and remaining checks in conversion notes.
