@@ -1,6 +1,6 @@
 # Edit an existing assignment
 
-Canvas Live is authoritative, so always start from a fresh pull. What the teacher's words mean and the review page are in `AGENTS.md`.
+Canvas Live is authoritative, so always start from a fresh pull. What the teacher's words mean and when to write are in `AGENTS.md`.
 
 ## Pull, edit, push
 
@@ -10,7 +10,7 @@ Canvas Live is authoritative, so always start from a fresh pull. What the teache
 
 If several assignments match, choose from the returned candidates with the teacher; don't guess. Edit the pulled file, changing only what the teacher asked. Keep its identity, `observed` baseline and the Canvas HTML you aren't changing.
 
-Then `.\cse.cmd review <pulled-file>` (or, when review is skipped, `.\cse.cmd push <pulled-file>`). The review page reads Canvas at that moment and shows, for each changed field, what is in Canvas now and what it becomes. If Canvas changed those fields since your pull, it says so in red and nothing can be applied: pull again and reapply the edit to the new version. `push` rechecks the same way and keeps your unsent edit when it holds.
+Then tell the teacher here, for each changed field, what it is now and what it becomes (for a long body, the changed passage rather than the whole text), and push on their go-ahead with `.\cse.cmd push <pulled-file>` (MCP: `push_document`). When the request already included making the change, push first and then report. `push` rechecks Canvas: if those fields changed since your pull, it holds and keeps your unsent edit; pull again, reapply the edit to the new version and tell the teacher what had changed. When the teacher asks to see it on a page, `.\cse.cmd review <pulled-file>` reads Canvas at that moment and shows each changed field side by side.
 
 ## Attach a rubric
 
@@ -20,7 +20,7 @@ For a New Quiz, build criteria from each written item's `rubric_hint` in the qui
 
 The attachment keeps the assignment's points and settings and never edits or replaces an existing or shared rubric; an assignment that already has one is refused. If the outcome is uncertain, rerun the same file: it confirms only when the rubric now exists and never attaches twice. If it is still uncertain, check the assignment in Canvas with the teacher, then pull it again. Pull again before scoring so the packet has Canvas's real criterion and rating IDs.
 
-For an individual assignment limited to selected book clubs, read `group-work.md`'s individual-response instructions. Use the nested `audience` source and Engine preparation before review; preserve independent submissions and manual exceptions. Initial audience-only updates use the exact assignment-dates document with its existing rows unchanged; remove the unchanged pulled `only_visible_to_overrides` request and retain its observed baseline so the nested audience alone controls the restriction. Do not hand-maintain recipient lists or substitute native shared-group settings. For later membership changes use explicit `prepare_audience` with `refresh: true` on the saved receipt/latest action, then review/push the returned assignment-dates path. Preserve protected work, manual exceptions and saved ownership; see `group-work.md` for the agent-driven refresh procedure.
+For an individual assignment limited to selected book clubs, read `group-work.md`'s individual-response instructions. Use the nested `audience` source and Engine preparation before the check-in; preserve independent submissions and manual exceptions. Initial audience-only updates use the exact assignment-dates document with its existing rows unchanged; remove the unchanged pulled `only_visible_to_overrides` request and retain its observed baseline so the nested audience alone controls the restriction. Do not hand-maintain recipient lists or substitute native shared-group settings. For later membership changes use explicit `prepare_audience` with `refresh: true` on the saved receipt/latest action, then check in and push the returned assignment-dates path. Preserve protected work, manual exceptions and saved ownership; see `group-work.md` for the agent-driven refresh procedure.
 
 A course Page for selected clubs uses the same `audience` intent and `prepare_audience` call before `push_document`. An audience-only change sends no body or title PUT, so a teacher's live body edit is preserved; availability dates use `unlock_at`/`lock_at` with omit-to-preserve and `null`-to-clear. See `group-work.md`'s Page instructions.
 

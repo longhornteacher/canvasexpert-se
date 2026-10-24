@@ -2,7 +2,7 @@
 
 **1.1 beta 4 · `1.1.0-beta.4` · Windows 11**
 
-This folder is your local CanvasExpert-SE **UserInstall**. An AI agent (Claude or ChatGPT, for example) does the work here: scoring student work and creating or editing Canvas assignments and quizzes. Review is the default for scoring, new assignments, new quizzes and assignment edits; you can explicitly skip it for a task.
+This folder is your local CanvasExpert-SE **UserInstall**. An AI agent (Claude or ChatGPT, for example) does the work here: scoring student work and creating or editing Canvas assignments and quizzes. Before it posts scores, creates assignments or quizzes, or edits an assignment, it tells you in the chat what it did and waits for your go-ahead. You can also ask to look through the work on a private page first.
 
 ## Start here
 

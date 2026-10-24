@@ -4,13 +4,13 @@ schema: 1
 # {course} becomes the course picked on Home, or "one of my courses" when none is picked.
 commands:
   - name: Scoring session
-    about: Score submitted work, review it, then post.
+    about: Score submitted work, hear how it went, then post.
     prompt: "Start a scoring session for {course}."
   - name: Planning session
     about: Build pages and assignments for the days ahead.
     prompt: "Start a planning session for {course}."
   - name: Build a quiz
-    about: A New Quiz, drafted for your review first.
+    about: A New Quiz, drafted and talked through before it goes in.
     prompt: "Help me build a New Quiz for {course}."
   - name: Grade update home
     about: Each family gets their child's grades. You read every one before it sends.
