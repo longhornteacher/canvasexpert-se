@@ -168,6 +168,11 @@ type ReviewInput struct {
 	Course string `json:"course,omitempty" jsonschema:"Required for a QuizForge quiz review"`
 }
 
+type DraftPDFInput struct {
+	Path    string `json:"path" jsonschema:"Workspace-relative assignment, Page, QuizForge quiz or results file"`
+	Handout bool   `json:"handout,omitempty" jsonschema:"Keep only what students see (directions, questions, posted feedback) for printed copies"`
+}
+
 type ReviewStatusInput struct {
 	ReviewID string `json:"review_id" jsonschema:"ID returned by start_review"`
 }
@@ -262,6 +267,16 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 			return TextOutput{}, err
 		}
 		return s.command(ctx, "student-report", dir)
+	})
+	addActionTool(server, "save_draft_pdf", "Save a printable Draft PDF of an assignment, Page, QuizForge quiz or results file in the teacher's Downloads folder and open it, laid out for paper from the same rendering the review page uses. The teacher copy includes settings, answer keys and private notes; handout: true keeps only what students see, for physical copies. Returns the file path only; a results PDF can hold student names and work and is outside the workspace. Nothing is written to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in DraftPDFInput) (TextOutput, error) {
+		path, err := s.coursePath(in.Path)
+		if err != nil {
+			return TextOutput{}, err
+		}
+		if in.Handout {
+			return s.command(ctx, "draft-pdf", path, "--handout")
+		}
+		return s.command(ctx, "draft-pdf", path)
 	})
 	addReadTool(server, "list_modules", "List a configured course's Canvas modules through the CE-SE Engine.", func(ctx context.Context, _ *mcp.CallToolRequest, in CourseInput) (TextOutput, error) {
 		return s.command(ctx, "modules", in.Course)

@@ -49,9 +49,11 @@ func buildAssignmentReview(path string) (ReviewModel, error) {
 	}
 	m := ReviewModel{Kind: "New assignment", Title: doc.Title, AllOrNothing: true,
 		Notice: "Directions are shown as the Engine will write them to Canvas. Canvas's own editor styling and student view are not simulated."}
+	printed := ""
 	if doc.BodyFormat == "html" {
 		// Source is escaped inside the existing sandboxed frame: agent-authored
 		// HTML cannot introduce active content or external requests into review.
+		printed = directions
 		directions = "<pre>" + html.EscapeString(directions) + "</pre>"
 		m.Notice = "The directions below are escaped HTML source, not a visual preview. Canvas may normalize this HTML; verify saved content and student rendering in Canvas after creation."
 	}
@@ -61,7 +63,7 @@ func buildAssignmentReview(path string) (ReviewModel, error) {
 			fact("Due", optional(doc.DueAt)), fact("Available from", optional(doc.UnlockAt)), fact("Until", optional(doc.LockAt)),
 			fact("Published", fmt.Sprint(doc.Published)),
 		},
-		Frames: []ReviewFrame{{Label: "Directions (HTML field)", HTML: directions}}}
+		Frames: []ReviewFrame{{Label: "Directions (HTML field)", HTML: directions, PrintHTML: printed}}}
 	addAudienceReview(&card, doc.Audience)
 	if doc.GroupCategoryID > 0 {
 		mode := "unknown"
