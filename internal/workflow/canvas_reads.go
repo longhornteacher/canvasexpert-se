@@ -340,6 +340,17 @@ func AssignmentGroups(ctx context.Context, c *canvas.Client, courseID int64) ([]
 	err := c.List(ctx, fmt.Sprintf("/api/v1/courses/%d/assignment_groups?per_page=100", courseID), &result)
 	return result, err
 }
+
+func (s *Service) checkAssignmentGroupTarget(ctx context.Context, courseID, groupID int64) error {
+	var group AssignmentGroup
+	if err := s.Client.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignment_groups/%d", courseID, groupID), &group); err != nil {
+		return fmt.Errorf("assignment_group_id %d is unavailable in target course %d: %w", groupID, courseID, err)
+	}
+	if group.ID != groupID {
+		return fmt.Errorf("assignment_group_id %d was not confirmed in target course %d", groupID, courseID)
+	}
+	return nil
+}
 func GetAssignment(ctx context.Context, c *canvas.Client, courseID, id int64) (Assignment, error) {
 	var result Assignment
 	err := c.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d?include[]=rubric_assessment&include[]=checkpoints&include[]=all_dates&include[]=overrides&include[]=discussion_topic", courseID, id), &result)
@@ -503,7 +514,7 @@ func UnsupportedAssignment(a Assignment) string {
 		return "no supported submission mode"
 	}
 	for _, t := range a.SubmissionTypes {
-		if t != "online_text_entry" && t != "online_upload" {
+		if t != "online_text_entry" && t != "online_upload" && t != "on_paper" {
 			return "unsupported submission mode: " + t
 		}
 	}

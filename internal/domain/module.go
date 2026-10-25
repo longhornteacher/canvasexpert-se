@@ -16,6 +16,7 @@ type ModuleDocument struct {
 	CourseID  int64          `yaml:"course_id,omitempty"`
 	Title     string         `yaml:"title"`
 	ModuleID  int64          `yaml:"module_id,omitempty"`
+	Position  *int           `yaml:"position,omitempty"`
 	Published *bool          `yaml:"published,omitempty"`
 	Items     []ModuleItem   `yaml:"items"`
 	Created   *ModuleCreated `yaml:"created,omitempty"`
@@ -36,6 +37,7 @@ type ModuleCreated struct {
 	Module      ActionOutcome       `yaml:"module,omitempty"`
 	Items       []ModuleItemOutcome `yaml:"items,omitempty"`
 	Publication ActionOutcome       `yaml:"publication,omitempty"`
+	Position    *int                `yaml:"position,omitempty"`
 }
 
 type ModuleItemOutcome struct {
@@ -61,8 +63,11 @@ func (d ModuleDocument) Validate() error {
 	if d.ModuleID < 0 || d.CourseID < 0 {
 		return fmt.Errorf("module and course IDs cannot be negative")
 	}
-	if len(d.Items) == 0 {
-		return fmt.Errorf("at least one module item is required")
+	if d.Position != nil && *d.Position < 1 {
+		return fmt.Errorf("module position must be a positive one-based integer")
+	}
+	if len(d.Items) == 0 && (d.ModuleID == 0 || d.Position == nil) {
+		return fmt.Errorf("at least one module item is required, except for an existing module's position-only update")
 	}
 	for i, item := range d.Items {
 		if item.Position < 0 {

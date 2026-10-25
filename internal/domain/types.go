@@ -74,6 +74,7 @@ type AssignmentSnapshot struct {
 	Points                         Decimal                 `yaml:"points"`
 	DescriptionHTML                string                  `yaml:"description_html"`
 	SubmissionTypes                []string                `yaml:"submission_types"`
+	AssignmentGroupID              *int64                  `yaml:"assignment_group_id,omitempty"`
 	DueAt                          *string                 `yaml:"due_at,omitempty"`
 	UnlockAt                       *string                 `yaml:"unlock_at,omitempty"`
 	LockAt                         *string                 `yaml:"lock_at,omitempty"`
@@ -168,6 +169,7 @@ type AssignmentDocument struct {
 	BodyFormat                     string                  `yaml:"body_format,omitempty"`
 	Points                         Decimal                 `yaml:"points"`
 	SubmissionTypes                []string                `yaml:"submission_types"`
+	AssignmentGroupID              *int64                  `yaml:"assignment_group_id,omitempty"`
 	DueAt                          *string                 `yaml:"due_at,omitempty"`
 	UnlockAt                       *string                 `yaml:"unlock_at,omitempty"`
 	LockAt                         *string                 `yaml:"lock_at,omitempty"`

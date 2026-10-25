@@ -233,7 +233,7 @@ func (d *PageDocument) ValidateBody(body string) error {
 	} else {
 		b := d.Observed
 		if b == nil || !validInstance(b.Instance) || b.CourseID <= 0 || b.PageID <= 0 || b.Slug == "" || strings.TrimSpace(b.Title) == "" {
-			return fmt.Errorf("page update requires a pulled live baseline")
+			return fmt.Errorf("page update requires a pulled live baseline; run pull_page with course and query (CLI: pull-page COURSE ID|LINK), read the returned pulled file, and preserve its complete header including observed and observed_dates when writing the editable draft")
 		}
 		if d.Instance != b.Instance || d.CourseID != b.CourseID || d.GroupID != b.GroupID || d.PageID != b.PageID {
 			return fmt.Errorf("page update identity differs from baseline")

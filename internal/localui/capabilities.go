@@ -24,7 +24,7 @@ type capabilityGroup struct {
 
 // Keep this teacher-facing snapshot aligned with docs/engine-capabilities.md.
 // Recorded live evidence and local checks are different kinds of verification.
-const capabilitiesReviewed = "2026-10-24"
+const capabilitiesReviewed = "2026-10-25"
 
 var capabilityGroups = []capabilityGroup{
 	{
@@ -135,6 +135,7 @@ var capabilityGroups = []capabilityGroup{
 			{"Right key for each course", "Your key for your courses and wherever you co-teach; the owner's key otherwise. Local tests."},
 			{"Scoring only what teammates tag (CE)", "Checked when work is pulled and again right before posting. Local tests."},
 			{"Hidden grades for the teammate to post", "Grades go in with manual posting; already-visible grades are held. Canvas hiding behavior pending live check."},
+			{"Copy an assignment between courses, paper assignments, assignment groups", "Added in Dev 2026-10-25, local tests only; pending live check. copy-assignment copies an ordinary assignment (directions, points, base dates, rubric, embedded Canvas files) to another configured course, unpublished by default, with a resumable receipt and no submissions, grades or overrides. Assignment documents also accept on_paper submission and an assignment_group_id."},
 			{"Copy a Collab module once", "Sends one module to each named course with Canvas's course copy, never twice. Pending live check."},
 			{"Family replies go to the actual teacher", "Reply-To and a short note for teammates' students. Outlook draft check pending."},
 		},

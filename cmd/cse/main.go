@@ -79,6 +79,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
   prepare-late-timing FILE  Check first-genuine choices against pulled work and propose timing changes; never writes to Canvas
   parent-report COURSE [REF ...] Read parent-update facts (missing, corrections, due soon, history) into courses/COURSE/parent-updates/
+  copy-assignment SOURCE QUERY TARGET [--module-id ID] [--assignment-group-id ID] [--published] Copy with destination files; unpublished by default
   copy-module SOURCE "MODULE" COURSE [COURSE ...] Copy one module by exact title, once, into each course (each teacher's own key); never re-copies
   family-contact-prepare RUN_FOLDER Resolve a free-form contact.json audience against Canvas
   parent-review RUN_FOLDER      Open the private page to review and send a grade-update or family-contact run (Outlook)
@@ -93,7 +94,8 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   doctor [--json] [--offline]   Check this UserInstall; authenticated Canvas and hub checks unless offline
   version [--json]              Print version and build information
   review FILE [COURSE]  Open a local page where the teacher reviews scores (results file), a new assignment (create document) or a quiz (QuizForge file plus COURSE), revises some, and posts or creates the approved ones; exits when finished and prints what was posted, revised and held
-  help [formats|fields|examples] Print this help, the file-format reference, Canvas field limits, or the synthetic examples (no Canvas requests)
+  help [formats|formats-assignment|formats-page|formats-module|formats-quiz|fields|examples]
+                                Print offline reference, optionally limited to one document kind
 
 COURSE is an explicit nickname in context/courses.md. FILE paths are relative
 to the workspace unless absolute. Use quotes around paths or titles with spaces.
@@ -105,6 +107,14 @@ Read the playbooks (playbooks/setup.md, authoring.md, native-content.md, edit.md
 
 // printEngineDoc prints the embedded format reference, field limits, or synthetic examples.
 func printEngineDoc(out io.Writer, topic string) error {
+	if section, ok := strings.CutPrefix(topic, "formats-"); ok {
+		text, err := embedded.EngineFormatSection(section)
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, text)
+		return err
+	}
 	if doc := map[string]string{"formats": "formats.md", "fields": "field-limits.md"}[topic]; doc != "" {
 		b, err := embedded.EngineDocs.ReadFile("engine-docs/" + doc)
 		if err != nil {
@@ -152,7 +162,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		return 2
 	}
 	args = flags.Args()
-	if len(args) > 0 && args[0] == "help" && len(args) == 2 && (args[1] == "formats" || args[1] == "fields" || args[1] == "examples") {
+	if len(args) > 0 && args[0] == "help" && len(args) == 2 && embedded.IsEngineReferenceTopic(args[1]) {
 		if e := printEngineDoc(out, args[1]); e != nil {
 			return fail(e, progress)
 		}
@@ -160,7 +170,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 	}
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" {
 		if len(args) > 1 && args[0] == "help" {
-			fmt.Fprintf(out, "No separate help for %q. Detailed help topics: formats, fields, examples. The command list below shows what each command does.\n\n", args[1])
+			fmt.Fprintf(out, "No separate help for %q. Detailed help topics: formats, formats-assignment, formats-page, formats-module, formats-quiz, fields, examples. The command list below shows what each command does.\n\n", args[1])
 		}
 		fmt.Fprint(out, help)
 		return 0
@@ -497,7 +507,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "copy-assignment": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}

@@ -141,6 +141,11 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		report.Path, err = s.movePushed(path, doc.Course, doc.Title, doc.Created.AssignmentID)
 		return report, err
 	}
+	if doc.AssignmentGroupID != nil && (doc.Created == nil || !definite(doc.Created.Assignment)) {
+		if err = s.checkAssignmentGroupTarget(ctx, course.ID, *doc.AssignmentGroupID); err != nil {
+			return report, err
+		}
+	}
 	if doc.Audience != nil {
 		if e := s.checkAudience(ctx, course, doc.Audience, func() int64 {
 			if doc.Created != nil {
@@ -177,6 +182,7 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		doc.Created = &domain.CreatedResources{StartedAt: time.Now().UTC().Format(time.RFC3339Nano), IntendedHTML: html}
 	}
 	c := doc.Created
+	createdNow := false
 	if c.IntendedHTML == "" && c.AssignmentID == 0 {
 		c.IntendedHTML = html // hub delivery recorded tier pages before the assignment body existed
 	}
@@ -233,6 +239,7 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 			c.URL = a.HTMLURL
 			c.Assignment = domain.ActionOutcome{Status: "succeeded", ID: a.ID}
 			c.SavedHTML = a.Description
+			createdNow = true
 		}
 		if err = save(); err != nil {
 			return report, fmt.Errorf("Canvas assignment exists but local metadata could not be saved: %w", err)
@@ -265,6 +272,11 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	}
 	if live.ID != c.AssignmentID || live.CourseID != course.ID {
 		return report, fmt.Errorf("Canvas returned a different assignment/course identity; construction held")
+	}
+	if createdNow && doc.AssignmentGroupID != nil && !sameOptionalInt64(live.AssignmentGroupID, doc.AssignmentGroupID) {
+		report.Status = "held"
+		report.Message = "Canvas did not confirm the requested assignment_group_id; assignment remains unpublished. Check its assignment group in Canvas before resuming."
+		return report, nil
 	}
 	// Edits the teacher made to the unfinished item (content, publication) are
 	// left alone; only the remaining construction steps continue.
@@ -505,6 +517,9 @@ func (s *Service) movePushed(path, course, title string, id int64) (string, erro
 
 func createFields(d domain.AssignmentDocument, html string) map[string]any {
 	fields := map[string]any{"name": d.Title, "description": html, "points_possible": d.Points, "grading_type": "points", "submission_types": d.SubmissionTypes, "due_at": d.DueAt, "unlock_at": d.UnlockAt, "lock_at": d.LockAt, "published": false}
+	if d.AssignmentGroupID != nil {
+		fields["assignment_group_id"] = *d.AssignmentGroupID
+	}
 	if d.GroupCategoryID > 0 {
 		fields["group_category_id"] = d.GroupCategoryID
 		fields["grade_group_students_individually"] = *d.GradeGroupStudentsIndividually
@@ -523,6 +538,9 @@ func sameCreateCore(a Assignment, d domain.AssignmentDocument, html string) bool
 	modeMatches := true
 	if d.GroupCategoryID > 0 {
 		modeMatches = sameOptionalBool(a.GradeGroupStudentsIndividually, d.GradeGroupStudentsIndividually)
+	}
+	if d.AssignmentGroupID != nil && !sameOptionalInt64(a.AssignmentGroupID, d.AssignmentGroupID) {
+		return false
 	}
 	return e == nil && p.Cmp(d.Points) == 0 && a.Name == d.Title && academicHTML(a.Description) == academicHTML(html) && a.GradingType == "points" && !a.Anonymous && !a.Moderated && groupID == d.GroupCategoryID && modeMatches && reflect.DeepEqual(a.SubmissionTypes, d.SubmissionTypes) && sameDate(a.DueAt, d.DueAt) && sameDate(a.UnlockAt, d.UnlockAt) && sameDate(a.LockAt, d.LockAt)
 }
@@ -658,6 +676,11 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 	if err != nil {
 		return report, err
 	}
+	if _, changed := patch["assignment_group_id"]; changed {
+		if err = s.checkAssignmentGroupTarget(ctx, d.CourseID, *d.AssignmentGroupID); err != nil {
+			return report, err
+		}
+	}
 	if d.GroupCategoryID > 0 {
 		if _, err = s.groupCategory(ctx, d.CourseID, d.GroupCategoryID); err != nil {
 			return report, fmt.Errorf("group assignment target: %w", err)
@@ -683,6 +706,9 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 		intended.Points = d.Points
 		intended.DescriptionHTML = body
 		intended.SubmissionTypes = d.SubmissionTypes
+		if _, ok := patch["assignment_group_id"]; ok {
+			intended.AssignmentGroupID = d.AssignmentGroupID
+		}
 		intended.DueAt = d.DueAt
 		intended.UnlockAt = d.UnlockAt
 		intended.LockAt = d.LockAt
@@ -791,6 +817,10 @@ func editPatchMatches(a Assignment, d domain.AssignmentDocument, html string, pa
 			}
 		case "submission_types":
 			if !reflect.DeepEqual(a.SubmissionTypes, d.SubmissionTypes) {
+				return false
+			}
+		case "assignment_group_id":
+			if !sameOptionalInt64(a.AssignmentGroupID, d.AssignmentGroupID) {
 				return false
 			}
 		case "due_at":
