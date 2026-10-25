@@ -224,3 +224,77 @@ func TestInboxSetStateContinuesAfterOneFailure(t *testing.T) {
 		t.Fatalf("state results exposed Canvas IDs: %s", encoded)
 	}
 }
+
+func TestInboxReplyUsesNewestMessageWhenCanvasListsNewestFirst(t *testing.T) {
+	conversation := inboxFixtureConversation(inboxThreadID, "unread", "", 22)
+	conversation.Messages = []inboxMessageLive{
+		{ID: 22, AuthorID: 2, Body: "Newest"},
+		{ID: 21, AuthorID: 1, Body: "Middle"},
+		{ID: 20, AuthorID: 2, Body: "Oldest"},
+	}
+	replies := 0
+	s, _ := inboxFixtureService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/v1/conversations":
+			_ = json.NewEncoder(w).Encode([]inboxConversationLive{conversation})
+		case strings.HasSuffix(r.URL.Path, "/add_message"):
+			replies++
+			_, _ = w.Write([]byte(`{"id":23}`))
+		case r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(conversation)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+	})
+	ref := inboxConversationRef(s, inboxThreadID)
+	if _, err := s.InboxReply(context.Background(), ref, "Thanks.", inboxMessageRef(s, 20)); err == nil || replies != 0 {
+		t.Fatalf("reply to an old message ref was accepted: err=%v replies=%d", err, replies)
+	}
+	if _, err := s.InboxReply(context.Background(), ref, "Thanks.", inboxMessageRef(s, 22)); err != nil || replies != 1 {
+		t.Fatalf("reply after the newest message failed: err=%v replies=%d", err, replies)
+	}
+}
+
+func TestInboxReadReturnsMessagesOldestFirst(t *testing.T) {
+	conversation := inboxFixtureConversation(inboxThreadID, "read", "", 22)
+	conversation.Messages = []inboxMessageLive{{ID: 22, AuthorID: 2, Body: "Newest"}, {ID: 20, AuthorID: 2, Body: "Oldest"}}
+	s, _ := inboxFixtureService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/v1/conversations":
+			_ = json.NewEncoder(w).Encode([]inboxConversationLive{conversation})
+		case r.URL.Path == "/api/v1/users/self/profile":
+			_, _ = w.Write([]byte(`{"id":1}`))
+		case r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(conversation)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+	})
+	thread, err := s.InboxRead(context.Background(), inboxConversationRef(s, inboxThreadID), false)
+	if err != nil || len(thread.Messages) != 2 || thread.Messages[0].Body != "Oldest" || thread.Messages[1].Body != "Newest" {
+		t.Fatalf("messages not oldest-first: %+v err=%v", thread.Messages, err)
+	}
+}
+
+func TestInboxListSurvivesUnreadableCourseEnrollments(t *testing.T) {
+	conversation := inboxFixtureConversation(inboxThreadID, "unread", "course_7", 20)
+	s, _ := inboxFixtureService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/v1/conversations":
+			_ = json.NewEncoder(w).Encode([]inboxConversationLive{conversation})
+		case r.URL.Path == "/api/v1/users/self/profile":
+			_, _ = w.Write([]byte(`{"id":1}`))
+		case r.URL.Path == "/api/v1/courses/7/enrollments":
+			http.Error(w, `{"errors":["unauthorized"]}`, http.StatusForbidden)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+	})
+	list, err := s.InboxList(context.Background(), InboxListOptions{})
+	if err != nil || len(list) != 1 || len(list[0].Participants) != 2 {
+		t.Fatalf("list failed on unreadable enrollments: %+v err=%v", list, err)
+	}
+}

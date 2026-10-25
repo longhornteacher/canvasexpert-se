@@ -273,7 +273,9 @@ func (s *Service) inboxIdentities(ctx context.Context, courseID int64, teacherID
 	}
 	var enrollments []inboxEnrollment
 	if err := s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/enrollments?per_page=100", courseID), &enrollments); err != nil {
-		return nil, err
+		// A course the key cannot read (team-owned, concluded) must not fail the
+		// whole Inbox; its participants keep their role labels.
+		return identities, nil
 	}
 	students, err := workspace.OpenStudents(s.Root)
 	if err != nil {
@@ -514,6 +516,7 @@ func (s *Service) InboxRead(ctx context.Context, ref string, markRead bool) (Inb
 		Participants: labels,
 		Messages:     make([]InboxMessage, 0, len(thread.Messages)),
 	}
+	sort.SliceStable(thread.Messages, func(i, j int) bool { return thread.Messages[i].ID < thread.Messages[j].ID })
 	for _, message := range thread.Messages {
 		identity := identities[message.AuthorID]
 		if message.Generated {
@@ -562,7 +565,14 @@ func (s *Service) InboxReply(ctx context.Context, ref, body, afterMessage string
 	if len(current.Messages) == 0 {
 		return InboxReplyResult{}, errors.New("conversation has no messages to reply to")
 	}
-	last := current.Messages[len(current.Messages)-1]
+	// Canvas lists messages newest-first; message IDs only increase, so the
+	// highest ID is the latest regardless of array order.
+	last := current.Messages[0]
+	for _, m := range current.Messages {
+		if m.ID > last.ID {
+			last = m
+		}
+	}
 	if inboxRef(s.Client.Origin(), last.ID, "message") != afterMessage {
 		return InboxReplyResult{}, errors.New("conversation has a newer message; re-read it and check with the teacher before replying")
 	}
