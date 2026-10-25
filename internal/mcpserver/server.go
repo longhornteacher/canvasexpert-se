@@ -169,7 +169,7 @@ type PathInput struct {
 }
 
 type HelpInput struct {
-	Topic string `json:"topic,omitempty" jsonschema:"Optional reference topic: formats, formats-assignment, formats-page, formats-module, formats-quiz, fields, or examples"`
+	Topic string `json:"topic,omitempty" jsonschema:"Optional reference topic: formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, fields, or examples"`
 }
 
 type ReviewInput struct {
@@ -204,12 +204,12 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection. A course with an owner belongs to that teammate; the team list says whether their Canvas key is on this PC.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
 		return s.listCourses(ctx, in)
 	})
-	addReadTool(server, "engine_reference", "Read CE-SE command help, document formats, Canvas field limits, or synthetic examples. Use formats-assignment, formats-page, formats-module, or formats-quiz for a smaller focused contract.", func(ctx context.Context, _ *mcp.CallToolRequest, in HelpInput) (TextOutput, error) {
+	addReadTool(server, "engine_reference", "Read CE-SE command help, document formats, Canvas field limits, or synthetic examples. Use formats-assignment, formats-page, formats-module, formats-quiz, or formats-inbox for a smaller focused contract.", func(ctx context.Context, _ *mcp.CallToolRequest, in HelpInput) (TextOutput, error) {
 		if in.Topic == "" {
 			return s.command(ctx, "help")
 		}
 		if !embedded.IsEngineReferenceTopic(in.Topic) {
-			return TextOutput{}, errors.New("topic must be formats, formats-assignment, formats-page, formats-module, formats-quiz, fields, or examples")
+			return TextOutput{}, errors.New("topic must be formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, fields, or examples")
 		}
 		return s.command(ctx, "help", in.Topic)
 	})
@@ -424,7 +424,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

@@ -6,7 +6,7 @@ import (
 )
 
 func TestEngineFormatSections(t *testing.T) {
-	for _, section := range []string{"assignment", "page", "module", "quiz"} {
+	for _, section := range []string{"assignment", "page", "module", "quiz", "inbox"} {
 		t.Run(section, func(t *testing.T) {
 			text, err := EngineFormatSection(section)
 			if err != nil || len(text) < 500 || strings.Contains(text, "### Student operations") {

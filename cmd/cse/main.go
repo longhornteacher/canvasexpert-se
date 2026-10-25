@@ -55,6 +55,13 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   courses [--as TEAMMATE]       Discover authorized teacher courses (a teammate's with --as)
   modules COURSE                List a configured course's modules
   external-resources COURSE [--group ID]  Read collaboration and conference metadata
+  inbox-list [--scope inbox|archived|sent] [--unread] [--course NICK]
+                                List Inbox conversations using opaque refs
+  inbox-read CONVERSATION [--mark-read] Read one thread; does not mark it read by default
+  inbox-reply CONVERSATION BODY --after-message MESSAGE_REF
+                                Reply in an existing thread after the teacher's go-ahead
+  inbox-set-state CONVERSATION... --state read|unread|archived|inbox
+                                Set selected conversation state after the teacher's go-ahead
   groups COURSE [--set ID] [--members GROUP_ID] [--groups] [--group ID]
                                 List collaborative group sets/clubs; memberships require an exact group
   pull-group-set COURSE ID      Pull a collaborative group set and its editable baseline
@@ -94,7 +101,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   doctor [--json] [--offline]   Check this UserInstall; authenticated Canvas and hub checks unless offline
   version [--json]              Print version and build information
   review FILE [COURSE]  Open a local page where the teacher reviews scores (results file), a new assignment (create document) or a quiz (QuizForge file plus COURSE), revises some, and posts or creates the approved ones; exits when finished and prints what was posted, revised and held
-  help [formats|formats-assignment|formats-page|formats-module|formats-quiz|fields|examples]
+  help [formats|formats-assignment|formats-page|formats-module|formats-quiz|formats-inbox|fields|examples]
                                 Print offline reference, optionally limited to one document kind
 
 COURSE is an explicit nickname in context/courses.md. FILE paths are relative
@@ -170,7 +177,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 	}
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" {
 		if len(args) > 1 && args[0] == "help" {
-			fmt.Fprintf(out, "No separate help for %q. Detailed help topics: formats, formats-assignment, formats-page, formats-module, formats-quiz, fields, examples. The command list below shows what each command does.\n\n", args[1])
+			fmt.Fprintf(out, "No separate help for %q. Detailed help topics: formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, fields, examples. The command list below shows what each command does.\n\n", args[1])
 		}
 		fmt.Fprint(out, help)
 		return 0
@@ -507,7 +514,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "copy-assignment": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "inbox-list": true, "inbox-read": true, "inbox-reply": true, "inbox-set-state": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "copy-assignment": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}

@@ -4,6 +4,8 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+- Added teacher-directed Canvas Inbox list, thread read, existing-thread reply, and per-conversation read/archive state operations through CLI and MCP. Thread refs hide Canvas IDs, reads do not mark messages read by default, replies contain only the message body and refuse stale threads, and the Inbox playbook keeps message judgment in the teacher conversation. Local fixtures only; Canvas Live behavior remains pending.
+
 ## 1.5.0 (2026-10-24)
 
 Honest-effort floor grades.
