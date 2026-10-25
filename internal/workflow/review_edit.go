@@ -86,6 +86,8 @@ func (s *Service) BuildEditReview(ctx context.Context, path string) (ReviewModel
 			}
 		case "group_category_id":
 			c.Facts = []ReviewFact{fact("Now in Canvas", fmt.Sprint(cur.GroupCategoryID)), fact("After this edit", fmt.Sprint(doc.GroupCategoryID))}
+		case "assignment_group_id":
+			c.Facts = []ReviewFact{fact("Now in Canvas", optionalAssignmentGroup(cur.AssignmentGroupID)), fact("After this edit", optionalAssignmentGroup(doc.AssignmentGroupID)), fact("Note", "Moving this assignment between weighted assignment groups can change course grades, including grades for existing submitted work.")}
 		case "grade_group_students_individually":
 			c.Facts = []ReviewFact{fact("Now in Canvas", optionalBool(cur.GradeGroupStudentsIndividually)), fact("After this edit", optionalBool(doc.GradeGroupStudentsIndividually))}
 		}
@@ -105,7 +107,14 @@ func patchFields(patch map[string]any) []string {
 
 func fieldLabel(key string) string {
 	return map[string]string{"name": "Title", "description": "Directions", "points_possible": "Points", "submission_types": "Submission types",
-		"due_at": "Due date", "unlock_at": "Available from", "lock_at": "Available until", "published": "Published", "group_category_id": "Collaborative group set", "grade_group_students_individually": "Grade members individually"}[key]
+		"due_at": "Due date", "unlock_at": "Available from", "lock_at": "Available until", "published": "Published", "assignment_group_id": "Assignment group", "group_category_id": "Collaborative group set", "grade_group_students_individually": "Grade members individually"}[key]
+}
+
+func optionalAssignmentGroup(id *int64) string {
+	if id == nil {
+		return "Canvas default / not observed"
+	}
+	return fmt.Sprint(*id)
 }
 
 func optionalBool(value *bool) string {

@@ -33,7 +33,7 @@ type Service struct {
 	route  *routeState
 	// copyTiming shortens CopyModule polling in tests; zero means the defaults.
 	copyTiming copyTiming
-	team   *workspace.Teammate
+	team       *workspace.Teammate
 	// scoring is the owner when this Service writes grades in a teammate's course.
 	scoring *workspace.Teammate
 	// Skip lists student refs post must leave untouched (review: not approved).
@@ -80,6 +80,7 @@ func Snapshot(a Assignment, origin string) (domain.AssignmentSnapshot, error) {
 	}
 	v := domain.AssignmentSnapshot{Instance: origin, CourseID: a.CourseID, AssignmentID: a.ID, Title: a.Name, Points: points, DescriptionHTML: a.Description, SubmissionTypes: a.SubmissionTypes, DueAt: a.DueAt, UnlockAt: a.UnlockAt, LockAt: a.LockAt, Published: a.Published, UpdatedAt: a.UpdatedAt, NewQuiz: a.NewQuiz}
 	v.GradingType = a.GradingType
+	v.AssignmentGroupID = a.AssignmentGroupID
 	v.AnonymousGrading = a.Anonymous
 	v.ModeratedGrading = a.Moderated
 	if a.GroupCategoryID != nil {
@@ -161,6 +162,7 @@ func (s *Service) PullItem(ctx context.Context, nickname, query string) (string,
 	if snapshot.GroupCategoryID == 0 {
 		doc.GradeGroupStudentsIndividually = nil
 	}
+	doc.AssignmentGroupID = snapshot.AssignmentGroupID
 	name := fmt.Sprintf("%d-%s-%s.md", a.ID, Slug(a.Name), time.Now().UTC().Format("20060102T150405.000000000"))
 	path, err := workspace.ConstrainPath(s.Root, filepath.Join("courses", nickname, "pulled", name))
 	if err != nil {

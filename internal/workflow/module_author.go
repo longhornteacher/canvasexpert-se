@@ -22,6 +22,7 @@ type ModulePushReport struct {
 	ItemsAdded  int
 	ItemsTotal  int
 	Published   bool
+	Position    int
 	ChildAccess string
 	Items       []domain.ModuleItemOutcome
 	Message     string
@@ -148,7 +149,11 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 				return report, err
 			}
 			var created canvasModule
-			err = s.Client.Write(ctx, "POST", fmt.Sprintf("/api/v1/courses/%d/modules", course.ID), map[string]any{"module": map[string]any{"name": d.Title}}, &created)
+			payload := map[string]any{"name": d.Title}
+			if d.Position != nil {
+				payload["position"] = *d.Position
+			}
+			err = s.Client.Write(ctx, "POST", fmt.Sprintf("/api/v1/courses/%d/modules", course.ID), map[string]any{"module": payload}, &created)
 			if err != nil {
 				d.Created.Module = failedOutcome(err)
 			} else if created.ID <= 0 {
@@ -178,6 +183,34 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 	if module.ID != moduleID || (module.CourseID != 0 && module.CourseID != course.ID) {
 		return report, fmt.Errorf("module %d is not verified in configured course %s", moduleID, course.Nickname)
 	}
+	// A saved position marks a completed request. Preserve a teacher's later
+	// reorder on resume; changing position in this document requests a new move.
+	if d.Position != nil && (d.Created.Position == nil || *d.Created.Position != *d.Position) {
+		if module.Position != *d.Position {
+			if err = s.Client.Write(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/modules/%d", course.ID, moduleID), map[string]any{"module": map[string]any{"position": *d.Position}}, nil); err != nil {
+				return report, fmt.Errorf("move module %d: %w", moduleID, err)
+			}
+		}
+		var modules []canvasModule
+		if err = s.Client.List(ctx, fmt.Sprintf("/api/v1/courses/%d/modules?per_page=100", course.ID), &modules); err != nil {
+			return report, fmt.Errorf("verify module position with list_modules: %w", err)
+		}
+		verified := false
+		for _, live := range modules {
+			if live.ID == moduleID && live.Position == *d.Position {
+				module.Position, verified = live.Position, true
+				break
+			}
+		}
+		if !verified {
+			return report, fmt.Errorf("list_modules did not confirm module %d at requested position %d; inspect the live order before retrying", moduleID, *d.Position)
+		}
+		position := *d.Position
+		d.Created.Position = &position
+		if err = save(); err != nil {
+			return report, err
+		}
+	}
 	if d.Created.StartedAt != "" && !definite(d.Created.Module) {
 		d.Created.Module = domain.ActionOutcome{Status: "succeeded", ID: moduleID, Message: "module verified by its saved Canvas ID"}
 		if err = save(); err != nil {
@@ -189,7 +222,7 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 		d.Created.ModuleID = moduleID
 	}
 	d.ModuleID = moduleID
-	report.ModuleID, report.Published = moduleID, module.Published
+	report.ModuleID, report.Published, report.Position = moduleID, module.Published, module.Position
 	if err = save(); err != nil {
 		return report, err
 	}

@@ -65,6 +65,9 @@ func buildAssignmentReview(path string) (ReviewModel, error) {
 		},
 		Frames: []ReviewFrame{{Label: "Directions (HTML field)", HTML: directions, PrintHTML: printed}}}
 	addAudienceReview(&card, doc.Audience)
+	if doc.AssignmentGroupID != nil {
+		card.Facts = append(card.Facts, fact("Assignment group", optionalAssignmentGroup(doc.AssignmentGroupID)))
+	}
 	if doc.GroupCategoryID > 0 {
 		mode := "unknown"
 		if doc.GradeGroupStudentsIndividually != nil {

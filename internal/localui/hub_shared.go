@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"html/template"
-	"math/rand/v2"
 	"net/http"
 
 	"time"
@@ -137,5 +136,3 @@ func (h *Hub) render(w http.ResponseWriter, status int, t *template.Template, da
 	w.WriteHeader(status)
 	_, _ = w.Write(buf.Bytes())
 }
-
-func randomAlias(available []string) string { return available[rand.IntN(len(available))] }

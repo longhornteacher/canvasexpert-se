@@ -77,6 +77,9 @@ func ValidateSnapshot(s AssignmentSnapshot) error {
 	if s.GroupCategoryID < 0 {
 		return fmt.Errorf("assignment group_category_id cannot be negative")
 	}
+	if s.AssignmentGroupID != nil && *s.AssignmentGroupID <= 0 {
+		return fmt.Errorf("assignment assignment_group_id must be positive when supplied")
+	}
 	for _, raw := range []*string{s.DueAt, s.UnlockAt, s.LockAt} {
 		if raw != nil && *raw != "" {
 			if _, e := time.Parse(time.RFC3339Nano, *raw); e != nil {
@@ -123,10 +126,13 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 	if len(d.SubmissionTypes) == 0 {
 		return fmt.Errorf("submission_types required")
 	}
+	if containsSubmissionType(d.SubmissionTypes, "on_paper") && len(d.SubmissionTypes) != 1 {
+		return fmt.Errorf("on_paper must be the only submission type; it cannot be mixed with online submission types")
+	}
 	seen := map[string]bool{}
 	for _, s := range d.SubmissionTypes {
 		// A pulled New Quiz (external_tool) may only gain a rubric; PlanEdit refuses updates.
-		if s != "online_text_entry" && s != "online_upload" && (s != "external_tool" || d.Operation == "create") {
+		if s != "online_text_entry" && s != "online_upload" && s != "on_paper" && (s != "external_tool" || d.Operation == "create") {
 			return fmt.Errorf("unsupported submission type %q", s)
 		}
 		if seen[s] {
@@ -136,6 +142,9 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 	}
 	if d.ModuleID < 0 {
 		return fmt.Errorf("module_id cannot be negative")
+	}
+	if d.AssignmentGroupID != nil && *d.AssignmentGroupID <= 0 {
+		return fmt.Errorf("assignment_group_id must be positive when supplied")
 	}
 	if d.GroupCategoryID < 0 {
 		return fmt.Errorf("group_category_id cannot be negative")
@@ -322,6 +331,9 @@ func validateRubricAttachment(d AssignmentDocument, body string) error {
 	}
 	if d.Title != b.Title || d.Points.Cmp(b.Points) != 0 || !typesEqual || !dateEqual(d.DueAt, b.DueAt) || !dateEqual(d.UnlockAt, b.UnlockAt) || !dateEqual(d.LockAt, b.LockAt) || d.Published != b.Published || body != b.DescriptionHTML {
 		return fmt.Errorf("attach-rubric must preserve assignment title, points, submission types, dates, publication, and exact HTML")
+	}
+	if d.AssignmentGroupID != nil && (b.AssignmentGroupID == nil || *d.AssignmentGroupID != *b.AssignmentGroupID) {
+		return fmt.Errorf("attach-rubric must preserve assignment_group_id; use operation: update to change the assignment group")
 	}
 	if d.Created == nil {
 		return nil

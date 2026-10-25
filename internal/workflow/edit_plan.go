@@ -47,6 +47,9 @@ func PlanEdit(doc domain.AssignmentDocument, html string) (map[string]any, error
 	if !reflect.DeepEqual(doc.SubmissionTypes, base.SubmissionTypes) {
 		patch["submission_types"] = doc.SubmissionTypes
 	}
+	if doc.AssignmentGroupID != nil && !sameOptionalInt64(doc.AssignmentGroupID, base.AssignmentGroupID) {
+		patch["assignment_group_id"] = *doc.AssignmentGroupID
+	}
 	if !sameDate(doc.DueAt, base.DueAt) {
 		patch["due_at"] = doc.DueAt
 	}
@@ -89,6 +92,9 @@ func SameGradingBasis(a, b domain.AssignmentSnapshot) bool {
 		b.Rubric = &r
 	}
 	a.DescriptionHTML, b.DescriptionHTML = "", ""
+	// Assignment-group weights affect the course total, not this assessment's
+	// points, rubric or submission identity.
+	a.AssignmentGroupID, b.AssignmentGroupID = nil, nil
 	// Old individual snapshots predate this field. Canvas commonly returns false
 	// for an individual assignment, so absence is equivalent only off-group.
 	if a.GroupCategoryID == 0 && b.GroupCategoryID == 0 {
@@ -138,6 +144,10 @@ func sameEditFields(a, b domain.AssignmentSnapshot, patch map[string]any) bool {
 			}
 		case "group_category_id":
 			if a.GroupCategoryID != b.GroupCategoryID {
+				return false
+			}
+		case "assignment_group_id":
+			if !sameOptionalInt64(a.AssignmentGroupID, b.AssignmentGroupID) {
 				return false
 			}
 		case "grade_group_students_individually":
@@ -260,7 +270,16 @@ func SameSnapshot(a, b domain.AssignmentSnapshot) bool {
 	if a.Checkpoints == nil || b.Checkpoints == nil {
 		a.Checkpoints, b.Checkpoints = nil, nil
 	}
+	if a.AssignmentGroupID == nil || b.AssignmentGroupID == nil {
+		a.AssignmentGroupID, b.AssignmentGroupID = nil, nil
+	}
 	return reflect.DeepEqual(a, b)
+}
+func sameOptionalInt64(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 func sameOptionalBool(a, b *bool) bool {
 	if a == nil || b == nil {

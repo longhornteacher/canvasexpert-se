@@ -85,6 +85,15 @@ type PrepareLateTimingInput struct {
 	Groups   []workflow.LateTimingGroupDecision   `json:"groups,omitempty" jsonschema:"Per-member first-genuine choices for group-packet entries"`
 }
 
+type CopyAssignmentInput struct {
+	SourceCourse      string `json:"source_course" jsonschema:"Configured source course nickname"`
+	Query             string `json:"query" jsonschema:"Source assignment title or exact ID"`
+	TargetCourse      string `json:"target_course" jsonschema:"Configured destination course nickname"`
+	ModuleID          int64  `json:"module_id,omitempty" jsonschema:"Optional existing destination module ID"`
+	AssignmentGroupID int64  `json:"assignment_group_id,omitempty" jsonschema:"Optional destination assignment group ID"`
+	Published         bool   `json:"published,omitempty" jsonschema:"Publish only when requested; default false"`
+}
+
 type CopyModuleInput struct {
 	SourceCourse string   `json:"source_course" jsonschema:"Configured nickname of the course the module is copied from, usually Collab"`
 	Module       string   `json:"module" jsonschema:"Exact title of the module in the source course"`
@@ -160,7 +169,7 @@ type PathInput struct {
 }
 
 type HelpInput struct {
-	Topic string `json:"topic,omitempty" jsonschema:"Optional reference topic: formats, fields, or examples"`
+	Topic string `json:"topic,omitempty" jsonschema:"Optional reference topic: formats, formats-assignment, formats-page, formats-module, formats-quiz, fields, or examples"`
 }
 
 type ReviewInput struct {
@@ -195,12 +204,12 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection. A course with an owner belongs to that teammate; the team list says whether their Canvas key is on this PC.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
 		return s.listCourses(ctx, in)
 	})
-	addReadTool(server, "engine_reference", "Read CE-SE command help, document formats, Canvas field limits, or synthetic examples.", func(ctx context.Context, _ *mcp.CallToolRequest, in HelpInput) (TextOutput, error) {
+	addReadTool(server, "engine_reference", "Read CE-SE command help, document formats, Canvas field limits, or synthetic examples. Use formats-assignment, formats-page, formats-module, or formats-quiz for a smaller focused contract.", func(ctx context.Context, _ *mcp.CallToolRequest, in HelpInput) (TextOutput, error) {
 		if in.Topic == "" {
 			return s.command(ctx, "help")
 		}
-		if in.Topic != "formats" && in.Topic != "fields" && in.Topic != "examples" {
-			return TextOutput{}, errors.New("topic must be formats, fields, or examples")
+		if !embedded.IsEngineReferenceTopic(in.Topic) {
+			return TextOutput{}, errors.New("topic must be formats, formats-assignment, formats-page, formats-module, formats-quiz, fields, or examples")
 		}
 		return s.command(ctx, "help", in.Topic)
 	})
@@ -246,6 +255,22 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	})
 	addActionTool(server, "copy_module", "Copies one Collab module, by exact title, once into each listed course, using each course's teacher key. Never re-copies. State the module and the course list to the teacher before calling.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CopyModuleInput) (TextOutput, error) {
 		return s.longCommand(ctx, append([]string{"copy-module", in.SourceCourse, in.Module}, in.Courses...)...)
+	})
+	addActionTool(server, "copy_assignment", "Copy a plain assignment between configured courses, copying embedded Canvas files and preserving directions, points, dates and any rubric. Defaults unpublished. Optional module and assignment group IDs belong to the destination. Reuse the saved receipt to resume without duplicate assignments; no submissions, grades or overrides are copied.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CopyAssignmentInput) (TextOutput, error) {
+		if in.ModuleID < 0 || in.AssignmentGroupID < 0 {
+			return TextOutput{}, fmt.Errorf("module_id and assignment_group_id must be positive when supplied")
+		}
+		args := []string{"copy-assignment", in.SourceCourse, in.Query, in.TargetCourse}
+		if in.ModuleID != 0 {
+			args = append(args, "--module-id", strconv.FormatInt(in.ModuleID, 10))
+		}
+		if in.AssignmentGroupID != 0 {
+			args = append(args, "--assignment-group-id", strconv.FormatInt(in.AssignmentGroupID, 10))
+		}
+		if in.Published {
+			args = append(args, "--published")
+		}
+		return s.longCommand(ctx, args...)
 	})
 	addActionTool(server, "prepare_family_contact", "Resolve a free-form contact.json audience against current Canvas courses and collaborative groups. Save audience.json and return pseudonymized recipients, message counts, warnings and blocking conflicts. Refreshing preserves outcomes. No email is sent and no addresses or Canvas user IDs are returned.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in FamilyContactInput) (TextOutput, error) {
 		dir, err := s.coursePath(in.Folder)
@@ -310,7 +335,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "pull-assignment-dates", in.Course, strconv.FormatInt(in.AssignmentID, 10))
 	})
-	addActionTool(server, "pull_assignment", "Pull an exact Canvas assignment and its edit baseline through the CE-SE Engine.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
+	addActionTool(server, "pull_assignment", "Pull an exact Canvas assignment and its edit baseline through the CE-SE Engine. Pass the assignment title, ID, or Canvas link in query (not assignment or assignment_id).", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
 		return s.command(ctx, "pull-item", in.Course, in.Query)
 	})
 	addActionTool(server, "pull_page", "Pull an exact Canvas Page and its edit baseline through the CE-SE Engine. Use group_id for a group Page; query remains the exact Page ID or link.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PageQueryInput) (TextOutput, error) {
