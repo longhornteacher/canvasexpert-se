@@ -4,12 +4,29 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CanvasExpert-SE students</title>
 <style>{{pageCSS}}</style>
+{{if and .Hub .Rows}}<style>
+.student-reference{display:none}
+@media print{
+  @page{margin:0.5in}
+  html,body{background:white!important;color:black!important;color-scheme:light;font:11pt Arial,sans-serif}
+  body>main{display:none!important}
+  .student-reference{display:block}
+  .student-reference h1{font-size:16pt;margin:0 0 6pt;color:black}
+  .student-reference p{font-size:10pt;margin:0 0 8pt;color:black}
+  .student-reference table{width:100%;table-layout:fixed;border-collapse:collapse}
+  .student-reference th,.student-reference td{border:1px solid #888;padding:4pt 6pt;color:black;background:white!important;overflow-wrap:anywhere}
+  .student-reference th{font-size:11pt}
+  .student-reference thead{display:table-header-group}
+  .student-reference tr{break-inside:avoid}
+}
+</style>{{end}}
 <main class="wide">
 {{if .Hub}}{{nav "Classroom" "Students" .Appearance}}{{else}}{{.Appearance.Control}}{{end}}
 <h1>Students</h1>
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 {{if .Hub}}{{if .Tabs}}<nav class="course-tabs" aria-label="Active courses">{{range .Tabs}}<a href="/students?course={{.ID}}" {{if .Selected}}aria-current="page"{{end}}>{{.Name}}</a>{{end}}</nav>
-<div class="row"><form method="post" action="/students/refresh"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="course" value="{{.CourseID}}"><button type="submit">Refresh from Canvas</button></form><a href="/students/roster?course={{.CourseID}}" target="_blank" rel="noopener">Print name key</a><a href="/students/roster?course=all" target="_blank" rel="noopener">Name key for all courses</a><span class="pill on">{{len .Rows}} students</span></div>
+<div class="row"><form method="post" action="/students/refresh"><input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="course" value="{{.CourseID}}"><button type="submit">Refresh from Canvas</button></form>{{if .Rows}}<button type="button" class="secondary" id="print-student-reference" aria-describedby="student-reference-help">Print Student&lt;-&gt;Pokemon table</button>{{end}}<a href="/students/roster?course={{.CourseID}}" target="_blank" rel="noopener">Print name key</a><a href="/students/roster?course=all" target="_blank" rel="noopener">Name key for all courses</a><span class="pill on">{{len .Rows}} students</span></div>
+{{if .Rows}}<p id="student-reference-help">Prints saved names and aliases for {{.CourseName}}. Save student changes before printing.</p>{{end}}
 <h2 class="grp">{{.CourseName}}</h2>{{if .UpdatedAt}}<p>Last updated from Canvas: {{.UpdatedAt}}</p>{{end}}
 {{else}}<p class="card">No courses yet. <a href="/courses">Choose your courses</a> and their students will show up here.</p>{{end}}{{end}}
 {{if .TagMessage}}<p class="error">{{.TagMessage}}</p>{{end}}
@@ -23,6 +40,14 @@
 </form>{{end}}
 <script src="/_cse/contacts.js" defer></script>{{if .Hub}}<script src="/_cse/drafts.js" defer></script>{{end}}
 </main>
+{{if and .Hub .Rows}}<section class="student-reference" aria-label="Student Pokémon reference">
+<h1>{{.CourseName}} — Student ↔ Pokémon</h1>
+<p>Teacher reference · {{len .Rows}} students{{if .UpdatedAt}} · Roster last pulled: {{.UpdatedAt}}{{end}}</p>
+<table><thead><tr><th scope="col">Student</th><th scope="col">Pokémon / Privacy Alias</th></tr></thead><tbody>
+{{range .Rows}}<tr><td>{{.Name}}</td><td>{{.Alias}}</td></tr>
+{{end}}</tbody></table>
+</section>{{end}}
+{{if .Hub}}<script src="/_cse/student-reference.js" defer></script>{{end}}
 {{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
 </html>
 

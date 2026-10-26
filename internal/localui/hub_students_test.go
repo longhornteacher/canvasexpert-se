@@ -153,6 +153,11 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 	if !strings.Contains(page, "Cal Real") || !strings.Contains(page, "Blue") || !strings.Contains(page, "&lt;unsafe&gt;") || strings.Contains(page, "Ana Real") {
 		t.Fatal("course selection or tag scope is incorrect")
 	}
+	_, reference, found := strings.Cut(page, `<section class="student-reference"`)
+	reference, _, _ = strings.Cut(reference, `</section>`)
+	if !found || !strings.Contains(reference, "ELA7") || !strings.Contains(reference, "Cal Real") || strings.Contains(reference, "Ana Real") || strings.Contains(reference, "&lt;unsafe&gt;") || strings.Contains(reference, "<input") {
+		t.Fatal("print reference must contain only the selected course's saved name/alias table")
+	}
 	store, _ := workspace.OpenStudents(root)
 	byID := map[int64]workspace.Student{}
 	for i, student := range store.Rows {

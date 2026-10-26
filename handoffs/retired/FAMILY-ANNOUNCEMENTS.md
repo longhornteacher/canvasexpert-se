@@ -16,7 +16,7 @@ The teacher should be able to say things like:
 > "Tell Period 3 families the field trip form is due Friday."
 > "Send these four students' families a note that the makeup quiz is Thursday."
 
-First real use: ELA 7 Unit 2 book clubs (`LANG ARTS 7 - Beckham` group set 5291, `PAP LANG ARTS 7 - Beckham` group set 5289, six groups each, The Tequila Worm group empty in both). Expected: five versions and one email per student in both courses, covers shown inline.
+First real use: ELA 7 Unit 2 book clubs (`ELA7` group set 5291, `ELA7 PAP` group set 5289, six groups each, The Tequila Worm group empty in both). Expected: five versions and one email per student in both courses, covers shown inline.
 
 This is a development task. Audit first, then implement, test, update docs and agent guidance, and report.
 
@@ -66,8 +66,8 @@ Run folder `courses/<first course>/family-contact/<run_id>/`: `contact.json` and
       "key": "ghost",
       "audience": {
         "groups": [
-          {"course": "LANG ARTS 7 - Beckham", "group_set": 5291, "name": "Ghost"},
-          {"course": "PAP LANG ARTS 7 - Beckham", "group_set": 5289, "name": "Ghost"}
+          {"course": "ELA7", "group_set": 5291, "name": "Ghost"},
+          {"course": "ELA7 PAP", "group_set": 5289, "name": "Ghost"}
         ]
       },
       "subject": "Book Clubs: {{student_name}} is in the Ghost group",

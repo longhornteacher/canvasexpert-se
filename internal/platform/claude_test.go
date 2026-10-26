@@ -24,3 +24,19 @@ func TestClaudeDesktopPathFindsStableLauncher(t *testing.T) {
 		t.Fatalf("got %q %v", got, ok)
 	}
 }
+
+func TestClaudeDesktopPathFindsStoreAlias(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("LOCALAPPDATA", base)
+	dir := filepath.Join(base, "Microsoft", "WindowsApps")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(dir, "claude-desktop.exe")
+	if err := os.WriteFile(want, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := ClaudeDesktopPath(); !ok || got != want {
+		t.Fatalf("got %q %v", got, ok)
+	}
+}

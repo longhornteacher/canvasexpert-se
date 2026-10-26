@@ -101,8 +101,9 @@ type CopyModuleInput struct {
 }
 
 type ParentReportInput struct {
-	Courses  []string `json:"courses" jsonschema:"Configured course nicknames; one email can cover several courses"`
-	Students []string `json:"students,omitempty" jsonschema:"Optional student refs; omit for every active student"`
+	Courses    []string `json:"courses" jsonschema:"Configured course nicknames; one email can cover several courses"`
+	Students   []string `json:"students,omitempty" jsonschema:"Optional student refs; omit for every active student"`
+	FullPeriod bool     `json:"full_period,omitempty" jsonschema:"Include the full current school-calendar grading period rather than the default correction window"`
 }
 
 type ParentReviewInput struct {
@@ -251,7 +252,11 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		return TextOutput{Text: string(encoded)}, nil
 	})
 	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates (course score, missing work, correction candidates, due soon, grade history) into courses/<course>/parent-updates/<run>/report.json. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
-		return s.longCommand(ctx, append(append([]string{"parent-report"}, in.Courses...), in.Students...)...)
+		args := append(append([]string{"parent-report"}, in.Courses...), in.Students...)
+		if in.FullPeriod {
+			args = append(args, "--full-period")
+		}
+		return s.longCommand(ctx, args...)
 	})
 	addActionTool(server, "copy_module", "Copies one Collab module, by exact title, once into each listed course, using each course's teacher key. Never re-copies. State the module and the course list to the teacher before calling.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CopyModuleInput) (TextOutput, error) {
 		return s.longCommand(ctx, append([]string{"copy-module", in.SourceCourse, in.Module}, in.Courses...)...)

@@ -28,7 +28,7 @@ When the teacher asks for a scoring session, `pull_work --session` pulls only su
 
 ## Why: the 2026-10-21 session
 
-A Sonnet Cowork session scored "all Daily grades" across ELA7 120638, PAP ELA7 120669 and CS8 121046. Its handoff was provided in chat; only counts and IDs are recorded here.
+A Sonnet Cowork session scored "all Daily grades" across ELA7, PAP ELA7 and CS8. Its handoff was provided in chat; only counts and IDs are recorded here.
 
 - The session pull took about 2m47s and was polled six times. It printed a 520-row (~70 KB) table, mostly zeros, for 12 packets and 129 students.
 - The agent downloaded ~770 KB of `assignment_groups` JSON with `canvas_get` only to tell Daily from Major Grade.
@@ -39,7 +39,7 @@ A Sonnet Cowork session scored "all Daily grades" across ELA7 120638, PAP ELA7 1
 
 ## Evidence already observed
 
-**Canvas Live, read-only, 2026-10-21.** `GET /api/v1/courses/121046/assignments?per_page=100&include[]=all_dates` (CS8) returned 30 assignments, and all 30 had `needs_grading_count`:
+**Canvas Live, read-only, 2026-10-21.** `GET /api/v1/courses/<CS8>/assignments?per_page=100&include[]=all_dates` (CS8) returned 30 assignments, and all 30 had `needs_grading_count`:
 - 3698355 Hotline Miami: count 1.
 - 3703860 Stardew Valley: count 20; due 2026-10-21T21:00:00Z, so not yet due at the time.
 - 3697517, the timing-only packet: count 0.

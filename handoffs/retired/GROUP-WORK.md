@@ -64,7 +64,7 @@ Full table in `docs/group-work/README.md`. In short: shared-mode grade and rubri
 
 ## Live Canvas rules
 
-CS8 (course 121046) is a real class with real students plus a built-in Test Student. Existing credentials and historical course IDs do **not** authorize any Canvas write. Run a live check only when the teacher gives a concrete scope in this session, use disposable objects named with a clear prefix, never read or print roster details broadly (names and grades appear in raw enrollment responses), avoid placing real students in anything student-visible unless the teacher has explicitly chosen that, and clean up what you create. The Gate P authorization is spent; do not reuse it. `cmd/cse-probe` is a developer-only probe hardcoded to CS8 and the built-in Test Student.
+CS8 is a real class with real students plus a built-in Test Student. Existing credentials and historical course IDs do **not** authorize any Canvas write. Run a live check only when the teacher gives a concrete scope in this session, use disposable objects named with a clear prefix, never read or print roster details broadly (names and grades appear in raw enrollment responses), avoid placing real students in anything student-visible unless the teacher has explicitly chosen that, and clean up what you create. The Gate P authorization is spent; do not reuse it. `cmd/cse-probe` is a developer-only probe hardcoded to CS8 and the built-in Test Student.
 
 ## Per-slice protocol
 

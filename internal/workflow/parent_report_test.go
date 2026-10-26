@@ -591,3 +591,39 @@ func TestCorrectionDaysSettingDrivesDeadlineAndRejectsBadValues(t *testing.T) {
 		t.Fatal("90 days accepted")
 	}
 }
+
+func TestParentFalseBulkVisibilityUsesAssignmentBatchAndKeepsStudentDue(t *testing.T) {
+	reads := 0
+	svc, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		reads++
+		if r.URL.Path != "/api/v1/courses/1/assignments/7/submissions" {
+			t.Errorf("unexpected read %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[{"user_id":9,"assignment_id":7,"assignment_visible":true},{"user_id":10,"assignment_id":7,"assignment_visible":false}]`))
+	})
+	no := false
+	due := "2026-10-16T12:00:00-05:00"
+	assignments := []Assignment{{ID: 7, Name: "Paper", Published: true, GradingType: "points", DueAt: str("2026-10-15T12:00:00-05:00"), SubmissionTypes: []string{"on_paper"}, Points: "100"}}
+	loc, _ := time.LoadLocation("America/Chicago")
+	now := time.Date(2026, 10, 18, 12, 0, 0, 0, loc)
+	resolver := &parentSubmissionResolver{client: svc.Client, courseID: 1, batches: map[int64]map[int64]Submission{}}
+	for _, id := range []int64{9, 10} {
+		bulk := []Submission{{UserID: id, AssignmentID: 7, AssignmentVisible: &no, CachedDueDate: &due, CachedDueDatePresent: true, Score: num("0")}}
+		rows, flags := completeStudentSubmissionsWithResolver(t.Context(), resolver, id, assignments, bulk, now.AddDate(0, 0, -14), now, now.AddDate(0, 0, 7))
+		if len(flags) != 0 || len(rows) != 1 {
+			t.Fatalf("rows=%+v flags=%v", rows, flags)
+		}
+		course := ParentReportCourse{WorkDue: []ParentWorkDueItem{}}
+		buildStudentReportScoped(&course, rows, nil, map[int64]Assignment{7: assignments[0]}, now, loc, now.AddDate(0, 0, -14), now.AddDate(0, 0, 7))
+		if id == 9 && (len(course.WorkDue) != 1 || len(course.Missing) != 1 || !strings.Contains(course.WorkDue[0].DueAt, "2026-10-16")) {
+			t.Fatalf("visible override: %+v", course)
+		}
+		if id == 10 && len(course.WorkDue) != 0 {
+			t.Fatalf("invisible work leaked: %+v", course)
+		}
+	}
+	if reads != 1 {
+		t.Fatalf("assignment reads = %d, want one", reads)
+	}
+}

@@ -145,7 +145,7 @@ func (s *Service) BuildParentReview(dir string) (ReviewModel, error) {
 			m.Cards = append(m.Cards, withDigest(card))
 			continue
 		}
-		to, cc, parents, e := parentRecipients(s.Root, st)
+		to, cc, parents, e := familyRecipients(s.Root, st, run.Drafts.Layout == "weekly_update")
 		if e != nil {
 			return ReviewModel{}, e
 		}
@@ -200,7 +200,7 @@ func (s *Service) SendParentUpdates(ctx context.Context, dir string, skip map[st
 			return outlook.Message{Subject: r.Subject, HTMLBody: r.HTML}, nil
 		}})
 	}
-	return s.deliverFamilyMail(ctx, dir, tasks, false, skip, draftsOnly, sender)
+	return s.deliverFamilyMail(ctx, dir, tasks, run.Drafts.Layout == "weekly_update", skip, draftsOnly, sender)
 }
 
 // familyMailTask supplies content to the shared private recipient/send loop.

@@ -1,6 +1,7 @@
 package localui
 
 import (
+	"bytes"
 	"canvasexpertse/internal/workspace"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,28 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestStudentReferenceExcludesPrivateDetails(t *testing.T) {
+	data := studentsData{Hub: true, CourseID: 11, CourseName: "CS8", NotesOn: true, ContactsOn: true, Rows: []studentRow{{
+		Student:  workspace.Student{Name: "Ana <Example>", Alias: "Pika & Chu", FirstName: "Private nickname", Ref: "private-ref"},
+		Note:     "Private teacher note",
+		Contacts: workspace.StudentContacts{StudentEmail: "private@example.invalid"},
+	}}}
+	var output bytes.Buffer
+	if err := tmpl("students").Execute(&output, data); err != nil {
+		t.Fatal(err)
+	}
+	_, reference, found := strings.Cut(output.String(), `<section class="student-reference"`)
+	reference, _, _ = strings.Cut(reference, `</section>`)
+	if !found || !strings.Contains(reference, `<td>Ana &lt;Example&gt;</td><td>Pika &amp; Chu</td>`) {
+		t.Fatal("print reference missing escaped student/alias pair")
+	}
+	for _, private := range []string{"Private nickname", "private-ref", "Private teacher note", "private@example.invalid", "<input", "<textarea"} {
+		if strings.Contains(reference, private) {
+			t.Fatalf("print reference includes %q", private)
+		}
+	}
+}
 
 func TestStudentEditorOriginAndDuplicateAlias(t *testing.T) {
 	s, e := workspace.OpenStudents(t.TempDir())

@@ -32,7 +32,7 @@ Everything below is committed on `dev` and passes `go vet ./...` and `go test ./
 
 ## Where the evidence came from
 
-- **Two Haiku scoring runs on 2026-10-21**, both scoring all three courses (ELA7 120638, PAP ELA7 120669, CS8 121046) and posting directly. See [the run log](SCORING-SESSION-HAIKU-LOG-2026-10-21.md).
+- **Two Haiku scoring runs on 2026-10-21**, both scoring all three courses (ELA7, PAP ELA7, CS8) and posting directly. See [the run log](SCORING-SESSION-HAIKU-LOG-2026-10-21.md).
   - **The first run used the old UserInstall Engine (built 2026-10-19), not the Dev build.** `.claude.json` points `canvasexpert-se` at `C:/Users/adamb/CanvasExpert-SE/engine/cse.exe`. That run is not evidence about targeted sessions either way.
   - **The second run used the Dev build** `236a20f`, built 2026-10-21T17:51Z.
 - **I checked the second run's results files** for PAP 3705186, 3705775 and 3705779. They are in the assignment folder roots, not `scoring/`.
@@ -200,7 +200,7 @@ The playbooks are right in each case below; fix the Engine docs. `formats.md` is
   - The first run said PAP Anticipation (3705775) was scored 40/30/30 "matching earlier PAP comments".
   - The second run scored the one new student on six 5-point criteria (10 per item, 30 total).
   - LA7 and PAP copies of the same Terror quizzes were scored with separately invented criteria.
-  - **Confirm before writing the rule:** compare `courses/PAP LANG ARTS 7 - Beckham/assignments/3705775-the-terror-anticipation-writing/scoring/results-20261021.md` (09:40, morning session) with `.../results-20261021.md` (13:02, second run).
+  - **Confirm before writing the rule:** compare `courses/ELA7 PAP/assignments/3705775-the-terror-anticipation-writing/scoring/results-20261021.md` (09:40, morning session) with `.../results-20261021.md` (13:02, second run).
 - **Fix (playbook, judgment):**
   - In `score.md`'s no-rubric section, before inventing a basis, look for earlier results files for this assignment, and for the same-titled assignment in the teacher's other sections. Reuse their `scoring_basis` and `interpretation` exactly.
   - Invent new criteria only when none exists. If the earlier basis seems wrong, ask the teacher rather than silently changing scales mid-class.

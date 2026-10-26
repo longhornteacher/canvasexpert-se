@@ -127,12 +127,20 @@ if exist "%STAGED%\%NAME%" (
   if /i "!GOT!"=="!WANT!" exit /b 0
   del /f /q "%STAGED%\%NAME%" >nul 2>&1
 )
-curl.exe -fsSL --retry 2 --connect-timeout 20 -o "%STAGED%\%NAME%.part" "!BASE!/%NAME%"
+curl.exe -fsSL --retry 2 --connect-timeout 20 -o "%STAGED%\%NAME%.part" "!BASE!/%NAME%" 2>"%STAGED%\curl-error.txt"
 if errorlevel 1 (
-  del /f /q "%STAGED%\%NAME%.part" >nul 2>&1
-  echo Could not download %NAME% from !BASE!. Check the internet connection, or ask for the ZIP install. 1>&2
+  rem Some school networks block the certificate revocation servers. Retry once without
+  rem failing on that alone; the SHA-256 check below still verifies the file.
+  findstr /i /c:"CRYPT_E_NO_REVOCATION_CHECK" /c:"CRYPT_E_REVOCATION_OFFLINE" "%STAGED%\curl-error.txt" >nul 2>&1
+  if not errorlevel 1 curl.exe -fsSL --ssl-revoke-best-effort --retry 2 --connect-timeout 20 -o "%STAGED%\%NAME%.part" "!BASE!/%NAME%" 2>"%STAGED%\curl-error.txt"
+)
+if errorlevel 1 (
+  type "%STAGED%\curl-error.txt" 1>&2
+  del /f /q "%STAGED%\%NAME%.part" "%STAGED%\curl-error.txt" >nul 2>&1
+  echo Could not download %NAME% from !BASE!. Check the internet connection; if GitHub is blocked on this network, say so. 1>&2
   exit /b 5
 )
+del /f /q "%STAGED%\curl-error.txt" >nul 2>&1
 call :hash "%STAGED%\%NAME%.part"
 if /i not "!GOT!"=="!WANT!" (
   del /f /q "%STAGED%\%NAME%.part" >nul 2>&1

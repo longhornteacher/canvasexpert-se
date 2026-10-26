@@ -6,18 +6,24 @@ import (
 	"path/filepath"
 )
 
-// ClaudeDesktopPath returns the per-user Claude Desktop launcher when it is
-// installed in its observed stable Windows location.
+// ClaudeDesktopPath returns the per-user Claude Desktop launcher. Both observed
+// Windows installs are checked: the older per-user installer, and the Store
+// (MSIX) package, which is started through its app execution alias.
 func ClaudeDesktopPath() (string, bool) {
 	base := os.Getenv("LOCALAPPDATA")
 	if base == "" {
 		return "", false
 	}
-	p := filepath.Join(base, "AnthropicClaude", "claude.exe")
-	if st, err := os.Stat(p); err != nil || st.IsDir() {
-		return "", false
+	for _, p := range []string{
+		filepath.Join(base, "AnthropicClaude", "claude.exe"),
+		filepath.Join(base, "Microsoft", "WindowsApps", "claude-desktop.exe"),
+	} {
+		// An execution alias is a reparse point; Lstat reports it without resolving it.
+		if st, err := os.Lstat(p); err == nil && !st.IsDir() {
+			return p, true
+		}
 	}
-	return p, true
+	return "", false
 }
 
 // LaunchApp starts a visible local application without waiting for it. The

@@ -694,8 +694,17 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return code
 		}
 	case "parent-report":
-		courseList, refList := splitParentArgs(args)
-		path, packet, e := service.ParentReport(ctx, courseList, refList, time.Now())
+		fullPeriod := false
+		var filtered []string
+		for _, arg := range args {
+			if arg == "--full-period" {
+				fullPeriod = true
+			} else {
+				filtered = append(filtered, arg)
+			}
+		}
+		courseList, refList := splitParentArgs(filtered)
+		path, packet, e := service.ParentReportWithScope(ctx, courseList, refList, time.Now(), fullPeriod)
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}

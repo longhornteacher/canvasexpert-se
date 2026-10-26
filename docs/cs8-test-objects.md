@@ -1,6 +1,6 @@
 # CS8 test objects awaiting cleanup
 
-Disposable objects that development runs left in CS8 (course 121046). IDs are cleanup references; read current live state before acting. Canvas may refuse to unpublish an assignment that has submissions, so those need deleting in Canvas. The class's real quizzes and coursework were never touched.
+Disposable objects that development runs left in CS8. IDs are cleanup references; read current live state before acting. Canvas may refuse to unpublish an assignment that has submissions, so those need deleting in Canvas. The class's real quizzes and coursework were never touched.
 
 Published objects can be visible to enrolled students; clean those up first.
 
