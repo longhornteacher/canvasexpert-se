@@ -2,7 +2,18 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
-## 1.5.1 (2026-10-25)
+## 1.6.0 (2026-10-26)
+
+Weekly ELA parent updates, a printable student reference and wider WebUI pages. This release also carries the 1.5.1 Canvas Inbox work below, which was tagged but not published on its own.
+
+- Weekly ELA parent updates: an optional full-period pull (`cse parent-report --full-period`, MCP `full_period`) and a weekly update layout. The Engine lists Missing and Failing work from the saved report, adds each course's teacher announcement, can send an "all caught up" update and goes to enabled parents only. The default grade-update email and printable report are unchanged.
+- Parent reports confirm submission visibility against each assignment, which fixes empty work-due lists seen in two ELA courses. A read-only check on 2026-10-26 returned complete inventories for all 51 students; Outlook draft inspection and delivery remain pending.
+- Classroom > Students can print a compact, alphabetized table of the selected course's student names and privacy aliases. Notes, contacts and settings are left out, and printing does not save or discard form edits.
+- The desktop shortcut icon is redrawn as a retro robot brain.
+- Wide WebUI hub pages use the browser width (up to 120rem); an open contact editor fits without sideways scrolling, and the review page is wider with comments kept at reading width.
+- Docs and developer probes no longer carry real course IDs or the teacher's name.
+
+## 1.5.1 (2026-10-25, not published separately)
 
 Canvas Inbox conversations.
 
