@@ -12,6 +12,6 @@ For a routine late-work plea, use the teacher's saved voice from `context/` when
 
 Leave messages about safety, wellbeing, discipline, parents, grade disputes or records for the teacher unless the teacher gives specific directions. When appropriate, leave them unread and unarchived so they remain visible. District procedures govern those matters; the Engine does not classify or enforce these categories.
 
-Use `inbox_set_state` only for the refs and state the teacher approved: `read`, `unread`, `archived` or `inbox`. This changes workflow state, not message content, and never deletes a thread. One failed update does not cancel the others; report each result.
+Use `inbox_set_state` only for the refs and state the teacher approved: `read`, `unread`, `archived` or `inbox`. The `inbox` action returns an archived thread to the inbox as read. This changes workflow state, not message content, and never deletes a thread. One failed update does not cancel the others; report each result. An accepted write is complete: report it and stop without a confirmation read.
 
 After actions, report what was replied to, archived, marked read/unread, left for the teacher, or held. Do not claim a message was handled unless Canvas accepted the requested operation.

@@ -600,6 +600,10 @@ func (s *Service) InboxSetState(ctx context.Context, refs []string, state string
 	if len(refs) == 0 {
 		return []InboxStateResult{{State: state, Status: "failed", Error: "conversations must contain at least one ref"}}
 	}
+	canvasState := state
+	if canvasState == "inbox" {
+		canvasState = "read"
+	}
 	conversations, err := s.inboxAllConversations(ctx)
 	if err != nil {
 		return []InboxStateResult{{State: state, Status: "failed", Error: err.Error()}}
@@ -620,7 +624,7 @@ func (s *Service) InboxSetState(ctx context.Context, refs []string, state string
 			result.Status, result.Error = "failed", "conversation ref was not found in the current Canvas Inbox"
 		default:
 			var response any
-			err := s.Client.WriteAccepted(ctx, http.MethodPut, fmt.Sprintf("/api/v1/conversations/%d", id), map[string]string{"workflow_state": state}, &response)
+			err := s.Client.WriteAccepted(ctx, http.MethodPut, fmt.Sprintf("/api/v1/conversations/%d", id), map[string]map[string]string{"conversation": {"workflow_state": canvasState}}, &response)
 			if err != nil {
 				result.Status, result.Error = "failed", err.Error()
 			} else {

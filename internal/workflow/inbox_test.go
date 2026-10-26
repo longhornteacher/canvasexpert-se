@@ -199,12 +199,8 @@ func TestInboxSetStateContinuesAfterOneFailure(t *testing.T) {
 		}
 		if r.Method == http.MethodPut {
 			writes++
-			var body map[string]string
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatal(err)
-			}
-			if body["workflow_state"] != "archived" {
-				t.Fatalf("unexpected state body: %#v", body)
+			if !inboxFixtureStatePayload(t, w, r, "archived") {
+				return
 			}
 			if strings.Contains(r.URL.Path, strconv.FormatInt(inboxThreadID, 10)) {
 				http.Error(w, `{"errors":["denied"]}`, http.StatusForbidden)
@@ -222,6 +218,59 @@ func TestInboxSetStateContinuesAfterOneFailure(t *testing.T) {
 	encoded, _ := json.Marshal(results)
 	if strings.Contains(string(encoded), strconv.FormatInt(inboxThreadID, 10)) {
 		t.Fatalf("state results exposed Canvas IDs: %s", encoded)
+	}
+}
+
+// Canvas Edit Conversation requires conversation[workflow_state], not a
+// top-level workflow_state. Reject that old payload rather than accepting it.
+func inboxFixtureStatePayload(t *testing.T, w http.ResponseWriter, r *http.Request, want string) bool {
+	t.Helper()
+	var body map[string]map[string]string
+	err := json.NewDecoder(r.Body).Decode(&body)
+	if err != nil || len(body) != 1 || len(body["conversation"]) != 1 || body["conversation"]["workflow_state"] != want {
+		t.Errorf("expected nested conversation workflow_state %q, got %#v (decode error: %v)", want, body, err)
+		http.Error(w, `{"errors":["invalid conversation workflow_state"]}`, http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+func TestInboxSetStateUsesCanvasConversationPayload(t *testing.T) {
+	for _, tc := range []struct {
+		state       string
+		canvasState string
+	}{
+		{state: "read", canvasState: "read"},
+		{state: "unread", canvasState: "unread"},
+		{state: "archived", canvasState: "archived"},
+		{state: "inbox", canvasState: "read"},
+	} {
+		t.Run(tc.state, func(t *testing.T) {
+			conversation := inboxFixtureConversation(inboxThreadID, "archived", "", 20)
+			writes := 0
+			s, _ := inboxFixtureService(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/api/v1/conversations" && writes == 0:
+					_ = json.NewEncoder(w).Encode([]inboxConversationLive{conversation})
+				case r.Method == http.MethodPut && r.URL.Path == "/api/v1/conversations/"+strconv.FormatInt(inboxThreadID, 10):
+					writes++
+					if !inboxFixtureStatePayload(t, w, r, tc.canvasState) {
+						return
+					}
+					// An accepted write is complete even without a response body.
+					w.WriteHeader(http.StatusNoContent)
+				default:
+					t.Errorf("unexpected request (including confirmation reads): %s %s", r.Method, r.URL.String())
+					http.NotFound(w, r)
+				}
+			})
+			ref := inboxConversationRef(s, inboxThreadID)
+			results := s.InboxSetState(context.Background(), []string{ref}, tc.state)
+			if len(results) != 1 || results[0].Conversation != ref || results[0].State != tc.state || results[0].Status != "completed" || writes != 1 {
+				t.Fatalf("state update failed: %+v writes=%d", results, writes)
+			}
+		})
 	}
 }
 

@@ -2,9 +2,13 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
-## Unreleased
+## 1.5.1 (2026-10-25)
 
-- Added teacher-directed Canvas Inbox list, thread read, existing-thread reply, and per-conversation read/archive state operations through CLI and MCP. Thread refs hide Canvas IDs, reads do not mark messages read by default, replies contain only the message body and refuse stale threads, and the Inbox playbook keeps message judgment in the teacher conversation. Local fixtures only; Canvas Live behavior remains pending.
+Canvas Inbox conversations.
+
+- Added teacher-directed Canvas Inbox list, thread read, existing-thread reply, and per-conversation read/archive state operations through CLI and MCP. Thread refs hide Canvas IDs, reads do not mark messages read by default, replies contain only the message body and refuse stale threads, and the Inbox playbook keeps message judgment in the teacher conversation.
+- Corrected state writes to send nested `conversation.workflow_state`, as Canvas requires. The public `inbox` action returns an archived thread to the inbox as read. Per-thread failures remain independent, and accepted writes need no confirmation reads. Focused regression fixtures reject the old flat payload and cover read, unread, archived and inbox-to-read translation.
+- Canvas Live on 2026-10-25: list/read succeeded and the teacher confirmed three replies appeared in Canvas. After the repair, Canvas accepted read and archive for four selected conversations (eight outcomes); no replies were replayed or confirmation reads made. Unread, return-to-inbox and notifications remain unverified live. See [Engine capabilities](docs/engine-capabilities.md) for build-specific evidence and limits.
 
 ## 1.5.0 (2026-10-24)
 
