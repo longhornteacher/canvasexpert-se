@@ -33,7 +33,7 @@ Reference assignments by `assignment_id` taken from the report. The Engine fills
 | `due_soon` | `due_soon` | Include the ones that matter to the family. A `note` may repeat existing preparation instructions from the assignment, nothing new. |
 | `history` | `history` | Scored evidence only. The complete inventory is rendered separately; use this list for first/current score history when useful. Where `first_unavailable` is true the Engine shows "not available"; do not guess. |
 
-Order is fixed: Missing/0, Corrections, Due Soon, Work due in this period, footer (grade portal and tutoring sign-up). Empty sections are left out. The Engine renders every `work_due` row in both email and printable reports, including completed, perfect and awaiting-grading work; your draft cannot omit an inventory row. It shows the saved grading-period label and dates. Do not add another full inventory table.
+For the default layout, order is fixed: Missing/0, Corrections, Due Soon, Work due in this period, footer (grade portal and tutoring sign-up). Empty sections are left out. The default email and printable reports render every `work_due` row, including completed, perfect and awaiting-grading work; your draft cannot omit an inventory row. It shows the saved grading-period label and dates. Do not add another full inventory table.
 
 ## Defaults
 
@@ -69,7 +69,24 @@ These hold unless the teacher says otherwise. Honest values and privacy are not 
 }
 ```
 
-Every student in the report appears once, with a reason for `skip` and `flag`. A `send` decision is valid when the saved `work_due` inventory is nonempty even if there are no Missing/0 or correction selections. If it is empty, choose `skip` with the no-required-work reason or `flag` when report data is incomplete; Due Soon by itself does not create an email. An old report without `scope`, or with invalid scope data, must not be sent or printed: retain its drafts and outcomes, then pull a fresh report.
+For the default layout, every student in the report appears once, with a reason for `skip` and `flag`. A `send` decision is valid when the saved `work_due` inventory is nonempty even if there are no Missing/0 or correction selections. If it is empty, choose `skip` with the no-required-work reason or `flag` when report data is incomplete; Due Soon by itself does not create an email. An old report without `scope`, or with invalid scope data, must not be sent or printed: retain its drafts and outcomes, then pull a fresh report.
+
+## Weekly ELA update
+
+When the teacher requests the weekly ELA layout for the full current term, pull a fresh report with `pull_parent_report` and `full_period: true` (CLI: `parent-report --full-period COURSE [COURSE ...]`), then use `schema: 2`, `layout: "weekly_update"`. Supply an `announcements` object keyed by the exact course nicknames in the report. Each value is teacher-authored Markdown for that course, without student names, aliases, student references, grades or email addresses. Use current teacher-supplied announcements; do not reuse a previous week without confirmation. The Engine validates known aliases, student references and email addresses, but the agent must still keep all private information out.
+
+```json
+{
+  "schema": 2,
+  "kind": "parent-drafts",
+  "run_id": "RUN_ID_FROM_REPORT",
+  "layout": "weekly_update",
+  "announcements": {"ELA7": "- **Thursday:** Teacher-provided announcement."},
+  "students": [{"student_ref": "s-…", "decision": "send"}]
+}
+```
+
+Include each student. The weekly layout sends an update even when the work inventory is empty or the score meets the normal skip cutoff; flag unresolved report data instead of inventing an all-clear. It requires one course per student and routes to enabled parents only. The Engine constructs the subject and Missing and Failing lists from the saved report, keeps unreleased grades private, and omits the default inventory, corrections and due-soon sections. It uses the configured `bobcat_hour_url` and `sign_off`. Student names, aliases and references do not belong in the message. Review through `start_parent_review`; **Fill Outlook Drafts only** creates drafts without sending.
 
 ## Printable student reports
 

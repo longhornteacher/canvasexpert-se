@@ -1,10 +1,10 @@
 # Parent Update Flow
 
-Updated 2026-10-18 · Current-term due inventory implemented locally; existing Outlook evidence remains limited to NEWSPEEDY; Band is dropped
+Updated 2026-10-26 · Default and weekly ELA layouts; Canvas Live and Outlook evidence remains separately identified; Band is dropped
 
 Purpose: preserve the current parent-report contract and the evidence behind it. Read alongside [ARCHITECTURE.md](ARCHITECTURE.md) and [SCORING-RULES.md](SCORING-RULES.md). Sections explicitly marked historical record earlier design choices; the current playbook and rules below govern fresh reports.
 
-Reviewed 2026-10-20: [Family Contact](family-contact-flow.md) extends the same private review, recipient routing and Outlook delivery for free-form class messages. This document and `playbooks/parent-updates.md` continue to govern grade-update runs unchanged. Free-form `contact.json` runs contain no grade report and do not weaken complete-inventory, calendar, grade-privacy or skip guarantees here.
+Reviewed 2026-10-20: [Family Contact](family-contact-flow.md) extends the same private review, recipient routing and Outlook delivery for free-form class messages. This document and `playbooks/parent-updates.md` govern grade-update runs, including the separately requested weekly layout. Free-form `contact.json` runs contain no grade report and do not weaken complete-inventory, calendar, grade-privacy or skip guarantees here.
 
 ## Settled direction
 
@@ -23,6 +23,8 @@ Reviewed 2026-10-20: [Family Contact](family-contact-flow.md) extends the same p
 
 ## Email shape
 
+The following describes the default layout; the weekly ELA layout below is an explicit alternative.
+
 Keep student/course identity and an “As of” timestamp compact. Put actions before history; explain score labels once. Assignment titles are the links.
 
 | Order | Content | Compact row shape |
@@ -38,6 +40,14 @@ Sort corrections by closing deadline and Due Soon by due date; omit empty sectio
 Grade history exists so families can see where a score was raised, by a curve or by points for corrections. Decided 2026-10-16: no explanatory sentence; the Skyward footer link covers the official grade.
 
 Historical design: a brief class-wide Band post with no student names was considered. Band was dropped on 2026-10-16 and has no current draft or delivery action.
+
+## Weekly ELA layout
+
+A schema 2 `weekly_update` draft provides one teacher-authored Markdown announcement per exact course nickname and a decision for each student. The Engine derives the subject and the Missing and Failing lists from the saved report, omits the default inventory, Corrections and Due Soon sections from the email, and addresses enabled parents only. It does not include student names in the subject or body. It requires one course per student and permits an empty-state email even when the default skip rule applies. Unresolved report evidence remains a hold, not an all-clear. The normal printable report retains its inventory.
+
+A posted current zero is Missing; an unscored, overdue assignment marked missing by Canvas is also Missing. Positive posted scores below 70 percent appear under Failing, with the late-deduction marker only when Canvas reports a deduction. Excused work and unreleased scores are not displayed as failing. Pull the full current school-calendar period with `full_period: true` (CLI: `parent-report --full-period`) for a term-wide weekly update; the saved scope starts at period start in the school timezone. The default pull remains clipped by correction-days. Both use student-effective due dates. Course announcements must contain no student information, grades or email addresses; validation checks known aliases, references and addresses but does not replace the agent's review.
+
+This layout is local implementation evidence, not proof of a new Canvas Live read, Outlook draft, client adoption or family delivery.
 
 ## Correction eligibility and evidence
 
@@ -142,9 +152,9 @@ Dependencies and limits:
 
 New `schema: 1` reports add a non-null top-level `scope` object with the calendar timezone, grading-period name and inclusive dates, `recent_start_at`, `recent_end_at` (the report's `as_of`) and exclusive `due_soon_end_at`. Timestamps use RFC3339. The Engine reads grading periods from the active `context/school-calendar.md` through teacher-document routing, selects the one period containing `as_of` in that calendar timezone, and fails with a calendar correction message if the list is missing, malformed, overlapping or leaves `as_of` in a gap. The seed contains all four verified 2026–27 periods; school dates remain editable teacher context.
 
-Each course section has an explicit `work_due` array. It includes published, visible, non-excused assignments due in `[max(period start, as_of minus 14 calendar days), as_of]`, using the student-effective date, with the assignment date as fallback only when no student override makes the work undated. A missing bulk submission row is resolved through the existing targeted student/assignment read before classifying visibility. Unavailable or malformed relevant evidence is reported as a course flag; known undated work is outside this due-date report. Required ungraded work remains present with an honest no-grade status. Missing/0, Corrections, and scored history are derived from that inventory. Due Soon is separate and ends at the earlier of seven calendar days after `as_of` or midnight after the grading period.
+Each course section has an explicit `work_due` array. By default it includes published, visible, non-excused assignments due in `[max(period start, as_of minus correction_days), as_of]`; an explicit full-period pull starts at period start. Both use the student-effective date, with the assignment date as fallback only when no student override makes the work undated. A missing bulk submission row is resolved through the existing targeted student/assignment read before classifying visibility. Unavailable or malformed relevant evidence is reported as a course flag; known undated work is outside this due-date report. Required ungraded work remains present with an honest no-grade status. Missing/0, Corrections, and scored history are derived from that inventory. Due Soon is separate and ends at the earlier of seven calendar days after `as_of` or midnight after the grading period.
 
-Both email and printable output include the complete Work due in this period table directly from `work_due`, regardless of which optional section references the agent selected. Saved scope is used on reopen. An empty complete inventory calls for a no-required-work skip; Due Soon alone does not justify an email. Scope validation rejects missing legacy scope with a fresh-pull instruction and rejects malformed saved bounds before sending or printing, preserving the old drafts and outcomes. Local regression tests do not establish Canvas Live audience completeness or new Outlook delivery evidence.
+Default email and printable output include the complete Work due in this period table directly from `work_due`, regardless of which optional section references the agent selected. Saved scope is used on reopen. An empty complete inventory calls for a no-required-work skip; Due Soon alone does not justify an email. Scope validation rejects missing legacy scope with a fresh-pull instruction and rejects malformed saved bounds before sending or printing, preserving the old drafts and outcomes. Local regression tests do not establish Canvas Live audience completeness or new Outlook delivery evidence.
 
 ## Architecture and current evidence
 

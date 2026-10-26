@@ -62,3 +62,8 @@ A QuizForge file accepts the same `audience` intent in `metadata.canvas.audience
 ### Club units in a shared module (2026-10-19)
 
 A club unit is three independent resources sharing one audience: a course Page, an individual assignment and a New Quiz. Each is prepared, reviewed and pushed separately, so a held resource never blocks the others. The module is a navigation list and carries no audience; each child keeps its own restriction. Push the resources before the module so every native reference exists. An existing module keeps its unrelated entries and gains one native entry per resource in the requested order; a New Quiz entry uses its associated assignment ID, and a restricted course Page is an ordinary native `Page` entry rather than a group `ExternalUrl`. Membership refresh is per resource; assignment and quiz removals are work-protected, Page removals are not.
+
+
+## Parent-update email (outside Canvas)
+
+The weekly ELA layout uses Canvas assignment titles, links, effective dates, released current scores and deductions as read-only source data; it does not write these fields to Canvas. Teacher-supplied course announcements are rendered as Markdown in the local Outlook email. Local rendering tests do not establish Outlook client display or observer access to Canvas links; those remain pending human validation.

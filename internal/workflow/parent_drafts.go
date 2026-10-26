@@ -1,16 +1,21 @@
 package workflow
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html"
+	"math"
+	"net/url"
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"canvasexpertse/internal/workspace"
+	"github.com/yuin/goldmark"
 )
 
 // trimPoint shows Canvas's "80.0" as "80"; other decimals are kept.
@@ -62,10 +67,12 @@ func loadParentConfig(root string) (ParentConfig, error) {
 // ParentDrafts is the agent's decisions and short instruction text. Assignment
 // IDs refer to the report; titles, links, dates and scores come from it.
 type ParentDrafts struct {
-	Schema   int                  `json:"schema"`
-	Kind     string               `json:"kind"`
-	RunID    string               `json:"run_id"`
-	Students []ParentStudentDraft `json:"students"`
+	Schema        int                  `json:"schema"`
+	Kind          string               `json:"kind"`
+	RunID         string               `json:"run_id"`
+	Students      []ParentStudentDraft `json:"students"`
+	Layout        string               `json:"layout,omitempty"`
+	Announcements map[string]string    `json:"announcements,omitempty"`
 }
 
 type ParentStudentDraft struct {
@@ -123,6 +130,19 @@ func LoadParentRun(root, dir string) (*ParentRun, error) {
 		s.SkipEligible = parentSkipEligible(*s, run.Config.SkipScore)
 		run.students[s.Ref] = *s
 	}
+	if run.Drafts.Layout == "weekly_update" {
+		for i := range run.Drafts.Students {
+			d := &run.Drafts.Students[i]
+			if d.Decision != "send" {
+				continue
+			}
+			if student, ok := run.students[d.Ref]; ok {
+				if reason := weeklyHoldReason(student); reason != "" {
+					d.Decision, d.Reason = "flag", reason
+				}
+			}
+		}
+	}
 	if e := run.validate(); e != nil {
 		return nil, e
 	}
@@ -136,8 +156,25 @@ func (r *ParentRun) validate() error {
 		return err
 	}
 	d := r.Drafts
-	if d.Schema != 1 || d.Kind != "parent-drafts" {
-		return fmt.Errorf("drafts.json must have schema 1 and kind parent-drafts")
+	if d.Kind != "parent-drafts" || !((d.Schema == 1 && d.Layout == "") || (d.Schema == 2 && d.Layout == "weekly_update")) {
+		return fmt.Errorf("drafts.json must have schema 1 with the default layout, or schema 2 with layout weekly_update")
+	}
+	if d.Layout == "weekly_update" {
+		loc, err := time.LoadLocation(r.Report.Scope.Timezone)
+		if err != nil {
+			return err
+		}
+		start, err := time.ParseInLocation("2006-01-02", r.Report.Scope.PeriodStartDate, loc)
+		recent, e := time.Parse(time.RFC3339, r.Report.Scope.RecentStartAt)
+		if err != nil || e != nil || !start.Equal(recent) {
+			return fmt.Errorf("weekly update requires a full-period parent report; pull a fresh report with full_period")
+		}
+		if strings.TrimSpace(r.Config.SignOff) == "" || strings.TrimSpace(r.Config.BobcatHourURL) == "" {
+			return fmt.Errorf("weekly update requires sign_off and bobcat_hour_url in context/parent-updates.md")
+		}
+		if err := r.validateWeeklyAnnouncements(); err != nil {
+			return err
+		}
 	}
 	if d.RunID != r.Report.RunID {
 		return fmt.Errorf("drafts.json run_id %q does not match the report run %q", d.RunID, r.Report.RunID)
@@ -161,6 +198,15 @@ func (r *ParentRun) validate() error {
 		}
 		switch sd.Decision {
 		case "send":
+			if d.Layout == "weekly_update" {
+				if len(rs.Courses) != 1 {
+					return fmt.Errorf("%s: weekly update requires exactly one course per student", sd.Ref)
+				}
+				if len(rs.Courses[0].Flags) > 0 {
+					return fmt.Errorf("%s: report has unresolved flags; mark this student flag", sd.Ref)
+				}
+				continue
+			}
 		case "skip", "flag":
 			if strings.TrimSpace(sd.Reason) == "" {
 				return fmt.Errorf("%s: a %s decision needs a reason", sd.Ref, sd.Decision)
@@ -259,6 +305,65 @@ func (r *ParentRun) validate() error {
 		return fmt.Errorf("every student in the report needs a decision; missing: %s", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+var announcementEmail = regexp.MustCompile(`(?i)\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b`)
+
+func (r *ParentRun) validateWeeklyAnnouncements() error {
+	for _, course := range r.Report.Courses {
+		text, ok := r.Drafts.Announcements[course]
+		if !ok || strings.TrimSpace(text) == "" {
+			return fmt.Errorf("weekly update requires announcements for course %s", course)
+		}
+		if announcementEmail.MatchString(text) {
+			return fmt.Errorf("weekly announcements for %s cannot contain email addresses", course)
+		}
+		for _, student := range r.Report.Students {
+			for _, identifier := range []string{student.Ref, student.Alias} {
+				if identifier != "" && regexp.MustCompile(`(?i)(^|[^\pL\pN])`+regexp.QuoteMeta(identifier)+`([^\pL\pN]|$)`).MatchString(text) {
+					return fmt.Errorf("weekly announcements for %s cannot contain student identifiers", course)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// An incomplete course must be held rather than producing a reassuring but
+// incomplete email. Other students can still proceed through the review.
+func weeklyHoldReason(s ParentReportStudent) string {
+	if len(s.Courses) != 1 {
+		return "Weekly update requires exactly one course for this student."
+	}
+	c := s.Courses[0]
+	if len(c.Flags) != 0 {
+		return "The report has unresolved course flags."
+	}
+	for _, item := range c.WorkDue {
+		if item.Status == "excused" || item.Status == "grade_not_released" {
+			continue
+		}
+		if _, err := time.Parse(time.RFC3339, item.DueAt); err != nil {
+			return "An assignment has no valid due date."
+		}
+		u, err := url.Parse(item.URL)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			return "An assignment has no valid link."
+		}
+		if item.Current != nil {
+			n, err := strconv.ParseFloat(*item.Current, 64)
+			if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+				return "An assignment has an invalid score."
+			}
+			if n > 0 {
+				possible, err := strconv.ParseFloat(item.Possible, 64)
+				if err != nil || possible <= 0 || math.IsNaN(possible) || math.IsInf(possible, 0) {
+					return "An assignment has an invalid points possible value."
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func validateParentReportScope(report ParentReportPacket) error {
@@ -375,6 +480,9 @@ const (
 // Render builds one student's email from the report; the agent's draft supplies
 // only which assignments appear, their order and short notes.
 func (r *ParentRun) Render(sd ParentStudentDraft, student workspace.Student) Rendered {
+	if r.Drafts.Layout == "weekly_update" {
+		return r.renderWeekly(sd)
+	}
 	return r.render(sd, student, false)
 }
 
@@ -626,4 +734,92 @@ func sortedHist(items []ParentHistoryItem, picked []ParentItemRef, order func([]
 		return order(picked, out[i].AssignmentID) < order(picked, out[j].AssignmentID)
 	})
 	return out
+}
+
+// renderWeekly derives all academic facts from the saved, scoped inventory.
+func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
+	course := r.students[sd.Ref].Courses[0]
+	loc, err := time.LoadLocation(course.Timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+	asOf, _ := time.Parse(time.RFC3339, r.Report.AsOf)
+	day := asOf.In(loc)
+	monday := day.AddDate(0, 0, -(int(day.Weekday())+6)%7)
+	months := []string{"Jan.", "Feb.", "March", "April", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."}
+	subject := fmt.Sprintf("ELA 7 Update – Week of %s %d", months[int(monday.Month())-1], monday.Day())
+	rows := append([]ParentWorkDueItem(nil), course.WorkDue...)
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, _ := time.Parse(time.RFC3339, rows[i].DueAt)
+		b, _ := time.Parse(time.RFC3339, rows[j].DueAt)
+		if !a.Equal(b) {
+			return a.Before(b)
+		}
+		return rows[i].Title < rows[j].Title
+	})
+	var missing, failing []string
+	for _, item := range rows {
+		if item.Status == "excused" || item.Status == "grade_not_released" {
+			continue
+		}
+		value, valid := 0.0, false
+		if item.Current != nil {
+			var e error
+			value, e = strconv.ParseFloat(*item.Current, 64)
+			valid = e == nil
+		}
+		isMissing := (valid && value == 0) || (!valid && item.Status == "missing")
+		link := fmt.Sprintf(linkFormat, html.EscapeString(item.URL), html.EscapeString(item.Title))
+		if isMissing {
+			due, _ := time.Parse(time.RFC3339, item.DueAt)
+			missing = append(missing, fmt.Sprintf("<li>%s – due %d/%d</li>", link, due.In(loc).Month(), due.In(loc).Day()))
+			continue
+		}
+		if !valid || value <= 0 {
+			continue
+		}
+		possible, e := strconv.ParseFloat(item.Possible, 64)
+		if e != nil || possible <= 0 {
+			continue
+		}
+		percent := value * 100 / possible
+		if percent >= 70 {
+			continue
+		}
+		score := ""
+		if possible != 100 {
+			score = strconv.FormatFloat(math.Round(percent), 'f', 0, 64)
+		} else {
+			score = strconv.FormatFloat(math.Round(value*10)/10, 'f', -1, 64)
+		}
+		marker := ""
+		if item.PointsDeducted != nil {
+			if n, e := strconv.ParseFloat(*item.PointsDeducted, 64); e == nil && n > 0 {
+				marker = " (late points deducted)"
+			}
+		}
+		failing = append(failing, fmt.Sprintf("<li>%s – %s%s</li>", link, score, marker))
+	}
+	var b strings.Builder
+	b.WriteString(`<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.4;color:#1f2933;max-width:640px"><p>Hello,</p><p>Here's a quick ELA update.</p>`)
+	fmt.Fprintf(&b, "<p><strong>Work that needs attention (%s)</strong></p>", html.EscapeString(r.Report.Scope.PeriodName))
+	if len(missing)+len(failing) == 0 {
+		fmt.Fprintf(&b, "<p>No missing or failing work in %s right now.</p>", html.EscapeString(r.Report.Scope.PeriodName))
+	}
+	if len(missing) > 0 {
+		b.WriteString("<p>Missing:</p><ul>" + strings.Join(missing, "") + "</ul>")
+	}
+	if len(failing) > 0 {
+		b.WriteString("<p>Failing (below 70):</p><ul>" + strings.Join(failing, "") + "</ul>")
+	}
+	if len(missing) > 0 {
+		b.WriteString("<p>All missing work should be done as soon as possible.</p>")
+	}
+	b.WriteString("<p><strong>Major grades this week</strong></p>")
+	var md bytes.Buffer
+	_ = goldmark.Convert([]byte(r.Drafts.Announcements[course.Course]), &md)
+	b.WriteString(md.String())
+	fmt.Fprintf(&b, `<p><strong>Extra help</strong><br>Sign up for Bobcat Hour tutorials at <a href="%s">flex.securly.com</a>.</p>`, html.EscapeString(r.Config.BobcatHourURL))
+	fmt.Fprintf(&b, "<p>Thank you,<br>%s</p></div>", html.EscapeString(r.Config.SignOff))
+	return Rendered{Subject: subject, HTML: b.String()}
 }

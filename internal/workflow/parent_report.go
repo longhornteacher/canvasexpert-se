@@ -77,11 +77,12 @@ type ParentReportCourse struct {
 // evidence without inferring submission or a grade when neither is known.
 type ParentWorkDueItem struct {
 	ParentReportItem
-	Status   string  `json:"status"`
-	Possible string  `json:"points_possible,omitempty"`
-	First    *string `json:"first_earned,omitempty"`
-	Current  *string `json:"canvas_score,omitempty"`
-	Note     string  `json:"note,omitempty"`
+	Status         string  `json:"status"`
+	Possible       string  `json:"points_possible,omitempty"`
+	First          *string `json:"first_earned,omitempty"`
+	Current        *string `json:"canvas_score,omitempty"`
+	PointsDeducted *string `json:"points_deducted,omitempty"`
+	Note           string  `json:"note,omitempty"`
 }
 
 type ParentReportItem struct {
@@ -127,6 +128,11 @@ type ParentHistoryItem struct {
 // a pseudonymized report under courses/<first nickname>/parent-updates/<run-id>/.
 // refs, when given, limits the report to those student refs.
 func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []string, now time.Time) (string, ParentReportPacket, error) {
+	return s.ParentReportWithScope(ctx, nicknames, refs, now, false)
+}
+
+// ParentReportWithScope optionally includes the entire current calendar period.
+func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string, refs []string, now time.Time, fullPeriod bool) (string, ParentReportPacket, error) {
 	if len(nicknames) == 0 {
 		return "", ParentReportPacket{}, fmt.Errorf("at least one course is required")
 	}
@@ -148,6 +154,14 @@ func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []s
 	scope, recentStart, dueSoonEnd, e := makeParentReportScopeDays(calendar, period, now, config.CorrectionDays)
 	if e != nil {
 		return "", ParentReportPacket{}, e
+	}
+	if fullPeriod {
+		loc, _ := time.LoadLocation(calendar.Timezone)
+		recentStart, e = time.ParseInLocation("2006-01-02", period.StartDate, loc)
+		if e != nil {
+			return "", ParentReportPacket{}, e
+		}
+		scope.RecentStartAt = recentStart.Format(time.RFC3339)
 	}
 	want := map[string]bool{}
 	for _, r := range refs {
@@ -249,24 +263,38 @@ func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []s
 			}
 			versions[v.UserID][v.AssignmentID] = append(versions[v.UserID][v.AssignmentID], v)
 		}
+		resolver := &parentSubmissionResolver{client: s.Client, courseID: course.ID, batches: map[int64]map[int64]Submission{}}
+		courseWorkCount := 0
+		verifiedInWindow := false
 		for _, id := range order {
 			en := byUser[id]
 			rc := ParentReportCourse{Course: course.Nickname, Timezone: zone, CourseScore: en.score, CourseScoreSource: "canvas_enrollment_current_score", WorkDue: []ParentWorkDueItem{}}
 			if en.score == nil {
 				rc.Flags = append(rc.Flags, "course score unavailable from Canvas")
 			}
-			studentSubs, incomplete := completeStudentSubmissions(ctx, s.Client, course.ID, id, assignments, perStudent[id], recentStart, now, dueSoonEnd)
+			studentSubs, incomplete := completeStudentSubmissionsWithResolver(ctx, resolver, id, assignments, perStudent[id], recentStart, now, dueSoonEnd)
 			for _, note := range incomplete {
 				rc.Flags = append(rc.Flags, note)
 			}
+			for _, sub := range studentSubs {
+				a, ok := byAssignment[sub.AssignmentID]
+				due := effectiveDueForStudent(sub, a, id)
+				if ok && a.Published && a.GradingType != "not_graded" && !sub.Excused && sub.AssignmentVisible != nil && *sub.AssignmentVisible && due != nil && !due.Before(recentStart) && !due.After(now) {
+					verifiedInWindow = true
+				}
+			}
 			rc.correctionDays = config.CorrectionDays
 			buildStudentReportScoped(&rc, studentSubs, versions[id], byAssignment, now, loc, recentStart, dueSoonEnd)
+			courseWorkCount += len(rc.WorkDue)
 			rs := byRef[en.st.Ref]
 			if rs == nil {
 				rs = &ParentReportStudent{Ref: en.st.Ref, Alias: en.st.Alias}
 				byRef[en.st.Ref] = rs
 			}
 			rs.Courses = append(rs.Courses, rc)
+		}
+		if verifiedInWindow && courseWorkCount == 0 {
+			return "", ParentReportPacket{}, fmt.Errorf("course %s has confirmed student-visible work due in the report window but no student inventory", course.Nickname)
 		}
 	}
 	if e = students.Save(); e != nil {
@@ -411,7 +439,18 @@ func effectiveDue(sub Submission, a Assignment) *time.Time {
 // completeStudentSubmissions joins the catalog to the bulk submission feed.
 // Missing rows and rows without visibility are resolved with the existing
 // assignment/student read before they can affect a family report.
+type parentSubmissionResolver struct {
+	client   *canvas.Client
+	courseID int64
+	batches  map[int64]map[int64]Submission
+}
+
 func completeStudentSubmissions(ctx context.Context, c *canvas.Client, courseID, studentID int64, assignments []Assignment, bulk []Submission, recentStart, asOf, dueSoonEnd time.Time) ([]Submission, []string) {
+	return completeStudentSubmissionsWithResolver(ctx, &parentSubmissionResolver{client: c, courseID: courseID, batches: map[int64]map[int64]Submission{}}, studentID, assignments, bulk, recentStart, asOf, dueSoonEnd)
+}
+
+func completeStudentSubmissionsWithResolver(ctx context.Context, resolver *parentSubmissionResolver, studentID int64, assignments []Assignment, bulk []Submission, recentStart, asOf, dueSoonEnd time.Time) ([]Submission, []string) {
+	c, courseID := resolver.client, resolver.courseID
 	byAssignment := make(map[int64]Submission, len(bulk))
 	for _, sub := range bulk {
 		byAssignment[sub.AssignmentID] = sub
@@ -448,8 +487,35 @@ func completeStudentSubmissions(ctx context.Context, c *canvas.Client, courseID,
 		if catalogDue == nil && ok {
 			continue // the student's returned row confirms no effective date.
 		}
-		if ok && sub.AssignmentVisible != nil {
+		if ok && sub.AssignmentVisible != nil && *sub.AssignmentVisible {
 			continue
+		}
+		// Canvas's course-wide feed can report false visibility for every
+		// student even when the assignment-scoped feed reports true. Resolve
+		// these in one assignment read, retaining genuine invisible rows.
+		if ok && sub.AssignmentVisible != nil && !*sub.AssignmentVisible {
+			batch, loaded := resolver.batches[a.ID]
+			if !loaded {
+				batch = map[int64]Submission{}
+				var rows []Submission
+				path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?include[]=submission_history&include[]=submission_comments&include[]=visibility&per_page=100", courseID, a.ID)
+				if err := c.List(ctx, path, &rows); err == nil {
+					for _, row := range rows {
+						if row.UserID > 0 && (row.AssignmentID == 0 || row.AssignmentID == a.ID) {
+							if row.AssignmentID == 0 {
+								row.AssignmentID = a.ID
+							}
+							batch[row.UserID] = row
+						}
+					}
+				}
+				resolver.batches[a.ID] = batch
+			}
+			if resolved, found := batch[studentID]; found && resolved.AssignmentVisible != nil {
+				sub.AssignmentVisible = resolved.AssignmentVisible
+				byAssignment[a.ID] = sub
+				continue
+			}
 		}
 		// A bulk row without confirmed visibility is not usable evidence. Drop it
 		// before the targeted read so a failed read cannot leak it into the report.
@@ -577,7 +643,7 @@ func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, version
 			entered = sub.Score
 		}
 		enteredGrade := decimalPointer(entered)
-		positiveGrade := enteredGrade != nil && enteredGrade.Sign() > 0
+		positiveGrade := false
 		// The teacher-entered grade resolves missing status, while Canvas's
 		// current score (after any penalties) determines a recorded zero.
 		current := sub.Score
@@ -585,6 +651,7 @@ func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, version
 			current = sub.EnteredScore
 		}
 		currentGrade := decimalPointer(current)
+		positiveGrade = currentGrade != nil && currentGrade.Sign() > 0
 		recordedZero := currentGrade != nil && currentGrade.Sign() == 0
 		feedbackWithheld := sub.PostedAtPresent && sub.PostedAt == nil
 		gradeNotReleased := feedbackWithheld && (sub.Score != nil || sub.EnteredScore != nil || sub.GradedAt != nil)
@@ -632,6 +699,10 @@ func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, version
 				status = "graded"
 			}
 			row := ParentWorkDueItem{ParentReportItem: item, Status: status, Possible: a.Points.String(), First: hist.First, Current: hist.Current}
+			if !gradeNotReleased && sub.PointsDeducted != nil {
+				v := sub.PointsDeducted.String()
+				row.PointsDeducted = &v
+			}
 			if gradeNotReleased {
 				row.Possible, row.First, row.Current, row.Note = "", nil, nil, "Canvas has not released this grade"
 			}

@@ -7,7 +7,7 @@ grade_portal_name: ""
 bobcat_hour_url: ""
 bobcat_hour_label: ""
 bobcat_hour_text: ""
-# How the email closes, for example "Mr. Beckham".
+# How the email closes, for example "Your teacher".
 sign_off: ""
 # Every included Canvas course score at or above this, with no resolved Missing/0 items, means no email is needed.
 skip_score: 90
