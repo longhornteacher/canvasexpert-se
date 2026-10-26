@@ -1,7 +1,7 @@
 # HANDOFF: Fix empty parent report and add the weekly ELA update layout
 
 Date: 2026-10-26 (Monday). From: Cowork session (ELA 7 project). To: Codex working in the CE-SE repo.
-Teacher: Coach Beckham (William Beckham), Pearland ISD. Teaches ELA 7, ELA 7 PAP and CS 8.
+Teacher: the teacher, Pearland ISD. Teaches ELA 7, ELA 7 PAP and CS 8.
 
 This document stands alone. You don't need earlier chats, Claude memory, or any other handoff. Where I name source files or functions I haven't seen, I mark them as guesses to verify.
 
@@ -24,10 +24,10 @@ This document stands alone. You don't need earlier chats, Claude memory, or any 
 | Engine version at time of bug | `1.5.0-dev.97ef417f6f80.dirty.20261025T234840Z` (`engine_info update-status` = current, no newer build waiting) |
 | Canvas instance | `https://pearland.instructure.com` |
 | Outlook | `engine_info outlook-status` → `outlook_available: true` (classic Outlook) |
-| Courses (configured nicknames) | `ELA7` = 120638, `ELA7 PAP` = 120669, `CS8` = 121046 |
+| Courses (configured nicknames) | `ELA7`, `ELA7 PAP`, `CS8` (IDs in UserSync `dev-reference/course-ids.md`) |
 | Course timezone | America/Chicago (DST ends Sun 2026-11-01) |
 | Canvas term | 248 "YEAR-2026/2027", `grading_period_group_id: null` |
-| Canvas course grading periods | **none** (`/api/v1/courses/120638/grading_periods` → `[]`; course `grading_periods: null`) |
+| Canvas course grading periods | **none** (`/api/v1/courses/<ELA7>/grading_periods` → `[]`; course `grading_periods: null`) |
 | Engine term source | `context/school-calendar.md`. Term 2 = 2026-10-13 to 2026-12-18 |
 | Late policy (ELA7, verified) | 10% per day, floor 30%, missing deduction disabled |
 | Relevant playbooks | `playbooks/parent-updates.md` (sha256 `adcb1d22…6839`), `playbooks/family-contact.md` |
@@ -74,7 +74,7 @@ Course scores run from 60.12 to 98.51. Several students are below 70 and still `
 
 Published assignments with `due_at` inside the Term 2 window up to `as_of`:
 
-**ELA7 (120638)**, all in group 258105 (Daily):
+**ELA7**, all in group 258105 (Daily):
 
 | id | name | due_at (UTC) | submission type |
 |---|---|---|---|
@@ -90,7 +90,7 @@ Published assignments with `due_at` inside the Term 2 window up to `as_of`:
 | 3705188 | Typing - Stardew Valley | 2026-10-23T21:00:00Z | none |
 | 3707044 | Make it Sound True | 2026-10-24T04:59:59Z | online_text_entry |
 
-**ELA7 PAP (120669)**, all in group 258205:
+**ELA7 PAP**, all in group 258205:
 
 | id | name | due_at (UTC) | submission type |
 |---|---|---|---|
@@ -107,7 +107,7 @@ Published assignments with `due_at` inside the Term 2 window up to `as_of`:
 | 3703862 | Typing - Stardew Valley | 2026-10-23T21:00:00Z | none |
 | 3707007 | Make it Sound True | 2026-10-24T04:59:59Z | online_text_entry |
 
-Submission evidence from the first page (100 rows) of `GET /api/v1/courses/120638/students/submissions?student_ids[]=all&workflow_state=unsubmitted&include[]=assignment&per_page=100`:
+Submission evidence from the first page (100 rows) of `GET /api/v1/courses/<ELA7>/students/submissions?student_ids[]=all&workflow_state=unsubmitted&include[]=assignment&per_page=100`:
 - 17 rows have `missing: true`. In-window examples: First Impressions (5 students), Moment of Truth (2), Brain Rot quiz (1), Anticipation Writing (1), Book Club Launch (1), Benchmark 1 Reflection (1).
 - **Every row has `grading_period_id: null`.** That's expected, since Canvas has no grading periods here.
 
@@ -150,7 +150,7 @@ So `work_due` must be nonempty for every enrolled student, and at least 10 ELA7 
 - **Unposted grades** (`posted_at: null`) are never shown as failing.
 - **Every assignment title is a link** to its Canvas `html_url` in the student's own course.
 - **No inventory table, no Corrections section, no Due Soon section** in this layout.
-- **Sign-off:** "Coach Beckham". Set `sign_off: "Coach Beckham"` in `context/parent-updates.md` (it is currently blank).
+- **Sign-off:** the teacher's usual sign-off (in UserSync). Set `sign_off: "<teacher sign-off from UserSync>"` in `context/parent-updates.md` (it is currently blank).
 - **Tone:** direct, imperative. Never ask parents to reply. Don't use "Please encourage".
 
 ---
@@ -193,7 +193,7 @@ All missing work should be done as soon as possible.
 Sign up for Bobcat Hour tutorials at [flex.securly.com](https://flex.securly.com/login).
 
 Thank you,
-Coach Beckham
+<teacher sign-off>
 ```
 
 Rendering rules:
@@ -210,16 +210,16 @@ Rendering rules:
 
 The agent supplies this in the drafts file per course. The Engine inserts it verbatim (Markdown) into each student's email for that course. It must never contain grades or names. For this week:
 
-**ELA7 (120638):**
+**ELA7:**
 ```markdown
-- **Thursday, 10/29 – Essay (ECR):** [The Last Human Light: Features ECR](https://pearland.instructure.com/courses/120638/assignments/3708512). Plan the essay in class Monday through Wednesday with [Plan Your Features ECR](https://pearland.instructure.com/courses/120638/assignments/3708515) (due Wednesday, 10/28). Type the essay in class Thursday. Major-grade writing done outside of school will not be accepted.
-- **Friday, 10/30 – Book Club Reading Quiz 1:** Prepare with the [Book Club Quiz 1: Build Your Study Guide](https://pearland.instructure.com/courses/120638/pages/book-club-quiz-1-build-your-study-guide) page.
+- **Thursday, 10/29 – Essay (ECR):** [The Last Human Light: Features ECR](https://pearland.instructure.com/courses/<ELA7>/assignments/3708512). Plan the essay in class Monday through Wednesday with [Plan Your Features ECR](https://pearland.instructure.com/courses/<ELA7>/assignments/3708515) (due Wednesday, 10/28). Type the essay in class Thursday. Major-grade writing done outside of school will not be accepted.
+- **Friday, 10/30 – Book Club Reading Quiz 1:** Prepare with the [Book Club Quiz 1: Build Your Study Guide](https://pearland.instructure.com/courses/<ELA7>/pages/book-club-quiz-1-build-your-study-guide) page.
 ```
 
-**ELA7 PAP (120669):**
+**ELA7 PAP:**
 ```markdown
-- **Thursday, 10/29 – Essay (ECR):** [The Last Human Light: Features ECR](https://pearland.instructure.com/courses/120669/assignments/3708513). Plan the essay in class Monday through Wednesday with [Plan Your Features ECR](https://pearland.instructure.com/courses/120669/assignments/3708517) (due Wednesday, 10/28). Type the essay in class Thursday. Major-grade writing done outside of school will not be accepted.
-- **Friday, 10/30 – Book Club Reading Quiz 1:** Prepare with the [Book Club Quiz 1: Build Your Study Guide](https://pearland.instructure.com/courses/120669/pages/book-club-quiz-1-build-your-study-guide) page.
+- **Thursday, 10/29 – Essay (ECR):** [The Last Human Light: Features ECR](https://pearland.instructure.com/courses/<ELA7-PAP>/assignments/3708513). Plan the essay in class Monday through Wednesday with [Plan Your Features ECR](https://pearland.instructure.com/courses/<ELA7-PAP>/assignments/3708517) (due Wednesday, 10/28). Type the essay in class Thursday. Major-grade writing done outside of school will not be accepted.
+- **Friday, 10/30 – Book Club Reading Quiz 1:** Prepare with the [Book Club Quiz 1: Build Your Study Guide](https://pearland.instructure.com/courses/<ELA7-PAP>/pages/book-club-quiz-1-build-your-study-guide) page.
 ```
 
 Facts behind the block (verified 2026-10-26, Canvas is the source of truth per Coach):
@@ -277,7 +277,7 @@ Use synthetic fixtures for unit tests (no real names). For live checks, compare 
    None of the Missing lines shows a score.
 4. **Empty state:** a synthetic student with no Missing/0 and nothing below 70 renders the single line `No missing or failing work in Term 2 right now.` and is still `send`.
 5. **No name leak:** the rendered subject and body for every student contain no student name, alias or `student_ref`.
-6. **Per-course links:** a PAP student's email links only to `/courses/120669/…`. An ELA7 student's email links only to `/courses/120638/…`.
+6. **Per-course links:** a PAP student's email links only to `/courses/<ELA7-PAP>/…`. An ELA7 student's email links only to `/courses/<ELA7>/…`.
 7. **Silent-failure guard:** inject one unclassifiable assignment. The run keeps the others, adds a `flags` entry, and the affected students are not skip-eligible. Inject "all inventories empty while in-window assignments exist" and the run aborts with an error.
 8. **Outlook:** `start_parent_review` on the new run shows previews matching Section 4. "Fill Outlook Drafts only" creates one draft per student in classic Outlook Drafts and sends nothing. `review_status` reports counts by `student_ref` only.
 
@@ -286,7 +286,7 @@ Use synthetic fixtures for unit tests (no real names). For live checks, compare 
 ## 6. After the fix: operator steps (for whichever agent runs it)
 
 1. `engine_info version` and confirm the fixed build.
-2. Set `sign_off: "Coach Beckham"` in `context/parent-updates.md` (use `write_workspace_file` with the current sha256).
+2. Set `sign_off: "<teacher sign-off from UserSync>"` in `context/parent-updates.md` (use `write_workspace_file` with the current sha256).
 3. `pull_parent_report {courses: ["ELA7","ELA7 PAP"]}`. Spot-check that `work_due` is nonempty.
 4. If the run date is still the week of 10/26, use the Section 4.1 announcements as written. Otherwise ask Coach for that week's announcements.
 5. `write_draft` `drafts.json` beside `report.json` with `layout: "weekly_update"` and every student `send`.
@@ -306,7 +306,7 @@ Use synthetic fixtures for unit tests (no real names). For live checks, compare 
 
 ## 8. IDs for reference
 
-| Thing | ELA7 (120638) | ELA7 PAP (120669) |
+| Thing | ELA7 | ELA7 PAP |
 |---|---|---|
 | Features ECR (Major Grade) | 3708512 | 3708513 |
 | Plan Your Features ECR | 3708515 | 3708517 |

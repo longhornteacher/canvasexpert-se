@@ -15,6 +15,9 @@ import (
 	"canvasexpertse/internal/workflow"
 )
 
+// Synthetic course ID; the real probe course is never in the repo.
+func init() { courseID = 900001 }
+
 func TestDisposableAssignmentGuardRejectsRealPublishedAndWrongScope(t *testing.T) {
 	s := probeState{Origin: allowedOrigin, CourseID: courseID, AssignmentID: 42, Title: prefix + " synthetic"}
 	a := workflow.Assignment{ID: 42, CourseID: courseID, Name: s.Title, GradingType: "points"}
@@ -79,7 +82,7 @@ func TestSubmissionGuardRechecksBuiltinAndNeverWritesOtherStudent(t *testing.T) 
 		if strings.HasSuffix(r.URL.Path, "student_view_student") {
 			return response(r, `{"id":6}`), nil
 		}
-		return response(r, `{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
+		return response(r, `{"id":42,"course_id":900001,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
 	})
 	if e := p.submit(context.Background(), nil, false); e == nil {
 		t.Fatal("submission retargeted unexpected built-in user")
@@ -119,9 +122,9 @@ func TestExplicitPublicationPersistsScopedAuthorization(t *testing.T) {
 			if string(b) != `{"assignment":{"published":true}}` {
 				t.Fatal("publication modified unrelated settings")
 			}
-			return response(r, `{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":true,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
+			return response(r, `{"id":42,"course_id":900001,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":true,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
 		}
-		return response(r, `{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"only_visible_to_overrides":true,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
+		return response(r, `{"id":42,"course_id":900001,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"only_visible_to_overrides":true,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
 	})
 	p.state.OverrideID = 77
 	if e := p.publication(context.Background(), true); e != nil {
@@ -140,7 +143,7 @@ func TestPublicationRefusesAssignmentNotLimitedToTestStudent(t *testing.T) {
 		if r.Method != "GET" {
 			writes++
 		}
-		return response(r, `{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"only_visible_to_overrides":false,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
+		return response(r, `{"id":42,"course_id":900001,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"only_visible_to_overrides":false,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
 	})
 	p.state.OverrideID = 77
 	if e := p.publication(context.Background(), true); e == nil {
@@ -157,7 +160,7 @@ func TestDeniedUnpublishTruthfullyKeepsPublishedScope(t *testing.T) {
 			out.StatusCode = 403
 			return out, nil
 		}
-		return response(r, `{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":true,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
+		return response(r, `{"id":42,"course_id":900001,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":true,"points_possible":20,"grading_type":"points","submission_types":["online_text_entry"]}`), nil
 	})
 	p.state.PublicationAuthorized = true
 	e := p.publication(context.Background(), false)
@@ -177,14 +180,14 @@ func TestCouplingPreservesFixtureDefinitionIDsAndPoints(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var live workflow.Assignment
-			if e := json.Unmarshal([]byte(`{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","points_possible":20,"description":"<p>Synthetic only.</p>","grading_type":"points","submission_types":["online_text_entry"],"rubric_settings":{"id":20,"title":"Synthetic rubric","points_possible":100},"rubric_association":{"id":30,"rubric_id":20,"association_id":42,"association_type":"Assignment","use_for_grading":false},"rubric":[{"id":"c1","points":100,"description":"Evidence","long_description":"Teacher's definition","criterion_use_range":true,"ratings":[{"id":"r-full","points":100,"description":"Complete","long_description":"Teacher's rating"},{"id":"r-empty","points":0,"description":"Missing"}]}]}`), &live); e != nil {
+			if e := json.Unmarshal([]byte(`{"id":42,"course_id":900001,"name":"[CSE 0.1b DISPOSABLE] synthetic","points_possible":20,"description":"<p>Synthetic only.</p>","grading_type":"points","submission_types":["online_text_entry"],"rubric_settings":{"id":20,"title":"Synthetic rubric","points_possible":100},"rubric_association":{"id":30,"rubric_id":20,"association_id":42,"association_type":"Assignment","use_for_grading":false},"rubric":[{"id":"c1","points":100,"description":"Evidence","long_description":"Teacher's definition","criterion_use_range":true,"ratings":[{"id":"r-full","points":100,"description":"Complete","long_description":"Teacher's rating"},{"id":"r-empty","points":0,"description":"Missing"}]}]}`), &live); e != nil {
 				t.Fatal(e)
 			}
 			writes := 0
 			p := fixtureProbe(t, func(r *http.Request) (*http.Response, error) {
 				if r.Method == "PUT" {
 					writes++
-					if r.URL.Path != "/api/v1/courses/121046/rubrics/20" {
+					if r.URL.Path != "/api/v1/courses/900001/rubrics/20" {
 						t.Fatalf("unexpected coupling route: %s", r.URL.Path)
 					}
 					var fields struct {

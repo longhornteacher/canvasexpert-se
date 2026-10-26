@@ -25,7 +25,11 @@ import (
 )
 
 const allowedOrigin = "https://pearland.instructure.com"
-const courseID int64 = 121046
+
+// courseID is the one authorized disposable-test course. Its real ID stays out of
+// the public repo: CSE_PROBE_COURSE_ID, or dev-reference/course-ids.json in UserSync.
+var courseID int64
+
 const prefix = "[CSE 0.1b DISPOSABLE]"
 const unattendedPrefix = "[CSE UNATTENDED]"
 const statePath = ".test-workspaces/live-probe/state.json"
@@ -71,11 +75,18 @@ func run(ctx context.Context, args []string) error {
 	}
 	if len(args) == 0 || args[0] == "help" {
 		fmt.Println("Optional leading --state PATH. Unattended helpers: select --assignment ID | configure-fixture [--assignment ID] [--submission-types online_text_entry,online_upload] | create-module --name '[CSE UNATTENDED] ...' | read-module | submit-file --file SYNTHETIC_PATH. Read-only field probe: field-read course | image-files | page ID | new-quiz ID | assignment ID ([CSE FIELD PROBE] objects only). Use a separate state per assignment; configure only unpublished exact named fixtures, then select. select never adopts legacy coursework.")
-		fmt.Println("DEV ONLY: cse-probe inspect-test-student | create | restrict | verify-visibility | attach-rubric | read | submit [--body SYNTHETIC_TEXT] [--submitted-at RFC3339] | submit-as [same flags] | grade [--grade POINTS] [--rubric POINTS] [--comment SYNTHETIC_TEXT] | edit-comment --id ID --text SYNTHETIC_TEXT | couple-association [--enabled=false] | late --status none|late | set-due --at RFC3339 | publish | unpublish | pull [--workspace DEV_ROOT] | post --results RESULTS [--workspace DEV_ROOT] | inspect-state\nHardcoded CS8 course 121046; exact disposable assignment; built-in Test Student only. Publish requires separate teacher authorization and an explicit invocation; no automatic publication. Unpublish may be rejected by Canvas after submissions; no policy workaround. No delete/course-policy commands. State: " + statePath)
+		fmt.Println("DEV ONLY: cse-probe inspect-test-student | create | restrict | verify-visibility | attach-rubric | read | submit [--body SYNTHETIC_TEXT] [--submitted-at RFC3339] | submit-as [same flags] | grade [--grade POINTS] [--rubric POINTS] [--comment SYNTHETIC_TEXT] | edit-comment --id ID --text SYNTHETIC_TEXT | couple-association [--enabled=false] | late --status none|late | set-due --at RFC3339 | publish | unpublish | pull [--workspace DEV_ROOT] | post --results RESULTS [--workspace DEV_ROOT] | inspect-state\nAuthorized CS8 course from CSE_PROBE_COURSE_ID or UserSync dev-reference/course-ids.json; exact disposable assignment; built-in Test Student only. Publish requires separate teacher authorization and an explicit invocation; no automatic publication. Unpublish may be rejected by Canvas after submissions; no policy workaround. No delete/course-policy commands. State: " + statePath)
 		return nil
 	}
 	if len(args) > 0 && args[0] == "outlook-self-test" {
 		return outlookSelfTest()
+	}
+	if courseID == 0 {
+		id, e := probeCourseID()
+		if e != nil {
+			return e
+		}
+		courseID = id
 	}
 	path, e := filepath.Abs(selectedState)
 	if e != nil {
@@ -238,7 +249,7 @@ func (p *probe) serviceWorkflow(ctx context.Context, command string, args []stri
 		}
 	}
 	if nickname == "" {
-		return fmt.Errorf("developer workspace must explicitly configure authorized course 121046")
+		return fmt.Errorf("developer workspace must explicitly configure the authorized probe course")
 	}
 	if _, e = p.assignment(ctx); e != nil {
 		return e
@@ -969,4 +980,26 @@ func outlookSelfTest() error {
 	})
 	fmt.Println("outcome:", out)
 	return e
+}
+
+func probeCourseID() (int64, error) {
+	if v := strings.TrimSpace(os.Getenv("CSE_PROBE_COURSE_ID")); v != "" {
+		id, e := strconv.ParseInt(v, 10, 64)
+		if e != nil || id <= 0 {
+			return 0, fmt.Errorf("CSE_PROBE_COURSE_ID must be a positive Canvas course ID")
+		}
+		return id, nil
+	}
+	ref := filepath.Join(os.Getenv("OneDriveCommercial"), "Teaching Assistant Project", "dev-reference", "course-ids.json")
+	b, e := os.ReadFile(ref)
+	if e != nil {
+		return 0, fmt.Errorf("set CSE_PROBE_COURSE_ID or add cse-probe-course-id to %s", ref)
+	}
+	var ids struct {
+		Probe int64 `json:"cse-probe-course-id"`
+	}
+	if e = json.Unmarshal(b, &ids); e != nil || ids.Probe <= 0 {
+		return 0, fmt.Errorf("%s needs a positive cse-probe-course-id", ref)
+	}
+	return ids.Probe, nil
 }

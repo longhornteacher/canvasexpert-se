@@ -28,7 +28,7 @@ func uploadFixtureResponse(r *http.Request) *http.Response {
 	if strings.HasSuffix(r.URL.Path, "student_view_student") {
 		return response(r, `{"id":5}`)
 	}
-	return response(r, `{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"points_possible":20,"grading_type":"points","submission_types":["online_upload"]}`)
+	return response(r, `{"id":42,"course_id":900001,"name":"[CSE 0.1b DISPOSABLE] synthetic","published":false,"points_possible":20,"grading_type":"points","submission_types":["online_upload"]}`)
 }
 
 func TestFileUploadStorageOmitsTokenAndFinalizesExactCanvasFile(t *testing.T) {
@@ -81,7 +81,7 @@ func TestFileUploadStorageOmitsTokenAndFinalizesExactCanvasFile(t *testing.T) {
 				t.Fatal("file write omitted exact Test Student impersonation")
 			}
 			if strings.HasSuffix(r.URL.Path, "/files") {
-				if r.URL.Path != "/api/v1/courses/121046/assignments/42/submissions/5/files" {
+				if r.URL.Path != "/api/v1/courses/900001/assignments/42/submissions/5/files" {
 					t.Fatal("wrong initiation scope")
 				}
 				return response(r, `{"upload_url":"https://storage.example/upload","upload_params":{"key":"fixture","policy":"signed-policy"}}`), nil
@@ -194,7 +194,7 @@ func TestFileUploadTransportFailureIsUncertainAndRedirectIsNotFollowed(t *testin
 }
 
 func TestUploadFinalizationRejectsWrongOriginPathAndStudent(t *testing.T) {
-	for _, raw := range []string{"https://storage.example/api/v1/files/99/create_success", allowedOrigin + "/api/v1/courses/121046/assignments", allowedOrigin + "/api/v1/files/99/create_success?as_user_id=6", allowedOrigin + "/api/v1/files/99/create_success?as_user_id=5&as_user_id=6", "http://pearland.instructure.com/api/v1/files/99", allowedOrigin + "/api/v1/files/0"} {
+	for _, raw := range []string{"https://storage.example/api/v1/files/99/create_success", allowedOrigin + "/api/v1/courses/900001/assignments", allowedOrigin + "/api/v1/files/99/create_success?as_user_id=6", allowedOrigin + "/api/v1/files/99/create_success?as_user_id=5&as_user_id=6", "http://pearland.instructure.com/api/v1/files/99", allowedOrigin + "/api/v1/files/0"} {
 		if _, e := probeFinalizePath(raw, 5); e == nil {
 			t.Fatal("accepted unsafe finalization", raw)
 		}

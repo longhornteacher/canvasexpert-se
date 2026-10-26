@@ -6,7 +6,7 @@ Current direction (2026-10-12): New Quizzes, including written-response items, a
 
 2026-10-10. **Teacher decisions:** CE-SE gives each student a **feedback comment that includes the agent's rubric scores** for the written items (ECR/SCR), visible to the student; that information matters to them. **The teacher enters the item points** in SpeedGrader. A rubric attached to the New Quiz is important for ECR/SCRs: `pull-item` + `attach-rubric` now supports New Quiz assignments (local tests; see `docs/engine-capabilities.md`). Item-score writes stay out of scope (no public API). Writing the rubric assessment onto the New Quiz submission is question C below. The rubric pre-check result stays on record in `docs/engine-capabilities.md`.
 
-**Probe target:** CS8 New Quiz assignment **3698192** (https://pearland.instructure.com/courses/121046/assignments/3698192), made and assigned by the teacher, **waiting for a student response**. Nothing below runs until that response exists.
+**Probe target:** CS8 New Quiz assignment **3698192** (https://pearland.instructure.com/courses/<CS8>/assignments/3698192), made and assigned by the teacher, **waiting for a student response**. Nothing below runs until that response exists.
 
 ## What the feature is
 

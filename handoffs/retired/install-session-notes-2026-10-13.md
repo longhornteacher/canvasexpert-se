@@ -10,7 +10,7 @@ No student data or secrets here. The PAT was entered only in the private WebUI a
 
 1. Agent read `AGENTS.md` -> `playbooks/install.md`. Destination was unstated, so the playbook's "ask one plain question" applied. Teacher answered "both."
 2. `.\cse.cmd install --client work` -> exit code 4.
-   - `state: settings-saved`; wrote `C:\Users\beckhamw\.codex\config.toml` and a timestamped backup.
+   - `state: settings-saved`; wrote `C:\Users\<user>\.codex\config.toml` and a timestamped backup.
    - Local MCP check passed (26 tools, instructions read, configured courses read, `destination_verified: false`).
    - Error line: `private WebUI did not report startup; open webui.cmd in this Install and retry connection from the hub`.
 3. `.\cse.cmd install --client cowork` -> exit code 4.
@@ -61,7 +61,7 @@ Done in `playbooks/install.md` this session: "Walkthrough principles" and "Cowor
 - **Work destination hand-off:** `settings-saved` writes `~/.codex/config.toml` (the Codex/Work config). The teacher still needs to reconnect/restart Work. Add a concrete, observable verification step (what they should see) and have the agent re-check `list_courses` `install_root` after reconnect. Not yet verified: neither destination has confirmed CE-SE tools in a real conversation.
 - **Cowork post-install:** after the teacher clicks Install/trust, verify tools appear in a Cowork conversation; not yet done.
 - **Order of operations:** best flow is (1) pick destination(s), (2) run helper(s), (3) open WebUI and get Canvas origin from a pasted link, (4) PAT in form, (5) `doctor`, (6) `courses`, nicknames, (7) launch mcpb/reconnect, (8) pilot. Playbook currently has the extension step before Canvas steps; reorder if desired.
-- **Courses step:** with 17 courses (duplicates: FUND OF COMPUTER SCIENCE 121046 available / 121051 unpublished; POWER READING 7 121063 / 121068 both unpublished), the agent should propose the likely current set (e.g. available + "Beckham" in the name) as a suggestion, but nicknames must still come from the teacher per `setup.md`.
+- **Courses step:** with 17 courses (duplicates: FUND OF COMPUTER SCIENCE: one available, one unpublished; POWER READING 7: both unpublished), the agent should propose the likely current set (e.g. available + the teacher's name in the course name) as a suggestion, but nicknames must still come from the teacher per `setup.md`.
 - `context/teaching-profile.md`, `grading.md`, `school-calendar.md` were not touched this session.
 
 ### G. Minor / observations

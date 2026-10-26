@@ -361,8 +361,8 @@ https://pearland.instructure.com
 
 | Course nickname | Course ID | Book Club set ID | Existing Book Club module |
 |---|---:|---:|---:|
-| LANG ARTS 7 - Beckham | 120638 | 5291 | 637696 |
-| PAP LANG ARTS 7 - Beckham | 120669 | 5289 | 637697 |
+| ELA7 | (see UserSync) | 5291 | 637696 |
+| ELA7 PAP | (see UserSync) | 5289 | 637697 |
 
 | Book group | ELA 7 group ID | PAP group ID |
 |---|---:|---:|
@@ -393,8 +393,8 @@ Current work to preserve:
 
 Operational notes and receipts are under:
 
-courses/LANG ARTS 7 - Beckham/book-club-2026/
-courses/PAP LANG ARTS 7 - Beckham/book-club-2026/
+courses/ELA7/book-club-2026/
+courses/ELA7 PAP/book-club-2026/
 
 Each contains unit.md and the actual creation documents.
 

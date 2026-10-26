@@ -27,7 +27,7 @@ In every row Canvas needs-grading equals pulled plus comment-posted, so no stude
 - PAP First Impressions: one student 86/100, late 72,264 s (~20 h). Grade, comment and late status succeeded. Basis: four criteria the agent defined (characters 30/30, beginning 25, sentences and parts 15); the assignment has no Canvas rubric.
 - PAP Moment of Truth: one comment-only result, 21/30 across two written items (5/5/5 from item prompts).
 - PAP Anticipation: one comment-only result, 24/30 across three items (criteria defined by the agent from the prompts). The comment notes the missing "My claim that ___ is substantiated by ___" sentence in item 3.
-- Results files under `C:\Users\adamb\CanvasExpert-SE\courses\PAP LANG ARTS 7 - Beckham\assignments\` (`3705186-first-impressions`, `3705779-the-terror-moment-of-truth-reading-and-response`, `3705775-the-terror-anticipation-writing`, each `results-20261021.md`). `post_results` rewrote each file with normalized fields and outcomes; the rewritten copy is the record.
+- Results files under `C:\Users\adamb\CanvasExpert-SE\courses\ELA7 PAP\assignments\` (`3705186-first-impressions`, `3705779-the-terror-moment-of-truth-reading-and-response`, `3705775-the-terror-anticipation-writing`, each `results-20261021.md`). `post_results` rewrote each file with normalized fields and outcomes; the rewritten copy is the record.
 
 ## Held / waiting on the teacher
 

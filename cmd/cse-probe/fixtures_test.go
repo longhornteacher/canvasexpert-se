@@ -14,11 +14,11 @@ import (
 
 func TestSelectRequiresNewNamedExcludedFixture(t *testing.T) {
 	for _, body := range []string{
-		`{"id":42,"course_id":121046,"name":"[CSE 0.1b DISPOSABLE] synthetic","grading_type":"points","omit_from_final_grade":true,"post_to_sis":false}`,
-		`{"id":42,"course_id":121046,"name":"Actual coursework","grading_type":"points","omit_from_final_grade":true,"post_to_sis":false}`,
-		`{"id":42,"course_id":121046,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":false,"post_to_sis":false}`,
-		`{"id":42,"course_id":121046,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":true,"post_to_sis":true}`,
-		`{"id":42,"course_id":121046,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":true}`,
+		`{"id":42,"course_id":900001,"name":"[CSE 0.1b DISPOSABLE] synthetic","grading_type":"points","omit_from_final_grade":true,"post_to_sis":false}`,
+		`{"id":42,"course_id":900001,"name":"Actual coursework","grading_type":"points","omit_from_final_grade":true,"post_to_sis":false}`,
+		`{"id":42,"course_id":900001,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":false,"post_to_sis":false}`,
+		`{"id":42,"course_id":900001,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":true,"post_to_sis":true}`,
+		`{"id":42,"course_id":900001,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":true}`,
 		`{"id":42,"course_id":1,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":true,"post_to_sis":false}`,
 	} {
 		p := fixtureProbe(t, func(r *http.Request) (*http.Response, error) {
@@ -42,7 +42,7 @@ func TestSelectPersistsRubricAndPublication(t *testing.T) {
 		if strings.Contains(r.URL.Path, "/rubrics/") {
 			return response(r, `{"associations":[{"id":7,"association_id":42,"association_type":"Assignment","rubric_id":6,"use_for_grading":false}]}`), nil
 		}
-		return response(r, `{"id":42,"course_id":121046,"name":"[CSE UNATTENDED] synthetic","published":true,"grading_type":"points","omit_from_final_grade":true,"post_to_sis":false,"rubric_settings":{"id":6},"rubric":[{"id":"c1","points":100}]}`), nil
+		return response(r, `{"id":42,"course_id":900001,"name":"[CSE UNATTENDED] synthetic","published":true,"grading_type":"points","omit_from_final_grade":true,"post_to_sis":false,"rubric_settings":{"id":6},"rubric":[{"id":"c1","points":100}]}`), nil
 	})
 	p.state.AssignmentID, p.state.Title = 0, ""
 	if e := p.selectFixture(context.Background(), []string{"--assignment", "42"}); e != nil {
@@ -77,9 +77,9 @@ func TestConfigureOnlyUnpublishedNamedFixtureAndNarrowPatch(t *testing.T) {
 			safe = true
 		}
 		if safe {
-			return response(r, `{"id":42,"course_id":121046,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":true,"post_to_sis":false}`), nil
+			return response(r, `{"id":42,"course_id":900001,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":true,"post_to_sis":false}`), nil
 		}
-		return response(r, `{"id":42,"course_id":121046,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":false,"post_to_sis":true}`), nil
+		return response(r, `{"id":42,"course_id":900001,"name":"[CSE UNATTENDED] synthetic","grading_type":"points","omit_from_final_grade":false,"post_to_sis":true}`), nil
 	})
 	p.state.AssignmentID, p.state.Title = 0, ""
 	if e := p.configureFixture(context.Background(), []string{"--assignment", "42", "--submission-types", "online_upload"}); e != nil {
@@ -98,9 +98,9 @@ func TestUnsafeOrPublishedFixtureCannotBeWritten(t *testing.T) {
 				writes++
 			}
 			if operation == "configure" {
-				return response(r, `{"id":42,"course_id":121046,"name":"[CSE UNATTENDED] synthetic","published":true,"grading_type":"points","omit_from_final_grade":true,"post_to_sis":false}`), nil
+				return response(r, `{"id":42,"course_id":900001,"name":"[CSE UNATTENDED] synthetic","published":true,"grading_type":"points","omit_from_final_grade":true,"post_to_sis":false}`), nil
 			}
-			return response(r, `{"id":42,"course_id":121046,"name":"[CSE UNATTENDED] synthetic","published":false,"grading_type":"points","omit_from_final_grade":false,"post_to_sis":false}`), nil
+			return response(r, `{"id":42,"course_id":900001,"name":"[CSE UNATTENDED] synthetic","published":false,"grading_type":"points","omit_from_final_grade":false,"post_to_sis":false}`), nil
 		})
 		p.state.Title = unattendedPrefix + " synthetic"
 		var e error
@@ -160,10 +160,10 @@ func TestReadModuleListsFreshPaginatedMembershipWithoutContent(t *testing.T) {
 				return response(r, `[{"id":12,"module_id":8,"type":"Assignment","content_id":43,"title":"PRIVATE TITLE","url":"https://example.com/private"}]`), nil
 			}
 			out := response(r, `[{"id":11,"module_id":8,"type":"Assignment","content_id":42,"title":"PRIVATE TITLE"}]`)
-			out.Header.Set("Link", "<"+allowedOrigin+"/api/v1/courses/121046/modules/8/items?page=2>; rel=\"next\"")
+			out.Header.Set("Link", "<"+allowedOrigin+"/api/v1/courses/900001/modules/8/items?page=2>; rel=\"next\"")
 			return out, nil
 		}
-		if r.URL.Path != "/api/v1/courses/121046/modules/8" {
+		if r.URL.Path != "/api/v1/courses/900001/modules/8" {
 			t.Fatal("read broadened module scope", r.URL.Path)
 		}
 		return response(r, `{"id":8,"name":"[CSE UNATTENDED] module","published":false,"items_count":2,"items":[{"id":999}]}`), nil

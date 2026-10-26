@@ -61,7 +61,7 @@ func (p *probe) adopt(a fixtureAssignment) error {
 
 func (p *probe) namedFixture(a fixtureAssignment, id int64) error {
 	if id <= 0 || a.ID != id || a.CourseID != courseID || !strings.HasPrefix(a.Name, unattendedPrefix+" ") || a.GradingType != "points" {
-		return fmt.Errorf("target must be an exact [CSE UNATTENDED] points assignment in course 121046")
+		return fmt.Errorf("target must be an exact [CSE UNATTENDED] points assignment in the authorized probe course")
 	}
 	if p.state.AssignmentID > 0 && (id != p.state.AssignmentID || a.Name != p.state.Title) {
 		return fmt.Errorf("state already owns another assignment; use a separate --state path")

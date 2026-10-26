@@ -215,7 +215,7 @@ Membership changes are refreshed per resource with `prepare_audience {course, pa
 ---
 schema: 1
 kind: assign-to
-course: PAP LANG ARTS 7 - Beckham
+course: ELA7 PAP
 mode: replace            # replace (default) sets exactly these tags; add merges with the existing audience
 everyone: false          # optional; per-target everyone wins. Default: restricted when tags are named
 allow_remove_with_submissions: false
