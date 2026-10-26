@@ -4,17 +4,26 @@ schema: 1
 # {course} becomes the course picked on Home, or "one of my courses" when none is picked.
 commands:
   - name: Scoring session
-    about: Score submitted work, review it, then post.
+    about: Score submitted work, hear how it went, then post.
     prompt: "Start a scoring session for {course}."
   - name: Planning session
     about: Build pages and assignments for the days ahead.
     prompt: "Start a planning session for {course}."
   - name: Build a quiz
-    about: A New Quiz, drafted for your review first.
+    about: A New Quiz, drafted and talked through before it goes in.
     prompt: "Help me build a New Quiz for {course}."
-  - name: Parent update
-    about: Draft notes home. You read every one before it sends.
+  - name: Grade update home
+    about: Each family gets their child's grades. You read every one before it sends.
     prompt: "Draft parent updates for {course}."
+  - name: Email families
+    about: Send a reminder or class news home. You read every email before it sends.
+    prompt: "Help me email families in {course} about an upcoming activity or reminder."
+  - name: Print grade reports
+    about: One page per student, for conferences or take-home folders.
+    prompt: "Print student grade reports for {course}."
+  - name: Book club unit
+    about: Set up clubs, club pages and discussions in Canvas.
+    prompt: "Help me set up a book club unit for {course}."
   - name: Fix in Canvas
     about: Change a page, due date or assignment that's already live.
     prompt: "I need to change something that's already live in Canvas for {course}."

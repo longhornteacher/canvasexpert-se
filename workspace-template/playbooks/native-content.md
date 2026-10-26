@@ -37,13 +37,29 @@ published: true
 The header ends with a `---` line and the Page needs a non-empty body after it.
 
 Pull before each edit. If the body conflicts, keep the unsent draft and merge its requested change into a fresh pull; a title-only change leaves current student writing untouched. Never push the starter body again over a populated notebook. `cse page-history COURSE PAGE_ID --group GROUP_ID` reads history; a revision is not a complete record of who contributed or simultaneous editing.
-3. Create activities with the existing assignment contract, optionally `body_format: html`. Follow `authoring.md` and its review policy. Choose text entry, file submission, a rubric or teacher grading to suit the student product.
+3. Create activities with the existing assignment contract, optionally `body_format: html`. Follow `authoring.md` and its check-in. Choose text entry, file submission, a rubric or teacher grading to suit the student product.
 4. Create assessments with `quizzes.md` and the supported QuizForge types. Matching and ordering interactions may become corresponding native questions when their semantics fit. Convert Classic source questions to supported New Quiz types; report or explicitly adapt unsupported questions rather than dropping them. Python work becomes a code/text/file submission with teacher assessment; copying its prompt does not replace vendor execution or hidden autograding. Written New Quiz responses are graded by the teacher in SpeedGrader.
 5. Assemble a `kind: module` document using verified existing Page, File, Assignment, native course Discussion and SubHeader references. For a New Quiz use its returned assignment ID. A group-specific Page or discussion uses an explicitly titled `ExternalUrl` with its exact Canvas URL; read `cse external-resources COURSE [--group ID]` for existing collaboration/conference metadata and teacher-selected links. External URLs must be stable HTTP(S) links without embedded credentials or signed temporary parameters. Push the module after its native children exist. An existing module receives only the requested additions and positions. Module publication does not publish its children or grant group membership: students can see a course module link and still lack access to the linked group resource. Metadata does not prove document contribution or meeting attendance, and the Engine does not provision external documents or conferences or read their content/recordings.
 
 For a club unit whose Page, response and quiz are restricted to selected clubs, push each resource first and then the module, so every native reference already exists. A restricted course Page and an individual assignment are ordinary native entries; a New Quiz uses its associated assignment ID. The module itself carries no audience: it is a navigation list, and each child keeps its own restriction. Do not add a group-specific `ExternalUrl` for a resource that is now a native restricted course Page.
 
-Pages, files and modules have no new universal approval gate. Follow the teacher's requested scope; assignments and quizzes retain their existing review policy. A held or uncertain write needs the specific recovery described by the Engine. Do not erase a receipt or saved create record to make a rerun write again; rerun the same file and report what was adopted or preserved. Continue independent content while an item is held and report which objects exist and what remains.
+Pages, files and modules have no new universal approval gate. Follow the teacher's requested scope; assignments and quizzes keep their check-in with the teacher before creation. A held or uncertain write needs the specific recovery described by the Engine. Do not erase a receipt or saved create record to make a rerun write again; rerun the same file and report what was adopted or preserved. Continue independent content while an item is held and report which objects exist and what remains.
+
+## Teaching Pages: Green supports and Check yourself
+
+Apply `TEACHER.md` to every new teaching Page: plain, concise wording, accessible images and links, and the tiers it describes.
+
+**Green page.** Pages have no hub `tiers`, so when the course's Green tag has students (`list_tags`), build the Green tier as its own Page: push a `kind: page` titled "<Page title>: Green" with the supports, restrict it to the teacher's Green tag with `assign_to` (preview, then apply), and link it from the main Page with the link text "Green supports". If the restriction does not apply, say so plainly: until it does, every student can open that page. Silver/Red/Blue pages for a Page follow the same steps when the teacher accepts them. Use the same steps when the teacher wants a tier page added to an existing assignment or quiz, linking it through `edit.md`.
+
+**Check yourself.** End a substantial teaching Page (`body_format: html`) with two or three questions on its learning target, each answer in a collapsible box:
+
+```html
+<h3>Check yourself</h3>
+<p>1. What does the narrator want most in chapter 2?</p>
+<details><summary>Show answer</summary><p>To be trusted by her older brother.</p></details>
+```
+
+It is a self-check only: no "write this on paper", no turn-in, and no link to an activity that does not exist. On the first Page with a Check yourself section, read the saved HTML back once to confirm Canvas kept the `<details>` boxes. If Canvas removed them, take the section out, tell the teacher, and record the finding in `context/engine-notes.md`.
 
 ## Verify in Canvas
 

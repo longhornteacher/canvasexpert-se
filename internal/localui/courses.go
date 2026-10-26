@@ -19,6 +19,7 @@ type courseRow struct {
 	Name, Code, Nick    string
 	State               string
 	Owner               string
+	Floor               string // honest-effort floor, percent of points; blank is none
 	Active, Unpublished bool
 }
 
@@ -68,7 +69,7 @@ func (h *Hub) coursesPage(w http.ResponseWriter, r *http.Request) {
 		seen[c.ID] = true
 		row := courseRow{ID: c.ID, Name: c.Name, Code: c.Code, State: c.State, Unpublished: c.State == "unpublished", Nick: ""}
 		if known, ok := configured[c.ID]; ok {
-			row.Nick, row.Active, row.Owner = known.Nickname, known.Current, known.Owner
+			row.Nick, row.Active, row.Owner, row.Floor = known.Nickname, known.Current, known.Owner, floorText(known.EffortFloor)
 		}
 		rows = append(rows, row)
 	}
@@ -78,7 +79,7 @@ func (h *Hub) coursesPage(w http.ResponseWriter, r *http.Request) {
 	})
 	for _, c := range config.Courses {
 		if !seen[c.ID] {
-			rows = append(rows, courseRow{ID: c.ID, Name: c.Nickname, Nick: c.Nickname, Active: c.Current, Owner: c.Owner})
+			rows = append(rows, courseRow{ID: c.ID, Name: c.Nickname, Nick: c.Nickname, Active: c.Current, Owner: c.Owner, Floor: floorText(c.EffortFloor)})
 		}
 	}
 	team, _ := workspace.ReadTeam(h.root)
@@ -121,11 +122,17 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 		}
 		nick := strings.TrimSpace(r.PostForm.Get("nick_" + raw))
 		active := r.PostForm.Get("active_"+raw) == "on"
+		floor, ok := parseFloor(r.PostForm.Get("floor_" + raw))
+		if !ok {
+			h.redirect(w, r, "/courses", "", "Not saved: the honest-effort floor is a percent from 1 to 100, such as 50, or blank for none.")
+			return
+		}
 		if i, ok := index[id]; ok {
 			if nick != "" {
 				config.Courses[i].Nickname = nick
 			}
 			config.Courses[i].Current = active
+			config.Courses[i].EffortFloor = floor
 			continue
 		}
 		if !active {
@@ -135,7 +142,7 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 			h.redirect(w, r, "/courses", "", "Every active course needs a nickname.")
 			return
 		}
-		added = append(added, domain.Course{Nickname: nick, ID: id, Current: true})
+		added = append(added, domain.Course{Nickname: nick, ID: id, Current: true, EffortFloor: floor})
 	}
 	config.Courses = append(config.Courses, added...)
 	if err = domain.ValidateConfig(config); err != nil {
@@ -154,4 +161,25 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 	}
 	h.loaded = nil
 	h.redirect(w, r, "/courses?saved=1", fmt.Sprintf("Saved. %d active courses.", active), "")
+}
+
+func floorText(floor *domain.Decimal) string {
+	if floor == nil {
+		return ""
+	}
+	return floor.String()
+}
+
+// parseFloor reads the honest-effort floor box: blank is no floor, otherwise a
+// percent above 0 and at most 100 (a trailing % is fine).
+func parseFloor(raw string) (*domain.Decimal, bool) {
+	raw = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(raw), "%"))
+	if raw == "" {
+		return nil, true
+	}
+	d, err := domain.ParseDecimal(raw)
+	if err != nil || d.Sign() <= 0 || d.Cmp(domain.MustDecimal("100")) > 0 {
+		return nil, false
+	}
+	return &d, true
 }

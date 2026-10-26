@@ -56,8 +56,16 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 47);
+  assert.equal(names.length, 53);
   assert.ok(names.includes('init_results'), 'missing init_results');
+  for (const name of ['inbox_list', 'inbox_read', 'inbox_reply', 'inbox_set_state']) assert.ok(names.includes(name), `missing ${name}`);
+  const inboxReadTool = discovered.result.tools.find(t => t.name === 'inbox_read');
+  assert.ok(inboxReadTool.inputSchema.properties.conversation, 'inbox_read must require a conversation ref');
+  assert.ok(inboxReadTool.inputSchema.properties.mark_read, 'inbox_read must expose optional mark_read');
+  const inboxReplyTool = discovered.result.tools.find(t => t.name === 'inbox_reply');
+  for (const field of ['conversation', 'body', 'after_message']) assert.ok(inboxReplyTool.inputSchema.properties[field], `inbox_reply must expose ${field}`);
+  const inboxStateTool = discovered.result.tools.find(t => t.name === 'inbox_set_state');
+  for (const field of ['conversations', 'state']) assert.ok(inboxStateTool.inputSchema.properties[field], `inbox_set_state must expose ${field}`);
   const familyContactTool = discovered.result.tools.find(t => t.name === 'prepare_family_contact');
   assert.ok(familyContactTool?.inputSchema.properties.folder, 'prepare_family_contact must expose folder');
   const audienceTool = discovered.result.tools.find(t => t.name === "prepare_audience");

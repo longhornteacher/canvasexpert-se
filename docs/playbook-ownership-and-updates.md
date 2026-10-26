@@ -156,8 +156,8 @@ does not need to request a file edit or know the storage layout.
 - Preserve meaningful scope, exceptions and stated reasons. Do not generalize
   "for this assignment" into a permanent default.
 - Honor explicitly stated standing workflow preferences, including "Whenever
-  I explicitly request posting, skip review." If the teacher says skip review,
-  skip review. Persist the teacher's actual authorization and scope rather
+  I explicitly request posting, don't ask me first." If the teacher says not
+  to ask, don't. Persist the teacher's actual authorization and scope rather
   than inferring standing permission from a one-task skip.
 - Perform routine maintenance and incorporate compatible product updates in
   the background. Acknowledge a newly stated preference naturally.
@@ -296,3 +296,5 @@ teacher was not asked to merge anything.
 ## Git installs (decided 2026-10-21)
 
 A git install inverts the ownership above: git owns the shipped playbooks, `TEACHER.md` and the root `AGENTS.md`/`CLAUDE.md`, and an update replaces them. A teacher's choices live in `Teacher_Override.md`, `context/` and their own root guides, which git never tracks. An agent never edits a shipped file in a git install; a preference goes in `Teacher_Override.md`. An edit that is found at update time is converted into an override once, the old file is kept under `playbook-old/<date>/`, and the file is reset to the shipped text. The `shipped/` copies and the `kept` merge belong to ZIP installs only. UserSync carries `context/` and `Teacher_Override.md`, not playbooks. See [the migration plan](../handoffs/retired/GIT-INSTALL-MIGRATION.md).
+
+Add shipped playbooks under `workspace-template/playbooks/`; the package script includes matching Markdown playbooks in the flattened UserInstall tree, and the Engine seeds them from the same template. `inbox.md` follows this standard path and remains teacher-editable in ZIP installs and git-owned in git installs.

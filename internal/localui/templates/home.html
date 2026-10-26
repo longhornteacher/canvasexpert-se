@@ -12,9 +12,9 @@
 {{if .Connected}}<form method="post" action="/canvas/test"><input type="hidden" name="request_secret" value="{{.Secret}}"><button type="submit" data-canvas-test class="small" {{if .CanvasChecking}}disabled{{end}}>Test</button></form><a class="status-fix" href="/setup">Replace token</a>{{else}}<a href="/setup">Connect Canvas</a>{{end}}
 </div>
 <div class="status-line" id="home-sync">
-<span class="status-mark" aria-hidden="true"></span><span class="status-name">UserSync</span><b>{{.SyncHealth}}</b><span class="health-note">{{.SyncHealthNote}}</span>
+<span class="status-mark" aria-hidden="true"></span><span class="status-name">Other PCs</span><b>{{.SyncHealth}}</b><span class="health-note">{{.SyncHealthNote}}</span>
 </div>
-<div class="status-links"><a href="/settings?section=connections">Connection details</a><a href="/connect">Connect a teaching app</a></div>
+<div class="status-links"><a href="/settings?section=connections">Canvas and other PCs</a><a href="/connect">Connect Claude or ChatGPT</a></div>
 </section>
 {{range .TeamWarnings}}<p class="error">{{.}} <a href="/team">Team</a></p>{{end}}
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
@@ -25,16 +25,16 @@
 {{if .Commands}}
 <div class="cmd-grid">{{range $i, $c := .Commands}}<button type="button" class="cmd" data-command data-prompt="{{$c.Prompt}}" aria-pressed="{{if eq $i 0}}true{{else}}false{{end}}"><span class="cmd-name">{{$c.Name}}</span>{{if $c.About}}<span class="cmd-about">{{$c.About}}</span>{{end}}</button>{{end}}</div>
 <div class="prompt-box">
-<p class="prompt-label">Paste this into your teaching app</p>
+<p class="prompt-label">Choose Copy, then paste this into a new chat in Claude or ChatGPT</p>
 <div class="prompt-row"><span class="prompt-text" data-prompt-text aria-live="polite">{{.FirstPrompt}}</span><button type="button" class="small" data-copy-prompt>Copy</button></div>
 </div>
-<p class="health-note">To add or change a command, ask your teaching app.</p>
+<p class="health-note">Want your own button here? Ask Claude or ChatGPT to add one.</p>
 {{end}}
 </section>
 <aside class="home-courses" aria-labelledby="courses-head">
 <div class="section-head"><h2 id="courses-head">Courses <span class="count">{{.ActiveCourses}}</span></h2><a href="/courses">Manage</a></div>
-{{if .CourseRows}}<ul class="course-pick">{{range .CourseRows}}<li><button type="button" data-course="{{.Nickname}}" aria-pressed="{{if eq .Nickname $.PickedCourse}}true{{else}}false{{end}}">{{.Nickname}} <small>{{.ID}}</small></button></li>{{end}}<li><button type="button" class="any" data-course="" aria-pressed="{{if eq "" .PickedCourse}}true{{else}}false{{end}}">Let the agent ask</button></li></ul>
-<p class="health-note">Pick a course to fill it into the prompt. Students and notes are under Classroom.</p>{{else}}<p class="health-note">No active courses yet. Pick the courses you teach this term and they will show up here, ready for student and grading work.</p><a class="go" href="/courses">Choose courses</a>{{end}}
+{{if .CourseRows}}<ul class="course-pick">{{range .CourseRows}}<li><button type="button" data-course="{{.Nickname}}" aria-pressed="{{if eq .Nickname $.PickedCourse}}true{{else}}false{{end}}">{{.Nickname}} <small>{{.ID}}</small></button></li>{{end}}<li><button type="button" class="any" data-course="" aria-pressed="{{if eq "" .PickedCourse}}true{{else}}false{{end}}">Any course (it will ask)</button></li></ul>
+<p class="health-note">Pick a course to add it to the message.</p>{{else}}<p class="health-note">No courses yet. Choose the courses you teach this term and they'll show up here.</p><a class="go" href="/courses">Choose courses</a>{{end}}
 </aside>
 </div>
 <script src="/_cse/canvas-health.js" defer></script>

@@ -262,7 +262,9 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			v.FirstName = name
 		}
-		v.Alias = a
+		if a != v.Alias {
+			v.Alias, v.AliasSource = a, workspace.AliasFromTeacher
+		}
 		v.Monitored = r.PostForm.Get("monitored_"+v.Ref) == "on"
 		v.ExtraTime = r.PostForm.Get("extra_time_"+v.Ref) == "on"
 		if raw, sent := r.PostForm["note_"+v.Ref]; sent && h.notesRoot != "" {
@@ -490,7 +492,6 @@ func (h *Hub) syncRoster(config domain.CourseConfig, course domain.Course, roste
 	if err != nil {
 		return rosters, err
 	}
-	store.Choose = randomAlias
 	tags, tagOrigin, tagErr := h.fetchTags(ctx, course.ID)
 	if tagErr == nil && tagOrigin != origin {
 		tagErr = fmt.Errorf("the Canvas address differs from the roster")

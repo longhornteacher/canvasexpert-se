@@ -66,6 +66,12 @@ func SaveStudentReports(ctx context.Context, sheets []workflow.StudentSheet, lab
 	if err != nil {
 		return "", err
 	}
+	return savePrintable(ctx, doc, "Student reports "+label)
+}
+
+// savePrintable saves doc as a PDF in the teacher's Downloads folder and opens
+// it, or saves a printable HTML page when Edge cannot make the PDF.
+func savePrintable(ctx context.Context, doc []byte, name string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -74,12 +80,12 @@ func SaveStudentReports(ctx context.Context, sheets []workflow.StudentSheet, lab
 	if info, e := os.Stat(dir); e != nil || !info.IsDir() {
 		dir = home
 	}
-	base := "Student reports " + strings.Map(func(r rune) rune {
+	base := strings.Map(func(r rune) rune {
 		if strings.ContainsRune(`<>:"/\|?*`, r) {
 			return '-'
 		}
 		return r
-	}, label)
+	}, name)
 	pdf := uniquePath(dir, base, ".pdf")
 	pdfErr := printPDF(ctx, doc, pdf)
 	if pdfErr == nil {
@@ -111,12 +117,12 @@ func printPDF(ctx context.Context, doc []byte, out string) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp("", "cse-student-reports-")
+	tmp, err := os.MkdirTemp("", "cse-print-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	page := filepath.Join(tmp, "reports.html")
+	page := filepath.Join(tmp, "print.html")
 	if err = os.WriteFile(page, doc, 0600); err != nil {
 		return err
 	}

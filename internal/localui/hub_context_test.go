@@ -55,7 +55,7 @@ func TestFeedbackVoiceAndCourseSetupUseConfiguredSync(t *testing.T) {
 	}
 	connections := hubGet(h, "/settings?section=connections").Body.String()
 	preferences := hubGet(h, "/settings?section=preferences").Body.String()
-	if !strings.Contains(connections, syncRoot) || !strings.Contains(connections, "provider") || !strings.Contains(preferences, syncRoot) {
+	if !strings.Contains(connections, syncRoot) || !strings.Contains(connections, "signed in on both PCs") || !strings.Contains(preferences, "Feedback voice") {
 		t.Fatal("Settings did not show effective rules location and provider boundary")
 	}
 	form = url.Values{"request_secret": {"nonce"}, "voice": {"Shared voice."}, "feedback_guidance": {"Shared guidance."}}
@@ -80,7 +80,7 @@ func TestStudentNotesSaveWithoutTouchingHandWrittenNotes(t *testing.T) {
 	if err := workspace.WriteDocument(filepath.Join(root, "context", "courses.md"), config, ""); err != nil {
 		t.Fatal(err)
 	}
-	if page := hubGet(h, "/students").Body.String(); !strings.Contains(page, "Private notes for the agent") || !strings.Contains(page, "<details class=\"student-notes\">") {
+	if page := hubGet(h, "/students").Body.String(); !strings.Contains(page, "<summary>Private notes</summary>") || !strings.Contains(page, "<details class=\"student-notes\">") {
 		t.Fatal("private notes should be in a collapsed per-student section")
 	}
 	store, _ := workspace.OpenStudents(root)
@@ -359,13 +359,13 @@ func TestCanvasHealthStaleCredentialResultsAreIgnored(t *testing.T) {
 
 func TestCanvasFailureNoteSeparatesResponseFromNoResponse(t *testing.T) {
 	answered := canvasFailureNote(&canvas.Error{Kind: "forbidden", Status: 403})
-	if !strings.Contains(answered, "HTTP 403") || !strings.Contains(answered, "did not reject") || strings.Contains(answered, "could not be reached") {
+	if !strings.Contains(answered, "code 403") || !strings.Contains(answered, "token is probably fine") || strings.Contains(answered, "internet connection") {
 		t.Fatalf("answered note = %q", answered)
 	}
-	if note := canvasFailureNote(context.DeadlineExceeded); !strings.Contains(note, "did not answer in time") {
+	if note := canvasFailureNote(context.DeadlineExceeded); !strings.Contains(note, "slow to answer") {
 		t.Fatalf("timeout note = %q", note)
 	}
-	if note := canvasFailureNote(&canvas.Error{Kind: "transport"}); !strings.Contains(note, "could not be reached (Canvas connection failed)") {
+	if note := canvasFailureNote(&canvas.Error{Kind: "transport"}); !strings.Contains(note, "(Details: Canvas connection failed)") {
 		t.Fatalf("transport note = %q", note)
 	}
 }

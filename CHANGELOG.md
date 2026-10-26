@@ -2,8 +2,44 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
-## 1.2.0-beta.2 (2026-10-23, Dev)
+## 1.5.1 (2026-10-25)
 
+Canvas Inbox conversations.
+
+- Added teacher-directed Canvas Inbox list, thread read, existing-thread reply, and per-conversation read/archive state operations through CLI and MCP. Thread refs hide Canvas IDs, reads do not mark messages read by default, replies contain only the message body and refuse stale threads, and the Inbox playbook keeps message judgment in the teacher conversation.
+- Corrected state writes to send nested `conversation.workflow_state`, as Canvas requires. The public `inbox` action returns an archived thread to the inbox as read. Per-thread failures remain independent, and accepted writes need no confirmation reads. Focused regression fixtures reject the old flat payload and cover read, unread, archived and inbox-to-read translation.
+- Canvas Live on 2026-10-25: list/read succeeded and the teacher confirmed three replies appeared in Canvas. After the repair, Canvas accepted read and archive for four selected conversations (eight outcomes); no replies were replayed or confirmation reads made. Unread, return-to-inbox and notifications remain unverified live. See [Engine capabilities](docs/engine-capabilities.md) for build-specific evidence and limits.
+
+## 1.5.0 (2026-10-24)
+
+Honest-effort floor grades.
+
+- A course can set an honest-effort floor on the WebUI Courses page, as a percent of the assignment's points (`effort_floor` in `context/courses.md`). When the agent judges a submission a genuine attempt (`honest_effort: true` on the grade row) and the earned score is lower, the Engine enters the floor as the Canvas grade. The rubric and earned score stay as assessed, and the comment adds "Entered as N/P (class minimum for an honest attempt)" under the earned overall line. Review previews show the entered grade. Canvas applies any late deduction to the entered grade; shared group grades do not use the floor.
+
+## 1.4.0 (2026-10-24)
+
+Teacher check-ins move into the conversation, and drafts can be printed.
+
+- Scores, new assignments, new quizzes and assignment edits are reported in the chat, and the agent writes to Canvas on the teacher's go-ahead there. Scoring reports give each assignment's score range, general impressions, held students and timing notes; the teacher can ask for changes, see a student's feedback or hold a student back before posting. "Score and post" still posts first and then reports. The review page remains available when the teacher asks for it or saves that as a preference.
+- Draft PDF (`cse draft-pdf FILE [--handout]`, MCP `save_draft_pdf`) prints an assignment, Page, quiz or results file to Downloads, laid out for paper from the review page's rendering. The teacher copy includes settings, answer keys and private notes; the handout keeps only what students see, with one student's posted feedback per page for scores.
+- The CanvasExpert WebUI desktop shortcut shows the original CanvasExpert easel icon. Installs carry `engine/canvasexpert.ico`, and setup sets it on a new shortcut or an existing one for the same folder.
+
+## 1.3.0 (2026-10-24)
+
+Teaching defaults a new install starts with, plus scoring and WebUI refinements.
+
+### Teaching defaults (playbooks)
+
+- Plain, grade-level wording rules for everything students read: word budgets, verb-first steps, sentence length by grade, a cut test and inline definitions ("hard thinking, easy reading").
+- Every writing prompt gets a Canvas rubric by default, shaped like the STAAR rubric with a rating between each STAAR level. A writing assignment's rubric totals its points (100 by default); a New Quiz with written items gets one rubric whose criteria total each item's points, named by item number. Mixed quizzes give written items about 40% of the points.
+- Quiz choices are written to survive shuffling, distractors match the answer's length, and spiral items are offered for unit quizzes.
+- Accessibility basics (alt text, descriptive links, real headings, header rows, no color-only meaning) and a "Check yourself" section with collapsible answers at the end of substantial teaching Pages. Whether Canvas keeps the collapsible boxes is checked on the first real Page.
+- Support tiers use two tag sets: **Green** (ELPS) is added automatically when the course's Green tag has students; **Silver**, **Red** and **Blue** readiness tiers (STAAR Did Not Meet, Approaches/Meets, Masters) are offered. Tier links show only the color name.
+
+### Scoring and WebUI
+
+- Teacher-visible WebUI text rewritten as plain, step-by-step help; Connect Canvas explains how to make an access token; Home buttons for family email, grade reports and book clubs.
+- Scoring sessions score every packet in one conversation rather than a subagent per packet.
 - Results validation and review resolve omitted assignment metadata in memory without rewriting drafts or invalidating their hashes. New results scaffolds include the packet's assignment snapshot, exact component/criterion examples and per-student work paths. Reuse of an earlier scoring interpretation also resolves omitted metadata, preserving handwritten results compatibility.
 - Feedback-only comments use `comment-only` with `header: none` and no components, rubric or scoring basis. Review/post retain identity, attempt, evidence and duplicate checks; these comments do not suppress unscored New Quiz work. Supplied scores still require valid arithmetic.
 - Results schema errors explain where criterion points belong and show the feedback-only form. Draft conflicts report the current hash while requiring a fresh read.
