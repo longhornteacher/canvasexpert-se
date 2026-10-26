@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}}
+	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -156,6 +156,58 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	fmt.Fprintf(status, "%s…\n", cmd)
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	switch cmd {
+	case "inbox-list":
+		options, e := parseInboxListOptions(args)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		list, e := service.InboxList(ctx, options)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, e := json.MarshalIndent(list, "", "  ")
+		if e != nil {
+			return fail(e, progress)
+		}
+		fmt.Fprintln(out, string(b))
+	case "inbox-read":
+		markRead := len(args) == 2 && args[1] == "--mark-read"
+		if len(args) == 2 && !markRead {
+			return fail(inputError(fmt.Errorf("expected optional --mark-read")), progress)
+		}
+		thread, e := service.InboxRead(ctx, args[0], markRead)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, e := json.MarshalIndent(thread, "", "  ")
+		if e != nil {
+			return fail(e, progress)
+		}
+		fmt.Fprintln(out, string(b))
+	case "inbox-reply":
+		if args[2] != "--after-message" {
+			return fail(inputError(fmt.Errorf("use inbox-reply CONVERSATION BODY --after-message MESSAGE_REF")), progress)
+		}
+		result, e := service.InboxReply(ctx, args[0], args[1], args[3])
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		b, e := json.Marshal(result)
+		if e != nil {
+			return fail(e, progress)
+		}
+		fmt.Fprintln(out, string(b))
+	case "inbox-set-state":
+		refs, state, e := parseInboxSetState(args)
+		if e != nil {
+			return fail(inputError(e), progress)
+		}
+		results := service.InboxSetState(ctx, refs, state)
+		b, e := json.MarshalIndent(results, "", "  ")
+		if e != nil {
+			return fail(e, progress)
+		}
+		fmt.Fprintln(out, string(b))
 	case "tags":
 		catalog, e := service.ReadTags(ctx, args[0])
 		if e != nil {
@@ -457,9 +509,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	case "push":
 		b, _ := os.ReadFile(file)
 		if kind := documentKind(b); kind == "assign-to" {
-				report, e := service.PushAssignTo(ctx, file)
-				return finishAssignTo(report, e, out, progress)
-			} else if kind == "assignment-dates" {
+			report, e := service.PushAssignTo(ctx, file)
+			return finishAssignTo(report, e, out, progress)
+		} else if kind == "assignment-dates" {
 			report, e := service.PushAssignmentDates(ctx, file)
 			fmt.Fprintf(out, "%s: %d override rows, %s\n", report.Status, len(report.Rows), report.Path)
 			if report.Message != "" {
@@ -1032,6 +1084,61 @@ func parseExternalResourceFlags(args []string) (int64, string, error) {
 		return 0, "", fmt.Errorf("--type must be collaborations, conferences, or all")
 	}
 	return groupID, resourceType, nil
+}
+
+func parseInboxListOptions(args []string) (workflow.InboxListOptions, error) {
+	var options workflow.InboxListOptions
+	seen := map[string]bool{}
+	for i := 0; i < len(args); {
+		switch args[i] {
+		case "--unread":
+			if seen[args[i]] {
+				return options, fmt.Errorf("--unread may be supplied once")
+			}
+			options.Unread = true
+			seen[args[i]] = true
+			i++
+		case "--scope", "--course":
+			option := args[i]
+			if seen[option] || i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
+				return options, fmt.Errorf("%s requires one value and may be supplied once", option)
+			}
+			seen[option] = true
+			if option == "--scope" {
+				options.Scope = args[i+1]
+			} else {
+				options.Course = args[i+1]
+			}
+			i += 2
+		default:
+			return options, fmt.Errorf("unknown inbox-list option %q", args[i])
+		}
+	}
+	switch options.Scope {
+	case "", "inbox", "archived", "sent":
+	default:
+		return options, fmt.Errorf("--scope must be inbox, archived, or sent")
+	}
+	return options, nil
+}
+
+func parseInboxSetState(args []string) ([]string, string, error) {
+	if len(args) < 3 || args[len(args)-2] != "--state" {
+		return nil, "", fmt.Errorf("use inbox-set-state CONVERSATION... --state read|unread|archived|inbox")
+	}
+	state := args[len(args)-1]
+	switch state {
+	case "read", "unread", "archived", "inbox":
+	default:
+		return nil, "", fmt.Errorf("--state must be read, unread, archived, or inbox")
+	}
+	refs := append([]string(nil), args[:len(args)-2]...)
+	for _, ref := range refs {
+		if strings.TrimSpace(ref) == "" {
+			return nil, "", fmt.Errorf("conversation refs must not be empty")
+		}
+	}
+	return refs, state, nil
 }
 
 func parsePageHistoryFlags(args []string) (groupID, revisionID int64, err error) {

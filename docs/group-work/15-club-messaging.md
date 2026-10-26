@@ -1,6 +1,6 @@
-# 15 — Explicit Canvas Inbox messages
+# 15 — Explicit club conversation messages
 
-**Tier C: built only when the teacher requests this capability; no other slice depends on it.** Sending to students is high consequence; the teacher can message in Canvas, so build this only for an explicit need. Requires: [01](01-groups.md), [02](02-memberships.md). Result: send a teacher-requested club message with a clear distinction between private individual messages and a shared club thread.
+**Tier C: built only when the teacher requests this capability; no other slice depends on it.** This slice is about creating new club conversations, a distinct path from the teacher's existing Inbox read/reply/state operations. Sending to students is high consequence; the teacher can message in Canvas, so build this only for an explicit need. Requires: [01](01-groups.md), [02](02-memberships.md). Result: send a teacher-requested club message with a clear distinction between private individual messages and a shared club thread.
 
 ## Contract
 

@@ -8,7 +8,7 @@ import (
 // IsEngineReferenceTopic lists the offline CLI and MCP reference topics.
 func IsEngineReferenceTopic(topic string) bool {
 	switch topic {
-	case "formats", "fields", "examples", "formats-assignment", "formats-page", "formats-module", "formats-quiz":
+	case "formats", "fields", "examples", "formats-assignment", "formats-page", "formats-module", "formats-quiz", "formats-inbox":
 		return true
 	}
 	return false
@@ -32,6 +32,8 @@ func EngineFormatSection(section string) (string, error) {
 		headings = []string{"### Ordered module assembly"}
 	case "quiz":
 		headings = []string{"## Quiz file (QuizForge)"}
+	case "inbox":
+		headings = []string{"## Canvas Inbox"}
 	default:
 		return "", fmt.Errorf("unknown format section %q", section)
 	}

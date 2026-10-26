@@ -12,7 +12,7 @@ func TestHelpUnknownTopicExplainsAndExitsZero(t *testing.T) {
 	if code := run(context.Background(), []string{"help", "setup"}, &out, &progress); code != 0 || progress.Len() != 0 {
 		t.Fatalf("exit %d, stderr %q", code, progress.String())
 	}
-	if !strings.Contains(out.String(), "formats, formats-assignment, formats-page, formats-module, formats-quiz, fields, examples") || !strings.Contains(out.String(), "Usage:") {
+	if !strings.Contains(out.String(), "formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, fields, examples") || !strings.Contains(out.String(), "Usage:") {
 		t.Fatal("missing topic guidance or command list")
 	}
 }

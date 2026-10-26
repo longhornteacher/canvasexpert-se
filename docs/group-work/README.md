@@ -1,6 +1,6 @@
 # Group work implementation plan
 
-Date: 2026-10-19. Status: Tier A and B slices 01-03, 05a/05b, 06-11, 16 and the book-club playbook are implemented in Dev. The CS8 dev Engine check on 2026-10-17 exercised the specific paths recorded below; the October 19 regression fixes have local evidence only. Tier C remains frozen until requested. These documents are coding handoffs for Dev and do not authorize Canvas Live experiments, classroom writes or UserInstall changes.
+Date: 2026-10-25. Status: Tier A and B slices 01-03, 05a/05b, 06-11, 16 and the book-club playbook are implemented in Dev. The CS8 dev Engine check on 2026-10-17 exercised the specific paths recorded below; the October 19 regression fixes have local evidence only. Tier C remains frozen until requested. The existing teacher Inbox has a separate, explicitly requested read/reply/state implementation; new club conversation creation remains frozen. These documents are coding handoffs for Dev and do not authorize Canvas Live experiments, classroom writes or UserInstall changes.
 
 Read [shared contracts](contracts.md), then the assigned slice. Follow [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), and [SCORING-RULES.md](../SCORING-RULES.md). Each slice includes its CLI/MCP surface, document changes, integration work, consequential checks, and acceptance scenarios. Proposed contracts are implemented only where the status table says so.
 
@@ -24,9 +24,9 @@ Read [shared contracts](contracts.md), then the assigned slice. Follow [AGENTS.m
 
 ## Product result
 
-The delivered Tier A/B product establishes clubs and memberships, shared Pages, ungraded and graded course/distributed discussions, explicit announcements/replies and module links; authors group assignments and scoped dates/audiences; pulls source-linked shared products; posts shared or individual group assessments with separate feedback audiences; and individually assesses written discussion evidence. Ordinary individual assignments and New Quizzes continue through their existing paths. Recorded CS8 evidence and pending observations are scoped above; Tier C remains frozen.
+The delivered Tier A/B product establishes clubs and memberships, shared Pages, ungraded and graded course/distributed discussions, explicit announcements/replies and module links; authors group assignments and scoped dates/audiences; pulls source-linked shared products; posts shared or individual group assessments with separate feedback audiences; and individually assesses written discussion evidence. Ordinary individual assignments and New Quizzes continue through their existing paths. The separately implemented Inbox surface handles existing teacher conversations only; it does not create club threads. Recorded CS8 evidence and pending observations are scoped above; the remaining Tier C work remains frozen.
 
-Book-club emails to families use the separate [Family Contact flow](../family-contact-flow.md), including per-book versions, inline covers and attached reading schedules. They use the teacher's private Outlook review page and do not require the frozen Tier C Canvas Inbox feature. The corresponding seed guidance is `playbooks/family-contact-book-clubs.md`.
+Book-club emails to families use the separate [Family Contact flow](../family-contact-flow.md), including per-book versions, inline covers and attached reading schedules. They use the teacher's private Outlook review page and do not require Canvas Inbox messaging. The corresponding seed guidance is `playbooks/family-contact-book-clubs.md`.
 
 ## Slice map, tiers and dependencies
 
@@ -50,7 +50,7 @@ Tiers say how the work is scheduled. **A** and **B** are scheduled. **C** is bui
 | [13](13-group-calendar.md) | C | Group meeting events and edits | 01 |
 | [04](04-group-files.md) | C | Group folders and file upload receipts | 01 |
 | [14](14-group-appointments.md) | C | Group conference slots and reservation reads (Scheduler availability unverified; published slots cannot be unpublished) | 01 |
-| [15](15-club-messaging.md) | C | Explicitly scoped Canvas Inbox messages (high consequence, low need; the teacher can message in Canvas) | 01, 02 |
+| [15](15-club-messaging.md) | C | Create new club conversations with explicit private-each or shared-thread audiences; existing teacher Inbox read/reply/state is implemented separately | 01, 02 |
 
 ## Phases
 
@@ -109,7 +109,7 @@ The checks to make the first time each feature is used with real students are in
 
 ## Boundaries
 
-- Tier A and B surfaces are scheduled deliverables, including self sign-up and individual group grades. Tier C (peer critique, calendars, group files, conference scheduling, Inbox messaging) is frozen as "maybe nice for later": specified, not scheduled, built only if the teacher asks; an implementer does not start it as a side effect of another slice.
+- Tier A and B surfaces are scheduled deliverables, including self sign-up and individual group grades. Remaining Tier C (peer critique, calendars, group files, conference scheduling and creating club conversations) is frozen as "maybe nice for later": specified, not scheduled, built only if the teacher asks; an implementer does not start it as a side effect of another slice. The existing teacher Inbox is separate and does not enable creating new club threads.
 - Do not provision Google/Microsoft documents or video meetings through invented Canvas REST writes. Slice 16 covers discovery and links; provider creation remains a separate integration. The public resources document reads: [Collaborations](https://developerdocs.instructure.com/services/canvas/resources/collaborations), [Conferences](https://developerdocs.instructure.com/services/canvas/resources/conferences).
 - No group quizzes, collaborative real-time editor, permanent contribution score, role-management service, new general job engine, generic HTTP-write tool, or database. Preserve existing New Quiz support.
 - Do not delete clubs containing student work, replace student Pages, shuffle active groups, or send announcements/messages merely because a unit is being assembled. Specific teacher scope controls these actions. Empty draft-object cleanup can remain teacher-directed in Canvas; automated deletion is not required for this unit.

@@ -18,7 +18,7 @@ Build reusable student content: course unit hub, club reading plan, rotating-rol
 
 Roles such as facilitator, evidence finder, connector, and summarizer are instructional content with teacher-chosen rotation. They do not automatically grant Canvas group leadership/moderator permissions. Never publish private tier tags, accommodations, student notes, or balancing rationales in rosters or role sheets. Shared group resources and private differentiation supports can coexist.
 
-Resume using saved returned IDs/outcomes. If a notebook is already populated, preserve it; if one group's page fails, complete independent groups and report that page specifically. Publishing the course module does not publish all its children or prove student group access. Do not send announcements, Inbox reminders, or teacher replies merely to announce setup completion.
+Resume using saved returned IDs/outcomes. If a notebook is already populated, preserve it; if one group's page fails, complete independent groups and report that page specifically. Publishing the course module does not publish all its children or prove student group access. Do not send announcements, create club conversations, or post teacher replies merely to announce setup completion.
 
 ## Ongoing teacher support
 

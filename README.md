@@ -4,11 +4,11 @@
 
 CanvasExpert-SE (CE-SE) helps teachers draft assignments and New Quizzes, organize course content, assess student work, prepare feedback and contact families. Your chosen agent follows editable teaching playbooks and your preferences; the Engine handles Canvas access, student/attempt identity, exact score arithmetic and supported writes.
 
-**Published release: 1.1 beta 4 (`1.1.0-beta.4`, the Groups update) · Windows 11 · MIT**
+**Published release: 1.5.1 (`1.5.1`, Canvas Inbox) · Windows 11 · MIT**
 
 [Get started](#get-started) · [Changelog](CHANGELOG.md) · [Release policy](docs/releasing.md) · [Contribute](.github/CONTRIBUTING.md)
 
-The links below install the published 1.1 beta 4 release, which adds book-club group work, Family Contact emails, parent reports, school-calendar late timing, targeted scoring sessions, installation and quiet updates by git, and lighter scoring files for the agent. Development continues on `dev`.
+The links below install the published 1.5.1 release, which adds teacher-directed Canvas Inbox conversations and corrected read/archive writes alongside the existing teaching, scoring, group-work and Family Contact flows. Development continues on `dev`.
 
 This is an independent open-source project. The teacher-first installation mechanics have local fixture and package checks; the complete fresh-user Cowork/Work installation and teaching example still need a destination-client pilot. See the [capability record](docs/engine-capabilities.md) for the distinction between Canvas Live evidence, local tests and pending human validation.
 
@@ -52,7 +52,8 @@ Use the [Setup guide](workspace-template/README.md) for the shipped folder and t
 | Late work *(1.1 beta)* | Count lateness in school time from your school calendar and grading periods, find each student's first genuine attempt, and correct Canvas late timing without changing grades or feedback. |
 | New Quiz written work | Prepare criterion scores and feedback as a submission comment. The teacher enters written-item points in SpeedGrader; this path writes no quiz/item grade. |
 | Course content | Author native Pages, upload assets with explicit access and assemble Modules. |
-| Book clubs and group work *(1.1 beta)* | Create group sets and clubs, manage memberships, build shared club Pages and discussions, and restrict individual assignments, Pages and New Quizzes to selected clubs in one shared unit module. Grade a shared group product (one grade for the group, or individual grades) and individual discussion contributions. Peer critique, group calendars, group files and Inbox messages are not included. See [group work](docs/group-work/README.md). |
+| Canvas Inbox *(1.5.1)* | Read, summarize and manage existing Inbox threads with opaque references; reply only in existing conversations and set read/archive state after the teacher's go-ahead. Message bodies can contain real names. No new conversations, forwarding or attachment sending. Live list/read succeeded and three replies appeared in Canvas on 2026-10-25; state-write repair/retest evidence is tracked in [Engine capabilities](docs/engine-capabilities.md). |
+| Book clubs and group work *(1.1 beta)* | Create group sets and clubs, manage memberships, build shared club Pages and discussions, and restrict individual assignments, Pages and New Quizzes to selected clubs in one shared unit module. Grade a shared group product (one grade for the group, or individual grades) and individual discussion contributions. Peer critique, group calendars, group files and creating new club conversations are not included. See [group work](docs/group-work/README.md). |
 | Parent updates *(1.1 beta)* | Prepare current-period progress reports from Canvas (missing work, recent grades, what's due soon), review them, then email parents through classic Outlook or print student sheets. |
 | Family Contact *(1.1 beta)* | Draft activity notices, reminders and book-club messages for courses, groups or selected students. Review each version and its recipients, then send or save Outlook drafts with inline images and file attachments. Requires local classic Outlook with a configured profile. See [Family Contact](docs/family-contact-flow.md). |
 | Teaching context | Keep teaching priorities, standards, feedback voice, calendar and student notes in editable files; onboarding grows as you work. |

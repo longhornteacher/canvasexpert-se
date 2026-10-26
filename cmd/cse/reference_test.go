@@ -8,7 +8,7 @@ import (
 )
 
 func TestFocusedReferencesNeedNoWorkspaceOrCanvas(t *testing.T) {
-	for _, section := range []string{"assignment", "page", "module", "quiz"} {
+	for _, section := range []string{"assignment", "page", "module", "quiz", "inbox"} {
 		var out, progress bytes.Buffer
 		code := run(context.Background(), []string{"help", "formats-" + section}, &out, &progress)
 		if code != 0 || !strings.HasPrefix(out.String(), "# "+section+" format") || strings.Contains(out.String(), "### Student operations") {
