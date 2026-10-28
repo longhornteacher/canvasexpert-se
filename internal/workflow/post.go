@@ -317,6 +317,7 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 		if err != nil {
 			return err
 		}
+		text = workspace.ReplaceStudentName(text, source.student)
 	}
 	var matches int
 	for _, existing := range commentsForAttempt(live, c.Attempt.Attempt) {
@@ -691,6 +692,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		if e != nil {
 			return e
 		}
+		text = workspace.ReplaceStudentName(text, source.student)
 		// Once an add has begun, retain its exact text across retries even if a
 		// teacher subsequently changes the entered grade or the file's feedback.
 		if g.Outcomes.Comment.PostedText != "" && (ambiguous(g.Outcomes.Comment) || g.Outcomes.Comment.ID > 0) {
@@ -868,6 +870,7 @@ func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument,
 		if e != nil {
 			return e
 		}
+		text = workspace.ReplaceStudentName(text, source.student)
 	}
 	if ambiguous(r.Outcome) {
 		if current.Comment == r.Outcome.PostedText {

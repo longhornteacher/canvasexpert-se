@@ -448,9 +448,11 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 				c.Submission = text
 			}
 		}
+		name := func(s string) string { return s }
 		if store != nil {
 			if st, e := store.Resolve(doc.Assignment.Instance, r.StudentRef); e == nil {
-				feedback = workspace.ReplaceStudentName(feedback, st)
+				name = func(s string) string { return workspace.ReplaceStudentName(s, st) }
+				feedback = name(feedback)
 			}
 		}
 		if c.Hold == "" && r.Grade != nil && doc.Basis() != nil {
@@ -495,6 +497,8 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 				}
 			}
 		}
+		// Per-part feedback can name the student too.
+		c.Comment = name(c.Comment)
 		m.Cards = append(m.Cards, c)
 	}
 	return m, nil

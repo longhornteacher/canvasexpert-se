@@ -420,7 +420,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			if !validHeader(g.Header) {
 				return fail(fmt.Errorf("header must be score, full or none"))
 			}
-			if strings.TrimSpace(g.Feedback) == "" {
+			if strings.TrimSpace(g.Feedback) == "" && !(ItemFeedback(g.Components) && fullHeader(g.Header)) {
 				return fail(fmt.Errorf("conversational feedback required"))
 			}
 			if prior := g.StrongestPrior; prior != nil {
@@ -468,7 +468,7 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 			if !validHeader(c.Header) {
 				return fail(fmt.Errorf("header must be score, full or none"))
 			}
-			if strings.TrimSpace(c.Feedback) == "" {
+			if strings.TrimSpace(c.Feedback) == "" && !(ItemFeedback(c.Components) && fullHeader(c.Header)) {
 				return fail(fmt.Errorf("conversational feedback required"))
 			}
 			if e := validateOutcome(c.Outcome); e != nil {
@@ -538,6 +538,10 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 }
 
 // validHeader accepts the teacher's choices for what leads a comment.
+// fullHeader reports whether the header shows each part's lines, where per-part
+// feedback appears.
+func fullHeader(h string) bool { return h == "" || h == "full" }
+
 func validHeader(h string) bool {
 	return h == "" || h == "default" || h == "score" || h == "full" || h == "none"
 }

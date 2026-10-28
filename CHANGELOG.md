@@ -2,6 +2,10 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
+## Unreleased
+
+- Per-item scoring feedback: a component may carry its own `feedback` and a hand-copy `exemplar`. The comment then reads one block per item (`Q11 Remote execution 10/12`, its feedback, and the exemplar only when the item earned under 90% of its points) instead of a score summary followed by repeated criterion lines.
+
 ## 1.7.0 (2026-10-28)
 
 New Quiz accommodations, differentiation tags, shared rubrics, content edits and a conversation-only scoring check-in.

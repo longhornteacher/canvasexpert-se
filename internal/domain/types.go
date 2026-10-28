@@ -325,6 +325,26 @@ type ComponentScore struct {
 	Key      string           `yaml:"key"`
 	Evidence string           `yaml:"evidence"` // present, missing, unknown
 	Criteria []CriterionScore `yaml:"criteria"`
+	// Feedback explains this part's score under its own score line. Exemplar
+	// is a model answer the student hand-copies; the Engine shows it only
+	// when the part earned under ExemplarBelow of its points.
+	Feedback string `yaml:"feedback,omitempty"`
+	Exemplar string `yaml:"exemplar,omitempty"`
+}
+
+// ExemplarBelow is the share of a part's points under which its hand-copy
+// exemplar is shown.
+const ExemplarBelow = "0.9"
+
+// ItemFeedback reports whether every part carries its own feedback, so the
+// comment needs no closing feedback.
+func ItemFeedback(components []ComponentScore) bool {
+	for _, c := range components {
+		if strings.TrimSpace(c.Feedback) == "" {
+			return false
+		}
+	}
+	return len(components) > 0
 }
 type PriorComparison struct {
 	Attempt         AttemptRef `yaml:"attempt"`
