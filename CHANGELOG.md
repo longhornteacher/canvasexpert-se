@@ -2,6 +2,18 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
+## 1.7.0 (2026-10-28)
+
+New Quiz accommodations, differentiation tags, shared rubrics, content edits and a conversation-only scoring check-in.
+
+- New Quiz accommodations: `set_quiz_accommodations` / `cse quiz-accommodations` sets named students' extra time, extra attempts and fewer choices. A Canvas Live probe on CS8 (disposable unpublished quiz, read back on Moderate) showed that a request merges into the student's existing setting, `0` and `false` clear, and extra attempts are absolute, so only supplied fields are sent and a repeat is safe. Saved Quiz time and Fewer choices settings (Classroom > Students) are applied by `push_quiz` and by `from_saved` before publication; an unconfirmed request holds publication and a rerun resends it. Whether extra time and attempts take effect in a student's own session is not yet observed, and course-level sync stays off.
+- Bulk differentiation-tag management (`kind: tags`, `set_tags`), with previews, drift holds and submitted-work protection.
+- Shared rubrics: `list_rubrics` / `pull_rubric`, rubric references by ID or personal library key, and reuse across assignments and New Quizzes, with CS8 Canvas Live evidence.
+- Existing-content edits: inherited Page audiences, exact module-item removal and replacement, narrow New Quiz text/link edits with fresh pulls and three-way conflict checks, and New Quiz assignment-group and date edits.
+- The scoring and authoring review page (`start_review`) is gone; the check-in happens in the conversation with an Engine-rendered sample. The private family review and send page is unchanged.
+- Direction images now download through the authenticated Canvas client.
+- Known open item: a 2026-10-28 read found Canvas's `sessionless_launch` returning JSON with a `url` where the New Quiz file-download path expects the launch page, and a 404 from the participants route. Neither is confirmed against the Engine; check an uploaded-file pull before relying on it. Posting New Quiz item scores through the Engine remains blocked on a captured SpeedGrader request.
+
 ## 1.6.0 (2026-10-26)
 
 Weekly ELA parent updates, a printable student reference and wider WebUI pages. This release also carries the 1.5.1 Canvas Inbox work below, which was tagged but not published on its own.
