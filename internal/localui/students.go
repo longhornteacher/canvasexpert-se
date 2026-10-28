@@ -40,6 +40,20 @@ type studentRow struct {
 	Contacts workspace.StudentContacts
 }
 
+func (s studentRow) QuizTimeMode() string {
+	if s.QuizTime == "" || s.QuizTime == "50%" || s.QuizTime == "100%" {
+		return s.QuizTime
+	}
+	return "minutes"
+}
+
+func (s studentRow) QuizMinutes() string {
+	if s.QuizTimeMode() == "minutes" {
+		return s.QuizTime
+	}
+	return ""
+}
+
 type studentsData struct {
 	Appearance                        appearanceData
 	Secret, Message, Notice           string
@@ -267,6 +281,25 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		v.Monitored = r.PostForm.Get("monitored_"+v.Ref) == "on"
 		v.ExtraTime = r.PostForm.Get("extra_time_"+v.Ref) == "on"
+		// Older forms that only edit aliases/monitoring must retain quiz settings.
+		if _, sent := r.PostForm["quiz_time_"+v.Ref]; sent {
+			quizTime := r.PostForm.Get("quiz_time_" + v.Ref)
+			if quizTime == "minutes" {
+				quizTime = r.PostForm.Get("quiz_minutes_" + v.Ref)
+				if quizTime == "" || quizTime == "50%" || quizTime == "100%" {
+					quizTime = "invalid"
+				}
+			} else if quizTime != "" && quizTime != "50%" && quizTime != "100%" {
+				quizTime = "invalid"
+			}
+			if !workspace.ValidQuizTime(quizTime) {
+				h.store.Rows = before
+				h.page(w, 400, "Choose Standard, Time and a half, Double time, or 1–10080 whole extra minutes.")
+				return
+			}
+			v.QuizTime = quizTime
+			v.ReducedChoices = r.PostForm.Get("reduced_choices_"+v.Ref) == "on"
+		}
 		if raw, sent := r.PostForm["note_"+v.Ref]; sent && h.notesRoot != "" {
 			note, ok := cleanText(raw[0])
 			if !ok {
@@ -350,14 +383,14 @@ func Students(ctx context.Context, root string, output io.Writer) error {
 
 func init() {
 	register(
-		page{Path: "/students", Methods: []string{http.MethodGet, http.MethodPost}, Template: "students", Scripts: []string{"drafts.js", "contacts.js", "appearance.js", "student-reference.js"},
+		page{Path: "/students", Methods: []string{http.MethodGet, http.MethodPost}, Template: "students", Scripts: []string{"drafts.js", "contacts.js", "appearance.js", "student-reference.js", "quiz-settings.js"},
 			Nav:    []navSlot{{Primary: "Classroom", Label: "Students", Order: 22}},
 			Handle: (*Hub).studentsPage},
 		page{Path: "/students/refresh", Methods: []string{http.MethodPost}, Handle: (*Hub).refreshStudents},
 	)
 }
 
-func (h *Hub) fetchTags(ctx context.Context, courseID int64) (map[int64][]string, string, error) {
+func (h *Hub) fetchTags(ctx context.Context, courseID int64, userIDs ...int64) (map[int64][]string, string, error) {
 	if h.tagsFn != nil {
 		return h.tagsFn(ctx, courseID)
 	}
@@ -365,7 +398,7 @@ func (h *Hub) fetchTags(ctx context.Context, courseID int64) (map[int64][]string
 	if err != nil {
 		return nil, "", err
 	}
-	tags, err := workflow.DifferentiationTags(ctx, c, courseID)
+	tags, err := workflow.DifferentiationTags(ctx, c, courseID, userIDs...)
 	return tags, c.Origin(), err
 }
 
@@ -492,7 +525,17 @@ func (h *Hub) syncRoster(config domain.CourseConfig, course domain.Course, roste
 	if err != nil {
 		return rosters, err
 	}
-	tags, tagOrigin, tagErr := h.fetchTags(ctx, course.ID)
+	ids := []int64{}
+	for _, en := range enrollments {
+		id := en.UserID
+		if id == 0 {
+			id = en.User.ID
+		}
+		if id > 0 {
+			ids = append(ids, id)
+		}
+	}
+	tags, tagOrigin, tagErr := h.fetchTags(ctx, course.ID, ids...)
 	if tagErr == nil && tagOrigin != origin {
 		tagErr = fmt.Errorf("the Canvas address differs from the roster")
 	}

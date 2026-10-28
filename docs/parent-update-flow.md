@@ -120,7 +120,7 @@ Still open:
 
 Outlook delivery is an Engine capability, not a separate connector. Cowork's thin extension and Work's direct registration both start UserInstall's `engine/cse.exe` on the teacher's Windows PC as the signed-in user. Outlook automation runs in that same process context, so whatever route reaches the Engine also reaches Outlook. The agent's own sandbox, such as Cowork's Linux VM, never touches Outlook.
 
-The proposed shape follows the existing `start_review` / `review_status` pattern:
+The proposed shape follows the shared family-review session / `review_status` pattern:
 
 1. **Draft.** The agent reads current Canvas data and writes per-student update drafts and the class-wide Band text to `courses/` with `write_draft`. Drafts use student references, never addresses.
 2. **Review.** A tool like `start_parent_review` opens a private local WebUI page and returns only its loopback URL. On the page, the Engine resolves recipients from `.cse/student-contacts.json` against Canvas instance and user ID. The teacher sees each family's actual To line and the email body, and can skip, edit or approve the batch.

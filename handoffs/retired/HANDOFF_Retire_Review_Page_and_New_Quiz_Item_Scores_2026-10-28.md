@@ -1,3 +1,5 @@
+> **Retired 2026-10-28.** Historical instructions follow; do not execute them again. Part 1 is complete in Dev: the scoring/authoring review page and `start_review` are removed, the check-in happens in the conversation with an Engine-rendered sample (`validate --show` / `validate_document.show`), and the private family review page, Draft PDF and terminal previews remain. The `resourceId` number/string decode fix landed. **Part 2 (New Quiz item scores) was not started:** it needs a teacher-controlled student account, which does not exist yet; it moved to [HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md](../active/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md). Re-verified at retirement: full uncached tests, vet, 57-tool MCP smoke and `git diff --check` passed.
+
 # HANDOFF: Retire the review page; post New Quiz item scores through the Engine
 
 Date: 2026-10-28. To: whoever picks this up in Dev (CE-SE repo, `dev` branch). The teacher works on several PCs, so run `git fetch` and bring `dev` up to date before starting (root `AGENTS.md`).
@@ -7,6 +9,14 @@ This document stands alone. Part 2's findings come from a 2026-10-28 research se
 Execution review: 2026-10-28 against the current Dev working tree. **Part 1 is ready for 6.1 Terra or 6.1 Sol execution. Part 2 is ready for the bounded evidence step, not an invented write protocol.** Read the [shared execution notes](../README.md#execution-notes-for-the-three-active-handoffs). The earlier live observations below are retained as reported evidence; this review made no Canvas calls.
 
 ---
+
+## Execution record — 2026-10-28
+
+Part 1 is complete in Dev. Scoring/authoring CLI and MCP review entry points and the optional scoring-page smoke branch are removed. Offline `validate RESULTS --show STUDENT_REF` / `validate_document.show` returns only the selected ref/alias, hold status and exact comment from the shared rendering path; held rows omit the comment and unknown references fail. A focused CLI test compares the text against the posting renderer and checks alias selection, privacy, held/unknown selection and unchanged unsent files; compiled MCP checks exercise the same selections. Conversation reports now include impressions, distribution, conditional hypothetical curve options and one exact feedback sample. Private family review and shared reconnect/status, Draft PDF and terminal previews remain. Full uncached Go tests, vet and the fresh 56-tool compiled MCP smoke passed, including retained family/privacy/rendering tests. No Canvas write was needed. Installed-client adoption is unobserved.
+
+Part 2 remains waiting for the exact teacher-controlled CS8 account and teacher-recorded redacted SpeedGrader save capture in §3.3. The user clarified that no teacher-controlled student account exists: there is the teacher account and the real student accounts. The requested disposable attempt tests cannot be performed in that setup; no real-student attempt was selected or written. No item-score request protocol has been guessed.
+
+The independent native file-read compatibility fix is implemented: resourceId accepts the observed numeric form and the existing string form; the full synthetic token-isolation/attempt-matching chain passes both with access_token. This is local evidence against the earlier reported live payload shape, not a live download observation or item-score write protocol. No grading POST was added. Final combined checks passed: full uncached Go tests, vet and the 57-tool compiled MCP smoke (including the accommodation tool); the earlier Part 1-only count was 56.
 
 ## 0. TL;DR
 

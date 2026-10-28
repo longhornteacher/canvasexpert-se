@@ -24,12 +24,41 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "review": {1, 2}, "push-quiz": {2, 2}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}}
+	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "pull-quiz": {2, 2}, "rubrics": {1, 2}, "pull-rubric": {2, 2}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "push-quiz": {2, 3}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "quiz-accommodations": {3, 4}, "set-tags": {1, 2}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
 	}
 	var file string
+	var accommodationRequest workflow.QuizAccommodationRequest
+	var accommodationQuizID int64
+	if cmd == "quiz-accommodations" {
+		var e error
+		accommodationQuizID, e = strconv.ParseInt(args[1], 10, 64)
+		if e != nil || accommodationQuizID <= 0 {
+			return fail(inputError(fmt.Errorf("quiz ID must be a positive assignment ID")), progress)
+		}
+		if len(args) == 4 && args[3] != "--preview" {
+			return fail(inputError(fmt.Errorf("expected optional --preview")), progress)
+		}
+		if args[2] == "--from-saved" {
+			accommodationRequest.FromSaved = true
+		} else {
+			p, e := documentPath(root, args[2])
+			if e != nil {
+				return fail(inputError(e), progress)
+			}
+			f, e := os.Open(p)
+			if e != nil {
+				return fail(inputError(e), progress)
+			}
+			accommodationRequest, e = workflow.DecodeQuizAccommodations(f)
+			_ = f.Close()
+			if e != nil {
+				return fail(inputError(e), progress)
+			}
+		}
+	}
 	var uploadOptions workflow.CourseUploadOptions
 	var uploadSource string
 	var assignmentCopyOptions workflow.AssignmentCopyOptions
@@ -47,7 +76,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 	}
-	if cmd == "assign-to" {
+	if cmd == "assign-to" || cmd == "set-tags" {
 		p, e := documentPath(root, args[0])
 		if e == nil {
 			e = validateDocument(p, root)
@@ -58,6 +87,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		file = p
 	}
 	if cmd == "push-quiz" {
+		if len(args) == 3 && args[2] != "--skip-accommodations" {
+			return fail(inputError(fmt.Errorf("expected optional --skip-accommodations")), progress)
+		}
 		p, e := documentPath(root, args[1])
 		if e != nil {
 			return fail(inputError(e), progress)
@@ -67,28 +99,12 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 		file = p
 	}
-	quizReview := false
 	if cmd == "parent-review" || cmd == "family-contact-prepare" || cmd == "student-report" {
 		p, e := documentPath(root, args[0])
 		if e != nil {
 			return fail(inputError(e), progress)
 		}
 		file = p
-	}
-	if cmd == "review" {
-		p, e := documentPath(root, args[0])
-		if e != nil {
-			return fail(inputError(e), progress)
-		}
-		course := ""
-		if len(args) > 1 {
-			course = args[1]
-		}
-		kind, e := workflow.ValidateReviewInput(root, p, course)
-		if e != nil {
-			return fail(inputError(e), progress)
-		}
-		file, quizReview = p, kind == "quiz"
 	}
 	if cmd == "push" || cmd == "post" {
 		p, e := documentPath(root, args[0])
@@ -104,8 +120,8 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 		kind := documentKind(b)
-		if cmd == "push" && kind != "assignment" && kind != "assignment-dates" && kind != "page" && kind != "discussion" && kind != "discussion-reply" && kind != "module" && kind != "group-set" && kind != "group-memberships" && kind != "assign-to" {
-			return fail(inputError(fmt.Errorf("push supports assignment, assignment-dates, assign-to, page, discussion/reply, module, group-set, or group-memberships documents")), progress)
+		if cmd == "push" && kind != "new-quiz-edit" && kind != "assignment" && kind != "assignment-dates" && kind != "page" && kind != "discussion" && kind != "discussion-reply" && kind != "module" && kind != "group-set" && kind != "group-memberships" && kind != "assign-to" {
+			return fail(inputError(fmt.Errorf("push supports new-quiz-edit, assignment, assignment-dates, assign-to, page, discussion/reply, module, group-set, or group-memberships documents")), progress)
 		}
 		if cmd == "post" && kind != "results" && kind != "group-results" {
 			return fail(inputError(fmt.Errorf("post requires a results or group-results document")), progress)
@@ -360,6 +376,104 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if report.Status != "completed" {
 			return 3
 		}
+	case "quiz-accommodations":
+		report, e := service.SetQuizAccommodations(ctx, args[0], accommodationQuizID, accommodationRequest, len(args) == 4)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		if e = json.NewEncoder(out).Encode(report); e != nil {
+			return fail(e, progress)
+		}
+		if report.Status != "completed" && report.Status != "preview" {
+			return 3
+		}
+		return 0
+	case "set-tags":
+		preview := len(args) == 2 && args[1] == "--preview"
+		if len(args) == 2 && !preview {
+			return fail(inputError(fmt.Errorf("set-tags accepts only --preview")), progress)
+		}
+		r, e := service.SetTags(ctx, file, preview)
+		fmt.Fprintf(out, "%s: differentiation tag set %d\n%s\n", r.Status, r.SetID, r.Path)
+		if r.Message != "" {
+			fmt.Fprintln(out, r.Message)
+		}
+		if r.Structure.Status != "" {
+			fmt.Fprintf(out, "structure: %s %s\n", r.Structure.Status, r.Structure.Message)
+		}
+		for _, row := range r.Rows {
+			fmt.Fprintf(out, "%s (tag %d): %d -> %d; %s %s\n", row.Name, row.TagID, row.Current, row.Desired, row.Status, row.Message)
+			if len(row.Added) > 0 {
+				fmt.Fprintln(out, "  add:", strings.Join(row.Added, ", "))
+			}
+			if len(row.Removed) > 0 {
+				fmt.Fprintln(out, "  remove:", strings.Join(row.Removed, ", "))
+			}
+			if len(row.Usage) > 0 {
+				fmt.Fprintln(out, "  used by:", strings.Join(row.Usage, "; "))
+			}
+		}
+		for _, member := range r.Members {
+			label := member.Alias
+			if label == "" {
+				label = member.StudentRef
+			}
+			fmt.Fprintf(out, "%s tag %d %s: %s %s\n", label, member.TagID, member.Operation, member.Outcome.Status, member.Outcome.Message)
+		}
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		if r.Status != "completed" && r.Status != "preview" {
+			return 3
+		}
+	case "pull-quiz":
+		id, e := strconv.ParseInt(args[1], 10, 64)
+		if e != nil || id <= 0 {
+			return fail(inputError(fmt.Errorf("assignment ID must be a positive integer")), progress)
+		}
+		p, e := service.PullQuiz(ctx, args[0], id)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, p)
+	case "rubrics":
+		includeAccount := len(args) == 2 && args[1] == "--include-account"
+		if len(args) == 2 && !includeAccount {
+			return fail(inputError(fmt.Errorf("rubrics accepts only --include-account")), progress)
+		}
+		r, e := service.ListRubrics(ctx, args[0], includeAccount)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		for _, rubric := range r.Rubrics {
+			count := "unknown"
+			if rubric.CriteriaCount != nil {
+				count = strconv.Itoa(*rubric.CriteriaCount)
+			}
+			fmt.Fprintf(out, "%s rubric %d: %s; %s points; %s criteria\n", rubric.Context, rubric.ID, rubric.Title, rubric.Points, count)
+		}
+		if len(r.Rubrics) == 0 {
+			fmt.Fprintln(out, "No rubrics returned.")
+		}
+		for _, limitation := range r.Limitations {
+			fmt.Fprintln(out, limitation)
+		}
+	case "pull-rubric":
+		id, e := strconv.ParseInt(args[1], 10, 64)
+		if e != nil || id <= 0 {
+			return fail(inputError(fmt.Errorf("rubric ID must be a positive integer")), progress)
+		}
+		r, e := service.PullRubric(ctx, args[0], id)
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, r.Path)
+		if r.UsedCourses != nil && r.UsedAssignments != nil {
+			fmt.Fprintf(out, "Used in %d courses and %d assignments.\n", *r.UsedCourses, *r.UsedAssignments)
+		}
+		for _, limitation := range r.Limitations {
+			fmt.Fprintln(out, limitation)
+		}
 	case "pull-page":
 		groupID, err := parseOptionalPageGroup(args[2:])
 		if err != nil {
@@ -508,7 +622,27 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 	case "push":
 		b, _ := os.ReadFile(file)
-		if kind := documentKind(b); kind == "assign-to" {
+		if kind := documentKind(b); kind == "new-quiz-edit" {
+			report, e := service.PushQuizEdit(ctx, file)
+			fmt.Fprintf(out, "%s: New Quiz %d, course %d, %s\n%s\n", report.Status, report.AssignmentID, report.CourseID, report.Instance, report.Path)
+			for _, action := range report.Actions {
+				label := "quiz fields"
+				if action.ItemID != "" {
+					label = fmt.Sprintf("item %s (position %d)", action.ItemID, action.Position)
+				}
+				fmt.Fprintf(out, "%s: %s %s\n", label, action.Outcome.Status, action.Outcome.Message)
+			}
+			if report.Message != "" {
+				fmt.Fprintln(out, report.Message)
+			}
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			if report.Status != "completed" {
+				return 3
+			}
+			return 0
+		} else if kind == "assign-to" {
 			report, e := service.PushAssignTo(ctx, file)
 			return finishAssignTo(report, e, out, progress)
 		} else if kind == "assignment-dates" {
@@ -642,7 +776,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return 3
 		}
 	case "push-quiz":
-		report, e := service.PushQuiz(ctx, args[0], file)
+		report, e := service.PushQuiz(ctx, args[0], file, workflow.QuizPushOptions{SkipAccommodations: len(args) == 3})
 		for _, warning := range report.Warnings {
 			fmt.Fprintln(progress, "Warning:", warning)
 		}
@@ -655,11 +789,17 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if report.Hub != "" {
 			fmt.Fprintln(out, report.Hub)
 		}
+		if report.Accommodations != "" {
+			fmt.Fprintln(out, report.Accommodations)
+		}
 		if report.Message != "" {
 			fmt.Fprintln(out, report.Message)
 		}
 		if e != nil {
 			return fail(workflowError(e), progress)
+		}
+		if report.Status != "completed" {
+			return 3
 		}
 	case "copy-assignment":
 		report, e := service.CopyAssignment(ctx, args[0], args[1], args[2], assignmentCopyOptions)
@@ -848,115 +988,6 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			Path   string                   `json:"result_path,omitempty"`
 			Revise []localui.ReviewRevision `json:"revision_notes,omitempty"`
 		}{outcome.Status, outcome.Path, outcome.Revise})
-		fmt.Fprintf(out, "Review result: %s\n", encoded)
-	case "review":
-		outcome, e := localui.Review(ctx, file, func() (workflow.ReviewModel, error) {
-			if b, _ := os.ReadFile(file); documentKind(b) == "assignment" {
-				var doc domain.AssignmentDocument
-				if _, e := workspace.ReadDocument(file, &doc); e == nil && doc.Operation == "update" {
-					return service.BuildEditReview(ctx, file)
-				}
-			}
-			return workflow.BuildReview(root, file)
-		}, func(ctx context.Context, skip map[string]bool) (localui.ReviewPostResult, error) {
-			if quizReview {
-				report, e := service.PushQuiz(ctx, args[1], file)
-				for _, warning := range report.Warnings {
-					fmt.Fprintln(progress, "Warning:", warning)
-				}
-				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: quiz %d, %d of %d items. %s %s", report.Status, report.AssignmentID, report.ItemsAdded, report.ItemsTotal, report.URL, report.Message))}, e
-			}
-			if b, _ := os.ReadFile(file); documentKind(b) == "assignment" {
-				report, e := service.Push(ctx, file)
-				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: %s %s", report.Status, report.URL, report.Message))}, e
-			}
-			if fileKind(file) == "assignment-dates" {
-				report, e := service.PushAssignmentDates(ctx, file)
-				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: report.Message}, e
-			}
-			if fileKind(file) == "page" {
-				report, e := service.PushPage(ctx, file)
-				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: Page %d %s %s", report.Status, report.PageID, report.URL, report.Message))}, e
-			}
-			if b, _ := os.ReadFile(file); documentKind(b) == "discussion" {
-				report, e := service.PushDiscussion(ctx, file)
-				return localui.ReviewPostResult{Status: report.Status, Path: report.Path, Summary: strings.TrimSpace(fmt.Sprintf("%s: discussion %d %s", report.Status, report.TopicID, report.Message))}, e
-			}
-			if fileKind(file) == "group-results" {
-				service.Skip = skip
-				report, e := service.PostGroupResults(ctx, file)
-				failed := 0
-				for _, r := range report.Groups {
-					if !r.SharedDone && !skip[workflow.GroupCardRef(r.GroupID)] {
-						failed++
-					}
-					for _, st := range r.Students {
-						if st.Status != "completed" && !skip[workflow.GroupStudentRef(r.GroupID, st.StudentRef)] {
-							failed++
-						}
-					}
-					for ref, outcome := range r.Private {
-						if outcome.Status != "succeeded" && outcome.Status != "preserved" && outcome.Status != "not-requested" && !skip[workflow.GroupPrivateRef(r.GroupID, ref)] {
-							failed++
-						}
-					}
-				}
-				summary := fmt.Sprintf("%d approved group action(s) did not fully complete; run cse post output or rerun review", failed)
-				if failed == 0 {
-					summary = "all approved group actions completed"
-				}
-				if line := report.OwnerSummary(); line != "" {
-					summary = line + " " + summary
-				}
-				status := "completed"
-				if failed > 0 || e != nil {
-					status = "partial"
-				}
-				return localui.ReviewPostResult{Status: status, Summary: summary, Path: report.Path}, e
-			}
-			if fileKind(file) != "results" {
-				return localui.ReviewPostResult{}, fmt.Errorf("review cannot post a %q document", fileKind(file))
-			}
-			service.Skip = skip
-			report, e := service.Post(ctx, file)
-			failed := 0
-			for _, r := range report.Students {
-				if r.Status != "completed" && r.Status != "succeeded" && !skip[r.StudentRef] {
-					failed++
-				}
-			}
-			summary := fmt.Sprintf("%d approved student(s) did not fully complete; run cse validate/post output or rerun review", failed)
-			if failed == 0 {
-				summary = "all approved students completed"
-			}
-			if line := report.OwnerSummary(); line != "" {
-				summary = line + " " + summary
-			}
-			status := "completed"
-			if failed > 0 || e != nil {
-				status = "partial"
-			}
-			return localui.ReviewPostResult{Status: status, Summary: summary, Path: report.Path}, e
-		}, progress, root)
-		if e != nil {
-			return fail(inputError(e), progress)
-		}
-		fmt.Fprintf(out, "Review finished. Outcome: %s\n", outcome.Status)
-		if outcome.PostSummary != "" && outcome.Status != "completed" {
-			fmt.Fprintln(out, "Post:", outcome.PostSummary)
-		}
-		fmt.Fprintln(out, "Results:", outcome.Path)
-		fmt.Fprintf(out, "Approved (%d): %s\n", len(outcome.Approved), strings.Join(outcome.Approved, ", "))
-		for _, r := range outcome.Revise {
-			fmt.Fprintf(out, "Revise %s: %s\n", r.Ref, r.Note)
-		}
-		for _, h := range outcome.Held {
-			fmt.Fprintln(out, "Held", h)
-		}
-		if len(outcome.Revise) > 0 {
-			fmt.Fprintln(out, "Revision notes are saved beside the results file; fix those students, then run cse review again.")
-		}
-		encoded, _ := json.Marshal(outcome)
 		fmt.Fprintf(out, "Review result: %s\n", encoded)
 	case "post":
 		if fileKind(file) == "group-results" {

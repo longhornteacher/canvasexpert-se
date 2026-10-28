@@ -56,6 +56,19 @@ func (s *Service) pushRubricAttachment(ctx context.Context, path string, d *doma
 		d.Created = &domain.CreatedResources{AssignmentID: d.AssignmentID, URL: live.HTMLURL, Assignment: domain.ActionOutcome{Status: "preserved", ID: d.AssignmentID}, Publication: domain.ActionOutcome{Status: "preserved"}, Module: domain.ActionOutcome{Status: "not-requested"}}
 	}
 	c := d.Created
+	if domain.IsRubricReference(d.Rubric) || c.RubricSelection != nil {
+		if e = s.resolveRubricReference(ctx, course.ID, d.Rubric, &c.RubricSelection, save); e != nil {
+			report.Status, report.Message = "held", e.Error()
+			return report, nil
+		}
+		if e = s.pushReferencedRubric(ctx, course.ID, d.AssignmentID, c.RubricSelection, &c.Rubric, &c.RubricID, &c.RubricAssociationID, live, save); e != nil {
+			report.Status, report.Message = rubricReferenceStatus(c.RubricSelection, c.Rubric), e.Error()
+			return report, nil
+		}
+		c.Complete = true
+		report.Status, report.Message = "completed", c.Rubric.Message
+		return report, save()
+	}
 	confirm := func(actual *domain.Rubric) bool {
 		if actual == nil || !actual.UseForGradingKnown || actual.UseForGrading || actual.ID <= 0 || actual.AssociationID <= 0 || !sameRubricDefinition(*actual, *d.Rubric) {
 			return false

@@ -70,3 +70,11 @@ For an HTML Page conversion only, read the saved HTML back once to see Canvas's 
 For video, upload MP4 and available VTT assets, then test the saved Page's player, course-file access and captions in the live browser before claiming embedded playback. If Canvas removes the markup or captions fail, use a native course-file link and explain the limitation. Missing source captions remain a source gap; an uploaded MP4 alone is not a working lesson player.
 
 Report Canvas URLs, returned IDs, publication/access states, successful pieces and specific held items. Local tests and API read-back do not establish student rendering or access. Keep provenance and conversion decisions in the teacher's workspace, not in Engine code.
+
+## Differentiation tags
+
+When the teacher asks to create/rename/delete support tags, move students or re-level a class, use `list_tags` to inspect the exact course/set/tag names, then write a `kind: tags` draft (`engine_reference` formats; example `synthetic-tags.md`). The teacher decides placement. An evidence-based suggestion is a proposal until the teacher approves it; never invent a default level or disclose why a student is in a tag.
+
+Call `set_tags {path, preview: true}` first and show current -> new counts, aliases added/removed, content using the tags and any held removals. Use final names after renames; `members.mode: replace` sets exactly the listed members of each listed tag, `add` only adds, and an explicit empty list requests clearing. The student's stable ref or unique saved alias is the target. Apply with `set_tags {path}` on the teacher's go-ahead; a request already specifying the changes authorizes the write. Report the actual structure/member outcomes, including independent successes.
+
+Submitted or saved work protects access; unknown coverage stays held. Set `allow_remove_with_submissions` only when the teacher specifically requests that removal after understanding its access effect. Do not waive missing evidence. If Canvas names, members or usage changed after preview, preserve the draft and show a new preview. Rerun the same draft after failure/uncertainty; do not create another set or manually strip its saved outcomes. To copy a set to another course, create a fresh destination draft with the same structure names and no members, source IDs, observed baseline or outcomes.

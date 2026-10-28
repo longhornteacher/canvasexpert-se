@@ -21,29 +21,29 @@ type DiscussionAssignment struct {
 // discussion topic or announcement, optionally linked to a graded assignment
 // (course and distributed topics only).
 type DiscussionDocument struct {
-	Schema             int                 `yaml:"schema"`
-	Kind               string              `yaml:"kind"`
-	Operation          string              `yaml:"operation"`
-	Course             string              `yaml:"course"`
-	Instance           string              `yaml:"instance,omitempty"`
-	CourseID           int64               `yaml:"course_id,omitempty"`
-	TopicID            int64               `yaml:"topic_id,omitempty"`
-	GroupCategoryID    int64               `yaml:"group_category_id,omitempty"`
-	GroupID            int64               `yaml:"group_id,omitempty"`
-	Title              string              `yaml:"title"`
-	BodyFormat         string              `yaml:"body_format"`
-	DiscussionType     string              `yaml:"discussion_type,omitempty"`
-	RequireInitialPost *bool               `yaml:"require_initial_post,omitempty"`
-	Published          *bool               `yaml:"published,omitempty"`
-	DelayedPostAt      *string             `yaml:"delayed_post_at,omitempty"`
-	LockAt             *string             `yaml:"lock_at,omitempty"`
-	Pinned             *bool               `yaml:"pinned,omitempty"`
-	IsAnnouncement     *bool               `yaml:"is_announcement,omitempty"`
-	AnnouncementIntent string              `yaml:"announcement_intent,omitempty"`
+	Schema             int                   `yaml:"schema"`
+	Kind               string                `yaml:"kind"`
+	Operation          string                `yaml:"operation"`
+	Course             string                `yaml:"course"`
+	Instance           string                `yaml:"instance,omitempty"`
+	CourseID           int64                 `yaml:"course_id,omitempty"`
+	TopicID            int64                 `yaml:"topic_id,omitempty"`
+	GroupCategoryID    int64                 `yaml:"group_category_id,omitempty"`
+	GroupID            int64                 `yaml:"group_id,omitempty"`
+	Title              string                `yaml:"title"`
+	BodyFormat         string                `yaml:"body_format"`
+	DiscussionType     string                `yaml:"discussion_type,omitempty"`
+	RequireInitialPost *bool                 `yaml:"require_initial_post,omitempty"`
+	Published          *bool                 `yaml:"published,omitempty"`
+	DelayedPostAt      *string               `yaml:"delayed_post_at,omitempty"`
+	LockAt             *string               `yaml:"lock_at,omitempty"`
+	Pinned             *bool                 `yaml:"pinned,omitempty"`
+	IsAnnouncement     *bool                 `yaml:"is_announcement,omitempty"`
+	AnnouncementIntent string                `yaml:"announcement_intent,omitempty"`
 	Assignment         *DiscussionAssignment `yaml:"assignment,omitempty"`
-	Observed           *DiscussionSnapshot `yaml:"observed,omitempty"`
-	Created            *DiscussionCreated  `yaml:"created,omitempty"`
-	UpdateOutcome      ActionOutcome       `yaml:"update_outcome,omitempty"`
+	Observed           *DiscussionSnapshot   `yaml:"observed,omitempty"`
+	Created            *DiscussionCreated    `yaml:"created,omitempty"`
+	UpdateOutcome      ActionOutcome         `yaml:"update_outcome,omitempty"`
 }
 
 type DiscussionSnapshot struct {
@@ -66,35 +66,36 @@ type DiscussionSnapshot struct {
 }
 
 type DiscussionCreated struct {
-	Intent             *DiscussionIntent `yaml:"intent,omitempty"`
-	StartedAt          string            `yaml:"started_at,omitempty"`
-	TopicID            int64             `yaml:"topic_id,omitempty"`
-	GroupCategoryID    int64             `yaml:"group_category_id,omitempty"`
-	GroupID            int64             `yaml:"group_id,omitempty"`
-	URL                string            `yaml:"url,omitempty"`
-	IntendedTitle      string            `yaml:"intended_title"`
-	IntendedHTML       string            `yaml:"intended_html"`
-	SavedHTML          string            `yaml:"saved_html,omitempty"`
-	GroupTopicChildren []DiscussionChild `yaml:"group_topic_children,omitempty"`
-	AssignmentID        int64         `yaml:"assignment_id,omitempty"`
-	RubricID            int64         `yaml:"rubric_id,omitempty"`
-	RubricAssociationID int64         `yaml:"rubric_association_id,omitempty"`
-	Rubric              ActionOutcome `yaml:"rubric,omitempty"`
-	Topic              ActionOutcome     `yaml:"topic,omitempty"`
-	PublishedRequested bool              `yaml:"published_requested,omitempty"`
-	Publication        ActionOutcome     `yaml:"publication,omitempty"`
-	Complete           bool              `yaml:"complete,omitempty"`
+	Intent              *DiscussionIntent `yaml:"intent,omitempty"`
+	StartedAt           string            `yaml:"started_at,omitempty"`
+	TopicID             int64             `yaml:"topic_id,omitempty"`
+	GroupCategoryID     int64             `yaml:"group_category_id,omitempty"`
+	GroupID             int64             `yaml:"group_id,omitempty"`
+	URL                 string            `yaml:"url,omitempty"`
+	IntendedTitle       string            `yaml:"intended_title"`
+	IntendedHTML        string            `yaml:"intended_html"`
+	SavedHTML           string            `yaml:"saved_html,omitempty"`
+	GroupTopicChildren  []DiscussionChild `yaml:"group_topic_children,omitempty"`
+	AssignmentID        int64             `yaml:"assignment_id,omitempty"`
+	RubricID            int64             `yaml:"rubric_id,omitempty"`
+	RubricSelection     *RubricSelection  `yaml:"rubric_selection,omitempty"`
+	RubricAssociationID int64             `yaml:"rubric_association_id,omitempty"`
+	Rubric              ActionOutcome     `yaml:"rubric,omitempty"`
+	Topic               ActionOutcome     `yaml:"topic,omitempty"`
+	PublishedRequested  bool              `yaml:"published_requested,omitempty"`
+	Publication         ActionOutcome     `yaml:"publication,omitempty"`
+	Complete            bool              `yaml:"complete,omitempty"`
 }
 
 type DiscussionIntent struct {
-	DiscussionType     string  `yaml:"discussion_type,omitempty"`
-	RequireInitialPost *bool   `yaml:"require_initial_post,omitempty"`
-	Published          bool    `yaml:"published"`
-	DelayedPostAt      *string `yaml:"delayed_post_at,omitempty"`
-	LockAt             *string `yaml:"lock_at,omitempty"`
-	Pinned             *bool   `yaml:"pinned,omitempty"`
-	IsAnnouncement     bool    `yaml:"is_announcement"`
-	AnnouncementIntent string  `yaml:"announcement_intent,omitempty"`
+	DiscussionType     string                `yaml:"discussion_type,omitempty"`
+	RequireInitialPost *bool                 `yaml:"require_initial_post,omitempty"`
+	Published          bool                  `yaml:"published"`
+	DelayedPostAt      *string               `yaml:"delayed_post_at,omitempty"`
+	LockAt             *string               `yaml:"lock_at,omitempty"`
+	Pinned             *bool                 `yaml:"pinned,omitempty"`
+	IsAnnouncement     bool                  `yaml:"is_announcement"`
+	AnnouncementIntent string                `yaml:"announcement_intent,omitempty"`
 	Assignment         *DiscussionAssignment `yaml:"assignment,omitempty"`
 }
 
@@ -281,7 +282,7 @@ func (d *DiscussionDocument) ValidateBody(body string) error {
 			}
 		}
 		if a.Rubric != nil {
-			if e := ValidateRubric(*a.Rubric); e != nil {
+			if e := ValidateAuthoredRubric(*a.Rubric); e != nil {
 				return e
 			}
 			if a.Rubric.UseForGrading {
@@ -322,6 +323,13 @@ func (d *DiscussionDocument) ValidateBody(body string) error {
 		return err
 	}
 	if c := d.Created; c != nil {
+		var rubric *Rubric
+		if d.Assignment != nil {
+			rubric = d.Assignment.Rubric
+		}
+		if e := ValidateRubricSelection(c.RubricSelection, rubric); e != nil {
+			return e
+		}
 		if c.Intent == nil {
 			return fmt.Errorf("saved discussion create lacks its original settings intent; resolve the exact Canvas topic before proceeding")
 		}

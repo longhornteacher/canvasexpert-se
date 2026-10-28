@@ -34,7 +34,7 @@ Document all generated member IDs/attempt assertions through the packet; no raw 
 
 ## Review and posting
 
-Use `review`/`start_review`, `post`/`post_results` with explicit kind dispatch. Review has one shared-grade card per group showing artifact, full affected aliases/refs, group-mode setting, common criterion scores, computed assessment, shared comment and separate private-comment cards. The group card is indivisible for a shared grade. Private text must never appear in the shared comment or criterion comments. Deselecting a private comment does not change the grade's audience.
+Use `post`/`post_results` with explicit kind dispatch after the conversation check-in. Draft PDF has one shared-grade card per group showing artifact, affected aliases/refs, group mode, criterion scores, computed assessment and shared comment, plus separate private-comment cards. A shared grade is indivisible. Private text must never appear in the shared comment or criterion comments; withholding a private comment does not change the grade audience.
 
 Before each propagated action, check live assignment basis/mode, current group/set/course, full propagation membership and per-member current attempts/evidence. Require the live audience to equal the reviewed snapshot and requested scope. A subset student request cannot become a group grade. A changed member, excused member, hidden/unassigned target, unresolved enrollment, or divergent artifact holds the group grade with a specific explanation; other groups continue. Preserve actual completed outcomes if a later check fails.
 

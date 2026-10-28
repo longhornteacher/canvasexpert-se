@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// Differentiation tags are non-collaborative groups. They are teacher-owned and
-// read-only here: counts and IDs only, never members.
+// Differentiation tags are teacher-directed non-collaborative groups. These
+// catalog reads expose counts/IDs only; explicit management uses SetTags.
 
 type TagInfo struct {
 	TagID       int64  `json:"tag_id"`

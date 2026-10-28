@@ -58,6 +58,7 @@ type Criterion struct {
 	Ratings         []Rating `yaml:"ratings,omitempty" json:"ratings,omitempty"`
 }
 type Rubric struct {
+	Library                   string      `yaml:"library,omitempty" json:"library,omitempty"`
 	ID                        int64       `yaml:"id,omitempty" json:"id,omitempty"`
 	AssociationID             int64       `yaml:"association_id,omitempty" json:"association_id,omitempty"`
 	Title                     string      `yaml:"title" json:"title"`
@@ -146,6 +147,7 @@ type CreatedResources struct {
 	Complete            bool                        `yaml:"complete,omitempty"`
 	Assignment          ActionOutcome               `yaml:"assignment,omitempty"`
 	Rubric              ActionOutcome               `yaml:"rubric,omitempty"`
+	RubricSelection     *RubricSelection            `yaml:"rubric_selection,omitempty"`
 	Module              ActionOutcome               `yaml:"module,omitempty"`
 	Publication         ActionOutcome               `yaml:"publication,omitempty"`
 	Overrides           []AssignmentOverrideOutcome `yaml:"overrides,omitempty"`

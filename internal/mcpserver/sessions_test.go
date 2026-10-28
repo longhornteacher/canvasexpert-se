@@ -14,10 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/hubcoord"
 	"canvasexpertse/internal/workflow"
-	"canvasexpertse/internal/workspace"
 )
 
 func TestLocalUIStatusReportsOnlyAllowlistedHubConnectionState(t *testing.T) {
@@ -119,7 +117,7 @@ func sessionFixture(t *testing.T) (*Server, context.CancelFunc, string) {
 	s := &Server{root: root, ctx: ctx, sessionReadyWait: time.Millisecond}
 	s.newSessionCommand = func(args []string) *exec.Cmd {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestSessionChild$")
-		cmd.Env = append(os.Environ(), "CSE_SESSION_CHILD=1", "CSE_SESSION_KIND="+args[2], "CSE_SESSION_FINISH="+finish, "CSE_SESSION_OUTCOME=Revision requested: clarify feedback. Nothing posted.")
+		cmd.Env = append(os.Environ(), "CSE_SESSION_CHILD=1", "CSE_SESSION_KIND="+strings.ReplaceAll(args[2], "parent-review", "review"), "CSE_SESSION_FINISH="+finish, "CSE_SESSION_OUTCOME=Revision requested: clarify feedback. Nothing posted.")
 		return cmd
 	}
 	return s, cancel, finish
@@ -147,7 +145,7 @@ func awaitSession(t *testing.T, task *reviewTask, finished bool) string {
 
 func TestDelayedReviewReadinessAndRevisionOutcome(t *testing.T) {
 	s, _, finish := sessionFixture(t)
-	out, err := s.startReview(context.Background(), ReviewInput{Path: "courses/results.md"})
+	out, err := s.startReviewSession(context.Background(), filepath.Join(s.root, "courses", "results.md"), []string{"parent-review", "courses"})
 	if err != nil || !strings.Contains(out.Text, "still starting") {
 		t.Fatalf("%+v %v", out, err)
 	}
@@ -155,7 +153,7 @@ func TestDelayedReviewReadinessAndRevisionOutcome(t *testing.T) {
 	for _, task = range s.reviews {
 	}
 	awaitSession(t, task, false)
-	if _, err := s.startReview(context.Background(), ReviewInput{Path: "courses/results.md"}); err == nil || !strings.Contains(err.Error(), task.id) {
+	if _, err := s.startReviewSession(context.Background(), filepath.Join(s.root, "courses", "results.md"), []string{"parent-review", "courses"}); err == nil || !strings.Contains(err.Error(), task.id) {
 		t.Fatal("duplicate active review accepted")
 	}
 	// Setup and review can coexist; private child output never enters tool results.
@@ -188,7 +186,7 @@ func TestDelayedReviewReadinessAndRevisionOutcome(t *testing.T) {
 		cmd.Env = append(os.Environ(), "CSE_SESSION_CHILD=1", "CSE_SESSION_KIND=review", "CSE_SESSION_FINISH="+finish, "CSE_SESSION_OUTCOME=Approved: synthetic student-ref 7; posted honest computed assessment 8/10.")
 		return cmd
 	}
-	if _, err := s.startReview(context.Background(), ReviewInput{Path: "courses/results.md"}); err != nil {
+	if _, err := s.startReviewSession(context.Background(), filepath.Join(s.root, "courses", "results.md"), []string{"parent-review", "courses"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, next := range s.reviews {
@@ -219,28 +217,13 @@ func TestReviewStructuredStatusPreservesOutcomePathAndNotes(t *testing.T) {
 	}
 }
 
-func TestInvalidReviewRejectedBeforeAllocatingSession(t *testing.T) {
-	s, _, _ := sessionFixture(t)
-	config := domain.CourseConfig{Schema: 1, Instance: "https://canvas.example.edu", Courses: []domain.Course{{Nickname: "DEMO", ID: 11}, {Nickname: "WRONG", ID: 12}}}
-	if err := workspace.WriteDocument(filepath.Join(s.root, "context", "courses.md"), config, ""); err != nil {
-		t.Fatal(err)
-	}
-	s.newSessionCommand = func([]string) *exec.Cmd { t.Fatal("invalid review allocated child process"); return nil }
-	if _, err := s.startReview(context.Background(), ReviewInput{Path: "courses/results.md", Course: "WRONG"}); err == nil || !strings.Contains(err.Error(), "differs from document course_id 11") {
-		t.Fatal("course mismatch accepted")
-	}
-	if len(s.reviews) != 0 {
-		t.Fatal("invalid input consumed active review slot")
-	}
-}
-
 // A review page outlives both the tool call and the adapter, so a teacher's
 // approval still lands when the agent app restarts the connection.
 func TestReviewSurvivesCallCancellationAndServerShutdown(t *testing.T) {
 	s, cancel, _ := sessionFixture(t)
 	callCtx, callCancel := context.WithCancel(context.Background())
 	callCancel()
-	if _, err := s.startReview(callCtx, ReviewInput{Path: "courses/results.md"}); err != nil {
+	if _, err := s.startReviewSession(callCtx, filepath.Join(s.root, "courses", "results.md"), []string{"parent-review", "courses"}); err != nil {
 		t.Fatal(err)
 	}
 	var task *reviewTask
@@ -269,7 +252,7 @@ func TestStartReviewReconnectsToPageLeftOpenByEarlierAdapter(t *testing.T) {
 	release := hubcoord.MarkPage(s.root, "review", pageURL, results)
 	defer release()
 	s.newSessionCommand = func([]string) *exec.Cmd { t.Fatal("started a second review page"); return nil }
-	out, err := s.startReview(context.Background(), ReviewInput{Path: "courses/results.md"})
+	out, err := s.startReviewSession(context.Background(), filepath.Join(s.root, "courses", "results.md"), []string{"parent-review", "courses"})
 	if err != nil || out.State != "pending" || out.URL != pageURL+"/review" || !strings.Contains(out.Text, "Reconnected") {
 		t.Fatalf("%+v %v", out, err)
 	}
@@ -284,7 +267,7 @@ func TestStartReviewReconnectsToPageLeftOpenByEarlierAdapter(t *testing.T) {
 	if status.State != "finished" || status.URL != "" || len(status.RevisionNotes) != 1 || status.RevisionNotes[0].Ref != "s-a" {
 		t.Fatalf("closed page status: %+v", status)
 	}
-	if _, err = s.reviewStatus("from-before-restart"); err == nil || !strings.Contains(err.Error(), "call start_review") {
+	if _, err = s.reviewStatus("from-before-restart"); err == nil || !strings.Contains(err.Error(), "call start_parent_review") {
 		t.Fatalf("unknown id guidance: %v", err)
 	}
 }

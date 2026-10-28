@@ -119,6 +119,11 @@ type CourseQueryInput struct {
 	Query  string `json:"query" jsonschema:"Assignment title or ID, or Page ID or Canvas link"`
 }
 
+type PullQuizInput struct {
+	Course       string `json:"course" jsonschema:"Configured course nickname"`
+	AssignmentID int64  `json:"assignment_id" jsonschema:"Exact positive New Quiz assignment ID"`
+}
+
 type PageQueryInput struct {
 	Course  string `json:"course" jsonschema:"Configured course nickname"`
 	Query   string `json:"query" jsonschema:"Exact Page ID or Canvas Page link; preserve this field name"`
@@ -169,13 +174,13 @@ type PathInput struct {
 	Path string `json:"path" jsonschema:"Workspace-relative document path"`
 }
 
-type HelpInput struct {
-	Topic string `json:"topic,omitempty" jsonschema:"Optional reference topic: formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, fields, or examples"`
+type ValidateDocumentInput struct {
+	Path string `json:"path" jsonschema:"Workspace-relative document path"`
+	Show string `json:"show,omitempty" jsonschema:"Optional student_ref in a results file; return only their exact rendered feedback sample or hold reason"`
 }
 
-type ReviewInput struct {
-	Path   string `json:"path" jsonschema:"Workspace-relative results, assignment, or QuizForge file"`
-	Course string `json:"course,omitempty" jsonschema:"Required for a QuizForge quiz review"`
+type HelpInput struct {
+	Topic string `json:"topic,omitempty" jsonschema:"Optional reference topic: formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, fields, or examples"`
 }
 
 type DraftPDFInput struct {
@@ -184,7 +189,7 @@ type DraftPDFInput struct {
 }
 
 type ReviewStatusInput struct {
-	ReviewID string `json:"review_id" jsonschema:"ID returned by start_review"`
+	ReviewID string `json:"review_id" jsonschema:"ID returned by start_parent_review"`
 }
 
 func Run(ctx context.Context, root string) error {
@@ -201,7 +206,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		fmt.Fprintf(os.Stderr, "Could not add some CE-SE starter files: %v\n", err)
 	}
 	s := &Server{root: root, ctx: ctx, reviews: map[string]*reviewTask{}}
-	server := mcp.NewServer(&mcp.Implementation{Name: "canvasexpert-se", Version: AdapterVersion()}, &mcp.ServerOptions{Instructions: "Before any teacher task, read AGENTS.md using read_workspace_file, then read the relevant playbook. Commands and grading/planning session files remain in UserInstall. Reusable teacher setup, including course configuration, student settings/notes, instructions, playbooks, guides and preferences, uses UserInstall by default or the explicitly configured UserSync authority. Private roster and contact files also use that authority but are never model context; UserSync is a provider-synchronized local directory, and reads always use its current contents. Check engine_info operation rules-location if the active authority is unclear. Read list_courses with its default configured source for saved nicknames and current selections; request source canvas only for connection testing or additional course discovery. Treat the structured courses list as setup status and ignore obsolete starter text in a preserved document body. Use engine_reference for Engine commands and file contracts. Keep .cse files and private teacher-only browser pages out of model context. Preserve honest computed grades, unsent work, and the teacher's requested scope. Before posting scores, creating assignments or quizzes, or editing assignments, report the work in the conversation and wait for the teacher's go-ahead there, unless the request already included the write; use start_review only when the teacher asks for the review page or has saved that preference."})
+	server := mcp.NewServer(&mcp.Implementation{Name: "canvasexpert-se", Version: AdapterVersion()}, &mcp.ServerOptions{Instructions: "Before any teacher task, read AGENTS.md using read_workspace_file, then read the relevant playbook. Commands and grading/planning session files remain in UserInstall. Reusable teacher setup, including course configuration, student settings/notes, instructions, playbooks, guides and preferences, uses UserInstall by default or the explicitly configured UserSync authority. Private roster and contact files also use that authority but are never model context; UserSync is a provider-synchronized local directory, and reads always use its current contents. Check engine_info operation rules-location if the active authority is unclear. Read list_courses with its default configured source for saved nicknames and current selections; request source canvas only for connection testing or additional course discovery. Treat the structured courses list as setup status and ignore obsolete starter text in a preserved document body. Use engine_reference for Engine commands and file contracts. Keep .cse files and private teacher-only browser pages out of model context. Preserve honest computed grades, unsent work, and the teacher's requested scope. Before posting scores, creating assignments or quizzes, or editing assignments, report the work in the conversation and wait for the teacher's go-ahead there, unless the request already included the write."})
 	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection. A course with an owner belongs to that teammate; the team list says whether their Canvas key is on this PC.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
 		return s.listCourses(ctx, in)
 	})
@@ -298,7 +303,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "student-report", dir)
 	})
-	addActionTool(server, "save_draft_pdf", "Save a printable Draft PDF of an assignment, Page, QuizForge quiz or results file in the teacher's Downloads folder and open it, laid out for paper from the same rendering the review page uses. The teacher copy includes settings, answer keys and private notes; handout: true keeps only what students see, for physical copies. Returns the file path only; a results PDF can hold student names and work and is outside the workspace. Nothing is written to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in DraftPDFInput) (TextOutput, error) {
+	addActionTool(server, "save_draft_pdf", "Save a printable Draft PDF of an assignment, Page, QuizForge quiz or results file in the teacher's Downloads folder and open it, laid out for paper from the shared draft rendering. The teacher copy includes settings, answer keys and private notes; handout: true keeps only what students see, for physical copies. Returns the file path only; a results PDF can hold student names and work and is outside the workspace. Nothing is written to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in DraftPDFInput) (TextOutput, error) {
 		path, err := s.coursePath(in.Path)
 		if err != nil {
 			return TextOutput{}, err
@@ -342,6 +347,12 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	})
 	addActionTool(server, "pull_assignment", "Pull an exact Canvas assignment and its edit baseline through the CE-SE Engine. Pass the assignment title, ID, or Canvas link in query (not assignment or assignment_id).", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CourseQueryInput) (TextOutput, error) {
 		return s.command(ctx, "pull-item", in.Course, in.Query)
+	})
+	addActionTool(server, "pull_quiz", "Pull a New Quiz's exact rich HTML and paginated items into a fresh new-quiz-edit draft. Edit changes maps, validate_document, then push_document. Stimulus and bank content stays read-only; this does not pull student work.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullQuizInput) (TextOutput, error) {
+		if in.AssignmentID <= 0 {
+			return TextOutput{}, errors.New("assignment_id must be positive")
+		}
+		return s.command(ctx, "pull-quiz", in.Course, strconv.FormatInt(in.AssignmentID, 10))
 	})
 	addActionTool(server, "pull_page", "Pull an exact Canvas Page and its edit baseline through the CE-SE Engine. Use group_id for a group Page; query remains the exact Page ID or link.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PageQueryInput) (TextOutput, error) {
 		args := []string{"pull-page", in.Course, in.Query}
@@ -401,16 +412,17 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "results-init", in.Path)
 	})
-	addReadTool(server, "validate_document", "Validate a CE-SE workspace document without writing to Canvas.", func(ctx context.Context, _ *mcp.CallToolRequest, in PathInput) (TextOutput, error) {
+	addReadTool(server, "validate_document", "Validate a CE-SE document offline. Optional show returns only one selected student's ref, alias, hold status and exact rendered comment; no submission or private teacher notes.", func(ctx context.Context, _ *mcp.CallToolRequest, in ValidateDocumentInput) (TextOutput, error) {
 		if _, err := s.coursePath(in.Path); err != nil {
 			return TextOutput{}, err
 		}
-		return s.command(ctx, "validate", in.Path)
+		args := []string{"validate", in.Path}
+		if in.Show != "" {
+			args = append(args, "--show", in.Show)
+		}
+		return s.command(ctx, args...)
 	})
-	addActionTool(server, "start_review", "Start the CE-SE local review page for a draft when the teacher asks to look through it on a page. Returns its loopback URL. Canvas is not changed until the teacher approves on that page. Call review_status afterward to receive the outcome or revision notes.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in ReviewInput) (TextOutput, error) {
-		return s.startReview(ctx, in)
-	})
-	addReadTool(server, "review_status", "Check whether the teacher finished a CE-SE review; returns approval/post outcome or teacher revision notes.", func(_ context.Context, _ *mcp.CallToolRequest, in ReviewStatusInput) (TextOutput, error) {
+	addReadTool(server, "review_status", "Check whether the teacher finished private family review; returns delivery outcomes or revision notes.", func(_ context.Context, _ *mcp.CallToolRequest, in ReviewStatusInput) (TextOutput, error) {
 		return s.reviewStatus(in.ReviewID)
 	})
 	s.registerOperationTools(server)
@@ -429,7 +441,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_page", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_review", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "set_quiz_accommodations", "set_tags", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

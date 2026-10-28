@@ -30,7 +30,8 @@ type quizAudienceFixtureState struct {
 	// Overrides is the live assignment override collection.
 	Overrides []AssignmentOverrideLive
 	// Visible is the live only_visible_to_overrides setting.
-	Visible bool
+	Visible        bool
+	QuizVisibility *[]int64
 	// FailAudience refuses the override write with this status.
 	FailAudience int
 	// FailPublish refuses publication with this status.
@@ -102,7 +103,7 @@ func newQuizAudienceFixture(t *testing.T, members map[int64][]int64) *quizAudien
 					f.SettingsPuts++
 				}
 			}
-			write(map[string]any{"id": 55, "course_id": 1, "name": "Ghost reading check", "published": f.Published, "only_visible_to_overrides": f.Visible, "overrides": f.Overrides, "is_quiz_lti_assignment": true})
+			write(map[string]any{"id": 55, "course_id": 1, "name": "Ghost reading check", "published": f.Published, "only_visible_to_overrides": f.Visible, "overrides": f.Overrides, "is_quiz_lti_assignment": true, "assignment_visibility": f.QuizVisibility})
 		case r.URL.Path == "/api/v1/courses/1/assignments/55/overrides":
 			if f.FailAudience > 0 {
 				w.WriteHeader(f.FailAudience)

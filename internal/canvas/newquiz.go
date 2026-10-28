@@ -13,6 +13,32 @@ import (
 	"time"
 )
 
+// Native launch returns numeric resource IDs live; the string form remains supported.
+type nativeResourceID string
+
+func (id *nativeResourceID) UnmarshalJSON(data []byte) error {
+	var text string
+	if len(data) > 0 && data[0] == '"' {
+		if err := json.Unmarshal(data, &text); err != nil {
+			return err
+		}
+	} else {
+		var n json.Number
+		if err := json.Unmarshal(data, &n); err != nil {
+			return err
+		}
+		if value, err := n.Int64(); err != nil || value <= 0 {
+			return &Error{Kind: "validation"}
+		}
+		text = n.String()
+	}
+	if strings.TrimSpace(text) == "" {
+		return &Error{Kind: "validation"}
+	}
+	*id = nativeResourceID(text)
+	return nil
+}
+
 // NewQuizFile is metadata for one actual uploaded file. URL is a signed
 // storage URL and must only be used with Download (which sends no credentials
 // to a different origin).
@@ -88,7 +114,7 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 		JWT         string `json:"jwt"`
 		AccessToken string `json:"access_token"`
 		Entry       struct {
-			ResourceID string `json:"resourceId"`
+			ResourceID nativeResourceID `json:"resourceId"`
 		} `json:"entry_path"`
 	}
 	if err = secureJSON(ctx, httpc, http.MethodPost, backend+"/api/native/launch", "Bearer "+jwt.Token, "", map[string]any{"params": json.RawMessage(config.NewQuizzes.Params), "signature": config.NewQuizzes.Signature}, &native, c.origin.Host); err != nil {
@@ -111,7 +137,7 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 		} `json:"participant_sessions"`
 	}
 	var participantRaw json.RawMessage
-	if err = secureJSON(ctx, httpc, http.MethodGet, backend+"/api/assignments/"+url.PathEscape(native.Entry.ResourceID)+"/participants?no_pagination=true", "Bearer "+nativeToken, "application/json", nil, &participantRaw); err != nil {
+	if err = secureJSON(ctx, httpc, http.MethodGet, backend+"/api/assignments/"+url.PathEscape(string(native.Entry.ResourceID))+"/participants?no_pagination=true", "Bearer "+nativeToken, "application/json", nil, &participantRaw); err != nil {
 		return nil, fmt.Errorf("participants step failed: %w", err)
 	}
 	var participants []participant

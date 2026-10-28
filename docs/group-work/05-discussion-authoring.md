@@ -4,7 +4,7 @@ Requires: [01](01-groups.md). **Delivered in two stages.** **05a** (Phase 1): un
 
 ## Surface and document
 
-Add `kind: discussion`, `operation: create|update` to validate/push/review. Use `pull-discussion` to obtain the editable baseline as well as evidence (slice 06 supplies full evidence). MCP uses `push_document`, `pull_discussion`, and `start_review`.
+Add `kind: discussion`, `operation: create|update` to validate/push. Use `pull-discussion` to obtain the editable baseline as well as evidence (slice 06 supplies full evidence). MCP uses `push_document`, `pull_discussion`, and `save_draft_pdf`.
 
 ```yaml
 schema: 1
