@@ -4,6 +4,8 @@ Date: 2026-10-28. To: whoever picks this up in Dev (CE-SE repo, `dev` branch). T
 
 This document stands alone. Part 2's findings come from a 2026-10-28 research session: official Canvas docs, the public New Quizzes UI bundle, and one read-only Canvas Live check. Sources are in §5.
 
+Execution review: 2026-10-28 against the current Dev working tree. **Part 1 is ready for 6.1 Terra or 6.1 Sol execution. Part 2 is ready for the bounded evidence step, not an invented write protocol.** Read the [shared execution notes](../README.md#execution-notes-for-the-three-active-handoffs). The earlier live observations below are retained as reported evidence; this review made no Canvas calls.
+
 ---
 
 ## 0. TL;DR
@@ -15,7 +17,7 @@ This document stands alone. Part 2's findings come from a 2026-10-28 research se
 
 The parts are independent; either can go first. Part 2 changes the New Quiz section of `score.md` that Part 1 also edits, so whoever lands second merges by hand.
 
-**Teacher decision (2026-10-28):** after a few weeks of real use, agent↔teacher interaction stays in the agent app. No review page in the scoring or authoring flow. If the teacher wants a pretty page, the agent writes one on request (§1.4). A browser-automation fallback for item scores is **not** being pursued.
+**Teacher decision (2026-10-28):** after a few weeks of real use, agent↔teacher interaction stays in the agent app. No review page in the scoring or authoring flow. If the teacher wants a pretty page, the agent writes one on request (§2.4). A browser-automation fallback for item scores is **not** being pursued.
 
 ---
 
@@ -24,7 +26,7 @@ The parts are independent; either can go first. Part 2 changes the New Quiz sect
 - **Engine vs playbook.** The Engine does Canvas access, identity, exact computation and safe writes. What to say to the teacher, which sample to show and which curve to suggest are playbook judgment.
 - **Public repo.** Use course nicknames (CS8, ELA7) and "the teacher". No real course IDs, student names or Windows usernames in code, tests, docs or successors of this file. Tests use synthetic IDs (e.g. 900001).
 - **Canvas Live.** Every live write needs the teacher's fresh, concrete go-ahead in that session. Live reads use the temporary `cmd/tmpdiag` pattern in [development-notes.md](../../docs/development-notes.md), which never prints tokens, signatures or student content. Delete it afterwards. List every disposable object in [cs8-test-objects.md](../../docs/cs8-test-objects.md).
-- **Accepted write = done.** In teacher use, no read-backs after accepted writes and a one-line report. Keep the cheap pre-write guards: exact course, assignment, student and attempt identity; wrong-target refusal; no replay. Part 2's live test plan is dev testing, so reading back there is expected.
+- **Accepted write = done.** In teacher use, no read-backs after accepted writes; Engine action reports are concise. The agent still gives the classroom report in §2.2. Keep the cheap pre-write guards: exact course, assignment, student and attempt identity; wrong-target refusal; no replay. Part 2's live test plan is dev testing, so reading back there is expected.
 - **Docs that change together.** Update `internal/localui/capabilities.go` (status data and review date) and [engine-capabilities.md](../../docs/engine-capabilities.md) together. Keep Canvas Live evidence, local tests and pending human checks separate.
 - **Checks.** `go test ./...`, `go vet ./...`, and `scripts/check-mcp.mjs`. Removing `start_review` lowers the asserted tool count on line 59 by one. The Canvas 2026 handoff also changes that count, so recount rather than assume.
 
@@ -44,7 +46,7 @@ On 2026-10-24 the default check moved into the conversation, but the page stayed
 - `internal/localui/capabilities.go:108` and `docs/engine-capabilities.md:89` (the "Review page" capability rows), and the WebUI "How it works" page, `internal/localui/templates/how.html`.
 - `group-work.md:65`, `authoring.md`, `quizzes.md`, `edit.md`, `team.md` and `install.md`: check each mention.
 
-Run `grep -rIn -i "review page\|start_review\|cse review\|review_status\|\.review\.json"` over Dev, excluding `.cache`, `.test-workspaces` and `handoffs/retired`, for the complete list.
+Run `rg -n -i 'review page|start_review|cse review|review_status|\.review\.json' README.md docs engine-docs workspace-template cmd internal scripts` for the complete current list. Classify each match: remove scoring/authoring entry points, retain parent/family behavior and Draft PDF support, and leave dated historical evidence accurate. A global deletion of the word `review` is incorrect.
 
 ### 2.2 The check-in, in the conversation (playbook: `score.md` "Report in the conversation")
 
@@ -52,15 +54,17 @@ The current report already covers count, range and spread, impressions, held stu
 
 1. **Overall impressions:** what most students did well, the most common gap, anything surprising. Two or three sentences.
 2. **Score ranges for a possible curve:** the distribution in assignment points (for example "median 7/10; most 6–9; four below 5"). For a New Quiz, give the range per written part and for the quiz total. Then give one or two curve options with their effect stated plainly (for example "+1 to everyone puts the median at 8 and leaves no one below 5"). Offer a curve only when the distribution suggests one; it is never applied without the teacher asking (see §2.3).
-3. **One example of the feedback, exactly as the student will see it.** Pick a typical student who is not held and show the Engine-rendered comment text (and, after Part 2, that student's per-item points) by alias. It must be the Engine's rendering, not the agent's paraphrase. If no current command returns one student's rendered comment, add the smallest option that does, for example `cse validate RESULTS --show STUDENT_REF` and a `show` field on MCP `validate`. Keep it read-only.
+3. **One example of the feedback, exactly as the student will see it.** Pick a typical student who is not held and show the Engine-rendered comment text (and, after Part 2, that student's per-item points) by alias. It must be the Engine's rendering, not the agent's paraphrase. Add `cse validate RESULTS --show STUDENT_REF` and optional `show` on the existing MCP **`validate_document`** tool (there is no MCP tool named `validate`). Validate normally, then return only the selected row's ref/alias, hold status, rendered student comment and computed item points when available. Reuse `BuildReview`/the shared rendering path; never expose `TeacherNote`, private contact data or the entire submission as part of this sample. Unknown refs fail clearly; held rows return the reason without presenting an unsendable comment as final. Keep it read-only and usable without a Canvas connection.
 4. Held students by alias with the specific reason, missing work as a count, late timing corrected or held, exemplars ready.
 5. Ask whether to post. On the go-ahead, `post_results`. When the request already said "score and post", post first and give the same report with the outcomes.
 
 Keep the existing rules for teacher changes ("go easier on…", "redo Maya's", holding someone back) and the Draft PDF for a teacher who wants to read everything.
 
+Use quiz totals only when the Engine has an exact, complete basis for that attempt. Before Part 2, or when auto-scored evidence is incomplete, report written-part ranges and say the quiz total is unavailable; do not add up a guessed total or present it as a posted grade. Curves remain hypothetical report text. Existing honest-effort floors must not be silently applied to New Quiz item points or `fudge_points`.
+
 ### 2.3 Curve: report only until the teacher confirms a shape
 
-`SCORING-RULES.md` requires the honest computed assessment, and there is no curve field today. For now, curve options appear only in the report. If the teacher asks to apply one, stop and confirm the shape before building anything. The recommended shape:
+`SCORING-RULES.md` requires the honest computed assessment, and there is no curve field today. For now, curve options appear only in the report. Applying a curve requires a separate requested feature; an execution agent must not add it to finish this handoff. If a later request leaves the amount or shape unclear, clarify only that missing decision. A possible future shape (not an implementation requirement here):
 
 - A document-level `curve` in the results file (points or percent, capped at points possible).
 - The Engine computes `posted = assessment + curve` exactly.
@@ -76,10 +80,11 @@ If the teacher asks for a nicer view, the agent may write a one-off local HTML f
 ### 2.5 Remove
 
 - **CLI:** the `review` command in `cmd/cse/remote.go` (the `case "review"` branch, covering results, drafts, QuizForge quizzes, assignment edits and assignment dates), its usage line, `cmd/cse/review_dispatch_test.go`, and the `"review": true` entry in the known-commands map in `cmd/cse/main.go:517`.
-- **MCP:** the `start_review` tool and `ReviewInput`, the `"review"` session kind's start/reconnect code in `internal/mcpserver/sessions.go` and the hub page record for it, the "Open the local review page" prefix, and the `start_review` clause in the server instructions. Rewrite the instructions to: report in the conversation, then write on the teacher's go-ahead.
-- **Workflow:** `.review.json` review state (`LoadReviewState`, `SaveReviewState`, `ReviewDigest`) if only the scoring page uses it, and `BuildEditReview` (`internal/workflow/review_edit.go`) if nothing else uses it. For an assignment edit, the agent describes the change in the conversation from the pulled Canvas Live copy, as `edit.md` already says for the check-in.
+- **MCP:** remove the `start_review` registration, `ReviewInput`, the scoring-specific `startReview` wrapper, its allowlist entry and instructional text. **Keep `startReviewSession`, the `"review"` session kind, its hub record/reconnect/status machinery and URL prefix:** `start_parent_review` calls the same helper today. Narrow human-facing messages to parent/family review where appropriate; do not break its existing wire/lifecycle contract.
+- **Workflow:** keep `LoadReviewState`, `SaveReviewState` and `ReviewDigest`: the surviving parent/family handler in `internal/localui/review.go` uses all three. Keep `BuildEditReview` too while `BuildReview` dispatches to it for Draft PDF. Remove a scoring-page-only helper only after checking its actual callers. For an assignment edit, the agent describes the change in the conversation from the pulled Canvas Live copy, as `edit.md` already says for the check-in.
 - **Playbooks and docs:** everything listed in §2.1. Update `README.md` to describe the conversation check-in. Change the Teacher_Override example to a preference that still applies (for example "always show me two example comments before posting").
 - **Capabilities:** retire the "Review scores and drafts on a local page" row in both places. Note the date and say that the parent/family review page is unaffected.
+- **Smoke and tests:** remove the scoring-page `--review` branch from `scripts/check-mcp.mjs`, its flag/help references and obsolete scoring CLI dispatch tests. Keep shared rendering, CSRF, family privacy, page reconnection/status and Draft PDF tests. Add one focused CLI/MCP sample-rendering test comparing the selected text with the normal post renderer, including a held/unknown selection. Assert `start_review` is absent and `start_parent_review`, `review_status`, `save_draft_pdf`, and `validate_document.show` remain discoverable. Do not delete whole shared test files because their names contain `review`.
 
 ### 2.6 Keep (out of scope here)
 
@@ -120,7 +125,7 @@ Content-Type: application/json
 - After a successful POST the UI posts `refreshGrades` to SpeedGrader. That suggests New Quizzes itself sends the new total to the Canvas gradebook, but it is not proven.
 - New Quizzes also has its own grading route, `/moderation/{assignment}/grading/{participant_session}`. It is only relevant to a browser approach, which is not being pursued.
 
-**Read-only Canvas Live check, CS8 quiz 3698192, teacher's PAT, 2026-10-28.** These steps returned 200: sessionless launch, launch page, `jwts`, native launch, participants, `/participant_sessions/{ps}/results`, `/participant_sessions/{ps}/grade`, quiz session, item results, and the results list (one version) using the grading token. Notes for the Engine:
+**Read-only Canvas Live check, an existing CS8 quiz, teacher's PAT, 2026-10-28.** The exact object belongs in the private dev reference, not this public handoff. These steps returned 200: sessionless launch, launch page, `jwts`, native launch, participants, `/participant_sessions/{ps}/results`, `/participant_sessions/{ps}/grade`, quiz session, item results, and the results list (one version) using the grading token. Notes for the Engine:
 
 - The native launch returns `access_token`, not `token`.
 - `entry_path.resourceId` is a JSON **number**. The current `internal/canvas/newquiz.go` struct reads it as a string; check whether the file-download chain still works live. Fix it here if not.
@@ -139,19 +144,21 @@ Content-Type: application/json
 
 ### 3.2 Teacher input needed before any live write
 
-- **A teacher-controlled student account in CS8.** New Quizzes cannot be taken as the built-in Test Student (it is an LTI tool), so live tests need a student attempt that belongs to no real student, such as the teacher's own second account enrolled as a student. Before any write to an existing attempt (including 3698192's), the teacher confirms whose attempt it is. Never write to a real student's attempt in testing.
+- **A teacher-controlled student account in CS8.** New Quizzes cannot be taken as the built-in Test Student (recorded in [team live evidence](../../docs/team/README.md)), so live tests need a student attempt that belongs to no real student, such as the teacher's own second account enrolled as a student. Before any write to an existing attempt, the teacher confirms whose attempt it is. Never write to a real student's attempt in testing.
 - A fresh go-ahead in the session for each live write step below.
 
 ### 3.3 Step A: observe one real save (before writing Engine code)
 
-On a disposable New Quiz in CS8 (unpublished, visible only to the teacher-controlled account; one essay, one file upload, one auto-scored item), the account submits an attempt. Then **the teacher** opens SpeedGrader, sets the essay's points, adds an item comment and clicks **Update**, with browser developer tools recording network traffic.
+Create a disposable New Quiz in CS8, initially unpublished, with one essay, one file upload and one auto-scored item. Restrict its associated assignment to the confirmed teacher-controlled account **before publishing it** for that account to submit; an unpublished quiz cannot supply the required student attempt. Include creation, restriction, publication, saves and cleanup in the concrete live authorization. Then **the teacher** opens SpeedGrader, sets the essay's points, adds an item comment and clicks **Update**, with browser developer tools recording network traffic.
 
 Record in a redacted note:
 - method, path and header **names** of every request to the quiz host and backend (no token values)
-- the full JSON body with the student's answer text replaced by `<redacted>`
+- the request and corresponding pre-save item-result JSON with synthetic identities and answer/feedback content; preserve field casing, nulls, types and list structure (no HAR, cookies, signed URLs or token values in Dev)
 - the response keys and new `score`
 
-Then check the Canvas gradebook total and how soon it changed. Repeat once with **Grade by question** on and once changing only fudge points. This settles unknowns 1–4 without the agent making a grade write. If the teacher can't run developer tools, a fallback is one agent-made POST built from the read item results, with the teacher's go-ahead, on the teacher-controlled account only.
+Then check the Canvas gradebook total and how soon it changed. Repeat once with **Grade by question** on and once changing only fudge points. Record whether these observations settle unknowns 1–4; do not assume they will. If the teacher cannot capture a save, report the missing wire evidence and continue Part 1 or other independent work. Do not guess request casing/status fields and try a grade POST as a substitute for observing the protocol.
+
+Store a short redacted protocol note with the dated evidence in `docs/new-quiz-written-work-spec.md` and synthetic before/request/response fixtures under `internal/canvas/testdata/`. The note must establish the exact participant/user/attempt/session mapping, grade-comment field and save behavior, result-version identifier, and gradebook/hidden-grade propagation. If a particular behavior remains unknown, mark that operation pending and keep the existing comment-only/SpeedGrader path available. Raw student payloads and credentials remain outside Dev.
 
 ### 3.4 Engine design
 
@@ -162,25 +169,49 @@ Then check the Canvas gradebook total and how soon it changed. Repeat once with 
 
 Keep the existing host rules. `backend_url` comes from the Canvas launch page and `host` from the backend's own response; both must be HTTPS and under `instructure.com`. Tokens go only to their own host. The PAT never leaves Canvas.
 
-**Building the body.** Start from the attempt's current item results exactly as returned. Change only the target manual items: `score`, any grade-status or graded fields Step A shows, and the grader comment when one is supplied. Keep every other item byte-for-byte and keep `fudge_points` as read (unless an approved curve sets it, §2.3). Never send a partial list, because a missing item could zero out work the student did.
+**Building the body.** Start from the attempt's current item results and apply only the read-to-write transformation established by Step A (including casing and removal of server-only keys). Preserve every untouched item's values and unknown nested fields; JSON whitespace/key order need not be byte-identical. Change only target manual-item scores, the observed graded/status fields, and supplied grader feedback. Preserve existing feedback when none is supplied and preserve `fudge_points` unconditionally in this handoff. Never send a partial list, because a missing item could zero out work the student did. Disable automatic retries for this result-version-creating POST.
 
-**Results format.** Add a New Quiz item-score operation (name it in `engine-docs/formats.md`; for example `operation: item-scores`). The agent supplies criterion components per written part as it does today. The Engine maps them to items with the existing written-part mapping (`partPoints` in `internal/workflow/review.go`) and computes each item's points exactly. Points are bounded by the item's `points_possible` and use exact decimals. The agent never types item points. Optional per-item feedback and the existing attempt-scoped whole-quiz comment remain available. Validation rejects item ids not in the packet and auto-scored items unless the teacher explicitly asked to override one.
+**Results format.** Add `operation: item-scores` with an `item_scores` body on a normal `kind: results` student row. Required: exact `attempt` and `components`; optional: `item_feedback` keyed by canonical packet item ID, and whole-quiz `feedback`/`header`. Reuse document `interpretation`, variants and rubric/local `scoring_basis`. Engine-owned state has separate item-result and whole-comment outcomes. `post_results` remains the write surface; no general internal-API tool is added. The agent never types item points. Reject auto-scored targets in this slice; overriding their grades is a separate capability, even when requested.
 
-**Pre-write guards (cheap, required):** exact course, assignment and Canvas user; the student's latest submitted attempt is still the pulled attempt (otherwise hold, since a new attempt arrived); no anonymous or moderated grading (hold with a reason); the course routes to the right Canvas key under team teaching; for a teammate's course, the assignment's post policy is manual, or the post holds (same rule as hidden grades today).
+**Item mapping and arithmetic.** `partPoints` currently resolves component keys to item maximums; it does not compute item scores or prove a unique session-result match. Normalize packet `item_id`/`entry_id` aliases to one canonical item, then to exactly one result in the selected attempt using Step A's observed mapping. Require one scored component per targeted written item in this first slice; missing, duplicate or ambiguous mappings hold the student. For each component, compute `item maximum × earned criterion total / applicable criterion maximum total`, using the existing repeated/direct interpretation rules and exact decimal arithmetic. Round once to the existing two-decimal posting precision; reject a zero numeric denominator, unknown evidence and out-of-range values. Component weights across other items do not rescale this item's score. Share this computation with the feedback renderer (`internal/render/render.go`), whose existing `PartPoints` path already displays this ratio, so sample, comment and posted points agree. Do not route through aggregate `EnteredGrade`, effort floors, late timing or rubric-assessment posting.
 
-**No replay:** if every target item already has the computed score and comment, skip the POST and report "already entered".
+For a selected-item request, the supplied component keys select the target items through `interpretation`; require the complete applicable criterion scores for each selected component. Unselected components are untouched, never converted to zero/missing. Keep the ordinary whole-assignment requirement in `ComputeAssessment` unchanged; use a focused per-item validator/calculator for this operation. `item_feedback` may name only selected canonical items; omission preserves live grader feedback, an explicit empty string clears only that selected item's grader comment. If no whole-quiz `feedback` is supplied, record its outcome as not requested and post no extra assignment comment. Example student row (the enclosing results file supplies its packet/basis and an interpretation mapping `response` to the synthetic item `900003`):
 
-**Post order per student:** item-score POST first, then the whole-quiz comment through the existing comment path. If the POST fails, post no comment and report that student as failed. Rerunning resumes.
+```yaml
+- student_ref: s-example
+  operation: item-scores
+  item_scores:
+    attempt: {attempt: 1, submitted_at: "2026-10-28T09:00:00-05:00"}
+    components:
+      - key: response
+        evidence: present
+        criteria:
+          - {criterion_id: evidence, points: 3}
+    item_feedback:
+      "900003": "Your example supports the claim."
+    feedback: "Use the same detail in your next response."
+```
+
+**Pre-write guards (cheap, required):** exact course, assignment and Canvas user; verify the participant/session belongs to that user and quiz, not merely that it has the same attempt number. The latest submitted attempt must still be the pulled attempt; hold anonymous/moderated grading, changed grading basis or changed target item maxima. Capture a baseline of the targeted result scores/feedback when pulling scoring evidence; a later teacher edit to those fields holds that student's stale result, preserving unsent work. Use the latest complete item list for untouched items. This is a pre-write conflict check, not an atomic guarantee.
+
+Read [team/README.md](../../docs/team/README.md) before integration. Reuse `Service.ForCourse`, `(CE)` consent, and `hideGrades`/`gradeVisibleHold` (in `team_consent.go`, called from `post.go`); an owned course requires the tag even when the operator's own key is routed. Current behavior sets manual posting before the first scoring write and holds already-visible submissions. A manual policy by itself is insufficient. Preserve excused/hidden/evidence checks from the ordinary comment-only path. Verify through L7 that the internal result API also respects that policy; do not claim teammate support from ordinary assignment tests alone.
+
+**No replay and recovery:** save a pending item-result outcome before POST and accepted result-version/session identity immediately afterwards. Completed outcomes skip POST even if someone later changes the grade in Canvas; an old results file must never undo that teacher edit. For an unfinished outcome, first enforce latest-attempt/identity guards, then compare the target values. If they already equal the computed score and supplied comment, record "already entered" without POST. For a timeout/interrupted pending write, reconcile against the current authoritative result; if it cannot be matched, hold that student for inspection instead of blindly creating another version. Save only the private minimum needed to resume in UserInstall; never persist grading tokens.
+
+**Post order per student:** item-score POST first, then the optional whole-quiz comment through the existing attempt-scoped comment path. If the POST fails or is uncertain, post no whole-quiz comment. If scores succeed but the comment fails, report both outcomes and resume only the comment. Continue independent students after a per-student API failure; stop on a shared wrong-target or inability to persist recovery state. An accepted write remains accepted even if its total is absent from the response: report the total as unavailable without a confirmation GET.
 
 **Output:** one line per student by alias with the new quiz total that New Quizzes returned (the Engine does not compute the quiz total itself).
+
+**Integration map:** `internal/domain/types.go` / `scoring.go` (new operation, `ValidateResults`, arithmetic and outcome validation), `internal/canvas/newquiz.go` (session and observed wire calls), `new_quiz_work.go` / `pull_work.go` (attempt baseline), `results_init.go` (scaffold), `post.go` (guards, outcomes, resume), `review.go` / `internal/render/render.go` (sample and exact points), and `session_discovery.go` / `targeted_session.go` (completion tracking). Extend every operation switch/hold/report helper that handles `comment-only`. Old results without the new baseline stay valid for comment-only; request a fresh pull for item scores. Keep the existing rule for older scored comments ("comment posted, item points not entered"), recognize successful item-score outcomes, and leave feedback-only comments unable to mark written scoring complete. A partial item selection must not hide remaining unscored items from discovery.
 
 ### 3.5 Local tests (fake servers; proportionate)
 
 - The full chain against fakes, asserting each host gets only its own token (the PAT never reaches the backend or quiz host; the grading token never reaches Canvas).
-- The posted body is exactly the read item list with only the target fields changed; `fudge_points` preserved. Use a golden file from Step A's redacted capture.
+- The posted body follows Step A's exact wire transform, with untouched item values/unknown fields and `fudge_points` preserved. Use its synthetic fixture.
 - An attempt mismatch, an unknown item id, points over `points_possible`, and anonymous grading each hold with a specific reason and make no POST.
-- The no-replay skip.
-- A failed POST means no comment is posted.
+- Computation/unique item mapping, stale targeted teacher edits, and the no-replay skip (including a completed result whose live grade later changed).
+- A failed POST means no comment is posted; an accepted score plus failed comment resumes only the comment; an uncertain POST is reconciled or held; independent students continue.
+- Team `(CE)` consent, manual policy and already-visible holds apply to this new operation; partial versus complete scoring outcomes remain truthful in discovery.
 - `entry_path.resourceId` decodes as a number and as a string.
 
 ### 3.6 Canvas Live test plan (CS8, disposable quiz, teacher-controlled account only)
@@ -194,14 +225,14 @@ Each step needs the teacher's go-ahead. Read back freely here, since this is dev
 | L3 | Existing fudge points (teacher sets +1 first) | Preserved after the Engine post |
 | L4 | Re-score an item the Engine already graded | New result version; earlier version still listed; total updated |
 | L5 | Rerun the same results file | No POST ("already entered") |
-| L6 | Quiz with 2 attempts: score attempt 1, then the student submits attempt 2, then rerun | The rerun holds (new attempt); `score_to_keep` behaves as Canvas documents |
+| L6 | Quiz with 2 attempts: score attempt 1, then the student submits attempt 2; try an unfinished stale attempt-1 result and rerun the completed file | The unfinished stale operation holds; the completed file makes no write; attempt 2 remains discoverable; record `score_to_keep` behavior |
 | L7 | Course with a manual post policy | The grade stays hidden until posted; the student sees nothing early |
 | L8 | Teacher changes an item in SpeedGrader after the Engine post; Engine pulls again | The pull shows the teacher's value; nothing is overwritten without a new results file |
 | L9 | Teacher regrades the question (Build > Regrade) after the Engine post | The record states whether Engine-entered manual scores survive |
 | L10 | Recovery drill: restore the previous result version by posting its item list | The restored scores and total match the earlier version |
-| L11 | A token that expires partway through a two-student run | The failed student is reported; the other is complete; rerunning finishes it; no half-written result |
+| L11 | A token that expires partway through a two-student run, only if two teacher-controlled accounts are available | The failed student is reported; the other is complete; rerunning finishes only unfinished work. Otherwise record this as covered by local fault injection, live unobserved; never recruit a real student's attempt |
 
-L9 and L10 tell the teacher how to undo a mistake; record them even if the answer is "regrade resets manual scores". Clean up the disposable quiz afterwards, or list it in `cs8-test-objects.md`.
+L1–L8 are the release evidence for the new internal grade-write path. L9–L11 are supplementary observations: record their actual results or why they were not run; they do not require building a recovery UI or delaying independently completed Part 1. L10 is an explicitly authorized disposable-data probe only, not a promise of a general undo feature. Clean up the disposable quiz afterwards, or list it in `cs8-test-objects.md`.
 
 ### 3.7 Playbooks and docs once L1–L8 pass
 
@@ -216,7 +247,7 @@ Browser or SpeedGrader UI automation; the total-only public `posted_grade` path;
 
 ### 3.9 Done when
 
-Step A's capture is recorded (redacted). The Engine path and local tests are in. L1–L11 are recorded with dates on a teacher-controlled account. The playbooks and docs in §3.7 are updated, with evidence levels kept separate.
+Step A's capture is recorded with synthetic fixtures. The Engine path and local tests are in, and L1–L8 pass on a teacher-controlled account. L9–L11 carry dated outcomes or explicit unobserved labels. The playbooks and docs in §3.7 are updated, with evidence levels kept separate. If the account/capture is unavailable, report Part 1 as complete and Part 2 as waiting on that specific evidence; leave this handoff active. Do not relabel the existing comment-only capability as unavailable.
 
 ---
 

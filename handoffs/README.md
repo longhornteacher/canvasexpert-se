@@ -1,6 +1,47 @@
 # Handoffs
 
-A handoff is bounded execution work for an agent session. It should say whether a change belongs to the Engine or the playbooks. Open work lives in `active/` (currently empty); completed or superseded handoffs move to `retired/` with a retirement banner. Retired files are history and evidence, not instructions. Retiring one does not mean every observation in it was verified.
+A handoff is bounded execution work for an agent session. It should say whether a change belongs to the Engine or the playbooks. Open work lives in `active/`; completed or superseded handoffs move to `retired/` with a retirement banner. Retired files are history and evidence, not instructions. Retiring one does not mean every observation in it was verified.
+
+## Active work
+
+Execution-readiness review: **2026-10-28**, against the current Dev working tree. These three handoffs are written for **6.1 Terra or 6.1 Sol** to execute one bounded slice at a time. Readiness here means the scope, integration points, contracts, checks and unresolved evidence are explicit; it does not mean the features are built or the undocumented Canvas behavior is known.
+
+| Handoff | Execution status | What the review clarified |
+|---|---|---|
+| [Existing New Quiz content edits](active/HANDOFF_Existing_New_Quiz_Content_Edits_2026-10-27.md) | Ready for implementation; optional live observation is not a prerequisite. | Exact CLI/MCP path, edit document, field presence, item identity, sibling-feedback preservation, conflict/outcome handling and acceptance checks. |
+| [Canvas 2026 additions](active/HANDOFF_Canvas_2026_Additions_2026-10-28.md) | A is ready now. B–E have explicit independent implementation slices and bounded probe dependencies. | Accommodation omission/retry semantics, private settings and partial-success recovery, a valid tag plan, shared-rubric formats/API payloads and realistic New Quiz test accounts. |
+| [Retire review page and New Quiz item scores](active/HANDOFF_Retire_Review_Page_and_New_Quiz_Item_Scores_2026-10-28.md) | Part 1 is ready now. Part 2 starts with a teacher-controlled attempt and redacted save capture. | Shared family-review code that must survive, exact feedback sampling, item arithmetic, team guards, stale-result protection, independent score/comment outcomes and release evidence. |
+
+## Execution notes for the three active handoffs
+
+1. Follow root `AGENTS.md`: fetch, compare `dev...origin/dev`, and pull if behind before editing. Inspect `git status --short` and preserve any existing changes; do not reset, stash, reimplement or commit someone else's work blindly. The existing-content Engine work and both review passes were committed and pushed to `dev` on 2026-10-28. Line numbers in handoffs are navigation hints; locate the current symbols with `rg`.
+2. Read `docs/ARCHITECTURE.md` and `docs/SCORING-RULES.md`, then the selected handoff. Read the team/group contracts when that slice touches their behavior. Start the next independently executable slice rather than stopping the whole handoff for an unrelated live check. No subagents, release, install, UserInstall/UserSync mutation or real-family send is authorized by these handoffs themselves.
+3. Implement through the existing domain → workflow → CLI/MCP adapters. Register a new CLI name in help, known commands, arity and dispatch; register its typed MCP schema, annotations and command allowlist where needed. Update document validation/dispatch, `engine_reference` help/formats/examples and the relevant seed playbook together. Do not leave a helper that cannot be reached through the advertised teacher flow.
+4. The three handoffs overlap in `cmd/cse/main.go`, `remote.go`, MCP registrations, `scripts/check-mcp.mjs`, capabilities/formats and quiz/edit/score playbooks. Execute slices sequentially in one checkout, or explicitly coordinate ownership if the user later requests parallel work. Reconcile these files against the then-current tree; never replace a whole file from an old handoff. Content-edit documents, QuizForge creation, accommodations and student item-score results are separate operations with separate outcomes.
+5. A concrete teacher request already authorizes its ordinary product write. Development probes require the explicitly scoped live go-ahead described in each handoff; missing live approval/account access blocks only that probe or dependent unknown protocol. Explain the exact missing evidence and continue independent work. Never use the classroom MCP connection to execute a Dev test accidentally.
+6. For implementation, run focused tests while editing, then these checks once for the completed slice. The build is a temporary Dev test binary, not a package or teacher install:
+
+   ```powershell
+   go test ./...
+   go vet ./...
+   $handoffCheckEngine = Join-Path ([System.IO.Path]::GetTempPath()) ("cse-handoff-check-" + [guid]::NewGuid().ToString("N") + ".exe")
+   go build -o $handoffCheckEngine ./cmd/cse
+   node scripts/check-mcp.mjs $handoffCheckEngine
+   git diff --check
+   ```
+
+   Run each command after the previous succeeds; use the available Node runtime if it is not on PATH. Recount the discovered MCP tools and test the changed schemas; do not assume the starting count of 53 survives other slices. After review-page retirement the scoring `--review` smoke branch is removed, while family review has its own surviving tests. Do not run Canvas writes to make this smoke check pass.
+7. Record what changed, checks actually run, and evidence still pending at the end of the slice. Update both capability records and their review date when implementation changes a capability. A fake-server pass is local evidence; an API reference is documented behavior; neither is Canvas Live proof. Retire a whole handoff only when its requested independent parts are complete, or clearly superseded with remaining work linked. A completed part may be recorded while the rest stays active.
+
+This 2026-10-28 readiness review changed handoff documentation only, checked official public API references, and made no Canvas calls or teacher-install changes. It does not update product capability status by itself.
+
+A second pass the same day checked the named files, symbols and call sites against the Dev tree (they hold; `hideGrades`/`gradeVisibleHold` live in `team_consent.go`) and removed recovery machinery that idempotent writes do not need, per root `AGENTS.md`: content-edit resume is a three-way live/observed/desired compare, not a pending-intent store. Quiz accommodations rerun the whole absolute-value array unless §3.1 shows otherwise, and course-level sync (Canvas 2026 §4.5) is frozen until the teacher asks, so Part C does not wait on it. Tag management resumes by re-resolving names and memberships, with one removal flag rather than two. Invalid saved quiz settings fail loading like the existing flags. Non-idempotent writes (New Quiz result versions) keep their pending/accepted records.
+
+## Completed work and evidence
+
+The [existing-content editing handoff](retired/HANDOFF_Existing_Content_Edit_Gaps_2026-10-27.md) is complete in Dev: inherited Page audiences, exact module-item removal/replacement and narrow New Quiz group/base-date edits. Its banner records the read-only Page pull, disposable quiz API probe and remaining live Engine evidence limits.
+
+The retired [WebUI width handoff](retired/HANDOFF_WebUI_Width_2026-10-26.md) records the implemented layout changes and the limit on recorded visual verification. The retired [parent-report and weekly ELA layout handoff](retired/HANDOFF_Parent_Report_Fix_and_Weekly_Layout_2026-10-26.md) records the Dev fix and read-only live inventory evidence; the independent Missing count, Outlook draft inspection, delivery and UserInstall adoption remain pending.
 
 Current development authority lives in the root `AGENTS.md`, `docs/ARCHITECTURE.md` and `docs/SCORING-RULES.md`; build instructions and dated observations live under `docs/`.
 
