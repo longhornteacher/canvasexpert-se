@@ -131,7 +131,7 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 	}
 	seen := map[string]bool{}
 	for _, s := range d.SubmissionTypes {
-		// A pulled New Quiz (external_tool) may only gain a rubric; PlanEdit refuses updates.
+		// PlanEdit restricts a pulled New Quiz to assignment group and base dates.
 		if s != "online_text_entry" && s != "online_upload" && s != "on_paper" && (s != "external_tool" || d.Operation == "create") {
 			return fmt.Errorf("unsupported submission type %q", s)
 		}
@@ -247,7 +247,13 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 		return fmt.Errorf("due_at must not precede unlock_at")
 	}
 	if d.Rubric != nil {
-		if e := ValidateRubric(*d.Rubric); e != nil {
+		var e error
+		if d.Operation == "create" || d.Operation == "attach-rubric" {
+			e = ValidateAuthoredRubric(*d.Rubric)
+		} else {
+			e = ValidateRubric(*d.Rubric)
+		}
+		if e != nil {
 			return e
 		}
 		if (d.Operation == "create" || d.Operation == "attach-rubric") && d.Rubric.UseForGrading {
@@ -305,7 +311,7 @@ func validateRubricAttachment(d AssignmentDocument, body string) error {
 	if b == nil || b.Rubric != nil || d.Rubric == nil {
 		return fmt.Errorf("attach-rubric requires an observed assignment without a rubric and a desired rubric")
 	}
-	if strings.TrimSpace(d.Rubric.Title) == "" || d.Rubric.ID != 0 || d.Rubric.AssociationID != 0 {
+	if !IsRubricReference(d.Rubric) && (strings.TrimSpace(d.Rubric.Title) == "" || d.Rubric.ID != 0 || d.Rubric.AssociationID != 0) {
 		return fmt.Errorf("attach-rubric requires a titled new rubric without existing rubric/association IDs")
 	}
 	if d.ModuleID != 0 || d.UpdateOutcome.Status != "" || d.UpdateOutcome.ID != 0 {
@@ -339,6 +345,9 @@ func validateRubricAttachment(d AssignmentDocument, body string) error {
 		return nil
 	}
 	c := d.Created
+	if e := ValidateRubricSelection(c.RubricSelection, d.Rubric); e != nil {
+		return e
+	}
 	if c.AssignmentID != d.AssignmentID || c.RubricID < 0 || c.RubricAssociationID < 0 {
 		return fmt.Errorf("attachment resource identities disagree with assignment or are negative")
 	}
@@ -359,7 +368,7 @@ func validateRubricAttachment(d AssignmentDocument, body string) error {
 	if c.Rubric.ID > 0 && c.Rubric.ID != c.RubricID {
 		return fmt.Errorf("attachment rubric outcome id disagrees with rubric_id")
 	}
-	if (c.Rubric.Status == "succeeded" || c.Rubric.Status == "preserved" || c.Complete) && (c.RubricID <= 0 || c.RubricAssociationID <= 0) {
+	if (c.Rubric.Status == "succeeded" || c.Rubric.Status == "preserved" || c.Complete) && (c.RubricID <= 0 || c.RubricAssociationID <= 0 && c.RubricSelection == nil) {
 		return fmt.Errorf("confirmed rubric attachment requires rubric and association ids")
 	}
 	if c.Complete && c.Rubric.Status != "succeeded" && c.Rubric.Status != "preserved" {
@@ -373,6 +382,9 @@ func validateRubricAttachment(d AssignmentDocument, body string) error {
 
 func validateCreated(d AssignmentDocument) error {
 	c := d.Created
+	if e := ValidateRubricSelection(c.RubricSelection, d.Rubric); e != nil {
+		return e
+	}
 	for _, id := range []int64{c.AssignmentID, c.RubricID, c.RubricAssociationID, c.ModuleItemID} {
 		if id < 0 {
 			return fmt.Errorf("created resource id cannot be negative")
@@ -409,7 +421,7 @@ func validateCreated(d AssignmentDocument) error {
 		}
 		// A rubric or module placement the teacher already settled in Canvas is
 		// recorded as preserved and needs no ids of ours.
-		if d.Rubric != nil && c.Rubric.Status != "preserved" && (c.RubricID <= 0 || c.RubricAssociationID <= 0 || c.Rubric.Status != "succeeded") {
+		if d.Rubric != nil && c.Rubric.Status != "preserved" && (c.RubricID <= 0 || c.RubricAssociationID <= 0 && c.RubricSelection == nil || c.Rubric.Status != "succeeded") {
 			return fmt.Errorf("complete create requires succeeded requested rubric and association ids")
 		}
 		if d.ModuleID > 0 && c.Module.Status != "preserved" && (c.ModuleItemID <= 0 || c.Module.Status != "succeeded") {

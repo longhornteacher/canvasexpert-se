@@ -25,13 +25,13 @@ func EngineFormatSection(section string) (string, error) {
 	var headings []string
 	switch section {
 	case "assignment":
-		headings = []string{"### Paper assignments, assignment groups and cross-course copies", "### Differentiated hub (assignments)", "## Individual assignment audiences from clubs"}
+		headings = []string{"### Paper assignments, assignment groups and cross-course copies", "### Existing rubrics and personal library", "### Differentiated hub (assignments)", "## Individual assignment audiences from clubs"}
 	case "page":
 		headings = []string{"### Standalone Pages and rich bodies", "### Course Page audiences from clubs"}
 	case "module":
 		headings = []string{"### Ordered module assembly"}
 	case "quiz":
-		headings = []string{"## Quiz file (QuizForge)"}
+		headings = []string{"## Quiz file (QuizForge)", "### Existing New Quiz content (`new-quiz-edit`)", "## Explicit New Quiz accommodations"}
 	case "inbox":
 		headings = []string{"## Canvas Inbox"}
 	default:

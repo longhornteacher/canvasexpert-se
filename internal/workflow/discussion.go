@@ -166,6 +166,12 @@ func (s *Service) PushDiscussion(ctx context.Context, path string) (report Discu
 		report.Message = "already created; pull-discussion before editing"
 		return report, nil
 	}
+	if d.Assignment != nil && (domain.IsRubricReference(d.Assignment.Rubric) || created.RubricSelection != nil) {
+		if e := s.resolveRubricReference(ctx, c.ID, d.Assignment.Rubric, &created.RubricSelection, save); e != nil {
+			report.Status, report.Message = "held", e.Error()
+			return report, nil
+		}
+	}
 	if created.Topic.Status == "held" {
 		report.Status = "held"
 		report.TopicID = created.TopicID
@@ -525,6 +531,13 @@ func (s *Service) finishGradedDiscussion(ctx context.Context, c domain.Course, d
 	live, err := GetAssignment(ctx, s.Client, c.ID, created.AssignmentID)
 	if err != nil {
 		return false, err
+	}
+	if created.RubricSelection != nil {
+		if e := s.pushReferencedRubric(ctx, c.ID, created.AssignmentID, created.RubricSelection, &created.Rubric, &created.RubricID, &created.RubricAssociationID, live, save); e != nil {
+			return hold(rubricReferenceStatus(created.RubricSelection, created.Rubric), e.Error())
+		}
+		report.Message = created.Rubric.Message
+		return false, nil
 	}
 	switch {
 	case len(live.Rubric) > 0 && !ambiguous(created.Rubric):

@@ -42,6 +42,9 @@ func validateAttempt(a AttemptRef) error {
 	return nil
 }
 func ValidateRubric(r Rubric) error {
+	if r.Library != "" {
+		return fmt.Errorf("scoring requires a complete rubric definition, not a library reference")
+	}
 	if r.ID < 0 || r.AssociationID < 0 {
 		return fmt.Errorf("rubric/association ids cannot be negative")
 	}

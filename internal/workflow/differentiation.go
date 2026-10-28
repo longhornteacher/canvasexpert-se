@@ -10,7 +10,7 @@ import (
 
 // DifferentiationTags reads Canvas tag names and accepted memberships for display.
 // Collaborative groups are excluded; this does not alter tags or assign content.
-func DifferentiationTags(ctx context.Context, c *canvas.Client, courseID int64) (map[int64][]string, error) {
+func DifferentiationTags(ctx context.Context, c *canvas.Client, courseID int64, userIDs ...int64) (map[int64][]string, error) {
 	var groups []struct {
 		ID               int64  `json:"id"`
 		Name             string `json:"name"`
@@ -20,20 +20,41 @@ func DifferentiationTags(ctx context.Context, c *canvas.Client, courseID int64) 
 		return nil, err
 	}
 	tags := map[int64][]string{}
+	namesByID := map[int64]string{}
 	for _, group := range groups {
 		if !group.NonCollaborative || group.ID <= 0 || group.Name == "" {
 			continue
 		}
-		var members []struct {
-			UserID int64  `json:"user_id"`
-			State  string `json:"workflow_state"`
+		namesByID[group.ID] = group.Name
+	}
+	if len(namesByID) == 0 {
+		return tags, nil
+	}
+	if len(userIDs) == 0 {
+		enrollments, e := StudentEnrollments(ctx, c, courseID)
+		if e != nil {
+			return nil, e
 		}
-		if err := c.List(ctx, fmt.Sprintf("/api/v1/groups/%d/memberships?filter_states[]=accepted&per_page=100", group.ID), &members); err != nil {
-			return nil, err
+		seen := map[int64]bool{}
+		for _, en := range enrollments {
+			id := en.UserID
+			if id == 0 {
+				id = en.User.ID
+			}
+			if id > 0 && !seen[id] {
+				userIDs = append(userIDs, id)
+				seen[id] = true
+			}
 		}
-		for _, member := range members {
-			if member.UserID > 0 && member.State == "accepted" {
-				tags[member.UserID] = append(tags[member.UserID], group.Name)
+	}
+	memberships, e := bulkUserTagIDs(ctx, c, courseID, userIDs)
+	if e != nil {
+		return nil, e
+	}
+	for id, groupIDs := range memberships {
+		for _, groupID := range groupIDs {
+			if name, ok := namesByID[groupID]; ok {
+				tags[id] = append(tags[id], name)
 			}
 		}
 	}

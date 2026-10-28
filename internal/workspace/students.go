@@ -23,6 +23,9 @@ type Student struct {
 	Ref, Instance, Name, FirstName, Alias, SISID, Login string
 	UserID                                              int64
 	Monitored, ExtraTime                                bool
+	// Quiz settings are private; ExtraTime above remains a deadline flag.
+	QuizTime       string `json:"-" yaml:"-"`
+	ReducedChoices bool   `json:"-" yaml:"-"`
 	// AliasSource is AliasFromCanvasID for a name every install derives the
 	// same way, or AliasFromTeacher for one the teacher typed.
 	AliasSource string
@@ -39,7 +42,8 @@ const (
 
 var legacyStudentHeader = []string{"student_ref", "instance", "canvas_user_id", "name", "first_name", "alias", "sis_id", "login", "monitored"}
 var extraTimeStudentHeader = append(append([]string(nil), legacyStudentHeader...), "extra_time")
-var studentHeader = append(append([]string(nil), extraTimeStudentHeader...), "alias_source")
+var aliasSourceStudentHeader = append(append([]string(nil), extraTimeStudentHeader...), "alias_source")
+var studentHeader = append(append([]string(nil), aliasSourceStudentHeader...), "quiz_time", "reduced_choices")
 
 // aliasPool is frozen: aliases are derived from the Canvas identity by position
 // in this list and by its length, so any change to it would give students
@@ -91,12 +95,23 @@ func OpenStudents(root string) (*StudentStore, error) {
 				return nil, fmt.Errorf("private student table row %d: invalid alias source", i+2)
 			}
 		}
-		s.Rows = append(s.Rows, Student{Ref: row[0], Instance: row[1], UserID: id, Name: row[3], FirstName: row[4], Alias: row[5], SISID: row[6], Login: row[7], Monitored: flag, ExtraTime: extraTime, AliasSource: source})
+		quizTime, reducedChoices := "", false
+		if len(row) > 11 {
+			quizTime = row[11]
+			if !ValidQuizTime(quizTime) {
+				return nil, fmt.Errorf("private student table row %d: invalid quiz_time", i+2)
+			}
+			reducedChoices, e = strconv.ParseBool(row[12])
+			if e != nil {
+				return nil, fmt.Errorf("private student table row %d: invalid reduced_choices flag", i+2)
+			}
+		}
+		s.Rows = append(s.Rows, Student{Ref: row[0], Instance: row[1], UserID: id, Name: row[3], FirstName: row[4], Alias: row[5], SISID: row[6], Login: row[7], Monitored: flag, ExtraTime: extraTime, AliasSource: source, QuizTime: quizTime, ReducedChoices: reducedChoices})
 	}
 	if e = s.validate(); e != nil {
 		return nil, e
 	}
-	if len(rows[0]) < len(studentHeader) {
+	if len(rows[0]) < len(aliasSourceStudentHeader) {
 		s.renameFromCanvasIDs()
 		if e = s.Save(); e != nil {
 			return nil, fmt.Errorf("could not save the one-time student alias update: %w", e)
@@ -105,12 +120,27 @@ func OpenStudents(root string) (*StudentStore, error) {
 	return s, nil
 }
 func knownStudentHeader(row []string) bool {
-	for _, h := range [][]string{studentHeader, extraTimeStudentHeader, legacyStudentHeader} {
+	for _, h := range [][]string{studentHeader, aliasSourceStudentHeader, extraTimeStudentHeader, legacyStudentHeader} {
 		if strings.Join(row, "\x00") == strings.Join(h, "\x00") {
 			return true
 		}
 	}
 	return false
+}
+
+// ValidQuizTime accepts standard, the two supported percentages, or positive
+// whole extra minutes within Canvas's maximum. It does not imply application.
+func ValidQuizTime(value string) bool {
+	if value == "" || value == "50%" || value == "100%" {
+		return true
+	}
+	for _, c := range value {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	minutes, err := strconv.Atoi(value)
+	return err == nil && minutes > 0 && minutes <= 10080
 }
 
 // renameFromCanvasIDs is the one-time move away from random aliases. Pool names
@@ -165,7 +195,7 @@ func idAlias(instance string, userID int64, used map[string]bool) string {
 }
 func (s *StudentStore) validate() error {
 	refs, ids, aliases := map[string]bool{}, map[string]bool{}, map[string]bool{}
-	for _, v := range s.Rows {
+	for i, v := range s.Rows {
 		key := v.Instance + "/" + strconv.FormatInt(v.UserID, 10)
 		aliasKey := v.Instance + "/" + strings.ToLower(v.Alias)
 		if v.Ref == "" || refs[v.Ref] || v.UserID <= 0 || v.Instance == "" || ids[key] || strings.TrimSpace(v.Alias) == "" || aliases[aliasKey] {
@@ -173,6 +203,9 @@ func (s *StudentStore) validate() error {
 		}
 		if strings.ContainsAny(v.Ref, "/\\:\x00") {
 			return fmt.Errorf("private student table has invalid stable reference")
+		}
+		if !ValidQuizTime(v.QuizTime) {
+			return fmt.Errorf("private student table row %d: invalid quiz_time", i+2)
 		}
 		refs[v.Ref] = true
 		ids[key] = true
@@ -188,7 +221,7 @@ func (s *StudentStore) Save() error {
 	w := csv.NewWriter(&b)
 	_ = w.Write(studentHeader)
 	for _, v := range s.Rows {
-		_ = w.Write([]string{v.Ref, v.Instance, strconv.FormatInt(v.UserID, 10), v.Name, v.FirstName, v.Alias, v.SISID, v.Login, strconv.FormatBool(v.Monitored), strconv.FormatBool(v.ExtraTime), v.AliasSource})
+		_ = w.Write([]string{v.Ref, v.Instance, strconv.FormatInt(v.UserID, 10), v.Name, v.FirstName, v.Alias, v.SISID, v.Login, strconv.FormatBool(v.Monitored), strconv.FormatBool(v.ExtraTime), v.AliasSource, v.QuizTime, strconv.FormatBool(v.ReducedChoices)})
 	}
 	w.Flush()
 	if e := w.Error(); e != nil {

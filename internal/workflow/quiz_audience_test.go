@@ -30,13 +30,18 @@ type quizAudienceFixtureState struct {
 	// Overrides is the live assignment override collection.
 	Overrides []AssignmentOverrideLive
 	// Visible is the live only_visible_to_overrides setting.
-	Visible bool
+	Visible        bool
+	QuizVisibility *[]int64
 	// FailAudience refuses the override write with this status.
 	FailAudience int
 	// FailPublish refuses publication with this status.
 	FailPublish int
 	// QuizCreates, ItemPosts, SettingsPuts and Publishes count writes.
 	QuizCreates, ItemPosts, SettingsPuts, Publishes int
+	// AccommodationBodies records each accommodation POST; FailAccommodations
+	// answers them with a server error.
+	AccommodationBodies [][]map[string]any
+	FailAccommodations  bool
 	// Submissions maps a user ID to a submission body; empty means no work.
 	Submissions map[int64]Submission
 }
@@ -79,6 +84,19 @@ func newQuizAudienceFixture(t *testing.T, members map[int64][]int64) *quizAudien
 		case r.Method == http.MethodPost && r.URL.Path == "/api/quiz/v1/courses/1/quizzes":
 			f.QuizCreates++
 			write(map[string]any{"id": "55"})
+		case r.Method == http.MethodPost && r.URL.Path == "/api/quiz/v1/courses/1/quizzes/55/accommodations":
+			var body []map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f.AccommodationBodies = append(f.AccommodationBodies, body)
+			if f.FailAccommodations {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			ok := []map[string]any{}
+			for _, c := range body {
+				ok = append(ok, map[string]any{"user_id": c["user_id"]})
+			}
+			write(map[string]any{"message": "Accommodations processed", "successful": ok, "failed": []any{}})
 		case r.Method == http.MethodGet && r.URL.Path == "/api/quiz/v1/courses/1/quizzes/55/items":
 			write([]any{})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/quiz/v1/courses/1/quizzes/55/items":
@@ -102,7 +120,7 @@ func newQuizAudienceFixture(t *testing.T, members map[int64][]int64) *quizAudien
 					f.SettingsPuts++
 				}
 			}
-			write(map[string]any{"id": 55, "course_id": 1, "name": "Ghost reading check", "published": f.Published, "only_visible_to_overrides": f.Visible, "overrides": f.Overrides, "is_quiz_lti_assignment": true})
+			write(map[string]any{"id": 55, "course_id": 1, "name": "Ghost reading check", "published": f.Published, "only_visible_to_overrides": f.Visible, "overrides": f.Overrides, "is_quiz_lti_assignment": true, "assignment_visibility": f.QuizVisibility})
 		case r.URL.Path == "/api/v1/courses/1/assignments/55/overrides":
 			if f.FailAudience > 0 {
 				w.WriteHeader(f.FailAudience)

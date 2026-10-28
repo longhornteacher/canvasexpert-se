@@ -67,7 +67,7 @@ The agent supplies educational judgment. The Engine supplies mechanics, not a cu
 
 ## You control the work
 
-“Draft” saves local work and does not authorize Canvas writes. Scores, new assignments, new quizzes and assignment edits use the teacher review page by default. You can explicitly skip review for a particular task. Native Pages, uploads, Modules and rubric attachments follow the requested scope directly; they do not share that review gate. Family emails, including grade updates, are sent only when the teacher clicks Send on the private review page; Drafts only saves them in Outlook.
+“Draft” saves local work and does not authorize Canvas writes. For scores, new assignments, quizzes and assignment edits, the agent reports the work in the conversation and writes on the teacher’s go-ahead there; a request that already includes the write authorizes it directly. The scoring report includes impressions, score distribution and one exact Engine-rendered feedback sample. Native Pages, uploads, Modules and rubric attachments follow the requested scope directly. Family emails, including grade updates, are sent only when the teacher clicks Send on the private review page; Drafts only saves them in Outlook.
 
 Ordinary assignment grading posts the honest computed assessment, including when it is below an existing entered grade. Canvas calculates late point penalties. Missing or unreadable evidence is reported specifically, while independent work continues. See [scoring rules](docs/SCORING-RULES.md) and the current [teacher playbooks](workspace-template/playbooks/) for details.
 

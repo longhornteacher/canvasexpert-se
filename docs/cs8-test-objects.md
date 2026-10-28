@@ -17,3 +17,11 @@ On 2026-10-17 assignments 3698077-3698082 and 3698181 were no longer found (alre
 All Engine unattended assignments have `omit_from_final_grade: true` and `post_to_sis: false`. Remove a row when its object is deleted.
 
 2026-10-17 group-work live check (all `[CSE 1.1b DISPOSABLE]`): everything was deleted, including the Test Student discussion 304285, its assignment 3703816 and its rubric. Nothing from that run remains in CS8.
+
+On 2026-10-28 the New Quiz content-edit Engine probe created one new unpublished disposable quiz with one essay item, changed instructions/prompt/general feedback, checked the saved fields and rerun behavior, and deleted the quiz afterward. No student attempt or existing classroom quiz was touched. Exact private IDs remain in UserSync dev-reference; no object from this probe awaits cleanup.
+
+On 2026-10-28 the rubric-reuse/Enhanced Rubrics compatibility probe created two ordinary assignments, one unpublished New Quiz and one new library rubric. One ordinary assignment was restricted to the built-in Test Student before publication for its synthetic submission and ordinary Engine assessment/comment post. All three assignments/quizzes and the rubric were deleted afterward. No object from this probe awaits cleanup; exact IDs and the scope are in the private dev reference.
+
+On 2026-10-28 the differentiation-tag protocol probe created disposable tag sets and a synthetic Page, and used only the built-in Test Student memberships. Bulk response wrapping was diagnosed with fresh disposable sets; every set was deleted after its run. The final probe restricted the Page to a disposable tag before publication and then observed deletion of that tag; the Page and set were deleted afterward. Exact private IDs are in dev-reference/tag-probe-20261028.json. No object from these checks awaits cleanup and no real student was re-leveled.
+
+On 2026-10-28 the quiz-accommodation probe (handoff `HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md`) created New Quiz 3710787 "[CSE DISPOSABLE] accommodation probe": unpublished, 30-minute timer, no items. Accommodation POSTs were sent only for the teacher-owned account 105645. **Awaiting cleanup:** delete the quiz in Canvas.

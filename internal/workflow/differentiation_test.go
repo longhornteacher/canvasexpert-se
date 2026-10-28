@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestDifferentiationReadsOnlyTagsAndAcceptedMembersAcrossPages(t *testing.T) {
+func TestDifferentiationReadsOnlyTagsAcrossPagesWithBulkMemberships(t *testing.T) {
 	requests := 0
 	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		requests++
@@ -26,18 +26,13 @@ func TestDifferentiationReadsOnlyTagsAndAcceptedMembersAcrossPages(t *testing.T)
 				w.Header().Set("Link", `</api/v1/courses/1/groups?collaboration_state=non_collaborative&page=2>; rel="next"`)
 				_, _ = io.WriteString(w, `[{"id":101,"name":"Silver","non_collaborative":true},{"id":999,"name":"Project group","non_collaborative":false}]`)
 			}
-		case "/api/v1/groups/101/memberships":
-			if r.URL.Query().Get("page") == "2" {
-				_, _ = io.WriteString(w, `[{"user_id":2,"workflow_state":"accepted"}]`)
-			} else {
-				if r.URL.Query().Get("filter_states[]") != "accepted" {
-					t.Error("missing accepted membership filter")
-				}
-				w.Header().Set("Link", `</api/v1/groups/101/memberships?page=2>; rel="next"`)
-				_, _ = io.WriteString(w, `[{"user_id":1,"workflow_state":"accepted"},{"user_id":3,"workflow_state":"invited"}]`)
+		case "/api/v1/courses/1/enrollments":
+			io.WriteString(w, `[{"user_id":1,"type":"StudentEnrollment"},{"user_id":2,"type":"StudentEnrollment"},{"user_id":3,"type":"StudentEnrollment"}]`)
+		case "/api/v1/courses/1/bulk_user_tags":
+			if len(r.URL.Query()["user_ids[]"]) != 3 {
+				t.Error("missing roster identities in bulk tag read")
 			}
-		case "/api/v1/groups/102/memberships":
-			_, _ = io.WriteString(w, `[{"user_id":1,"workflow_state":"accepted"}]`)
+			io.WriteString(w, `{"1":[101,102,999],"2":[101],"3":[]}`)
 		default:
 			t.Errorf("unexpected tag API call: %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -45,7 +40,7 @@ func TestDifferentiationReadsOnlyTagsAndAcceptedMembersAcrossPages(t *testing.T)
 	})
 	tags, err := DifferentiationTags(context.Background(), s.Client, 1)
 	want := map[int64][]string{1: {"Blue", "Silver"}, 2: {"Silver"}}
-	if err != nil || !reflect.DeepEqual(tags, want) || requests != 5 {
+	if err != nil || !reflect.DeepEqual(tags, want) || requests != 4 {
 		t.Fatalf("tag read: %v %v (%d requests)", tags, err, requests)
 	}
 }

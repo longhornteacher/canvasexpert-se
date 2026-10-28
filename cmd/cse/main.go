@@ -68,6 +68,9 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   pull-group-memberships COURSE ID  Pull an exact group set's membership baseline
   push FILE                     Create/resume assignments, date overrides, Pages, discussions/replies, modules, group sets or membership plans
   pull-page COURSE ID|LINK       Pull exact Page HTML and baseline for editing
+  pull-quiz COURSE ASSIGNMENT_ID Pull New Quiz content and exact item baselines
+  rubrics COURSE [--include-account] List course rubrics and optional school rubrics
+  pull-rubric COURSE RUBRIC_ID   Pull a portable rubric definition into a fresh draft
   pull-discussion COURSE TOPIC_ID Pull topic.md plus full/partial discussion packet (optional --group ID)
   page-history COURSE PAGE_ID   Read Page revisions (optional --group ID --revision ID)
   upload-file COURSE FILE --access course|hidden|locked [--folder ID] [--receipt PATH] [--new-upload]
@@ -76,6 +79,8 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   prepare-audience COURSE FILE [--refresh] Prepare individual club audience without Canvas writes
   pull-assignment-dates COURSE ASSIGNMENT_ID Pull exact audience override baselines for editing
   tags COURSE                   List differentiation tag sets and tags with member counts (no students)
+  quiz-accommodations COURSE QUIZ_ID REQUEST.json|--from-saved [--preview]  Quiz accommodations
+  set-tags FILE [--preview]     Create/rename/delete tags and set explicit memberships
   assign-to FILE [--preview]    Set Assign To (module, page, quiz, assignment, discussion) to tags from an assign-to document; --preview shows current -> new audience
   assign-modules COURSE (--pattern "Book Club: {tag}" | --map "Module=Tag" ...) [--tag-set NAME] [--preview]
                                 Assign each module to its same-named tag
@@ -91,16 +96,15 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   family-contact-prepare RUN_FOLDER Resolve a free-form contact.json audience against Canvas
   parent-review RUN_FOLDER      Open the private page to review and send a grade-update or family-contact run (Outlook)
   student-report RUN_FOLDER     Save one PDF of student reports (one per page) from a parent-update run and open it
-  push-quiz COURSE FILE         Create or resume a New Quiz from a QuizForge file
+  push-quiz COURSE FILE [--skip-accommodations]  Create or resume a New Quiz
   draft-pdf FILE [--handout]    Save a printable PDF of a draft assignment, Page, quiz or results file and open it; --handout keeps only what students see
   post RESULTS_FILE             Post validated grades or selected revisions
   quiz-points COURSE QUIZ [N=PTS ...] List a New Quiz's questions, or set question N to PTS points
   api PATH                      Read-only Canvas API GET when no command fits; prints the JSON
-  validate FILE                 Validate a workspace document locally
+  validate FILE [--show STUDENT_REF] Validate locally; optionally show one exact feedback sample
   results-init PACKET           Start a results file for a pulled packet (attempts and evidence filled in)
   doctor [--json] [--offline]   Check this UserInstall; authenticated Canvas and hub checks unless offline
   version [--json]              Print version and build information
-  review FILE [COURSE]  Open a local page where the teacher reviews scores (results file), a new assignment (create document) or a quiz (QuizForge file plus COURSE), revises some, and posts or creates the approved ones; exits when finished and prints what was posted, revised and held
   help [formats|formats-assignment|formats-page|formats-module|formats-quiz|formats-inbox|fields|examples]
                                 Print offline reference, optionally limited to one document kind
 
@@ -514,7 +518,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "inbox-list": true, "inbox-read": true, "inbox-reply": true, "inbox-set-state": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "copy-assignment": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "review": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "inbox-list": true, "inbox-read": true, "inbox-reply": true, "inbox-set-state": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-quiz": true, "rubrics": true, "pull-rubric": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "copy-assignment": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "quiz-accommodations": true, "set-tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -540,8 +544,11 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		return 0
 	}
 	if cmd == "validate" {
-		if len(args) != 1 {
-			return fail(inputError(fmt.Errorf("validate requires one file")), progress)
+		show := ""
+		if len(args) == 3 && args[1] == "--show" && args[2] != "" {
+			show = args[2]
+		} else if len(args) != 1 {
+			return fail(inputError(fmt.Errorf("validate requires one file and optional --show STUDENT_REF")), progress)
 		}
 		p, e := documentPath(root, args[0])
 		if e == nil {
@@ -549,6 +556,13 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		if e != nil {
 			return fail(inputError(e), progress)
+		}
+		if show != "" {
+			sample, err := workflow.BuildFeedbackSample(root, p, show)
+			if err != nil {
+				return fail(inputError(err), progress)
+			}
+			return fail(json.NewEncoder(out).Encode(sample), progress)
 		}
 		fmt.Fprintf(out, "Valid document: %s\n", p)
 		previewResults(root, p, out)
@@ -667,6 +681,12 @@ func validateDocument(path string, roots ...string) error {
 		target = &domain.GroupWorkDocument{}
 	case "page":
 		target = &domain.PageDocument{}
+	case "new-quiz-edit":
+		target = &domain.NewQuizEditDocument{}
+	case "rubric-library":
+		target = &domain.RubricLibraryDocument{}
+	case "tags":
+		target = &domain.TagsDocument{}
 	case "discussion":
 		target = &domain.DiscussionDocument{}
 	case "discussion-packet":
@@ -694,7 +714,7 @@ func validateDocument(path string, roots ...string) error {
 		case "students.md":
 			target = &domain.StudentNotes{}
 		default:
-			return fmt.Errorf("unsupported document kind %q; expected assignment, assignment-dates, assign-to, group-set, group-memberships, group-packet, group-work, page, discussion, discussion-packet, discussion-reply, module, results, group-results, packet, or student-work", kind)
+			return fmt.Errorf("unsupported document kind %q; expected assignment, new-quiz-edit, rubric-library, tags, assignment-dates, assign-to, group-set, group-memberships, group-packet, group-work, page, discussion, discussion-packet, discussion-reply, module, results, group-results, packet, or student-work", kind)
 		}
 	}
 	if kindErr != nil && kind != "" {

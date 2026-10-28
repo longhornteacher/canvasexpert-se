@@ -151,17 +151,18 @@ func (s QuizSettings) quizSettings() map[string]any {
 }
 
 type QuizPushReport struct {
-	Status       string // completed or partial
-	AssignmentID int64
-	URL          string
-	ItemsAdded   int
-	ItemsTotal   int
-	Published    bool
-	Message      string
-	Hub          string // hub tier pages, tags, and teacher actions
-	Audience     string // applied individual club audience, when requested
-	Path         string // existing sidecar containing the created quiz ID and resume data
-	Warnings     []string
+	Status         string // completed or partial
+	AssignmentID   int64
+	URL            string
+	ItemsAdded     int
+	ItemsTotal     int
+	Published      bool
+	Message        string
+	Hub            string // hub tier pages, tags, and teacher actions
+	Audience       string // applied individual club audience, when requested
+	Accommodations string // private saved-settings outcome, counts only
+	Path           string // existing sidecar containing the created quiz ID and resume data
+	Warnings       []string
 }
 
 // quizSidecar is the resume record beside the quiz file. A New Quiz records its
@@ -177,19 +178,30 @@ type quizSidecar struct {
 	// Audience is the Engine-managed individual audience for the quiz's
 	// associated assignment. It is never read from the QuizForge file.
 	Audience *domain.Audience `json:"audience,omitempty"`
-	// Stages records accepted restricted-quiz work so a resume repeats only
-	// unfinished stages. Absent for ordinary quizzes.
+	// Stages records accepted restricted-quiz/accommodation work so a resume
+	// repeats only unfinished stages. Older ordinary sidecars may omit it.
 	Stages *quizStages `json:"stages,omitempty"`
 }
 
-// quizStages records the accepted stages of a restricted quiz. Each outcome is
-// definite only after Canvas accepted that stage.
+// quizStages records restricted-quiz and saved-accommodation work. Canvas
+// outcomes become definite only after acceptance; skipped is not applied.
 type quizStages struct {
-	Items       domain.ActionOutcome `json:"items,omitempty"`
-	Settings    domain.ActionOutcome `json:"settings,omitempty"`
-	Audience    domain.ActionOutcome `json:"audience,omitempty"`
-	Module      domain.ActionOutcome `json:"module,omitempty"`
-	Publication domain.ActionOutcome `json:"publication,omitempty"`
+	Items          domain.ActionOutcome    `json:"items,omitempty"`
+	Settings       domain.ActionOutcome    `json:"settings,omitempty"`
+	Audience       domain.ActionOutcome    `json:"audience,omitempty"`
+	Module         domain.ActionOutcome    `json:"module,omitempty"`
+	Publication    domain.ActionOutcome    `json:"publication,omitempty"`
+	Accommodations *quizAccommodationStage `json:"accommodations,omitempty"`
+}
+
+type quizAccommodationStage struct {
+	Status string `json:"status"`
+	Count  int    `json:"count,omitempty"`
+	Digest string `json:"digest,omitempty"`
+}
+
+type QuizPushOptions struct {
+	SkipAccommodations bool
 }
 
 func writeSidecar(path string, rec quizSidecar) error {
@@ -213,7 +225,14 @@ func readSidecar(path string) quizSidecar {
 // already in Canvas. Publication, dates, assignment group and module placement
 // come last, only after every item is in, and only when requested in
 // metadata.canvas; otherwise the quiz stays unpublished.
-func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report QuizPushReport, err error) {
+func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options ...QuizPushOptions) (report QuizPushReport, err error) {
+	var opts QuizPushOptions
+	if len(options) > 1 {
+		return report, fmt.Errorf("only one quiz push options value is supported")
+	}
+	if len(options) == 1 {
+		opts = options[0]
+	}
 	q, e := ReadQuizForge(path)
 	if e != nil {
 		return report, e
@@ -236,10 +255,15 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 	base := fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes", course.ID)
 	rec := readSidecar(path)
 	restricted := set.Audience != nil || rec.Audience != nil
+	candidates, e := s.savedQuizCandidates()
+	if e != nil {
+		return report, e
+	}
+	tracked := restricted || len(candidates) > 0 || rec.Stages != nil || opts.SkipAccommodations
 	if rec.Instance != "" && (rec.Instance != s.Client.Origin() || rec.CourseID != 0 && rec.CourseID != course.ID) {
 		return report, fmt.Errorf("saved quiz sidecar belongs to a different Canvas/course; it was not reused")
 	}
-	if restricted {
+	if tracked {
 		if rec.Instance == "" {
 			rec.Instance, rec.CourseID = s.Client.Origin(), course.ID
 		}
@@ -316,9 +340,9 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 	report.URL = fmt.Sprintf("%s/courses/%d/assignments/%d", s.Client.Origin(), course.ID, id)
 	report.ItemsAdded = existing
 	labels := q.scoredIDs()
-	// A restricted quiz resumes only unfinished stages; accepted items are
+	// A tracked quiz resumes only unfinished stages; accepted items are
 	// never re-posted.
-	itemsAccepted := restricted && rec.Stages != nil && definite(rec.Stages.Items)
+	itemsAccepted := rec.Stages != nil && definite(rec.Stages.Items)
 	if itemsAccepted {
 		report.ItemsAdded = len(items)
 	}
@@ -330,7 +354,7 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 		}
 		report.ItemsAdded++
 	}
-	if restricted && rec.Stages != nil && !definite(rec.Stages.Items) {
+	if rec.Stages != nil && !definite(rec.Stages.Items) {
 		rec.Stages.Items = domain.ActionOutcome{Status: "succeeded"}
 		if e = writeSidecar(path, rec); e != nil {
 			return report, e
@@ -346,7 +370,7 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string) (report Q
 			return report, e
 		}
 	}
-	if complete, e := s.finishQuiz(ctx, course, id, set, &report, path); e != nil {
+	if complete, e := s.finishQuiz(ctx, course, id, set, &report, path, opts); e != nil {
 		report.Status = "partial"
 		return report, e
 	} else if !complete {
@@ -371,15 +395,15 @@ func (q QuizForge) scoredIDs() []string {
 
 // finishQuiz applies assignment-level settings, the individual audience and
 // module placement once the items are safe. Each step is idempotent, so a rerun
-// repeats it harmlessly. A restricted quiz records accepted stages in the
-// sidecar and resumes only unfinished work. It reports whether every requested
-// stage is complete; an incomplete audience leaves the quiz unpublished.
-func (s *Service) finishQuiz(ctx context.Context, course domain.Course, id int64, set QuizSettings, report *QuizPushReport, path string) (bool, error) {
+// repeats it harmlessly. Restricted quizzes and quizzes with saved requirements
+// record stages in the sidecar and resume unfinished work. Incomplete audiences
+// and unapplied saved accommodations hold publication.
+func (s *Service) finishQuiz(ctx context.Context, course domain.Course, id int64, set QuizSettings, report *QuizPushReport, path string, opts QuizPushOptions) (bool, error) {
 	courseID := course.ID
 	rec := readSidecar(path)
 	restricted := set.Audience != nil || rec.Audience != nil
 	var stages *quizStages
-	if restricted {
+	if restricted || rec.Stages != nil {
 		if rec.Stages == nil {
 			rec.Stages = &quizStages{}
 		}
@@ -466,6 +490,20 @@ func (s *Service) finishQuiz(ctx context.Context, course domain.Course, id int64
 			return false, nil
 		}
 		report.Audience = quizAudienceSummary(audience)
+	}
+	if stages != nil {
+		complete, e := s.guardSavedQuizPublication(ctx, course, id, set, opts.SkipAccommodations, &rec, report, save)
+		if e != nil {
+			report.Message = "Saved quiz accommodations could not be prepared; publication was held."
+			stages.Accommodations.Status = "held"
+			if saveErr := save(); saveErr != nil {
+				return false, saveErr
+			}
+			return false, e
+		}
+		if !complete {
+			return false, nil
+		}
 	}
 	if set.Published && (stages == nil || !definite(stages.Publication)) {
 		var a Assignment

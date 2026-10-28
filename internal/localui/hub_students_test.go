@@ -163,6 +163,7 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 	for i, student := range store.Rows {
 		if student.UserID == 1 {
 			store.Rows[i].Monitored, store.Rows[i].ExtraTime = true, true
+			store.Rows[i].QuizTime, store.Rows[i].ReducedChoices = "50%", true
 			store.Rows[i].FirstName = "Annie"
 		}
 		byID[student.UserID] = store.Rows[i]
@@ -173,6 +174,10 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 	form := url.Values{"request_secret": {"nonce"}, "course": {"22"}, "alias_" + byID[2].Ref: {"Edited Bo"}, "alias_" + byID[4].Ref: {byID[4].Alias}, "extra_time_" + byID[4].Ref: {"on"}}
 	form.Set("goes_by_"+byID[2].Ref, "  Bobby  ")
 	form.Set("goes_by_"+byID[1].Ref, "Wrong course")
+	form.Set("quiz_time_"+byID[1].Ref, "") // outside the selected course
+	form.Set("quiz_time_"+byID[4].Ref, "minutes")
+	form.Set("quiz_minutes_"+byID[4].Ref, "15")
+	form.Set("reduced_choices_"+byID[4].Ref, "on")
 	for i := 0; i < 2; i++ {
 		w := hubPost(h, "/students", form, h.origin)
 		if w.Code != 200 || !strings.Contains(w.Body.String(), "Saved.") || !strings.Contains(w.Body.String(), `href="/students?course=22" aria-current="page"`) {
@@ -197,7 +202,7 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 	for _, student := range store.Rows {
 		switch student.UserID {
 		case 1:
-			if !student.Monitored || !student.ExtraTime || student.Alias != byID[1].Alias || student.FirstName != "Annie" {
+			if !student.Monitored || !student.ExtraTime || student.Alias != byID[1].Alias || student.FirstName != "Annie" || student.QuizTime != "50%" || !student.ReducedChoices {
 				t.Fatal("saving another course changed Ana's settings")
 			}
 		case 2:
@@ -205,7 +210,7 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 				t.Fatal("refresh changed alias or identity")
 			}
 		case 4:
-			if !student.ExtraTime || student.Alias != byID[4].Alias {
+			if !student.ExtraTime || student.Alias != byID[4].Alias || student.QuizTime != "15" || !student.ReducedChoices {
 				t.Fatal("extra time not persisted or rejected save changed data")
 			}
 		}

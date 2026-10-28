@@ -6,6 +6,8 @@ The judgment calls are yours; the Engine pulls work, does the arithmetic and pos
 
 Read this playbook and grading/calendar references through their logical MCP paths or from the effective teacher-rules root (UserInstall by default, configured UserSync otherwise). Student notes and course configuration use that same authority. Packets, drafts and commands stay in UserInstall. Contact JSON is private and must not be read for scoring. If a shared reference is unavailable, explain that file's problem without reading an inactive local copy; continue independent work that has its needed evidence.
 
+A rubric shared by several assignments is assessed through the ordinary live rubric and exact criterion IDs. To inspect or offer a reusable rubric for future work, see edit.md; save a personal library entry only when the teacher asks. Never alter an existing definition to fit a grade.
+
 ## Pull
 
 ```powershell
@@ -88,14 +90,15 @@ Start each results file with `init_results` and the packet path from the pull re
 
 When the scoring is done and valid, report it here rather than sending the teacher to a page. Keep it short, one block per assignment (and per class when sections differ):
 
-- how many students were scored, and the score range with a rough spread in assignment points ("most 7–9/10; three below 6"); for a New Quiz, the range on each written part
-- general impressions: what most students did well, the most common gap or misconception, and anything surprising, in two or three sentences
+- overall impressions: what most students did well, the most common gap or misconception, and anything surprising, in two or three sentences
+- how many students were scored and the distribution in assignment points, including median and rough spread ("median 7/10; most 6–9; four below 5"). Offer one or two hypothetical curve options only when the distribution warrants it and state their numerical effect. No curve is applied; applying one requires a separately requested feature. For a New Quiz, report ranges per written part; a quiz total is unavailable until the Engine has an exact, complete basis for that attempt. Never guess a total or silently apply effort floors to item points or fudge points
+- one typical, non-held student’s exact Engine-rendered comment by alias, from `.\cse.cmd validate RESULTS --show STUDENT_REF` (MCP `validate_document {path, show: STUDENT_REF}`). Use the returned text verbatim, never paraphrase it. The sample exposes no submission or private teacher notes; held selections return only the reason. Item-score posting remains pending the separate live protocol evidence
 - each held student by alias with the specific reason, and missing submissions as a count
 - late timing that was corrected or held, and any accommodation applied, without the private basis
 - for exemplars, which prompts have them ready
 
 Do not paste every student's feedback. A teacher who wants to read it all can have a Draft PDF of the results file (`save_draft_pdf`): one student per page, held students marked; `handout: true` prints only each student's posted feedback, for handing back on paper. Then ask whether to post. The teacher may ask to see a student's feedback, ask for a change ("go easier on the thesis criterion", "redo Maya's"), or hold someone back. Make exactly the requested change to exactly those students, validate again and report only what changed. A change to the shared interpretation or scoring basis applies to every student. To hold a student back, remove that student's row from the results file before posting; they stay ungraded in Canvas and come back in the next scoring session. Post with `.\cse.cmd post <results-file>` (MCP: `post_results`) when the teacher says to. When the teacher already asked to score and post, post first, then give the same report with the outcomes.
 
-The review page (`.\cse.cmd review <results-file>`, MCP: `start_review`) remains available when the teacher asks to look through the cards there or has saved that preference. It approves everyone by default and calls out held students. After Revise, fix exactly the noted students and nothing else; the others keep their approval. If the command is interrupted or the teacher says "check revisions", read `<results-file>.review.json` (items with `"status": "revise"`). Never `post` students who were revised or held. The page stays open if the agent app restarts; after a restart `review_status` no longer knows the old `review_id`, so call `start_review` for the same file again. It reconnects to the page if it is still open; if it has closed, its outcomes are already saved in the results file and `<results-file>.review.json`.
+If the teacher asks for a nicer page, write a one-off local HTML file in the course’s scoring folder in UserInstall, using aliases unless names are requested and with no approve or post buttons. Never publish it to a cloud page or sharing service because it holds student work; posting still happens through the conversation.
 
 Report posted, held and failed students from the Engine's output. Explain each held student specifically. Before posting, the Engine checks whether the exact comment text is already present to avoid posting an identical comment twice. Once Canvas accepts a write, treat it as done: do not read it back or rerun just to confirm. If Canvas reports a genuine write error, rerun the same results file to resume; completed writes stay complete. A requested reassessment uses a fresh pull and new results file.

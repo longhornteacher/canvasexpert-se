@@ -10,7 +10,7 @@ import (
 )
 
 // The print page inlines draft HTML so it paginates, so the policy blocks
-// scripts and every network load in place of the review page's sandbox.
+// scripts and every network load for standalone draft rendering.
 var draftTemplate = template.Must(template.New("draft").Parse(`<!doctype html>
 <html lang="en"><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
@@ -80,7 +80,7 @@ func printFrames(frames []workflow.ReviewFrame) []draftFrame {
 		if f.PrintHTML != "" {
 			h = f.PrintHTML
 		}
-		// Frame HTML is what the review page shows in its sandbox: the Engine's
+		// Frame HTML comes from the shared draft renderer: the Engine's
 		// own rendering of the draft. The page policy above keeps it inert.
 		out = append(out, draftFrame{Label: f.Label, HTML: template.HTML(h)})
 	}
@@ -88,7 +88,7 @@ func printFrames(frames []workflow.ReviewFrame) []draftFrame {
 }
 
 // draftHTML lays out a review model for paper. The teacher copy shows
-// everything the review page does; the handout keeps only what students see:
+// the full draft rendering; the handout keeps only what students see:
 // directions, questions and posted feedback, never keys, settings or private notes.
 func draftHTML(m workflow.ReviewModel, handout bool, now time.Time) ([]byte, error) {
 	v := draftView{Title: m.Title, Kind: m.Kind, Notice: m.Notice, Date: now.Format("Jan 2, 2006"), Handout: handout}

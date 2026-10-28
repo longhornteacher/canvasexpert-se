@@ -81,7 +81,7 @@ func (s *Service) downloadDirectionImage(ctx context.Context, relDir string, id 
 		return item
 	}
 	tmp := f.Name()
-	e = s.Client.DownloadUnauthenticated(ctx, file.URL, f)
+	e = s.Client.Download(ctx, file.URL, f)
 	if ce := f.Close(); e == nil {
 		e = ce
 	}

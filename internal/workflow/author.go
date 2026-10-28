@@ -190,6 +190,12 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		return report, fmt.Errorf("incomplete create body changed; recover known creation before editing live content")
 	}
 	save := func() error { return workspace.WriteDocument(path, &doc, body) }
+	if domain.IsRubricReference(doc.Rubric) || c.RubricSelection != nil {
+		if e := s.resolveRubricReference(ctx, course.ID, doc.Rubric, &c.RubricSelection, save); e != nil {
+			report.Status, report.Message = "held", e.Error()
+			return report, nil
+		}
+	}
 	if err = save(); err != nil {
 		return report, err
 	}
@@ -281,7 +287,13 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	// Edits the teacher made to the unfinished item (content, publication) are
 	// left alone; only the remaining construction steps continue.
 	pointsBefore := live.Points
-	if doc.Rubric != nil && !definite(c.Rubric) {
+	if doc.Rubric != nil && c.RubricSelection != nil {
+		if e := s.pushReferencedRubric(ctx, course.ID, c.AssignmentID, c.RubricSelection, &c.Rubric, &c.RubricID, &c.RubricAssociationID, live, save); e != nil {
+			report.Status, report.Message = rubricReferenceStatus(c.RubricSelection, c.Rubric), e.Error()
+			return report, nil
+		}
+		report.Message = c.Rubric.Message
+	} else if doc.Rubric != nil && !definite(c.Rubric) {
 		if len(live.Rubric) > 0 && !ambiguous(c.Rubric) {
 			c.Rubric = domain.ActionOutcome{Status: "preserved", Message: "the assignment already has a rubric in Canvas; left as it is"}
 		} else if c.Rubric.Status == "uncertain" || c.Rubric.Status == "pending" {
@@ -343,7 +355,7 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	} else if doc.Rubric == nil {
 		c.Rubric = domain.ActionOutcome{Status: "not-requested"}
 	}
-	if doc.Rubric != nil && definite(c.Rubric) && c.Rubric.Status != "preserved" {
+	if doc.Rubric != nil && c.RubricSelection == nil && definite(c.Rubric) && c.Rubric.Status != "preserved" {
 		snap, e := Snapshot(live, s.Client.Origin())
 		if e != nil {
 			return report, e
@@ -694,6 +706,10 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 	live, err := Snapshot(a, s.Client.Origin())
 	if err != nil {
 		return report, err
+	}
+	if d.Observed.NewQuiz && !live.NewQuiz {
+		report.Status, report.Message = "held", "The live item is no longer identified as a New Quiz; the unsent edit was preserved. Pull it again before editing."
+		return report, nil
 	}
 	base := *d.Observed
 	base.UpdatedAt = ""

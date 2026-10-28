@@ -14,18 +14,19 @@ import (
 )
 
 type ModulePushReport struct {
-	Status      string
-	Course      string
-	CourseID    int64
-	ModuleID    int64
-	Title       string
-	ItemsAdded  int
-	ItemsTotal  int
-	Published   bool
-	Position    int
-	ChildAccess string
-	Items       []domain.ModuleItemOutcome
-	Message     string
+	Status           string
+	Course           string
+	CourseID         int64
+	ModuleID         int64
+	Title            string
+	ItemsAdded       int
+	ItemsTotal       int
+	Published        bool
+	Position         int
+	ChildAccess      string
+	Items            []domain.ModuleItemOutcome
+	Message          string
+	AlreadyCompleted bool
 }
 
 type canvasModule struct {
@@ -92,6 +93,23 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 	}
 	if d.CourseID != 0 && d.CourseID != course.ID {
 		return report, fmt.Errorf("module document course ID does not match configured course %s", course.Nickname)
+	}
+	if len(d.Remove) > 0 && d.Created != nil && len(d.Created.Items) == len(d.Items) {
+		complete := d.ModuleID > 0 && d.Created.ModuleID == d.ModuleID && d.Instance == s.Client.Origin() && d.CourseID == course.ID
+		for i, item := range d.Items {
+			saved := d.Created.Items[i]
+			complete = complete && saved.Index == i && saved.Type == item.Type && saved.ContentID == item.ContentID && saved.ExternalURL == item.ExternalURL && sameBoolPointer(saved.NewTab, item.NewTab) && saved.Title == item.Title && saved.Position == item.Position && definite(saved.Outcome)
+		}
+		for _, removal := range d.Remove {
+			complete = complete && removal.Outcome.Status == "succeeded" && (removal.Replacement == 0 || removal.MoveOutcome.Status == "succeeded")
+		}
+		complete = complete && (d.Position == nil || d.Created.Position != nil && *d.Position == *d.Created.Position) && (d.Published == nil || !*d.Published || definite(d.Created.Publication))
+		if complete {
+			report.Status, report.ModuleID, report.Items = "completed", d.ModuleID, d.Created.Items
+			report.AlreadyCompleted = true
+			report.Message = "module items already removed; course content remains in the course"
+			return report, nil
+		}
 	}
 	if d.Created != nil {
 		if d.Created.ModuleID > 0 && d.ModuleID > 0 && d.Created.ModuleID != d.ModuleID {
@@ -227,6 +245,24 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 		return report, err
 	}
 
+	// Capture the original position before an insertion can shift it. The item
+	// is checked again immediately before removal.
+	for i := range d.Remove {
+		removal := &d.Remove[i]
+		if removal.Outcome.Status != "" || removal.Position > 0 {
+			continue
+		}
+		live, getErr := s.getModuleItem(ctx, course.ID, moduleID, removal.ModuleItemID)
+		if getErr != nil || !moduleRemovalMatches(live, *removal) || live.Position <= 0 {
+			report.Status, report.Message = "held", fmt.Sprintf("Module item %d no longer matches the observed item; nothing was removed. Pull the current module before retrying.", removal.ModuleItemID)
+			return report, nil
+		}
+		removal.Position = live.Position
+		if err = save(); err != nil {
+			return report, err
+		}
+	}
+
 	for i, item := range d.Items {
 		var saved *domain.ModuleItemOutcome
 		if i < len(d.Created.Items) {
@@ -332,6 +368,77 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 		}
 	}
 
+	for i := range d.Remove {
+		removal := &d.Remove[i]
+		if removal.Outcome.Status != "succeeded" {
+			if removal.Outcome.Status == "pending" || removal.Outcome.Status == "uncertain" {
+				report.Status, report.Message = "held", "Removal outcome is uncertain; inspect the module before retrying. Course content is not deleted."
+				return report, nil
+			}
+			if removal.Replacement > 0 && d.Created.Items[removal.Replacement-1].Outcome.Status != "succeeded" {
+				report.Status, report.Message = "held", "Replacement item has not been added; the original remains in the module."
+				return report, nil
+			}
+			live, getErr := s.getModuleItem(ctx, course.ID, moduleID, removal.ModuleItemID)
+			if getErr != nil || !moduleRemovalMatches(live, *removal) || live.Position <= 0 {
+				report.Status, report.Message = "held", fmt.Sprintf("Module item %d no longer matches the observed item; nothing was removed. Pull the current module before retrying.", removal.ModuleItemID)
+				return report, nil
+			}
+			if removal.Replacement > 0 {
+				removal.ReplacementItemID = d.Created.Items[removal.Replacement-1].ModuleItemID
+			}
+			removal.Outcome = domain.ActionOutcome{Status: "pending", ID: removal.ModuleItemID}
+			if err = save(); err != nil {
+				return report, err
+			}
+			err = s.Client.WriteAccepted(ctx, "DELETE", fmt.Sprintf("/api/v1/courses/%d/modules/%d/items/%d", course.ID, moduleID, removal.ModuleItemID), nil, nil)
+			if err != nil {
+				removal.Outcome = failedOutcome(err)
+			} else {
+				removal.Outcome = domain.ActionOutcome{Status: "succeeded", ID: removal.ModuleItemID, Message: "removed from module; course content remains"}
+			}
+			if err = save(); err != nil {
+				return report, fmt.Errorf("module removal outcome could not be saved: %w", err)
+			}
+			if removal.Outcome.Status != "succeeded" {
+				report.Status, report.Message = removal.Outcome.Status, removal.Outcome.Message
+				return report, nil
+			}
+		}
+		if removal.Replacement > 0 && removal.MoveOutcome.Status != "succeeded" {
+			if removal.MoveOutcome.Status == "pending" || removal.MoveOutcome.Status == "uncertain" {
+				report.Status, report.Message = "held", "Replacement position is uncertain; inspect the module before retrying."
+				return report, nil
+			}
+			item := d.Created.Items[removal.Replacement-1]
+			live, getErr := s.getModuleItem(ctx, course.ID, moduleID, item.ModuleItemID)
+			if getErr != nil || !moduleItemMatches(live, d.Items[removal.Replacement-1], resolvedRefs[removal.Replacement-1]) {
+				report.Status, report.Message = "held", "Replacement item changed or disappeared; inspect the module before moving it."
+				return report, nil
+			}
+			removal.MoveOutcome = domain.ActionOutcome{Status: "pending", ID: item.ModuleItemID}
+			if err = save(); err != nil {
+				return report, err
+			}
+			err = s.Client.WriteAccepted(ctx, "PUT", fmt.Sprintf("/api/v1/courses/%d/modules/%d/items/%d", course.ID, moduleID, item.ModuleItemID), map[string]any{"module_item": map[string]any{"position": removal.Position}}, nil)
+			if err != nil {
+				removal.MoveOutcome = failedOutcome(err)
+			} else {
+				removal.MoveOutcome = domain.ActionOutcome{Status: "succeeded", ID: item.ModuleItemID}
+			}
+			if err = save(); err != nil {
+				return report, fmt.Errorf("replacement position outcome could not be saved: %w", err)
+			}
+			if removal.MoveOutcome.Status != "succeeded" {
+				report.Status, report.Message = removal.MoveOutcome.Status, removal.MoveOutcome.Message
+				return report, nil
+			}
+		}
+	}
+	if len(d.Remove) > 0 {
+		report.Message = "Items removed from the module; their course content remains."
+	}
+
 	if d.Published != nil && *d.Published {
 		if module.Published && (d.Created.Publication.Status == "pending" || d.Created.Publication.Status == "uncertain") {
 			d.Created.Publication = domain.ActionOutcome{Status: "succeeded", Message: "publication recovered from live module"}
@@ -378,6 +485,22 @@ func (s *Service) PushModule(ctx context.Context, path string) (report ModulePus
 	report.Items = append([]domain.ModuleItemOutcome(nil), d.Created.Items...)
 	report.Status = "completed"
 	return report, nil
+}
+
+func moduleRemovalMatches(live canvasModuleItem, observed domain.ModuleRemoval) bool {
+	if live.ID != observed.ModuleItemID || live.Type != observed.Type || live.Title != observed.Title {
+		return false
+	}
+	switch observed.Type {
+	case "Page":
+		return live.PageURL == observed.PageURL
+	case "ExternalUrl":
+		return live.ExternalURL == observed.ExternalURL
+	case "SubHeader":
+		return true
+	default:
+		return contentString(live.ContentID) == strconv.FormatInt(observed.ContentID, 10)
+	}
 }
 
 // findModuleByName returns the ID of the one module in the course with this

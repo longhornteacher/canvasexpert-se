@@ -4,7 +4,7 @@
 
 ## Contract
 
-Add `kind: conversation`, `operation: create|reply`, course/group identity, explicit `mode: private_each|club_thread`, observed recipient refs, subject for create, and plain text body. A reply also requires exact conversation ID and observed participants. Use validate/push/push_document; optional review can show the concrete body/audience through existing `review`/`start_review`.
+Add `kind: conversation`, `operation: create|reply`, course/group identity, explicit `mode: private_each|club_thread`, observed recipient refs, subject for create, and plain text body. A reply also requires exact conversation ID and observed participants. Use validate/push/push_document; describe the concrete body/audience in the conversation.
 
 ```yaml
 schema: 1

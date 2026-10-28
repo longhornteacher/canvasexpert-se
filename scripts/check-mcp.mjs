@@ -1,5 +1,4 @@
-// Synthetic checks against the compiled Engine. No Canvas writes. The optional
-// --review check uses the machine's saved connection only to start local review.
+// Synthetic checks against the compiled Engine. No Canvas writes.
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile, readFile, copyFile, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -8,7 +7,6 @@ import readline from 'node:readline';
 import assert from 'node:assert/strict';
 
 const engine = path.resolve(process.argv[2] || 'dist/cse.exe');
-const review = process.argv.includes('--review');
 const origin = process.env.CSE_MCP_CHECK_ORIGIN || 'https://canvas.example.edu';
 const root = await mkdtemp(path.join(tmpdir(), 'cse-mcp-check-'));
 await mkdir(path.join(root, 'context'));
@@ -23,6 +21,15 @@ const otherDirectory = await mkdtemp(path.join(tmpdir(), 'cse-agent-check-'));
 const conflicting = spawnSync(installedEngine, ['--workspace', otherDirectory, 'mcp'], { windowsHide: true, cwd: otherDirectory, encoding: 'utf8' });
 assert.equal(conflicting.status, 2);
 assert.match(conflicting.stderr, /installation mismatch/);
+// New invocation-only quiz flags must reject typos before credentials/Canvas.
+for (const args of [
+  ['push-quiz', 'CS8', 'courses/quiz.json', '--skip-accomodations'],
+  ['quiz-accommodations', 'CS8', '10', '--from-saved', '--bogus'],
+]) {
+  const invalid = spawnSync(installedEngine, ['--workspace', root, ...args], { windowsHide: true, cwd: otherDirectory, encoding: 'utf8' });
+  assert.equal(invalid.status, 2);
+  assert.match(invalid.stderr, /expected optional/);
+}
 const child = spawn(installedEngine, ['mcp'], { windowsHide: true, cwd: otherDirectory, stdio: ['pipe', 'pipe', 'pipe'] });
 let sequence = 0;
 const pending = new Map();
@@ -56,7 +63,48 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 53);
+  assert.equal(names.length, 57);
+  assert.ok(!names.includes('start_review'), 'retired scoring page remains exposed');
+  for (const name of ['start_parent_review', 'review_status', 'save_draft_pdf']) assert.ok(names.includes(name), `missing ${name}`);
+  assert.equal(discovered.result.tools.find(t => t.name === 'validate_document').inputSchema.properties.show.type, 'string');
+  const accommodationsTool = discovered.result.tools.find(t => t.name === 'set_quiz_accommodations');
+  for (const field of ['course', 'quiz_id', 'students', 'from_saved', 'preview']) assert.ok(accommodationsTool.inputSchema.properties[field]);
+  assert.equal(accommodationsTool.inputSchema.properties.from_saved.type, 'boolean');
+  assert.ok(!accommodationsTool.inputSchema.required.includes('students'), 'saved mode must not require explicit students');
+  const pushQuizTool = discovered.result.tools.find(t => t.name === 'push_quiz');
+  assert.equal(pushQuizTool.inputSchema.properties.skip_accommodations.type, 'boolean');
+  assert.equal(accommodationsTool.annotations.openWorldHint, true);
+  assert.equal(accommodationsTool.annotations.readOnlyHint, false);
+  const change = accommodationsTool.inputSchema.properties.students.items;
+  for (const field of ['student', 'extra_time_minutes', 'extra_attempts', 'reduce_choices']) assert.ok(change.properties[field]);
+  await call('set_quiz_accommodations', { course: 'CS8', quiz_id: 0, students: [{student: 'synthetic', extra_attempts: 1}] }, true);
+  await call('set_quiz_accommodations', { course: 'CS8', quiz_id: 10, students: [{student: 'synthetic', extra_time_minutes: -1}] }, true);
+  await call('set_quiz_accommodations', { course: 'CS8', quiz_id: 10, students: [{student: 'synthetic', mystery: true}] }, true);
+  await call('set_quiz_accommodations', { course: 'CS8', quiz_id: 10, from_saved: true, students: [{student: 'synthetic', extra_attempts: 1}] }, true);
+  await call('set_quiz_accommodations', { course: 'CS8', quiz_id: 10, from_saved: false }, true);
+  await call('set_quiz_accommodations', { course: 'CS8', quiz_id: 0, from_saved: true, preview: true }, true);
+  const tagsTool = discovered.result.tools.find(t => t.name === 'set_tags');
+  assert.ok(tagsTool?.inputSchema.properties.path, 'missing set_tags path');
+  assert.equal(tagsTool.inputSchema.properties.preview.type, 'boolean');
+  assert.equal(tagsTool.annotations.openWorldHint, true);
+  assert.equal(tagsTool.annotations.readOnlyHint, false);
+  const rubricsTool = discovered.result.tools.find(t => t.name === 'list_rubrics');
+  assert.ok(rubricsTool?.inputSchema.properties.include_account, 'missing list_rubrics include_account');
+  assert.equal(rubricsTool.annotations.readOnlyHint, true);
+  assert.equal(rubricsTool.annotations.openWorldHint, true);
+  const pullRubricTool = discovered.result.tools.find(t => t.name === 'pull_rubric');
+  assert.equal(pullRubricTool?.inputSchema.properties.rubric_id.type, 'integer');
+  assert.ok(pullRubricTool.inputSchema.required.includes('course'));
+  assert.ok(pullRubricTool.inputSchema.required.includes('rubric_id'));
+  assert.equal(pullRubricTool.annotations.openWorldHint, true);
+  await call('pull_rubric', { course: 'CS8', rubric_id: 0 }, true);
+  const quizEditTool = discovered.result.tools.find(t => t.name === 'pull_quiz');
+  assert.ok(quizEditTool, 'missing pull_quiz');
+  assert.equal(quizEditTool.inputSchema.properties.assignment_id.type, 'integer');
+  assert.ok(quizEditTool.inputSchema.required.includes('course'));
+  assert.ok(quizEditTool.inputSchema.required.includes('assignment_id'));
+  assert.equal(quizEditTool.annotations.openWorldHint, true);
+  await call('pull_quiz', { course: 'CS8', assignment_id: 0 }, true);
   assert.ok(names.includes('init_results'), 'missing init_results');
   for (const name of ['inbox_list', 'inbox_read', 'inbox_reply', 'inbox_set_state']) assert.ok(names.includes(name), `missing ${name}`);
   const inboxReadTool = discovered.result.tools.find(t => t.name === 'inbox_read');
@@ -167,6 +215,26 @@ try {
   await call('write_draft', { path: 'courses/invalid-settings.json', content: JSON.stringify({ title: 'Settings typo', metadata: { canvas: { allowed_atempts: 2 } }, items: [{ id: 'q1', type: 'ESSAY', prompt: 'Explain.', points: 5 }] }) });
   await call('validate_quiz', { path: 'courses/invalid-settings.json' }, true);
   const assignment = (await readFile('engine-docs/examples/synthetic-assignment-create.md', 'utf8')).replace('course: DEMO', 'course: CS8');
+  const quizEditExample = await readFile('engine-docs/examples/synthetic-new-quiz-edit.md', 'utf8');
+  const rubricLibraryExample = await readFile('engine-docs/examples/synthetic-rubric-library.md', 'utf8');
+  const rubricReferenceExample = await readFile('engine-docs/examples/synthetic-assignment-rubric-reference.md', 'utf8');
+  const tagsExample = await readFile('engine-docs/examples/synthetic-tags.md', 'utf8');
+  await call('write_draft', { path: 'courses/CS8/drafts/tags.md', content: tagsExample });
+  await call('validate_document', { path: 'courses/CS8/drafts/tags.md' });
+  await call('write_draft', { path: 'courses/CS8/drafts/tags-invalid.md', content: tagsExample.replace('Support: [s-example-1]', 'Support: null') });
+  await call('validate_document', { path: 'courses/CS8/drafts/tags-invalid.md' }, true);
+  await call('write_draft', { path: 'courses/CS8/drafts/reference.md', content: rubricReferenceExample });
+  await call('validate_document', { path: 'courses/CS8/drafts/reference.md' });
+  await call('write_draft', { path: 'courses/CS8/drafts/reference-id.md', content: rubricReferenceExample.replace('library: SCR 4-point', 'id: 900001') });
+  await call('validate_document', { path: 'courses/CS8/drafts/reference-id.md' });
+  await call('write_draft', { path: 'courses/CS8/drafts/reference-mixed.md', content: rubricReferenceExample.replace('library: SCR 4-point', 'library: SCR 4-point\n  id: 900001') });
+  await call('validate_document', { path: 'courses/CS8/drafts/reference-mixed.md' }, true);
+  await call('write_draft', { path: 'courses/CS8/drafts/rubric.md', content: rubricLibraryExample });
+  assert.match(await call('validate_document', { path: 'courses/CS8/drafts/rubric.md' }), /valid/i);
+  await call('write_draft', { path: 'courses/CS8/drafts/quiz-edit.md', content: quizEditExample });
+  assert.match(await call('validate_document', { path: 'courses/CS8/drafts/quiz-edit.md' }), /valid/i);
+  await call('write_draft', { path: 'courses/CS8/drafts/invalid-quiz-edit.md', content: quizEditExample.replace('changes:\n  instructions:', 'changes:\n  scoring_data:') });
+  await call('validate_document', { path: 'courses/CS8/drafts/invalid-quiz-edit.md' }, true);
   await call('write_draft', { path: 'courses/assignment.md', content: assignment });
   await call('validate_document', { path: 'courses/assignment.md' });
   const groupAssignment = (await readFile('engine-docs/examples/synthetic-group-assignment.md', 'utf8')).replace('course: ELA7', 'course: CS8');
@@ -203,40 +271,24 @@ try {
   const discussionReply = await readFile('engine-docs/examples/synthetic-discussion-reply.md', 'utf8');
   await call('write_draft', { path: 'courses/discussion-reply.md', content: discussionReply });
   await call('validate_document', { path: 'courses/discussion-reply.md' });
-  if (review) {
-    const started = await call('start_review', { path: 'courses/assignment.md', course: 'CS8' }, false, true);
-    assert.equal(started.state, 'pending', JSON.stringify(started));
-    const url = started.url;
-    assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/review$/);
-    const id = started.review_id;
-    assert.ok(id);
-    const html = await (await fetch(url)).text();
-    const form = new URLSearchParams({ action: 'revise', status_0: 'revise', note_0: 'Synthetic revision: shorten directions.' });
-    for (const match of html.matchAll(/name="(request_secret|token|ref_\d+)" value="([^"]*)"/g)) form.set(match[1], match[2]);
-    const response = await fetch(new URL('/submit', url), { method: 'POST', headers: { Origin: new URL(url).origin }, body: form });
-    assert.equal(response.status, 200, await response.text());
-    let status;
-    for (let i = 0; i < 20; i++) {
-      status = await call('review_status', { review_id: id }, false, true);
-      if (status.state !== 'pending') break;
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-    assert.equal(status.state, 'finished');
-    assert.equal(status.outcome, 'held');
-    assert.equal(status.result_path, path.join(root, 'courses/assignment.md'));
-    assert.equal(status.url, undefined);
-    assert.equal(status.revision_notes[0].note, 'Synthetic revision: shorten directions.');
-    assert.match(status.text, /Outcome: held/);
-    assert.doesNotMatch(status.text, /Open the local review page/);
-    const state = await call('read_workspace_file', { path: 'courses/assignment.md.review.json' });
-    assert.match(state, /Synthetic revision/);
-  }
+  const sampleResults = await readFile('engine-docs/examples/synthetic-results-two.md', 'utf8');
+  await call('write_draft', { path: 'courses/sample.md', content: sampleResults.replace('      assessment: 7', '      teacher_note: PRIVATE-TEACHER-NOTE\n      assessment: 7') });
+  const sample = JSON.parse(await call('validate_document', { path: 'courses/sample.md', show: 'synthetic-student-01' }));
+  assert.equal(sample.student_ref, 'synthetic-student-01');
+  assert.equal(sample.hold, '');
+  assert.match(sample.comment, /Synthetic feedback grounded in submitted work/);
+  assert.doesNotMatch(JSON.stringify(sample), /PRIVATE-TEACHER-NOTE|description_html|submission_types/);
+  await call('validate_document', { path: 'courses/sample.md', show: 'unknown-ref' }, true);
+  await call('write_draft', { path: 'courses/sample-held.md', content: sampleResults.replace('evidence: present', 'evidence: unknown') });
+  const heldSample = JSON.parse(await call('validate_document', { path: 'courses/sample-held.md', show: 'synthetic-student-01' }));
+  assert.match(heldSample.hold, /unreadable/);
+  assert.ok(!heldSample.comment);
   await rename(syncRoot, `${syncRoot}-offline`);
   const unavailable = JSON.parse(await call('engine_info', { operation: 'rules-location' }));
   assert.equal(unavailable.mode, 'sync');
   assert.match(unavailable.availability_error, /unavailable/);
   await call('read_workspace_file', { path: 'context/grading.md' }, true);
-  console.log(`PASS: ${names.length} tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, group/Page/discussion/external-resource discovery, references, path exclusions, guarded context, binary asset and QuizForge/document validation${review ? ', real local review and revision status' : ''}. No Canvas writes.`);
+  console.log(`PASS: ${names.length} tools; bundled root from another directory, mismatch rejection, MCP-first seed preservation, fresh configured courses, compiled stdio, group/Page/discussion/external-resource discovery, references, path exclusions, guarded context, binary asset and QuizForge/document validation. No Canvas writes.`);
   console.log(`Synthetic fixture: ${root}`);
 } finally {
   child.stdin.end();

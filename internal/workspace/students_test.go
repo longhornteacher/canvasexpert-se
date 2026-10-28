@@ -2,11 +2,96 @@ package workspace
 
 import (
 	"canvasexpertse/internal/domain"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestQuizSettingsKeepEstablishedAliasesAndPrivateAuthority(t *testing.T) {
+	root := makeRulesInstall(t)
+	path := filepath.Join(root, ".cse", "students.csv")
+	old := strings.Join(aliasSourceStudentHeader, ",") + "\ns-existing,https://school.example,7,Ana Smith,Ana,Pikachu,,,true,true,teacher\n"
+	if err := WriteFile(path, []byte(old), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenStudents(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := store.Rows[0]
+	if v.Alias != "Pikachu" || v.AliasSource != AliasFromTeacher || v.QuizTime != "" || v.ReducedChoices || !v.ExtraTime {
+		t.Fatalf("11-column identity/settings changed: %+v", v)
+	}
+	if b, _ := os.ReadFile(path); string(b) != old {
+		t.Fatal("opening an established table rewrote it")
+	}
+	shared := t.TempDir()
+	if _, err := SetRulesLocation(root, shared, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	store, err = OpenStudents(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.Rows[0].QuizTime, store.Rows[0].ReducedChoices = "50%", true
+	if _, err := store.Upsert(v.Instance, v.UserID, "Updated Name", "Updated", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(); err != nil {
+		t.Fatal(err)
+	}
+	again, err := OpenStudents(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := again.Rows[0]
+	if got.QuizTime != "50%" || !got.ReducedChoices || got.Alias != v.Alias || got.Ref != v.Ref || !got.ExtraTime {
+		t.Fatalf("refresh/save lost private settings: %+v", got)
+	}
+	if b, _ := os.ReadFile(path); string(b) != old {
+		t.Fatal("shared save changed inactive local table")
+	}
+	if b, err := os.ReadFile(filepath.Join(shared, ".cse", "students.csv")); err != nil || !strings.Contains(string(b), ",50%,true") {
+		t.Fatalf("shared settings not saved: %v", err)
+	}
+	b, err := json.Marshal(got)
+	if err != nil || strings.Contains(string(b), "QuizTime") || strings.Contains(string(b), "ReducedChoices") || strings.Contains(string(b), "50%") {
+		t.Fatalf("private quiz settings serialized: %s %v", b, err)
+	}
+}
+
+func TestQuizSettingValidation(t *testing.T) {
+	for _, value := range []string{"", "50%", "100%", "1", "15", "10080"} {
+		if !ValidQuizTime(value) {
+			t.Fatalf("valid quiz_time rejected: %q", value)
+		}
+	}
+	for _, value := range []string{"0", "-1", "10081", "1.5", "25%", " 15", "+15", "standard", "99999999999999999999"} {
+		if ValidQuizTime(value) {
+			t.Fatalf("invalid quiz_time accepted: %q", value)
+		}
+	}
+	for _, tc := range []struct{ time, choices, field string }{
+		{"25%", "false", "quiz_time"}, {"15", "sometimes", "reduced_choices"},
+	} {
+		t.Run(tc.field, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, ".cse", "students.csv")
+			data := strings.Join(studentHeader, ",") + "\ns-test,https://school.example,7,Ana,Ana,Pikachu,,,false,false,teacher," + tc.time + "," + tc.choices + "\n"
+			if err := WriteFile(path, []byte(data), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := OpenStudents(root); err == nil || !strings.Contains(err.Error(), "row 2: invalid "+tc.field) {
+				t.Fatalf("missing row/field error: %v", err)
+			}
+			if b, _ := os.ReadFile(path); string(b) != data {
+				t.Fatal("invalid private settings were replaced")
+			}
+		})
+	}
+}
 
 func TestStudentRenameAndInstanceIdentity(t *testing.T) {
 	root := t.TempDir()

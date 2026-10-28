@@ -53,6 +53,37 @@ func TestEditPreservesHTMLAndOmittedSettings(t *testing.T) {
 	}
 }
 
+func TestNewQuizEditAllowsOnlyGroupAndBaseDates(t *testing.T) {
+	a, b := int64(7), int64(8)
+	base := domain.AssignmentSnapshot{Instance: "https://school.instructure.com", CourseID: 1, AssignmentID: 2, Title: "Quiz", Points: domain.MustDecimal("20"), DescriptionHTML: "<p>Directions</p>", SubmissionTypes: []string{"external_tool"}, NewQuiz: true, AssignmentGroupID: &a}
+	doc := domain.AssignmentDocument{Schema: 1, Kind: "assignment", Operation: "update", Instance: base.Instance, CourseID: 1, AssignmentID: 2, Course: "TEST", Title: base.Title, Points: base.Points, SubmissionTypes: base.SubmissionTypes, AssignmentGroupID: &b, Observed: &base}
+	due, unlock, lock := "2026-11-20T22:00:00Z", "2026-11-20T14:00:00Z", "2026-11-20T22:00:00Z"
+	doc.DueAt, doc.UnlockAt, doc.LockAt = &due, &unlock, &lock
+	patch, err := PlanEdit(doc, base.DescriptionHTML)
+	if err != nil || len(patch) != 4 {
+		t.Fatalf("allowed fields: %v %v", patch, err)
+	}
+	for name, change := range map[string]func(*domain.AssignmentDocument){
+		"title":       func(d *domain.AssignmentDocument) { d.Title = "Changed" },
+		"points":      func(d *domain.AssignmentDocument) { d.Points = domain.MustDecimal("21") },
+		"submission":  func(d *domain.AssignmentDocument) { d.SubmissionTypes = []string{"online_upload"} },
+		"publication": func(d *domain.AssignmentDocument) { d.Published = true },
+		"rubric":      func(d *domain.AssignmentDocument) { d.Rubric = &domain.Rubric{} },
+		"module":      func(d *domain.AssignmentDocument) { d.ModuleID = 3 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			altered := doc
+			change(&altered)
+			if _, err := PlanEdit(altered, base.DescriptionHTML); err == nil {
+				t.Fatal("unsupported quiz edit accepted")
+			}
+		})
+	}
+	if _, err = PlanEdit(doc, "<p>Changed</p>"); err == nil {
+		t.Fatal("quiz description edit accepted")
+	}
+}
+
 func TestAcademicBasisIgnoresPresentationAndDirectionsButRetainsScale(t *testing.T) {
 	base := domain.AssignmentSnapshot{Title: "Original", Points: domain.MustDecimal("20"), DescriptionHTML: `<p>Read <a href='https://example.org/a'>A &amp; B</a>.</p><pre><code>x  = 1</code></pre>`}
 	live := base

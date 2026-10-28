@@ -50,21 +50,6 @@ func (s *Server) registerSessionTools(server *mcp.Server) {
 	})
 }
 
-func (s *Server) startReview(ctx context.Context, in ReviewInput) (TextOutput, error) {
-	path, err := s.coursePath(in.Path)
-	if err != nil {
-		return TextOutput{}, err
-	}
-	if _, err = workflow.ValidateReviewInput(s.root, path, in.Course); err != nil {
-		return TextOutput{}, err
-	}
-	args := []string{"review", path}
-	if in.Course != "" {
-		args = append(args, in.Course)
-	}
-	return s.startReviewSession(ctx, path, args)
-}
-
 // startReviewSession reconnects to a review page for the same file that is
 // still open (for example after the agent app restarted this adapter) instead
 // of starting a second page; otherwise it starts one.
@@ -82,7 +67,7 @@ func (s *Server) startReviewSession(ctx context.Context, subject string, args []
 		}
 		s.reviews[task.id] = task
 		s.mu.Unlock()
-		return TextOutput{State: "pending", ReviewID: task.id, URL: pageURL, Text: "Reconnected to the review page that is still open for this file: " + pageURL + ". review_id: " + task.id + ". No Canvas changes occur unless the teacher approves on the page."}, nil
+		return TextOutput{State: "pending", ReviewID: task.id, URL: pageURL, Text: "Reconnected to the review page that is still open for this file: " + pageURL + ". review_id: " + task.id + ". Family messages are sent only when the teacher chooses Send on the private page."}, nil
 	}
 	return s.startSession(ctx, "review", args)
 }
@@ -354,7 +339,7 @@ func (t *reviewTask) status() (TextOutput, error) {
 		}
 		message := "Ask the teacher to open " + t.url + ". " + identity
 		if t.kind == "review" {
-			message = "The review page is opening in the teacher's browser; fallback address " + t.url + ". " + identity + ". No Canvas changes occur unless the teacher approves on the page."
+			message = "The review page is opening in the teacher's browser; fallback address " + t.url + ". " + identity + ". Family messages are sent only when the teacher chooses Send on the private page."
 		} else {
 			message += ". This page is private to the teacher; do not read its contents through MCP."
 			if t.kind == "setup" {
@@ -371,7 +356,7 @@ func (s *Server) reviewStatus(id string) (TextOutput, error) {
 	task := s.reviews[id]
 	s.mu.Unlock()
 	if task == nil {
-		return TextOutput{}, errors.New("unknown review_id; if the app restarted, call start_review (or start_parent_review) again for the same file: it reconnects to a page that is still open, and a closed page has already saved its outcomes in the results file")
+		return TextOutput{}, errors.New("unknown review_id; if the app restarted, call start_parent_review again for the same file: it reconnects to a page that is still open, and a closed page has already saved its outcomes in the results file")
 	}
 	if task.external {
 		return s.externalReviewStatus(task)
@@ -487,7 +472,7 @@ func (s *Server) stopSessions() {
 func (s *Server) externalReviewStatus(task *reviewTask) (TextOutput, error) {
 	result := TextOutput{State: "pending", ReviewID: task.id, URL: task.url}
 	if hubcoord.PageOpen(s.root, task.url) {
-		result.Text = "The review page is still open at " + task.url + ". review_id: " + task.id + ". No Canvas changes occur unless the teacher approves on the page."
+		result.Text = "The review page is still open at " + task.url + ". review_id: " + task.id + ". Family messages are sent only when the teacher chooses Send on the private page."
 		return result, nil
 	}
 	result.State, result.URL = "finished", ""

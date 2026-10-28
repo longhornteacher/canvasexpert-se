@@ -62,6 +62,7 @@ func TestPullWorkProjectsExtraTimeFromActiveStudentAuthority(t *testing.T) {
 	want := map[string]bool{}
 	for i := range store.Rows {
 		store.Rows[i].ExtraTime = store.Rows[i].UserID == 5
+		store.Rows[i].QuizTime, store.Rows[i].ReducedChoices = "50%", true
 		want[store.Rows[i].Ref] = store.Rows[i].ExtraTime
 	}
 	if err = store.Save(); err != nil {
@@ -86,7 +87,7 @@ func TestPullWorkProjectsExtraTimeFromActiveStudentAuthority(t *testing.T) {
 			t.Fatalf("extra time used a wrong identity/authority or lost explicit false: %+v", work)
 		}
 		body, err := os.ReadFile(path)
-		if err != nil || strings.Contains(string(body), "private-sis") || strings.Contains(string(body), "private-login") {
+		if err != nil || strings.Contains(string(body), "private-sis") || strings.Contains(string(body), "private-login") || strings.Contains(string(body), "quiz_time") || strings.Contains(string(body), "reduced_choices") || strings.Contains(string(body), "50%") {
 			t.Fatalf("student projection exposed private roster fields: err=%v", err)
 		}
 	}
