@@ -48,11 +48,20 @@ type PageDocument struct {
 // PageDatesSnapshot is the exact date-details baseline for one course Page.
 // Pages have availability dates and no graded due date.
 type PageDatesSnapshot struct {
-	OnlyVisibleToOverrides *bool             `yaml:"only_visible_to_overrides,omitempty"`
-	VisibleToEveryone      *bool             `yaml:"visible_to_everyone,omitempty"`
-	UnlockAt               *string           `yaml:"unlock_at,omitempty"`
-	LockAt                 *string           `yaml:"lock_at,omitempty"`
-	Overrides              []PageOverrideRow `yaml:"overrides,omitempty"`
+	OnlyVisibleToOverrides *bool                   `yaml:"only_visible_to_overrides,omitempty"`
+	VisibleToEveryone      *bool                   `yaml:"visible_to_everyone,omitempty"`
+	UnlockAt               *string                 `yaml:"unlock_at,omitempty"`
+	LockAt                 *string                 `yaml:"lock_at,omitempty"`
+	Overrides              []PageOverrideRow       `yaml:"overrides,omitempty"`
+	InheritedOverrides     []PageInheritedOverride `yaml:"inherited_overrides,omitempty"`
+}
+
+// PageInheritedOverride describes module access and is never sent as a Page override.
+type PageInheritedOverride struct {
+	PageOverrideRow   `yaml:",inline"`
+	ContextModuleID   int64  `yaml:"context_module_id"`
+	ContextModuleName string `yaml:"context_module_name,omitempty"`
+	NonCollaborative  bool   `yaml:"non_collaborative,omitempty"`
 }
 
 // PageOverrideRow is one date-details override. Student targets use private
@@ -173,7 +182,14 @@ func (d *PageDocument) ValidateBody(body string) error {
 			return fmt.Errorf("create cannot carry a date-details baseline")
 		}
 		if d.ObservedDates.OnlyVisibleToOverrides != nil && d.ObservedDates.VisibleToEveryone != nil && *d.ObservedDates.OnlyVisibleToOverrides == *d.ObservedDates.VisibleToEveryone {
-			return fmt.Errorf("observed date-details visibility is contradictory")
+			if *d.ObservedDates.OnlyVisibleToOverrides || len(d.ObservedDates.InheritedOverrides) == 0 {
+				return fmt.Errorf("Page %q: observed date-details visibility is contradictory", d.Title)
+			}
+		}
+		for i, row := range d.ObservedDates.InheritedOverrides {
+			if row.ContextModuleID <= 0 {
+				return fmt.Errorf("Page %q: inherited_overrides[%d] requires a module ID", d.Title, i)
+			}
 		}
 		seen := map[int64]bool{}
 		for i, row := range d.ObservedDates.Overrides {

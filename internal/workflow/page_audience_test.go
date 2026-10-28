@@ -23,7 +23,8 @@ type pageAudienceFixture struct {
 	// BodyPuts counts content updates; an audience-only change must not send one.
 	BodyPuts int
 	// FailDates makes the collection write fail with the given status.
-	FailDates int
+	FailDates   int
+	DatePayload []map[string]any
 }
 
 func newPageAudienceFixture(t *testing.T, members map[int64][]int64) *pageAudienceFixture {
@@ -73,6 +74,7 @@ func newPageAudienceFixture(t *testing.T, members map[int64][]int64) *pageAudien
 					Overrides   []map[string]any `json:"assignment_overrides"`
 				}
 				_ = json.NewDecoder(r.Body).Decode(&payload)
+				f.DatePayload = payload.Overrides
 				f.Dates.OnlyVisibleToOverrides = payload.OnlyVisible
 				f.Dates.VisibleToEveryone = boolPtr(payload.OnlyVisible == nil || !*payload.OnlyVisible)
 				f.Dates.UnlockAt, f.Dates.LockAt = payload.UnlockAt, payload.LockAt
@@ -156,6 +158,117 @@ func newPageAudienceFixture(t *testing.T, members map[int64][]int64) *pageAudien
 		}
 	})
 	return f
+}
+
+func TestPageInheritedModuleAudienceIsReadAndNeverWritten(t *testing.T) {
+	f := newPageAudienceFixture(t, map[int64][]int64{60: {9001}})
+	f.seedStudents(t, 9001)
+	f.Dates.OnlyVisibleToOverrides, f.Dates.VisibleToEveryone = boolPtr(false), boolPtr(false)
+	f.Dates.Overrides = []pageDateOverride{{ID: 42, ContextModuleID: 4, ContextModuleName: "Book Club", GroupID: 77, NonCollaborative: true}, {ID: 43, CourseSectionID: 5}}
+	path, err := f.Service.PullPage(context.Background(), "TEST", "7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d domain.PageDocument
+	body, err := workspace.ReadDocument(path, &d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.ObservedDates.Overrides) != 1 || len(d.ObservedDates.InheritedOverrides) != 1 || d.ObservedDates.InheritedOverrides[0].ContextModuleID != 4 || !d.ObservedDates.InheritedOverrides[0].NonCollaborative {
+		t.Fatalf("incorrect split: %+v", d.ObservedDates)
+	}
+	original := pageDatesFingerprint(*d.ObservedDates)
+	changed := *d.ObservedDates
+	changed.InheritedOverrides = append([]domain.PageInheritedOverride(nil), changed.InheritedOverrides...)
+	changed.InheritedOverrides[0].GroupID++
+	if original == pageDatesFingerprint(changed) {
+		t.Fatal("inherited change did not change fingerprint")
+	}
+	if err = workspace.WriteDocument(path, &d, body+"<p>Updated</p>"); err != nil {
+		t.Fatal(err)
+	}
+	report, err := f.Service.PushPage(context.Background(), path)
+	if err != nil || report.Status != "succeeded" || strings.Join(f.Writes, ",") != "page" {
+		t.Fatalf("body push: %+v %v writes=%v", report, err, f.Writes)
+	}
+	path, err = f.Service.PullPage(context.Background(), "TEST", "7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err = workspace.ReadDocument(path, &d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Audience = pageAudienceDraft().Audience
+	if err = workspace.WriteDocument(path, &d, body); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.Service.PrepareAudience(context.Background(), "TEST", path, false); err != nil {
+		t.Fatal(err)
+	}
+	report, err = f.Service.PushPage(context.Background(), path)
+	if err != nil || report.Status != "completed" {
+		t.Fatalf("audience push: %+v %v", report, err)
+	}
+	for _, row := range f.DatePayload {
+		if row["id"] == float64(42) || row["group_id"] == float64(77) {
+			t.Fatalf("inherited row sent: %+v", row)
+		}
+	}
+}
+
+func TestPageInheritedVisibilityValidation(t *testing.T) {
+	f := newPageAudienceFixture(t, nil)
+	path, err := f.Service.PullPage(context.Background(), "TEST", "7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d domain.PageDocument
+	body, err := workspace.ReadDocument(path, &d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ only, everyone, inherited, valid bool }{
+		{false, true, false, true}, {true, false, false, true},
+		{true, true, true, false}, {false, false, false, false}, {false, false, true, true},
+	} {
+		d.ObservedDates.OnlyVisibleToOverrides, d.ObservedDates.VisibleToEveryone = boolPtr(tc.only), boolPtr(tc.everyone)
+		d.ObservedDates.InheritedOverrides = nil
+		if tc.inherited {
+			d.ObservedDates.InheritedOverrides = []domain.PageInheritedOverride{{ContextModuleID: 4, PageOverrideRow: domain.PageOverrideRow{GroupID: 77}}}
+		}
+		if err := d.ValidateBody(body); (err == nil) != tc.valid {
+			t.Errorf("case %+v: %v", tc, err)
+		}
+	}
+}
+
+func TestPageInheritedAudienceChangeHoldsUnsentDateEdit(t *testing.T) {
+	f := newPageAudienceFixture(t, nil)
+	f.Dates.OnlyVisibleToOverrides, f.Dates.VisibleToEveryone = boolPtr(false), boolPtr(false)
+	f.Dates.Overrides = []pageDateOverride{{ID: 42, ContextModuleID: 4, GroupID: 77}}
+	path, err := f.Service.PullPage(context.Background(), "TEST", "7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d domain.PageDocument
+	body, err := workspace.ReadDocument(path, &d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.UnlockAt = &domain.OptionalDate{Set: true, Value: "2026-11-20T14:00:00Z"}
+	if err = workspace.WriteDocument(path, &d, body); err != nil {
+		t.Fatal(err)
+	}
+	f.Dates.Overrides[0].GroupID = 78
+	report, err := f.Service.PushPage(context.Background(), path)
+	if err != nil || report.Status != "held" || len(f.Writes) != 0 {
+		t.Fatalf("report=%+v err=%v writes=%v", report, err, f.Writes)
+	}
+	var saved domain.PageDocument
+	if _, err = workspace.ReadDocument(path, &saved); err != nil || saved.UnlockAt == nil || saved.UnlockAt.Value != d.UnlockAt.Value {
+		t.Fatal("unsent date edit lost")
+	}
 }
 
 func (f *pageAudienceFixture) seedStudents(t *testing.T, users ...int64) {

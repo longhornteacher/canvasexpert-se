@@ -603,7 +603,11 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return 0
 		} else if kind == "module" {
 			report, e := service.PushModule(ctx, file)
-			fmt.Fprintf(out, "%s: module %d, %d of %d entries, published: %t\n%s\n", report.Status, report.ModuleID, report.ItemsAdded, report.ItemsTotal, report.Published, file)
+			if report.AlreadyCompleted {
+				fmt.Fprintf(out, "%s: module %d, previously recorded actions\n%s\n", report.Status, report.ModuleID, file)
+			} else {
+				fmt.Fprintf(out, "%s: module %d, %d of %d entries, published: %t\n%s\n", report.Status, report.ModuleID, report.ItemsAdded, report.ItemsTotal, report.Published, file)
+			}
 			for _, item := range report.Items {
 				fmt.Fprintf(out, "Entry %d %s %d: item %d, %s %s\n", item.Index+1, item.Type, item.ContentID, item.ModuleItemID, item.Outcome.Status, item.Outcome.Message)
 			}

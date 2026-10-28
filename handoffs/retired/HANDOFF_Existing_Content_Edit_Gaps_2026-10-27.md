@@ -1,3 +1,5 @@
+> **Retired 2026-10-27 — implemented in Dev.** Historical instructions follow; do not execute them again. Local focused fixtures, the full uncached Go test suite and vet passed. A read-only Dev Engine pull succeeded on an affected ELA7 Page. On an unpublished disposable CS8 New Quiz, an assignment PUT changed group and base dates, and assignment and New Quizzes API reads agreed; the quiz was deleted. The new quiz Engine edit and module removal/replacement have local test evidence, not live Engine write evidence. No release or UserInstall update was performed; the teacher's engine-notes entries can be removed after a release containing these fixes reaches UserInstall.
+
 # HANDOFF: Close three gaps in editing existing Canvas content
 
 Date: 2026-10-27. From: Claude Code session in Dev. To: an agent working in the CE-SE repo.

@@ -149,8 +149,7 @@ func (s *Service) PullItem(ctx context.Context, nickname, query string) (string,
 	if err != nil {
 		return "", err
 	}
-	// A New Quiz is pulled only so a rubric can be attached; PlanEdit refuses
-	// updates to it.
+	// New Quiz pulls support rubric attachment and narrow group/base-date edits.
 	if reason := UnsupportedAssignment(a); reason != "" && !a.NewQuiz {
 		return "", fmt.Errorf("assignment %d: %s", a.ID, reason)
 	}

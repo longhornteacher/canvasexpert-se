@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -141,6 +142,76 @@ func TestAssignmentGroupTargetConflictAndRecoveryComparisons(t *testing.T) {
 	doc.AssignmentGroupID = nil
 	if _, exists := createFields(doc, live.Description)["assignment_group_id"]; exists {
 		t.Fatal("omission must retain Canvas default")
+	}
+}
+
+func TestNewQuizGroupAndDatesPushAndConflict(t *testing.T) {
+	for _, conflict := range []bool{false, true} {
+		t.Run(fmt.Sprintf("conflict=%t", conflict), func(t *testing.T) {
+			groupA, groupB := int64(7), int64(8)
+			live := Assignment{ID: 10, CourseID: 1, Name: "Quiz", Description: "<p>Quiz</p>", Points: json.Number("20"), SubmissionTypes: []string{"external_tool"}, NewQuiz: true, AssignmentGroupID: &groupA}
+			writes := 0
+			s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == "GET" && r.URL.Path == "/api/v1/courses/1/assignment_groups/8":
+					_ = json.NewEncoder(w).Encode(AssignmentGroup{ID: 8, Name: "Major"})
+				case r.Method == "GET" && r.URL.Path == "/api/v1/courses/1/assignments/10":
+					_ = json.NewEncoder(w).Encode(live)
+				case r.Method == "PUT" && r.URL.Path == "/api/v1/courses/1/assignments/10":
+					writes++
+					var payload struct {
+						Assignment map[string]json.RawMessage `json:"assignment"`
+					}
+					_ = json.NewDecoder(r.Body).Decode(&payload)
+					if len(payload.Assignment) != 4 {
+						t.Errorf("unexpected patch: %v", payload.Assignment)
+					}
+					_ = json.Unmarshal(payload.Assignment["assignment_group_id"], &live.AssignmentGroupID)
+					_ = json.Unmarshal(payload.Assignment["due_at"], &live.DueAt)
+					_ = json.Unmarshal(payload.Assignment["unlock_at"], &live.UnlockAt)
+					_ = json.Unmarshal(payload.Assignment["lock_at"], &live.LockAt)
+					_ = json.NewEncoder(w).Encode(live)
+				default:
+					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+				}
+			})
+			path, err := s.PullItem(context.Background(), "TEST", "10")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var d domain.AssignmentDocument
+			body, err := workspace.ReadDocument(path, &d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			due, unlock, lock := "2026-11-20T22:00:00Z", "2026-11-20T14:00:00Z", "2026-11-20T22:00:00Z"
+			d.AssignmentGroupID, d.DueAt, d.UnlockAt, d.LockAt = &groupB, &due, &unlock, &lock
+			if err = workspace.WriteDocument(path, d, body); err != nil {
+				t.Fatal(err)
+			}
+			if conflict {
+				other := "2026-11-21T22:00:00Z"
+				live.DueAt = &other
+			}
+			report, err := s.Push(context.Background(), path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if conflict {
+				if report.Status != "held" || writes != 0 {
+					t.Fatalf("conflict report=%+v writes=%d", report, writes)
+				}
+				var saved domain.AssignmentDocument
+				if _, err := workspace.ReadDocument(path, &saved); err != nil || *saved.DueAt != due {
+					t.Fatal("unsent edit lost")
+				}
+				return
+			}
+			if report.Status != "succeeded" || writes != 1 {
+				t.Fatalf("report=%+v writes=%d", report, writes)
+			}
+		})
 	}
 }
 

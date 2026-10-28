@@ -14,23 +14,25 @@ import (
 // pageDateDetails is the complete date-details response for one course Page.
 // Pages have availability dates and no graded due date.
 type pageDateDetails struct {
-	ID                     int64  `json:"id"`
-	OnlyVisibleToOverrides *bool  `json:"only_visible_to_overrides"`
-	VisibleToEveryone      *bool  `json:"visible_to_everyone"`
-	UnlockAt               *string `json:"unlock_at"`
-	LockAt                 *string `json:"lock_at"`
+	ID                     int64              `json:"id"`
+	OnlyVisibleToOverrides *bool              `json:"only_visible_to_overrides"`
+	VisibleToEveryone      *bool              `json:"visible_to_everyone"`
+	UnlockAt               *string            `json:"unlock_at"`
+	LockAt                 *string            `json:"lock_at"`
 	Overrides              []pageDateOverride `json:"overrides"`
 }
 
 type pageDateOverride struct {
-	ContextModuleID int64   `json:"context_module_id"`
-	ID              int64   `json:"id"`
-	Title           string  `json:"title"`
-	GroupID         int64   `json:"group_id"`
-	CourseSectionID int64   `json:"course_section_id"`
-	StudentIDs      []int64 `json:"student_ids"`
-	UnlockAt        *string `json:"unlock_at"`
-	LockAt          *string `json:"lock_at"`
+	ContextModuleID   int64   `json:"context_module_id"`
+	ContextModuleName string  `json:"context_module_name"`
+	NonCollaborative  bool    `json:"non_collaborative"`
+	ID                int64   `json:"id"`
+	Title             string  `json:"title"`
+	GroupID           int64   `json:"group_id"`
+	CourseSectionID   int64   `json:"course_section_id"`
+	StudentIDs        []int64 `json:"student_ids"`
+	UnlockAt          *string `json:"unlock_at"`
+	LockAt            *string `json:"lock_at"`
 }
 
 func pageDateDetailsPath(courseID, pageID int64) string {
@@ -96,9 +98,14 @@ func (s *Service) pageDatesSnapshot(d pageDateDetails, store *workspace.StudentS
 		if targets != 1 {
 			return snap, fmt.Errorf("Page override %d has an unsupported target shape; its access cannot be preserved", row.ID)
 		}
-		snap.Overrides = append(snap.Overrides, out)
+		if row.ContextModuleID > 0 {
+			snap.InheritedOverrides = append(snap.InheritedOverrides, domain.PageInheritedOverride{PageOverrideRow: out, ContextModuleID: row.ContextModuleID, ContextModuleName: row.ContextModuleName, NonCollaborative: row.NonCollaborative})
+		} else {
+			snap.Overrides = append(snap.Overrides, out)
+		}
 	}
 	sort.Slice(snap.Overrides, func(i, j int) bool { return snap.Overrides[i].ID < snap.Overrides[j].ID })
+	sort.Slice(snap.InheritedOverrides, func(i, j int) bool { return snap.InheritedOverrides[i].ID < snap.InheritedOverrides[j].ID })
 	return snap, nil
 }
 
@@ -109,6 +116,9 @@ func pageDatesFingerprint(snap domain.PageDatesSnapshot) string {
 	normalized := snap
 	if len(normalized.Overrides) == 0 {
 		normalized.Overrides = nil
+	}
+	if len(normalized.InheritedOverrides) == 0 {
+		normalized.InheritedOverrides = nil
 	}
 	return audienceHash(normalized)
 }
@@ -170,6 +180,9 @@ func pageAudienceRows(snap domain.PageDatesSnapshot, ownedIDs map[int64]bool) []
 // never claims exclusive access.
 func pageAudienceExceptions(snap domain.PageDatesSnapshot, ownedIDs map[int64]bool, desired map[string]bool) []string {
 	exceptions := []string{}
+	for _, row := range snap.InheritedOverrides {
+		exceptions = append(exceptions, fmt.Sprintf("Module %s (ID %d) also controls Page access", row.ContextModuleName, row.ContextModuleID))
+	}
 	for _, row := range snap.Overrides {
 		if ownedIDs[row.ID] {
 			continue

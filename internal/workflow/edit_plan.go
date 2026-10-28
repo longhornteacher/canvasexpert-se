@@ -23,12 +23,16 @@ func PlanEdit(doc domain.AssignmentDocument, html string) (map[string]any, error
 		return nil, fmt.Errorf("edit requires a freshly pulled assignment")
 	}
 	base := doc.Observed
+	quiz := base.NewQuiz
 	for _, t := range base.SubmissionTypes {
-		if t == "external_tool" {
+		if t == "external_tool" && !quiz {
 			return nil, fmt.Errorf("a New Quiz can only gain a rubric here (operation: attach-rubric); edit the quiz itself in Canvas")
 		}
 	}
 	if !sameRubric(doc.Rubric, base.Rubric) {
+		if quiz {
+			return nil, fmt.Errorf("a New Quiz update supports only assignment group and base dates; edit the quiz itself in Canvas")
+		}
 		return nil, fmt.Errorf("editing an existing rubric's criteria isn't supported yet; keep the pulled rubric")
 	}
 	if doc.ModuleID != 0 {
@@ -67,6 +71,13 @@ func PlanEdit(doc domain.AssignmentDocument, html string) (map[string]any, error
 	}
 	if doc.GradeGroupStudentsIndividually != nil && !sameOptionalBool(doc.GradeGroupStudentsIndividually, base.GradeGroupStudentsIndividually) {
 		patch["grade_group_students_individually"] = *doc.GradeGroupStudentsIndividually
+	}
+	if quiz {
+		for key := range patch {
+			if key != "assignment_group_id" && key != "due_at" && key != "unlock_at" && key != "lock_at" {
+				return nil, fmt.Errorf("a New Quiz update supports only assignment group and base dates; edit the quiz itself in Canvas")
+			}
+		}
 	}
 	return patch, nil
 }

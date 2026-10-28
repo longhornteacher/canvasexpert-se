@@ -1,3 +1,5 @@
+> **Retired 2026-10-28 — implemented in Dev.** Historical instructions follow; do not execute them again. Commit 39eb857 widened the hub and review pages and adjusted open contact editors. The full requested visual-check matrix is not recorded as verified.
+
 # HANDOFF: Let the WebUI use the browser width
 
 Date: 2026-10-26. To: whoever picks this up in Dev (CE-SE repo, `dev` branch).

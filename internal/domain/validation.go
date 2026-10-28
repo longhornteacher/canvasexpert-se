@@ -131,7 +131,7 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 	}
 	seen := map[string]bool{}
 	for _, s := range d.SubmissionTypes {
-		// A pulled New Quiz (external_tool) may only gain a rubric; PlanEdit refuses updates.
+		// PlanEdit restricts a pulled New Quiz to assignment group and base dates.
 		if s != "online_text_entry" && s != "online_upload" && s != "on_paper" && (s != "external_tool" || d.Operation == "create") {
 			return fmt.Errorf("unsupported submission type %q", s)
 		}

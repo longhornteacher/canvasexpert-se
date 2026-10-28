@@ -24,6 +24,85 @@ func moduleDocPath(t *testing.T, s *Service, d domain.ModuleDocument) string {
 	return path
 }
 
+func TestReplaceModuleFileWithLink(t *testing.T) {
+	for _, mismatch := range []bool{false, true} {
+		t.Run(fmt.Sprint("mismatch=", mismatch), func(t *testing.T) {
+			old := canvasModuleItem{ID: 10, Type: "File", ContentID: 22, Title: "Guide.pdf", Position: 3}
+			link := canvasModuleItem{ID: 11, Type: "ExternalUrl", Title: "Guide", ExternalURL: "https://example.org/guide", Position: 9}
+			var calls, writes []string
+			oldReads := 0
+			s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				calls = append(calls, r.Method+" "+r.URL.Path)
+				switch r.Method + " " + r.URL.Path {
+				case "GET /api/v1/courses/1/modules/7":
+					_ = json.NewEncoder(w).Encode(canvasModule{ID: 7, CourseID: 1, Name: "Unit"})
+				case "POST /api/v1/courses/1/modules/7/items":
+					writes = append(writes, "add")
+					_ = json.NewEncoder(w).Encode(link)
+				case "GET /api/v1/courses/1/modules/7/items/10":
+					oldReads++
+					if mismatch && oldReads == 2 {
+						old.ContentID = 23
+					}
+					_ = json.NewEncoder(w).Encode(old)
+				case "GET /api/v1/courses/1/modules/7/items/11":
+					_ = json.NewEncoder(w).Encode(link)
+				case "DELETE /api/v1/courses/1/modules/7/items/10":
+					writes = append(writes, "remove")
+					w.WriteHeader(204)
+				case "PUT /api/v1/courses/1/modules/7/items/11":
+					writes = append(writes, "move")
+					var payload struct {
+						Item struct {
+							Position int `json:"position"`
+						} `json:"module_item"`
+					}
+					_ = json.NewDecoder(r.Body).Decode(&payload)
+					if payload.Item.Position != 3 {
+						t.Errorf("position = %d", payload.Item.Position)
+					}
+					w.WriteHeader(204)
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+				}
+			})
+			path := moduleDocPath(t, s, domain.ModuleDocument{Schema: 1, Kind: "module", Course: "TEST", Title: "Unit", ModuleID: 7, Items: []domain.ModuleItem{{Type: "ExternalUrl", Title: "Guide", ExternalURL: "https://example.org/guide"}}, Remove: []domain.ModuleRemoval{{ModuleItemID: 10, Type: "File", ContentID: 22, Title: "Guide.pdf", Replacement: 1}}})
+			report, err := s.PushModule(context.Background(), path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mismatch {
+				if report.Status != "held" || !reflect.DeepEqual(writes, []string{"add"}) {
+					t.Fatalf("report=%+v writes=%v", report, writes)
+				}
+				return
+			}
+			if report.Status != "completed" || !reflect.DeepEqual(writes, []string{"add", "remove", "move"}) {
+				t.Fatalf("report=%+v writes=%v", report, writes)
+			}
+			count := len(calls)
+			report, err = s.PushModule(context.Background(), path)
+			if err != nil || report.Status != "completed" || len(calls) != count {
+				t.Fatalf("resume report=%+v err=%v calls=%v", report, err, calls[count:])
+			}
+		})
+	}
+}
+
+func TestModuleRemovalRequiresExplicitGradedIntent(t *testing.T) {
+	for _, kind := range []string{"Assignment", "Quiz", "Discussion"} {
+		d := domain.ModuleDocument{Schema: 1, Kind: "module", Course: "TEST", Title: "Unit", ModuleID: 7, Remove: []domain.ModuleRemoval{{ModuleItemID: 10, Type: kind, Title: "Work", ContentID: 22}}}
+		if err := d.Validate(); err == nil {
+			t.Fatalf("%s removal accepted without explicit intent", kind)
+		}
+		d.Remove[0].ConfirmGraded = true
+		if err := d.Validate(); err != nil {
+			t.Fatalf("%s explicit removal rejected: %v", kind, err)
+		}
+	}
+}
+
 func TestPushModuleCreatesNativeOrderedItemsPublishesAndResumes(t *testing.T) {
 	type itemRequest struct {
 		Type      string `json:"type"`

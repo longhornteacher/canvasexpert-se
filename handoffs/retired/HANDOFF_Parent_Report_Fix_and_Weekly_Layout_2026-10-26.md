@@ -1,3 +1,5 @@
+> **Retired 2026-10-28 — implemented in Dev.** Historical instructions follow; do not execute them again. Commit e413931 fixed the inventory and added the weekly ELA layout. A read-only Dev Engine pull returned nonempty inventories for all 51 students and included all expected assignment IDs. The independent Missing count, Outlook draft inspection, delivery and UserInstall adoption remain pending; the dated operator steps were not performed as part of this retirement.
+
 # HANDOFF: Fix empty parent report and add the weekly ELA update layout
 
 Date: 2026-10-26 (Monday). From: Cowork session (ELA 7 project). To: Codex working in the CE-SE repo.

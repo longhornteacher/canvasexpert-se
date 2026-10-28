@@ -695,6 +695,10 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 	if err != nil {
 		return report, err
 	}
+	if d.Observed.NewQuiz && !live.NewQuiz {
+		report.Status, report.Message = "held", "The live item is no longer identified as a New Quiz; the unsent edit was preserved. Pull it again before editing."
+		return report, nil
+	}
 	base := *d.Observed
 	base.UpdatedAt = ""
 	compare := live
