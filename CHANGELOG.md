@@ -2,6 +2,11 @@
 
 Notable changes are recorded here. Version names use semantic versioning; **1.0** is `1.0.0` and **1.0 beta** was `1.0.0-beta.1`.
 
+## Unreleased
+
+- New Quiz feedback for a missed question: Canvas shows a choice's feedback only for the choice picked, so `push_quiz` now also puts each correct MC/MA choice's rationale in the question's incorrect feedback, green and naming the choice. A student who misses a question sees why their answer isn't right and why the correct one is. Local tests only; the quiz player's display is not yet viewed. Existing quizzes can be fixed through the New Quiz content edit flow.
+- Scoring sessions flag possible AI use or copying for the teacher's review: `score.md` sets out the signals, the threshold, and the private in-conversation report with quoted suspect phrases. A flag never changes the score or reaches students or families.
+
 ## 1.7.0 (2026-10-28)
 
 New Quiz accommodations, differentiation tags, shared rubrics, content edits and a conversation-only scoring check-in.

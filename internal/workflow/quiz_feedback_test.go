@@ -63,6 +63,25 @@ func TestMAFeedbackLabels(t *testing.T) {
 	}
 }
 
+func TestMissedChoiceItemsExplainTheCorrectAnswer(t *testing.T) {
+	q, err := fbQuiz(t,
+		`{"id":"m","type":"MC","points":1,"prompt":"p","choices":[{"id":"a","text":"<em>Simile</em>","correct":true},{"id":"b","text":"B"}]},`+
+			`{"id":"x","type":"MA","points":2,"prompt":"p","choices":[{"id":"a","text":"A","correct":true},{"id":"b","text":"B","correct":true},{"id":"c","text":"C"}]}`,
+		`{"item_id":"m","choices":[{"id":"a","rationale":"It uses like."},{"id":"b","rationale":"No."}]},`+
+			`{"item_id":"x","choices":[{"id":"a","rationale":"One."},{"id":"b","rationale":"Two."},{"id":"c","rationale":"Three."}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := q.itemPayloads()
+	if got, want := entryOf(p[0])["feedback"].(map[string]any)["incorrect"], fbGreen+`Why “Simile” is the best answer:</strong> It uses like.</p>`; got != want {
+		t.Errorf("MC incorrect feedback = %v, want %v", got, want)
+	}
+	want := fbGreen + `Why “A” is a correct choice:</strong> One.</p>` + fbGreen + `Why “B” is a correct choice:</strong> Two.</p>`
+	if got := entryOf(p[1])["feedback"].(map[string]any)["incorrect"]; got != want {
+		t.Errorf("MA incorrect feedback = %v, want %v", got, want)
+	}
+}
+
 func TestTFFeedbackIsNeutralGreen(t *testing.T) {
 	q, err := fbQuiz(t, `{"id":"q","type":"TF","points":1,"prompt":"p","answer":true}`, `{"item_id":"q","rationale":"It is so."}`)
 	if err != nil {

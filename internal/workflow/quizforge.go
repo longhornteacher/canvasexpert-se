@@ -565,6 +565,21 @@ func (it qfItem) choiceFeedback(correct bool, text string) string {
 	return feedbackHTML(feedbackRed, "Why this isn't the best answer:", text)
 }
 
+var choiceTextTags = regexp.MustCompile(`<[^>]*>`)
+
+// missedFeedback explains one correct choice in the item's incorrect feedback:
+// Canvas shows a choice's rationale only for the choice the student picked, so
+// a student who missed the question would otherwise never see why the correct
+// answer is correct.
+func (it qfItem) missedFeedback(choiceText, rationale string) string {
+	label := "Why “%s” is the best answer:"
+	if it.Type == "MA" {
+		label = "Why “%s” is a correct choice:"
+	}
+	text := strings.Join(strings.Fields(choiceTextTags.ReplaceAllString(choiceText, " ")), " ")
+	return feedbackHTML(feedbackGreen, fmt.Sprintf(label, text), rationale)
+}
+
 // neutralFeedback is shown whatever the student answered: for MC/MA it is the
 // optional general note beside the per-choice feedback; for other auto-scored
 // items it explains the correct answer, in green.
@@ -652,6 +667,7 @@ func (it qfItem) buildChoice() map[string]any {
 	choices := make([]map[string]any, len(it.Choices))
 	feedback := map[string]any{}
 	var correct []string
+	missed := ""
 	for i, c := range it.Choices {
 		id := newUUID()
 		choices[i] = map[string]any{"id": id, "position": i + 1, "item_body": para(c.Text)}
@@ -661,13 +677,20 @@ func (it qfItem) buildChoice() map[string]any {
 		}
 		if r := rat[key]; r != "" {
 			feedback[id] = it.choiceFeedback(c.Correct, r)
+			if c.Correct {
+				missed += it.missedFeedback(c.Text, r)
+			}
 		}
 		if c.Correct {
 			correct = append(correct, id)
 		}
 	}
 	entry := map[string]any{"title": it.title(it.Type), "item_body": it.Prompt, "interaction_data": map[string]any{"choices": choices}, "answer_feedback": feedback}
-	if general := it.neutralFeedback(); len(general) > 0 {
+	general := it.neutralFeedback()
+	if missed != "" {
+		general["incorrect"] = missed
+	}
+	if len(general) > 0 {
 		entry["feedback"] = general
 	}
 	if it.Type == "MC" {
