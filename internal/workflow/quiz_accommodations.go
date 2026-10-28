@@ -16,9 +16,9 @@ import (
 
 type QuizAccommodationChange struct {
 	Student          string `json:"student" jsonschema:"Exact stable student reference or unique saved privacy alias"`
-	ExtraTimeMinutes *int   `json:"extra_time_minutes,omitempty" jsonschema:"Whole extra minutes, 0 through 10080; omission preserves intent, never means zero"`
-	ExtraAttempts    *int   `json:"extra_attempts,omitempty" jsonschema:"Nonnegative extra attempts; repeat semantics remain live-unverified"`
-	ReduceChoices    *bool  `json:"reduce_choices,omitempty" jsonschema:"Explicit true or false; omission does not mean false"`
+	ExtraTimeMinutes *int   `json:"extra_time_minutes,omitempty" jsonschema:"Whole extra minutes, 0 through 10080; omitted fields keep the student's existing setting; 0 clears"`
+	ExtraAttempts    *int   `json:"extra_attempts,omitempty" jsonschema:"Nonnegative extra attempts, an absolute setting (repeating it does not add more); omission keeps the existing setting"`
+	ReduceChoices    *bool  `json:"reduce_choices,omitempty" jsonschema:"Explicit true or false; false clears, omission keeps the existing setting"`
 }
 
 type QuizAccommodationRequest struct {
@@ -86,7 +86,7 @@ type QuizAccommodationReport struct {
 }
 
 // SetQuizAccommodations implements the documented single-request route. Until
-// omission semantics are observed, a write requires all three intended values.
+// Observed on CS8 (2026-10-28): Canvas merges, so only supplied fields are sent.
 // There is no automatic retry, effective-value claim, or confirmation GET.
 func (s *Service) SetQuizAccommodations(ctx context.Context, nickname string, quizID int64, request QuizAccommodationRequest, preview bool) (report QuizAccommodationReport, err error) {
 	if err = request.Validate(); err != nil {
@@ -153,13 +153,12 @@ func (s *Service) SetQuizAccommodations(ctx context.Context, nickname string, qu
 	}
 	type wireChange struct {
 		UserID        int64 `json:"user_id"`
-		ExtraTime     int   `json:"extra_time"`
-		ExtraAttempts int   `json:"extra_attempts"`
-		ReduceChoices bool  `json:"reduce_choices_enabled"`
+		ExtraTime     *int  `json:"extra_time,omitempty"`
+		ExtraAttempts *int  `json:"extra_attempts,omitempty"`
+		ReduceChoices *bool `json:"reduce_choices_enabled,omitempty"`
 	}
 	body := []wireChange{}
 	index := map[int64]int{}
-	incomplete := false
 	for _, change := range request.Students {
 		var matches []workspace.Student
 		// Exact stable references take precedence over aliases, as elsewhere.
@@ -185,23 +184,11 @@ func (s *Service) SetQuizAccommodations(ctx context.Context, nickname string, qu
 		index[st.UserID] = len(report.Rows)
 		change.Student = st.Ref
 		report.Rows = append(report.Rows, QuizAccommodationRow{StudentRef: st.Ref, Alias: st.Alias, Settings: change, Status: "preview"})
-		if change.ExtraTimeMinutes == nil || change.ExtraAttempts == nil || change.ReduceChoices == nil {
-			incomplete = true
-			continue
-		}
-		body = append(body, wireChange{st.UserID, *change.ExtraTimeMinutes, *change.ExtraAttempts, *change.ReduceChoices})
+		body = append(body, wireChange{st.UserID, change.ExtraTimeMinutes, change.ExtraAttempts, change.ReduceChoices})
 	}
-	report.Note = "Effective values, omission and repeated-attempt semantics remain live-unverified; inspect Moderate after any uncertain result. Never blindly rerun accepted or uncertain requests."
+	report.Note = "Canvas merges a request into the student's existing setting: omitted fields are kept, and 0 or false clears one. Each value is absolute, so repeating a request changes nothing more. Canvas cannot read settings back; inspect Moderate after an uncertain result."
 	if preview {
 		report.Status = "preview"
-		return report, nil
-	}
-	if incomplete {
-		report.Status = "held"
-		for i := range report.Rows {
-			report.Rows[i].Status = "held"
-			report.Rows[i].Reason = "No write: omission semantics are unverified; supply all three intended values without guessing existing settings."
-		}
 		return report, nil
 	}
 	var response struct {
@@ -262,10 +249,55 @@ func (s *Service) SetQuizAccommodations(ctx context.Context, nickname string, qu
 	return report, nil
 }
 
-// Saved settings cannot be posted until omission/repeat and course/quiz
-// combination semantics are established. This limit is shared by the public
-// from-saved path and the quiz publication stage; no hidden enabling flag.
-const savedQuizAccommodationHold = "Saved accommodations were not applied: Canvas omission, repeat and course/quiz combination behavior is still unverified. Inspect Moderate; do not guess or clear existing settings."
+// quizAccommodationHold is the publication hold left by a saved-settings
+// application that did not fully land. Rerunning resends the whole absolute-value
+// array, which Canvas applies idempotently.
+const quizAccommodationHold = "Saved accommodations were not fully applied. Rerun to resend them; Canvas applies each value as an absolute setting, so a rerun is safe. Inspect Moderate if a student keeps failing."
+
+// applySavedQuizAccommodations posts the planned array in one request and maps
+// Canvas's per-student outcome. aliases names a failed student without an ID.
+func (s *Service) applySavedQuizAccommodations(ctx context.Context, courseID, quizID int64, plan savedQuizAccommodationPlan, aliases map[int64]string) (applied int, failed []string, err error) {
+	var response struct {
+		Successful []struct {
+			UserID int64 `json:"user_id"`
+		} `json:"successful"`
+		Failed []struct {
+			UserID int64 `json:"user_id"`
+		} `json:"failed"`
+	}
+	path := fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes/%d/accommodations", courseID, quizID)
+	if err = s.Client.Write(ctx, http.MethodPost, path, plan.Changes, &response); err != nil {
+		return 0, nil, err
+	}
+	ok := map[int64]bool{}
+	for _, r := range response.Successful {
+		ok[r.UserID] = true
+	}
+	for _, c := range plan.Changes {
+		if ok[c.UserID] {
+			applied++
+		} else {
+			failed = append(failed, aliases[c.UserID])
+		}
+	}
+	return applied, failed, nil
+}
+
+func savedAliases(students []workspace.Student) map[int64]string {
+	m := map[int64]string{}
+	for _, st := range students {
+		m[st.UserID] = st.Alias
+	}
+	return m
+}
+
+// savedQuizApplyNote reports counts and failed aliases only.
+func savedQuizApplyNote(applied int, failed []string) string {
+	if len(failed) == 0 {
+		return fmt.Sprintf("Saved accommodations applied for %d students.", applied)
+	}
+	return fmt.Sprintf("Saved accommodations applied for %d students; Canvas did not accept them for: %s. %s", applied, strings.Join(failed, ", "), quizAccommodationHold)
+}
 
 func (s *Service) savedQuizAccommodationsReport(ctx context.Context, course domain.Course, quizID int64, timer savedQuizTimer, preview bool) (QuizAccommodationReport, error) {
 	students, err := s.savedQuizStudents(ctx, course.ID)
@@ -276,11 +308,24 @@ func (s *Service) savedQuizAccommodationsReport(ctx context.Context, course doma
 	if err != nil {
 		return QuizAccommodationReport{}, err
 	}
-	report := QuizAccommodationReport{Planned: len(plan.Changes), Status: "held", Note: savedQuizAccommodationHold}
-	if preview {
+	report := QuizAccommodationReport{Planned: len(plan.Changes)}
+	switch {
+	case preview:
 		report.Status = "preview"
-	} else if len(plan.Changes) == 0 {
+	case len(plan.Changes) == 0:
 		report.Status, report.Note = "completed", "No saved accommodations require application to this quiz; no Canvas settings were changed."
+	default:
+		applied, failed, e := s.applySavedQuizAccommodations(ctx, course.ID, quizID, plan, savedAliases(students))
+		if e != nil {
+			report.Status, report.Uncertain = "uncertain", len(plan.Changes)
+			report.Note = "The request did not return confirmed outcomes. " + quizAccommodationHold
+			return report, nil
+		}
+		report.Completed, report.Failed = applied, len(failed)
+		report.Status, report.Note = "completed", savedQuizApplyNote(applied, failed)
+		if len(failed) > 0 {
+			report.Status = "partial"
+		}
 	}
 	return report, nil
 }

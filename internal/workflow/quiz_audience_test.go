@@ -38,6 +38,10 @@ type quizAudienceFixtureState struct {
 	FailPublish int
 	// QuizCreates, ItemPosts, SettingsPuts and Publishes count writes.
 	QuizCreates, ItemPosts, SettingsPuts, Publishes int
+	// AccommodationBodies records each accommodation POST; FailAccommodations
+	// answers them with a server error.
+	AccommodationBodies [][]map[string]any
+	FailAccommodations  bool
 	// Submissions maps a user ID to a submission body; empty means no work.
 	Submissions map[int64]Submission
 }
@@ -80,6 +84,19 @@ func newQuizAudienceFixture(t *testing.T, members map[int64][]int64) *quizAudien
 		case r.Method == http.MethodPost && r.URL.Path == "/api/quiz/v1/courses/1/quizzes":
 			f.QuizCreates++
 			write(map[string]any{"id": "55"})
+		case r.Method == http.MethodPost && r.URL.Path == "/api/quiz/v1/courses/1/quizzes/55/accommodations":
+			var body []map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f.AccommodationBodies = append(f.AccommodationBodies, body)
+			if f.FailAccommodations {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			ok := []map[string]any{}
+			for _, c := range body {
+				ok = append(ok, map[string]any{"user_id": c["user_id"]})
+			}
+			write(map[string]any{"message": "Accommodations processed", "successful": ok, "failed": []any{}})
 		case r.Method == http.MethodGet && r.URL.Path == "/api/quiz/v1/courses/1/quizzes/55/items":
 			write([]any{})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/quiz/v1/courses/1/quizzes/55/items":

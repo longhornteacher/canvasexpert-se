@@ -81,8 +81,9 @@ func (s *Service) savedQuizStudents(ctx context.Context, courseID int64) ([]work
 	return students, nil
 }
 
-// This publication stage deliberately makes no accommodation POST until the
-// live setter semantics are known. Explicit skipping lasts for this call only.
+// This publication stage applies saved settings before publication. Canvas
+// merges and every value is absolute, so a rerun resends the whole array.
+// Explicit skipping lasts for this call only.
 func (s *Service) guardSavedQuizPublication(ctx context.Context, course domain.Course, quizID int64, set QuizSettings, skip bool, rec *quizSidecar, report *QuizPushReport, save func() error) (bool, error) {
 	stage := &quizAccommodationStage{}
 	rec.Stages.Accommodations = stage
@@ -121,13 +122,28 @@ func (s *Service) guardSavedQuizPublication(ctx context.Context, course domain.C
 		stage.Status = "not-requested"
 		return true, save()
 	}
-	stage.Status = "held"
-	report.Accommodations = fmt.Sprintf("Saved accommodations planned for %d students; none applied.", stage.Count)
-	report.Message = savedQuizAccommodationHold + " Publication was held; explicitly request --skip-accommodations to publish anyway."
-	if plan.Published {
-		report.Message = savedQuizAccommodationHold + " This quiz is already published; its publication state was preserved."
+	applied, failed, e := s.applySavedQuizAccommodations(ctx, course.ID, quizID, plan, savedAliases(students))
+	if e != nil {
+		stage.Status = "held"
+		report.Accommodations = fmt.Sprintf("Saved accommodations planned for %d students; Canvas did not confirm them.", stage.Count)
+		report.Message = quizAccommodationHold + " Publication was held; explicitly request --skip-accommodations to publish anyway."
+		if plan.Published {
+			report.Message = quizAccommodationHold + " This quiz is already published; its publication state was preserved."
+		}
+		return false, save()
 	}
-	return false, save()
+	if len(failed) > 0 {
+		stage.Status = "held"
+		report.Accommodations = savedQuizApplyNote(applied, failed)
+		report.Message = "Publication was held; explicitly request --skip-accommodations to publish anyway."
+		if plan.Published {
+			report.Message = "This quiz is already published; its publication state was preserved."
+		}
+		return false, save()
+	}
+	stage.Status = "applied"
+	report.Accommodations = savedQuizApplyNote(applied, nil)
+	return true, save()
 }
 
 func savedQuizExtraMinutes(value string, timer savedQuizTimer) (*int, error) {
@@ -169,13 +185,19 @@ func (s *Service) planSavedQuizAccommodations(ctx context.Context, courseID, qui
 	// Canvas resolves direct, section, tag and inherited module visibility. Do
 	// not approximate that audience from local membership or authored intent.
 	var assignment struct {
-		ID         int64          `json:"id"`
-		CourseID   int64          `json:"course_id"`
-		NewQuiz    bool           `json:"is_quiz_lti_assignment"`
-		Published  bool           `json:"published"`
-		Visibility *[]json.Number `json:"assignment_visibility"`
+		ID            int64          `json:"id"`
+		CourseID      int64          `json:"course_id"`
+		NewQuiz       bool           `json:"is_quiz_lti_assignment"`
+		Published     bool           `json:"published"`
+		Visibility    *[]json.Number `json:"assignment_visibility"`
+		OnlyOverrides bool           `json:"only_visible_to_overrides"`
+		Overrides     []struct {
+			StudentIDs []json.Number `json:"student_ids"`
+			SectionID  int64         `json:"course_section_id"`
+			GroupID    int64         `json:"group_id"`
+		} `json:"overrides"`
 	}
-	if err := s.Client.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d?include[]=assignment_visibility", courseID, quizID), &assignment); err != nil {
+	if err := s.Client.Get(ctx, fmt.Sprintf("/api/v1/courses/%d/assignments/%d?include[]=assignment_visibility&include[]=overrides", courseID, quizID), &assignment); err != nil {
 		return plan, err
 	}
 	if assignment.ID != quizID || assignment.CourseID != courseID || !assignment.NewQuiz {
@@ -196,22 +218,40 @@ func (s *Service) planSavedQuizAccommodations(ctx context.Context, courseID, qui
 	if len(students) == 0 {
 		return plan, nil
 	}
-	// Upstream's visibility SQL excludes unpublished recipients on supported
-	// override paths. Even a present/nonempty list can therefore be partial.
-	// Do not turn that list into a claim that no saved accommodation is needed.
-	if !assignment.Published {
-		return plan, fmt.Errorf("quiz's effective student audience is unavailable before publication; assignment_visibility can omit unpublished recipients")
-	}
-	if assignment.Visibility == nil {
-		return plan, fmt.Errorf("quiz's effective student audience is unavailable; saved accommodations were not assumed")
-	}
 	visible := map[int64]bool{}
-	for _, raw := range *assignment.Visibility {
-		id, err := raw.Int64()
-		if err != nil || id <= 0 {
-			return plan, fmt.Errorf("quiz's effective student audience contains an unconfirmed identity")
+	if !assignment.Published {
+		// assignment_visibility omits unpublished recipients, so read the
+		// audience the Engine's own audience stage wrote: unrestricted means
+		// every active student, restricted means its individual overrides.
+		if !assignment.OnlyOverrides {
+			for _, st := range students {
+				visible[st.UserID] = true
+			}
+		} else {
+			for _, o := range assignment.Overrides {
+				if o.SectionID != 0 || o.GroupID != 0 || len(o.StudentIDs) == 0 {
+					return plan, fmt.Errorf("quiz's effective student audience is unavailable before publication; it has a section, group or empty override")
+				}
+				for _, raw := range o.StudentIDs {
+					id, err := raw.Int64()
+					if err != nil || id <= 0 {
+						return plan, fmt.Errorf("quiz's effective student audience contains an unconfirmed identity")
+					}
+					visible[id] = true
+				}
+			}
 		}
-		visible[id] = true
+	} else {
+		if assignment.Visibility == nil {
+			return plan, fmt.Errorf("quiz's effective student audience is unavailable; saved accommodations were not assumed")
+		}
+		for _, raw := range *assignment.Visibility {
+			id, err := raw.Int64()
+			if err != nil || id <= 0 {
+				return plan, fmt.Errorf("quiz's effective student audience contains an unconfirmed identity")
+			}
+			visible[id] = true
+		}
 	}
 	for _, st := range students {
 		if !visible[st.UserID] {

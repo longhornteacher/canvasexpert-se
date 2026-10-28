@@ -26,6 +26,8 @@ Both parts need a Canvas user that belongs to no real student. Ask the teacher w
 1. **Built-in Test Student** (accommodations only). It cannot launch New Quizzes, but the accommodation POST may accept its user ID and the Moderate page may list it. That is enough for §2.1 Q1–Q5 and Q8 (setting semantics), not for Q6/timer behavior or any of Part 2. Try this first; it needs only a concrete teacher go-ahead for the disposable quiz and POSTs.
 2. **A second account enrolled as a student in CS8** (district admin or a teacher-owned login). Needed for attempt/timer checks and all of Part 2.
 
+**Answer (2026-10-28):** the teacher reports option 2 is available, a second account enrolled as a student in CS8. Its identity and the per-step live go-ahead (disposable quiz, accommodation POSTs, Step A dev-tools save) are still to be given before any Canvas write.
+
 If neither is available, both parts stay here unchanged. The existing holds are the correct product behavior meanwhile.
 
 ## 2. Part A: accommodation semantics, then enable the writes
@@ -42,6 +44,14 @@ Record dated answers here before enabling anything that depends on them.
 6. *(Needs account 2.)* On a one-attempt quiz, does `extra_attempts: 1` give a second attempt? Does `extra_time` lengthen the student's timer?
 7. With a course-level `extra_time` the teacher set by hand, do course and quiz values add on an existing quiz and on one created afterwards? (Course-level sync stays frozen; this answer only decides whether §4.3/§4.4 must report a double-time conflict.) Include restoration of the account's previous course setting in the authorization.
 
+**Observed 2026-10-28 (CS8, disposable unpublished quiz 3710787, teacher-owned account 105645, per-quiz POST; read back on the teacher's Moderate page):**
+- Q1: `/api/quiz/v1/courses/:c/quizzes/:id/accommodations` returns 200 `{message, successful:[{user_id}], failed:[]}`; the same route under `/api/v1` is 404. The response carries no effective values and no GET exists.
+- Q4: an unpublished quiz accepts the POST.
+- Q2: **merge.** `extra_time:10`, then only `reduce_choices_enabled:true`, left Moderate at Time + 10 min and Answer Choices Reduced. Omitted fields are kept.
+- Q3: **clears.** `extra_time:0` then showed Time + 0 min (row remains) with choices still Reduced; `reduce_choices_enabled:false` then removed the reduced-choices line.
+- Q5: **absolute setter.** `extra_attempts:1` showed Additional 1 attempt (default 1, total 2); the identical repeat POST still showed Additional 1 (total 2).
+- Still unobserved: Q6 (second attempt and timer for a student; needs the account's own login) and Q7 (course-level combination). Sent in order: `extra_time:10`, `reduce_choices_enabled:true`, `extra_time:0`, `reduce_choices_enabled:false`, `extra_attempts:1` twice. Quiz 3710787 stays until cleanup (see cs8-test-objects.md).
+
 Check results on the Moderate page (dev read-backs are fine here). List or delete the disposable quiz in [cs8-test-objects.md](../../docs/cs8-test-objects.md).
 
 ### 2.2 Enable, according to the answers
@@ -52,6 +62,10 @@ Check results on the Moderate page (dev read-backs are fine here). List or delet
 - **Q7 add.** If course and quiz values add, hold the affected student's automatic application and explain the conflict; do not subtract from stale state.
 
 Local tests for each enabled behavior (fake server: partial 200, uncertain POST, rerun, privacy of counts-only output). Update both capability records and `quizzes.md`.
+
+### 2.2 execution record (2026-10-28)
+
+Implemented in Dev from the Q1-Q5 observations: the explicit tool now sends only supplied fields (the all-three hold is gone); `push_quiz` and `from_saved` POST the computed `extra_time` / `reduce_choices_enabled` array (never `extra_attempts`) before publication, and `savedQuizAccommodationHold` is replaced by `quizAccommodationHold` plus counts and failed students by alias; an unconfirmed or partial POST holds publication and a rerun resends the whole array, so no per-student outcome record was added (merge plus absolute setters make a resend idempotent). Unpublished audience: unrestricted means every active student, restricted means the quiz's own individual overrides read back from Canvas; a section, group or empty override holds. Q7 (course/quiz combination) is unobserved, so no double-time conflict report exists; course sync stays frozen. Docs, playbook and both capability records updated. Local evidence only: `go test ./...`, `go vet ./...`, the 57-tool compiled MCP smoke and `git diff --check` passed. Not done: a live Engine-built timed quiz push, and Q6/timer checks, which need the student account's own login. Quiz 3710787 still needs deleting (listed in cs8-test-objects.md).
 
 ### 2.3 Done when
 

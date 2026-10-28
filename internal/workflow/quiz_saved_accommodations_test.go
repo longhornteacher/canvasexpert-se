@@ -50,12 +50,22 @@ func TestFromSavedQuizAccommodationsScopePrivacyAndHold(t *testing.T) {
 	var writes int
 	timedQuiz := true
 	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && r.URL.Path == "/api/quiz/v1/courses/1/quizzes/10/accommodations" {
 			writes++
+			var body []map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			// Only supplied settings are sent: never extra_attempts, never a clear.
+			if len(body) != 1 || body[0]["user_id"] != float64(5) || body[0]["extra_time"] != float64(11) || body[0]["reduce_choices_enabled"] != true || len(body[0]) != 3 {
+				t.Errorf("unexpected saved array %+v", body)
+			}
+			fmt.Fprint(w, `{"successful":[{"user_id":5}],"failed":[]}`)
+			return
+		}
+		if r.Method != http.MethodGet {
 			t.Errorf("unexpected write %s", r.URL)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/quiz/v1/courses/1/quizzes/10":
 			fmt.Fprintf(w, `{"id":"10","quiz_settings":{"has_time_limit":%t,"session_time_limit_in_seconds":1260}}`, timedQuiz)
@@ -105,11 +115,11 @@ func TestFromSavedQuizAccommodationsScopePrivacyAndHold(t *testing.T) {
 	request := QuizAccommodationRequest{FromSaved: true}
 	for _, preview := range []bool{true, false} {
 		report, err := s.SetQuizAccommodations(context.Background(), "TEST", 10, request, preview)
-		want := "held"
+		want, wantWrites := "completed", 1
 		if preview {
-			want = "preview"
+			want, wantWrites = "preview", 0
 		}
-		if err != nil || report.Status != want || report.Planned != 1 || len(report.Rows) != 0 || writes != 0 {
+		if err != nil || report.Status != want || report.Planned != 1 || len(report.Rows) != 0 || writes != wantWrites {
 			t.Fatalf("report=%+v err=%v writes=%d", report, err, writes)
 		}
 		body, _ := json.Marshal(report)
@@ -146,7 +156,7 @@ func TestFromSavedQuizAccommodationsScopePrivacyAndHold(t *testing.T) {
 		t.Fatal(err)
 	}
 	report, err := s.SetQuizAccommodations(context.Background(), "TEST", 10, request, false)
-	if err != nil || report.Planned != 0 || report.Status != "completed" || writes != 0 {
+	if err != nil || report.Planned != 0 || report.Status != "completed" || writes != 1 {
 		t.Fatalf("untimed quiz received time/clearing writes: %+v %v writes=%d", report, err, writes)
 	}
 }
@@ -154,8 +164,6 @@ func TestFromSavedQuizAccommodationsScopePrivacyAndHold(t *testing.T) {
 func TestSavedQuizPublicationHoldResumeAndExplicitSkip(t *testing.T) {
 	f := newQuizAudienceFixture(t, map[int64][]int64{60: {9001}})
 	f.seedStudents(t, 9001)
-	visibility := []int64{9001}
-	f.QuizVisibility = &visibility
 	store, err := workspace.OpenStudents(f.Service.Root)
 	if err != nil {
 		t.Fatal(err)
@@ -164,14 +172,18 @@ func TestSavedQuizPublicationHoldResumeAndExplicitSkip(t *testing.T) {
 	if err = store.Save(); err != nil {
 		t.Fatal(err)
 	}
+	visibility := []int64{9001}
+	f.QuizVisibility = &visibility
 	path := f.writeQuiz(t, `{"title":"Private accommodation check","metadata":{"canvas":{"has_time_limit":true,"time_limit_minutes":21,"published":true}},"items":[{"id":"Q1","type":"ESSAY","prompt":"Explain.","points":5}]}`)
-	for i := 0; i < 2; i++ {
+	// An unconfirmed POST holds publication, and every rerun resends the whole array.
+	f.FailAccommodations = true
+	for i := 1; i <= 2; i++ {
 		report, err := f.Service.PushQuiz(context.Background(), "TEST", path)
-		if err == nil || !strings.Contains(err.Error(), "before publication") || report.Status != "partial" || report.Published || f.Published || f.QuizCreates != 1 || f.ItemPosts != 1 {
-			t.Fatalf("held resume=%+v err=%v creates/items=%d/%d", report, err, f.QuizCreates, f.ItemPosts)
+		if err != nil || report.Status != "partial" || report.Published || f.Published || f.QuizCreates != 1 || f.ItemPosts != 1 || len(f.AccommodationBodies) != i {
+			t.Fatalf("held resume=%+v err=%v creates/items=%d/%d posts=%d", report, err, f.QuizCreates, f.ItemPosts, len(f.AccommodationBodies))
 		}
 		rec := readSidecar(path)
-		if rec.Stages == nil || rec.Stages.Accommodations == nil || rec.Stages.Accommodations.Status != "held" || rec.Stages.Accommodations.Count != 0 || rec.Stages.Accommodations.Digest != "" {
+		if rec.Stages == nil || rec.Stages.Accommodations == nil || rec.Stages.Accommodations.Status != "held" || rec.Stages.Accommodations.Count != 1 || rec.Stages.Accommodations.Digest == "" {
 			t.Fatalf("missing private-safe stage: %+v", rec.Stages)
 		}
 		body, _ := os.ReadFile(sidecarPath(path))
@@ -181,15 +193,44 @@ func TestSavedQuizPublicationHoldResumeAndExplicitSkip(t *testing.T) {
 			}
 		}
 	}
+	// Explicit skip publishes without any accommodation POST, for this run only.
 	report, err := f.Service.PushQuiz(context.Background(), "TEST", path, QuizPushOptions{SkipAccommodations: true})
-	if err != nil || report.Status != "completed" || !f.Published || readSidecar(path).Stages.Accommodations.Status != "skipped" {
+	if err != nil || report.Status != "completed" || !f.Published || len(f.AccommodationBodies) != 2 || readSidecar(path).Stages.Accommodations.Status != "skipped" {
 		t.Fatalf("explicit skip=%+v %v", report, err)
 	}
-	// A recorded skip is never a saved preference. The next normal run checks
-	// again, reports the still-published state, and makes no accommodation write.
 	report, err = f.Service.PushQuiz(context.Background(), "TEST", path)
 	if err != nil || report.Status != "partial" || !report.Published || !f.Published || !strings.Contains(report.Message, "already published") || readSidecar(path).Stages.Accommodations.Status != "held" {
 		t.Fatalf("skip became permanent or state misreported: %+v %v", report, err)
+	}
+	// Once Canvas accepts the absolute-value array, the stage is applied.
+	f.FailAccommodations = false
+	report, err = f.Service.PushQuiz(context.Background(), "TEST", path)
+	last := f.AccommodationBodies[len(f.AccommodationBodies)-1]
+	if err != nil || report.Status != "completed" || readSidecar(path).Stages.Accommodations.Status != "applied" || len(last) != 1 || last[0]["extra_time"] != float64(11) || last[0]["reduce_choices_enabled"] != true || len(last[0]) != 3 || strings.Contains(report.Accommodations, "9001") {
+		t.Fatalf("applied run=%+v %v last=%+v", report, err, last)
+	}
+}
+
+func TestSavedQuizUnpublishedAudienceFollowsRestrictedOverrides(t *testing.T) {
+	f := newQuizAudienceFixture(t, map[int64][]int64{60: {9001}, 61: {9002}})
+	f.seedStudents(t, 9001, 9002)
+	store, err := workspace.OpenStudents(f.Service.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range store.Rows {
+		store.Rows[i].ReducedChoices = true
+	}
+	if err = store.Save(); err != nil {
+		t.Fatal(err)
+	}
+	path := f.writeQuiz(t, quizAudienceFixture)
+	if _, err = f.Service.PrepareAudience(context.Background(), "TEST", path, false); err != nil {
+		t.Fatal(err)
+	}
+	report, err := f.Service.PushQuiz(context.Background(), "TEST", path)
+	if err != nil || len(f.AccommodationBodies) != 1 || len(f.AccommodationBodies[0]) != 1 || f.AccommodationBodies[0][0]["user_id"] != float64(9001) {
+		t.Fatalf("accommodations were not limited to the restricted audience: %+v %v bodies=%+v", report, err, f.AccommodationBodies)
 	}
 }
 
@@ -210,10 +251,11 @@ func TestSavedQuizAudienceAndMissingEvidenceHoldEvenWhenSkipping(t *testing.T) {
 	if report.Status != "partial" || f.Published || !strings.Contains(report.Message, "audience") {
 		t.Fatalf("skip bypassed audience guard: %+v %v", report, err)
 	}
-	// A normal quiz with an unavailable effective audience must never treat
+	// A published quiz with an unavailable effective audience must never treat
 	// missing audience evidence as an empty audience and publish.
 	g := newQuizAudienceFixture(t, map[int64][]int64{60: {9001}})
 	g.seedStudents(t, 9001)
+	g.Published = true
 	store, err = workspace.OpenStudents(g.Service.Root)
 	if err != nil {
 		t.Fatal(err)
@@ -224,7 +266,7 @@ func TestSavedQuizAudienceAndMissingEvidenceHoldEvenWhenSkipping(t *testing.T) {
 	}
 	path = g.writeQuiz(t, `{"title":"No audience evidence","metadata":{"canvas":{"published":true}},"items":[{"id":"Q1","type":"ESSAY","prompt":"Explain.","points":5}]}`)
 	report, err = g.Service.PushQuiz(context.Background(), "TEST", path)
-	if err == nil || !strings.Contains(err.Error(), "effective student audience") || report.Status != "partial" || g.Published || readSidecar(path).Stages.Accommodations.Status != "held" {
+	if err == nil || !strings.Contains(err.Error(), "effective student audience") || report.Status != "partial" || len(g.AccommodationBodies) != 0 || readSidecar(path).Stages.Accommodations.Status != "held" {
 		t.Fatalf("missing evidence allowed publication: %+v %v", report, err)
 	}
 }
@@ -236,8 +278,8 @@ func TestFromSavedQuizTargetEvidence(t *testing.T) {
 		`{"id":10,"course_id":1,"is_quiz_lti_assignment":false,"assignment_visibility":[5]}`,
 		`{"id":10,"course_id":1,"is_quiz_lti_assignment":true,"published":true}`,
 		`{"id":10,"course_id":1,"is_quiz_lti_assignment":true,"published":true,"assignment_visibility":["invalid"]}`,
-		`{"id":10,"course_id":1,"is_quiz_lti_assignment":true,"published":false,"assignment_visibility":[]}`,
-		`{"id":10,"course_id":1,"is_quiz_lti_assignment":true,"published":false,"assignment_visibility":[5]}`,
+		`{"id":10,"course_id":1,"is_quiz_lti_assignment":true,"published":false,"only_visible_to_overrides":true,"overrides":[{"course_section_id":3}]}`,
+		`{"id":10,"course_id":1,"is_quiz_lti_assignment":true,"published":false,"only_visible_to_overrides":true,"overrides":[{"student_ids":[]}]}`,
 	} {
 		t.Run(response, func(t *testing.T) {
 			s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {

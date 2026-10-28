@@ -36,6 +36,14 @@ func TestQuizAccommodationsExactBulkPreviewHoldAndPartialOutcomes(t *testing.T) 
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body) != 2 {
 				t.Fatalf("not a top-level array: %+v %v", body, err)
 			}
+			if posts == 1 {
+				// Canvas merges, so an omitted field is omitted from the wire.
+				if _, has := body[0]["extra_time"]; has || len(body[0]) != 3 {
+					t.Fatalf("omitted field was sent: %+v", body)
+				}
+				fmt.Fprint(w, `{"successful":[{"user_id":5},{"user_id":6}],"failed":[]}`)
+				return
+			}
 			if body[0]["user_id"] != float64(5) || body[1]["user_id"] != float64(6) || body[0]["extra_time"] != float64(0) || body[0]["reduce_choices_enabled"] != false || body[0]["extra_attempts"] != float64(1) || len(body[0]) != 4 {
 				t.Fatalf("incorrect wire values: %+v", body)
 			}
@@ -52,14 +60,14 @@ func TestQuizAccommodationsExactBulkPreviewHoldAndPartialOutcomes(t *testing.T) 
 		t.Fatalf("preview: %+v %v posts=%d", preview, err, posts)
 	}
 	request.Students[0].ExtraTimeMinutes = nil
-	held, err := s.SetQuizAccommodations(ctx, "TEST", 10, request, false)
-	if err != nil || held.Status != "held" || posts != 0 {
-		t.Fatalf("omission was guessed: %+v %v", held, err)
+	sparse, err := s.SetQuizAccommodations(ctx, "TEST", 10, request, false)
+	if err != nil || sparse.Status != "completed" || posts != 1 {
+		t.Fatalf("partial row was not sent as supplied: %+v %v", sparse, err)
 	}
 	request.Students[0] = accommodationChange(one)
 	report, err := s.SetQuizAccommodations(ctx, "TEST", 10, request, false)
 	data, _ := json.Marshal(report)
-	if err != nil || report.Completed != 1 || report.Failed != 1 || report.Status != "partial" || posts != 1 || strings.Contains(string(data), "PRIVATE") || strings.Contains(string(data), "user_id") {
+	if err != nil || report.Completed != 1 || report.Failed != 1 || report.Status != "partial" || posts != 2 || strings.Contains(string(data), "PRIVATE") || strings.Contains(string(data), "user_id") {
 		t.Fatalf("partial/private result: %s %v posts=%d", data, err, posts)
 	}
 }
