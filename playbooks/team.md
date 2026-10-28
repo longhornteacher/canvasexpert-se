@@ -4,7 +4,7 @@ Some courses in `list_courses` have an `owner`: they belong to a teammate whose 
 
 ## Which courses a request means
 
-Work out the courses from the teacher's words with common sense. "My classes" means the teacher's current courses with no owner. "Turner's" means Turner's current courses. Courses and teammates not named are never touched. If a name matches no teammate, or could mean more than one set of courses, ask before writing. Before any write that spans more than one teacher, state the exact course list in one line ("Yours: P1, P3, P5. Ms. Turner's: P2, P4.") and continue; the review page, when used, shows it too.
+Work out the courses from the teacher's words with common sense. "My classes" means the teacher's current courses with no owner. "Turner's" means Turner's current courses. Courses and teammates not named are never touched. If a name matches no teammate, or could mean more than one set of courses, ask before writing. Before any write that spans more than one teacher, state the exact course list in one line ("Yours: P1, P3, P5. Ms. Turner's: P2, P4.") and continue.
 
 The Engine picks the right key for each course. If it says a teammate's key isn't on this PC, or Canvas didn't accept it, tell the teacher which teammate's key needs attention. Commands that take one course at a time keep going for the other courses. A parent report, or a family message sent to whole courses or groups, stops as a whole; run it again without that teammate's courses, and say which courses were left out. A family message to named students skips teammates' courses this PC can't read, and names them if a student isn't found anywhere else. Never ask for a teammate's key in chat; a teammate adds or replaces their key on the Team page.
 
@@ -35,7 +35,7 @@ The copy result ends with a "Check after copy" report for each course: item coun
 3. **Dates.** Set that teacher's dates with the assignment-date tools when the teacher asks or the preferences file says how (for example, due times or a day offset). Otherwise say the dates match Collab.
 4. **Published or hidden.** Say how many items arrived published. Change it only when the teacher asks or the preferences file says so.
 5. **Clubs and audiences.** For group activities, or work meant for some students only, build that teacher's clubs or set audiences in that teacher's course with the group and audience tools. Differentiation tags are made by the teacher in Canvas; CE-SE can then target work at them.
-6. **Gradebook placement.** CE-SE can't move an assignment into a different assignment group yet. If one landed in the wrong group, say so and tell the teacher it's a quick drag in Canvas's Assignments page.
+6. **Gradebook placement.** A copied assignment or New Quiz may land in Imported Assignments. If the teacher wants it in another group, use the pull/edit/push flow in `edit.md` and the destination course's exact `assignment_group_id`. A move between weighted groups can change course grades; report that effect before the requested write.
 
 Report what was done per course in a line each, and what still needs the teacher.
 

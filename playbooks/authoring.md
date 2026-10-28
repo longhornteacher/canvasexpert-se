@@ -2,6 +2,8 @@
 
 What the teacher's words mean and when to create are in `AGENTS.md`.
 
+When an existing rubric may fit, use `list_rubrics` and `pull_rubric` to inspect its definition; `edit.md` describes those reads and optional teacher-requested library saves. Use a full inline definition, an existing rubric ID (`rubric: {id: N}`), or a saved filename stem (`rubric: {library: "SCR 4-point"}`). The Engine reuses identical course definitions and creates a new course version when a library definition changed; it preserves existing attachments and past assessments. Do not save a personal library entry silently.
+
 Before designing content, read `context/teaching-profile.md`, relevant teacher reference notes and `context/grading.md` through logical MCP paths or the effective teacher-rules root. Use saved grade/subject, priorities, standards and feedback guidance; ask only for missing details needed for this task. Preserve teacher choices and never use developer class names or differentiation tags as colleague defaults.
 
 ## Standards
@@ -12,7 +14,7 @@ Apply `TEACHER.md`: 100 points by default, grade-level rigor in plain, concise w
 
 Ask only for missing details that matter: course, title, directions, points, due and availability dates, submission type, module, publication, rubric. The saved course nicknames come from MCP `list_courses` (or `context/courses.md`); `.\cse.cmd courses` lists live Canvas courses. `.\cse.cmd modules <course>` lists module targets, and `.\cse.cmd modules <course>` lists module targets.
 
-Write a draft in the course's `drafts/` folder using the fields in `help formats`. Put the teaching content in the body. The default Markdown renderer handles headings, paragraphs, lists, bold, italic, links and fenced code; raw HTML shows as escaped text. Use `body_format: html` explicitly for authored tables, images and Canvas file links. The review page, when the teacher asks for it, shows HTML as escaped source; verify its saved appearance in Canvas. For standalone Pages, asset uploads and module assembly, read `native-content.md`.
+Write a draft in the course's `drafts/` folder using the fields in `help formats`. Put the teaching content in the body. The default Markdown renderer handles headings, paragraphs, lists, bold, italic, links and fenced code; raw HTML shows as escaped text. Use `body_format: html` explicitly for authored tables, images and Canvas file links. Verify the saved content in the Draft PDF when the teacher requests a printable copy. For standalone Pages, asset uploads and module assembly, read `native-content.md`.
 
 For a book-club or collaborative group unit, read `group-work.md` first. It is the workflow guide and states the current group-work limits. The notes below are operation-specific details for authoring within that scope.
 
@@ -32,7 +34,7 @@ Post a teacher entry or reply only when the teacher explicitly asks to communica
 
 ## Check in and create
 
-When the draft is ready, describe it to the teacher here in a few lines: the title, points and grading type, due and availability dates, submission type, rubric, module placement, tiers and whether it will be published, then the directions in a sentence or two and anything you decided that the teacher did not specify. Don't paste the whole body; the teacher can ask to see it, or ask for a Draft PDF (`save_draft_pdf`) to look at or print as a handout. Make requested changes in the draft and report only what changed. When the teacher says to go ahead, run `.\cse.cmd push <draft-file>` (MCP: `push_document`). When the request already included creating it, push first and then report. If the teacher asks to see it on a page, or has saved that preference, run `.\cse.cmd review <draft-file>` (MCP: `start_review`) instead: the page shows the content as the Engine will write it (it doesn't simulate the student view), and the Engine creates the assignment when the teacher clicks Create.
+When the draft is ready, describe it to the teacher here in a few lines: the title, points and grading type, due and availability dates, submission type, rubric, module placement, tiers and whether it will be published, then the directions in a sentence or two and anything you decided that the teacher did not specify. Don't paste the whole body; the teacher can ask to see it, or ask for a Draft PDF (`save_draft_pdf`) to look at or print as a handout. Make requested changes in the draft and report only what changed. When the teacher says to go ahead, run `.\cse.cmd push <draft-file>` (MCP: `push_document`). When the request already included creating it, push first and then report.
 
 A new assignment stays unpublished until its requested rubric and module pieces succeed. If `push` reports partial or ambiguous results, rerun the same file; it resumes from saved IDs and adopts an existing matching item or preserves a teacher's change. Report what was adopted or preserved. Never pick a same-titled Canvas assignment arbitrarily or start a second create when the first may have succeeded. Report the resulting Canvas state and anything incomplete. To share a finished module with the team through Collab, see `team.md`.
 
