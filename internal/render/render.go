@@ -147,11 +147,7 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 				max = points.Rat()
 			}
 		}
-		part := new(big.Rat)
-		if possible.Sign() > 0 {
-			part.Mul(max, new(big.Rat).Quo(earned, possible))
-		}
-		points := fmt.Sprintf("%s/%s", shortNumber(domain.RoundRat(part, 2)), shortNumber(domain.RoundRat(max, 2)))
+		points := fmt.Sprintf("%s/%s", shortNumber(scalePart(max, earned, possible)), shortNumber(domain.RoundRat(max, 2)))
 		if !itemLayout {
 			top = append(top, component.Label+": "+points)
 			continue
@@ -184,6 +180,48 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		out.WriteString(in.Feedback)
 	}
 	return out.String(), nil
+}
+
+// ItemPoints gives each New Quiz part that names a written item its points on
+// the quiz's scale: the item's points times the part's earned share of its
+// rubric points, rounded once to two places. The comment shows the same
+// numbers, so what is posted and what students read agree.
+func ItemPoints(rubric domain.Rubric, interp domain.Interpretation, components []domain.ComponentScore, partPoints map[string]domain.Decimal) map[string]domain.Decimal {
+	scores := make(map[string]domain.ComponentScore, len(components))
+	for _, c := range components {
+		scores[c.Key] = c
+	}
+	out := map[string]domain.Decimal{}
+	for _, component := range interp.Components {
+		max, ok := partPoints[component.Key]
+		if !ok {
+			continue
+		}
+		byID := make(map[string]domain.Decimal, len(scores[component.Key].Criteria))
+		for _, cs := range scores[component.Key].Criteria {
+			byID[cs.CriterionID] = cs.Points
+		}
+		earned, possible := new(big.Rat), new(big.Rat)
+		for _, criterion := range rubric.Criteria {
+			if interp.Mapping == "direct" && !contains(component.CriterionIDs, criterion.ID) {
+				continue
+			}
+			if p, ok := byID[criterion.ID]; ok {
+				earned.Add(earned, p.Rat())
+			}
+			possible.Add(possible, criterion.Points.Rat())
+		}
+		out[component.Key] = scalePart(max.Rat(), earned, possible)
+	}
+	return out
+}
+
+func scalePart(max, earned, possible *big.Rat) domain.Decimal {
+	part := new(big.Rat)
+	if possible.Sign() > 0 {
+		part.Mul(max, new(big.Rat).Quo(earned, possible))
+	}
+	return domain.RoundRat(part, 2)
 }
 
 func contains(items []string, value string) bool {

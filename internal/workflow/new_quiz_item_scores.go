@@ -1,0 +1,149 @@
+package workflow
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
+
+	"canvasexpertse/internal/domain"
+	"canvasexpertse/internal/render"
+)
+
+// postItemScores writes each part's item points into the New Quiz result
+// before the comment, using the internal call SpeedGrader uses. It sends at
+// most one write per run: a pending or uncertain write is reconciled against
+// the quiz result and never repeated blindly, and a grade someone entered in
+// Canvas since the pull is not overwritten.
+func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocument, c *domain.CommentOnlyOperation, v domain.ValidatedStudent, source postSource, live Submission, save func() error) error {
+	o := &c.ItemScoresOutcome
+	parts, err := partPoints(doc, source.writtenItems, v.Interpretation)
+	if err != nil {
+		return err
+	}
+	points := render.ItemPoints(*doc.Basis(), v.Interpretation, c.Components, parts)
+	want := map[string]string{}
+	for _, ic := range v.Interpretation.Components {
+		entry := ""
+		for _, item := range source.writtenItems {
+			if ic.ItemID == item.ItemID || ic.ItemID == item.EntryID {
+				entry = item.EntryID
+				if entry == "" {
+					entry = item.ItemID
+				}
+			}
+		}
+		if _, dup := want[entry]; dup {
+			holdOutcome(o, fmt.Sprintf("two parts score item %s; give each written item one part", ic.ItemID))
+			return save()
+		}
+		want[entry] = points[ic.Key].String()
+	}
+	summary := itemScoreSummary(want)
+
+	ps, qs := newQuizSessionIDs(live)
+	if ps == "" {
+		holdOutcome(o, "Canvas did not report this attempt's quiz session; enter the item points in SpeedGrader")
+		return save()
+	}
+	g, err := s.Client.NewQuizGrading(ctx, doc.Assignment.CourseID, doc.Assignment.AssignmentID, ps, qs)
+	if err != nil {
+		holdOutcome(o, "could not read the current quiz result: "+err.Error())
+		return save()
+	}
+	landed := true
+	for entry, score := range want {
+		current, _, attempt, ok := g.ItemScore(entry)
+		if !ok {
+			holdOutcome(o, "item "+entry+" is not in the current quiz result")
+			return save()
+		}
+		if attempt != strconv.Itoa(c.Attempt.Attempt) {
+			holdOutcome(o, fmt.Sprintf("the quiz result is for attempt %s, not the pulled attempt %d; pull-work for this student", attempt, c.Attempt.Attempt))
+			return save()
+		}
+		if !sameNumber(current, score) {
+			landed = false
+		}
+	}
+	if landed {
+		*o = domain.ActionOutcome{Status: "preserved", PostedText: summary, Message: "the quiz result already shows these item points"}
+		return save()
+	}
+	if ambiguous(*o) {
+		o.Status, o.Message = "uncertain", "item score write remains uncertain; check SpeedGrader before repeating it"
+		return save()
+	}
+	if !sameScore(live.Score, source.work.ObservedScore) {
+		holdOutcome(o, "the quiz score changed in Canvas since the pull; not overwritten, pull-work for this student")
+		return save()
+	}
+	*o = domain.ActionOutcome{Status: "pending", PostedText: summary}
+	if err := save(); err != nil {
+		return err
+	}
+	version, err := g.PostScores(ctx, want)
+	if err != nil {
+		*o = failedOutcome(err)
+		o.PostedText = summary
+		return save()
+	}
+	*o = domain.ActionOutcome{Status: "succeeded", PostedText: summary, Message: "quiz result version " + version}
+	if id, e := strconv.ParseInt(version, 10, 64); e == nil {
+		o.ID = id
+	}
+	return save()
+}
+
+// newQuizSessionIDs reads the participant and quiz session IDs from the
+// launch URL Canvas reports on a New Quiz submission.
+func newQuizSessionIDs(sub Submission) (participant, quiz string) {
+	raw := sub.ExternalToolURL
+	if raw == "" {
+		raw = sub.URL
+	}
+	for i := 0; i < 2 && raw != ""; i++ {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return "", ""
+		}
+		q := u.Query()
+		if ps := q.Get("participant_session_id"); ps != "" {
+			return ps, q.Get("quiz_session_id")
+		}
+		raw = q.Get("url")
+	}
+	return "", ""
+}
+
+func itemScoreSummary(want map[string]string) string {
+	keys := make([]string, 0, len(want))
+	for k := range want {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for i, k := range keys {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("item " + k + ": " + want[k])
+	}
+	return b.String()
+}
+
+func sameNumber(a, b string) bool {
+	x, e1 := domain.ParseDecimal(a)
+	y, e2 := domain.ParseDecimal(b)
+	return e1 == nil && e2 == nil && x.Cmp(y) == 0
+}
+
+func sameScore(live *json.Number, pulled *domain.Decimal) bool {
+	if live == nil || pulled == nil {
+		return live == nil && pulled == nil
+	}
+	return sameNumber(live.String(), pulled.String())
+}

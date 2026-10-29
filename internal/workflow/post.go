@@ -286,6 +286,12 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 		holdOutcome(&c.Outcome, "new submission attempt since pull; pull-work for this student")
 		return save()
 	}
+	// Item scores go in first; the comment waits until they have landed.
+	if c.ItemScores && !definite(c.ItemScoresOutcome) {
+		if err := s.postItemScores(ctx, doc, c, v, source, live, save); err != nil || !definite(c.ItemScoresOutcome) {
+			return err
+		}
+	}
 	if definite(c.Outcome) {
 		return nil
 	}
@@ -353,7 +359,7 @@ func resultComplete(r domain.StudentResult) bool {
 		return gradeComplete(r.Grade)
 	}
 	if r.Operation == "comment-only" {
-		return r.CommentOnly != nil && definite(r.CommentOnly.Outcome)
+		return r.CommentOnly != nil && definite(r.CommentOnly.Outcome) && (!r.CommentOnly.ItemScores || definite(r.CommentOnly.ItemScoresOutcome))
 	}
 	return r.ReviseFeedback != nil && definite(r.ReviseFeedback.Outcome)
 }
@@ -380,6 +386,13 @@ func postReport(r domain.StudentResult) StudentPostReport {
 		p.Revision = r.CommentOnly.Outcome
 		p.Status = p.Revision.Status
 		p.Message = p.Revision.Message
+		// Item scores come first; until they land, they are what to report.
+		if items := r.CommentOnly.ItemScoresOutcome; r.CommentOnly.ItemScores {
+			p.Outcomes.Grade = items
+			if !definite(items) {
+				p.Status, p.Message = items.Status, "item points: "+items.Message
+			}
+		}
 	} else if r.LateOnly != nil {
 		p.Outcomes.Late = r.LateOnly.Outcome
 		p.Status = r.LateOnly.Outcome.Status

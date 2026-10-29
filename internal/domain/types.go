@@ -479,6 +479,11 @@ type CommentOnlyOperation struct {
 	Feedback   string             `yaml:"feedback"`
 	Header     string             `yaml:"header,omitempty"`
 	Outcome    ActionOutcome      `yaml:"outcome,omitempty"`
+	// ItemScores, on a New Quiz, first writes each part's item points (the
+	// numbers the comment shows) into the quiz result, then posts the comment.
+	// It uses an undocumented internal New Quizzes call.
+	ItemScores        bool          `yaml:"item_scores,omitempty"`
+	ItemScoresOutcome ActionOutcome `yaml:"item_scores_outcome,omitempty"`
 }
 
 func (c CommentOnlyOperation) FeedbackOnly() bool {

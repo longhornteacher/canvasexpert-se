@@ -465,6 +465,19 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 					return fail(e)
 				}
 			}
+			if c.ItemScores {
+				if !doc.Assignment.NewQuiz || c.FeedbackOnly() {
+					return fail(fmt.Errorf("item_scores needs a New Quiz and scored components"))
+				}
+				for _, ic := range v.Interpretation.Components {
+					if ic.ItemID == "" {
+						return fail(fmt.Errorf("item_scores needs an item_id on every part; part %q has none", ic.Key))
+					}
+				}
+				if e := validateOutcome(c.ItemScoresOutcome); e != nil {
+					return fail(e)
+				}
+			}
 			if !validHeader(c.Header) {
 				return fail(fmt.Errorf("header must be score, full or none"))
 			}
