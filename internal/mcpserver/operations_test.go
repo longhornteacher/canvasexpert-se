@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"canvasexpertse/internal/workflow"
 )
 
 func TestQuizPointsArgsExactScope(t *testing.T) {
@@ -100,5 +102,16 @@ func TestValidateQuizLocal(t *testing.T) {
 	}
 	if _, err := s.validateQuiz(".cse/quiz.json"); err == nil {
 		t.Fatal("accepted hidden file")
+	}
+}
+
+func TestReplaceTextArgsKeepPairsInOrder(t *testing.T) {
+	args, err := replaceTextArgs(ReplaceTextInput{Course: "ELA7", Target: "page", Query: "7", Replacements: []workflow.BodyReplacement{{Find: "Oct 3", Replace: "Oct 10", All: true}, {Find: "--push", Replace: ""}}, ExpectUpdatedAt: "2026-10-01T12:00:00Z", Push: true})
+	want := []string{"replace-text", "ELA7", "page", "7", "--find", "Oct 3", "--replace", "Oct 10", "--all", "--find", "--push", "--replace", "", "--expect-updated-at", "2026-10-01T12:00:00Z", "--push"}
+	if err != nil || !reflect.DeepEqual(args, want) {
+		t.Fatalf("got %q, %v", args, err)
+	}
+	if _, err := replaceTextArgs(ReplaceTextInput{Course: "ELA7", Target: "quiz", Query: "7", Replacements: []workflow.BodyReplacement{{Find: "a", Replace: "b"}}}); err == nil {
+		t.Fatal("accepted an unsupported target")
 	}
 }

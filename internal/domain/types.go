@@ -291,6 +291,13 @@ type StudentWorkDocument struct {
 	EnteredGrade           *Decimal          `yaml:"entered_grade,omitempty"`
 	ObservedEnteredScore   *Decimal          `yaml:"observed_entered_score,omitempty"`
 	ObservedScore          *Decimal          `yaml:"observed_score,omitempty"`
+	// ObservedGradedAt is Canvas's graded_at at pull time. Any SpeedGrader
+	// save moves it, so a later difference means someone graded since.
+	ObservedGradedAt string `yaml:"observed_graded_at,omitempty"`
+	// ObservedQuizResult is a New Quiz attempt's current result version at
+	// pull time. Every SpeedGrader save, even an item-comment-only one, makes
+	// a new version, so item scores hold when it has changed.
+	ObservedQuizResult string `yaml:"observed_quiz_result,omitempty"`
 	ObservedPointsDeducted *Decimal          `yaml:"observed_points_deducted,omitempty"`
 	EnteredGradeReason     string            `yaml:"entered_grade_reason,omitempty"`
 	Excused                bool              `yaml:"excused"`
@@ -325,6 +332,26 @@ type ComponentScore struct {
 	Key      string           `yaml:"key"`
 	Evidence string           `yaml:"evidence"` // present, missing, unknown
 	Criteria []CriterionScore `yaml:"criteria"`
+	// Feedback explains this part's score under its own score line. Exemplar
+	// is a model answer the student hand-copies; the Engine shows it only
+	// when the part earned under ExemplarBelow of its points.
+	Feedback string `yaml:"feedback,omitempty"`
+	Exemplar string `yaml:"exemplar,omitempty"`
+}
+
+// ExemplarBelow is the share of a part's points under which its hand-copy
+// exemplar is shown.
+const ExemplarBelow = "0.9"
+
+// ItemFeedback reports whether every part carries its own feedback, so the
+// comment needs no closing feedback.
+func ItemFeedback(components []ComponentScore) bool {
+	for _, c := range components {
+		if strings.TrimSpace(c.Feedback) == "" {
+			return false
+		}
+	}
+	return len(components) > 0
 }
 type PriorComparison struct {
 	Attempt         AttemptRef `yaml:"attempt"`
@@ -459,6 +486,14 @@ type CommentOnlyOperation struct {
 	Feedback   string             `yaml:"feedback"`
 	Header     string             `yaml:"header,omitempty"`
 	Outcome    ActionOutcome      `yaml:"outcome,omitempty"`
+	// ItemScores, on a New Quiz, first writes each part's item points (the
+	// numbers the comment shows) into the quiz result, then posts the comment.
+	// It uses an undocumented internal New Quizzes call.
+	ItemScores        bool          `yaml:"item_scores,omitempty"`
+	ItemScoresOutcome ActionOutcome `yaml:"item_scores_outcome,omitempty"`
+	// QuizScore is the quiz total Canvas reported once item scores landed,
+	// as X/Y; the whole-assignment comment states it. The Engine owns it.
+	QuizScore string `yaml:"quiz_score,omitempty"`
 }
 
 func (c CommentOnlyOperation) FeedbackOnly() bool {

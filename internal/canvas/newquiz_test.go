@@ -53,8 +53,12 @@ func TestTrustedInstructureOriginAndCanvasENV(t *testing.T) {
 }
 
 func TestNewQuizFilesKeepsTokensOnTheirHostsAndChecksItemAttempt(t *testing.T) {
-	for _, resource := range []string{`"resource"`, `123`} {
+	for _, resource := range []string{`"resource"`, `123`, "known-session"} {
 		t.Run(resource, func(t *testing.T) {
+			knownSession := resource == "known-session"
+			if knownSession {
+				resource = `123`
+			}
 			var ts *httptest.Server
 			ts = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -77,22 +81,27 @@ func TestNewQuizFilesKeepsTokensOnTheirHostsAndChecksItemAttempt(t *testing.T) {
 					}
 					io.WriteString(w, `{"access_token":"native-jwt","entry_path":{"resourceId":`+resource+`}}`)
 				case r.URL.Path == "/api/assignments/"+strings.Trim(resource, `"`)+"/participants":
+					if knownSession {
+						t.Errorf("participants route called although the submission named the session")
+					}
 					if r.Header.Get("Authorization") != "Bearer native-jwt" || r.Header.Get("Accept") != "application/json" {
 						t.Errorf("participants headers wrong: %#v", r.Header)
 					}
 					io.WriteString(w, `{"data":[{"canvas_user_id":5,"participant_sessions":[{"id":"ps"}]}]}`)
-				case r.URL.Path == "/api/participant_sessions/ps/results":
+				case r.URL.Path == "/api/participant_sessions/ps/grade":
 					if r.Header.Get("Authorization") != "Bearer native-jwt" {
 						t.Errorf("result lookup token wrong")
 					}
-					io.WriteString(w, `{"host":"https://quiz.instructure.com","token":"result-token","quiz_api_quiz_session_id":"qs"}`)
-				case r.URL.Path == "/api/quiz_sessions/qs":
+					// Live, the session ID arrives as a number.
+					io.WriteString(w, `{"host":"https://quiz.instructure.com","token":"result-token","quiz_api_quiz_session_id":7001}`)
+				case r.URL.Path == "/api/quiz_sessions/7001":
 					if r.Header.Get("Authorization") != "result-token" || r.Header.Get("AuthType") != "Signature" || r.Header.Get("Accept") != "application/json" {
 						t.Errorf("quiz session headers wrong: %#v", r.Header)
 					}
 					io.WriteString(w, `{"authoritative_result":{"id":123}}`)
-				case r.URL.Path == "/api/quiz_sessions/qs/results/123/session_item_results":
-					io.WriteString(w, `[{"item_id":99,"attempt":1,"scored_data":{"value":[{"id":"f1","name":"answer.docx","url":"https://storage.example/signed","size":4}]}},{"item_id":99,"attempt":2,"scored_data":{"value":[{"id":"f2","name":"wrong-attempt.docx","url":"https://storage.example/other","size":8}]}}]`)
+				case r.URL.Path == "/api/quiz_sessions/7001/results/123/session_item_results":
+					// Live rows mix essay text values with upload lists whose file IDs are numbers.
+					io.WriteString(w, `[{"item_id":98,"attempt":1,"scored_data":{"value":"<p>An essay.</p>"}},{"item_id":99,"attempt":1,"scored_data":{"value":[{"id":1793285766949,"name":"answer.docx","url":"https://storage.example/signed","size":4}]}},{"item_id":99,"attempt":2,"scored_data":{"value":[{"id":"f2","name":"wrong-attempt.docx","url":"https://storage.example/other","size":8}]}}]`)
 				case r.URL.Path == "/signed":
 					if r.Header.Get("Authorization") != "" || r.Header.Get("X-CSE-Download") != "" {
 						t.Errorf("signed storage request carried credentials/custom headers")
@@ -109,7 +118,11 @@ func TestNewQuizFilesKeepsTokensOnTheirHostsAndChecksItemAttempt(t *testing.T) {
 			c.origin, _ = url.Parse("https://canvas.instructure.com")
 			var requests atomic.Int64
 			c.http = &http.Client{Transport: countingTransport{hostRewriteTransport{destination: dest, base: ts.Client().Transport}, &requests}}
-			files, err := c.NewQuizFiles(context.Background(), 1, 2, 5, 1, map[string]bool{"99": true})
+			session := ""
+			if knownSession {
+				session = "ps"
+			}
+			files, err := c.NewQuizFiles(context.Background(), 1, 2, 5, 1, map[string]bool{"99": true}, session)
 			if err != nil || len(files) != 1 || files[0].Name != "answer.docx" || files[0].Size != 4 {
 				t.Fatalf("files %#v, %v", files, err)
 			}

@@ -110,6 +110,9 @@ func sharedText(s string) error {
 
 func sharedComponentText(components []ComponentScore) error {
 	for _, c := range components {
+		if err := sharedText(c.Feedback + c.Exemplar); err != nil {
+			return err
+		}
 		for _, sc := range c.Criteria {
 			if err := sharedText(sc.Comment); err != nil {
 				return err

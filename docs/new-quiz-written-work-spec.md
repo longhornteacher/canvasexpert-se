@@ -2,7 +2,7 @@
 
 Status (2026-10-11): **parts 1–3 are implemented with local tests; the Engine/MCP paths have not been validated live.** Earlier Canvas Live hand-runs on CS8 quiz 3698192 covered one student's typed response, one byte-exact DOCX download, and one comment post. Those runs are evidence for the APIs, not proof that the new Engine implementation works against Canvas. See the dated results at the end of [the probe handoff](../handoffs/retired/NEW-QUIZ-SCORING-PROBE.md).
 
-Teacher direction (2026-10-12): **New Quizzes, including written-response items, are open for regular authoring, use and scoring within these supported limits.** Use the scoped pull and comment-only conversation/post workflow in UserInstall. The teacher enters item points in SpeedGrader; CE-SE writes no New Quiz item grade, quiz grade, rubric assessment or late timing. Pending live/human checks describe the evidence level and are not a prerequisite for ordinary teacher use. Dev holds implementation and seed instructions; optional UserSync remains independent of UserInstall.
+Teacher direction (2026-10-12): **New Quizzes, including written-response items, are open for regular authoring, use and scoring within these supported limits.** Use the scoped pull and comment-only conversation/post workflow in UserInstall. Since 2026-10-29 CE-SE writes each written item's points and item comment (`comment_only.item_scores`, through an undocumented internal New Quizzes call, checked live 2026-10-29; see Item-score write protocol below); Canvas computes the quiz grade. CE-SE writes no rubric assessment or late timing. Where a part cannot name one item, the teacher enters those points in SpeedGrader. Pending live/human checks describe the evidence level and are not a prerequisite for ordinary teacher use. Dev holds implementation and seed instructions; optional UserSync remains independent of UserInstall.
 
 Design stance (teacher decision): keep the Engine lean. A mechanistic step that worked in development testing is treated as working until Canvas or the teacher says otherwise. No read-backs, confirmation reports or retry frameworks after a write.
 
@@ -86,7 +86,7 @@ Still not tested: a student with several attempts, several files in one item, a 
 
 ## Teacher workflow this serves
 
-The agent writes the whole-assignment comment with all per-criterion scores **before** the teacher opens SpeedGrader, so the teacher can read the scores in the comment while typing the per-item points. Students see the comment; the quiz grade is the teacher's.
+With item scores the Engine writes each item's points and comment into the quiz on the teacher's go-ahead, so the teacher has nothing to type. Without them (a part that cannot name one item), the agent writes the whole-assignment comment with all per-criterion scores before the teacher opens SpeedGrader, so the teacher can read the scores in the comment while typing the per-item points. Students see the comment; the quiz grade is the teacher's.
 
 ## Evidence discipline
 
@@ -95,3 +95,15 @@ Separate the recorded Canvas Live hand-runs from the implemented Engine paths an
 ## Native launch identifier compatibility — Dev, 2026-10-28
 
 The reported live native-launch shape uses numeric `entry_path.resourceId` and `access_token`. File-read decoding now accepts numeric or string resource IDs; full synthetic chain checks exercise both forms, token isolation, exact item-attempt filtering and signed download isolation. The access-token fallback already existed. This is local compatibility evidence; no live file download or item-grade save is claimed by this fix. Per-item score writes remain pending the teacher-controlled attempt and redacted teacher-save capture in the active handoff.
+
+## Item-score write protocol (observed 2026-10-29)
+
+Three teacher SpeedGrader saves on CS8 test assignment 3710957 (test account only), captured in a sanitized HAR outside Dev; dated detail in the active handoff §3.1 and synthetic fixtures in `internal/canvas/testdata/newquiz_item_scores/`. This is an undocumented internal New Quizzes call.
+
+- After `GET /api/participant_sessions/{ps}/grade` (quiz-lti host) supplies the quiz-api `host`, a grading `token` and `quiz_api_quiz_session_id`, SpeedGrader sends `POST {host}/api/quiz_sessions/{qs}/results` with `AuthType: Signature` and gets 201.
+- The body is `{"results": [...], "fudge_points": n|null}`. `results` repeats every item of the attempt in position order, auto-scored items included and unchanged: the current `session_item_results` rows in camelCase at every level, without `grading_method`, with `errors: {}` and `graderId: null`, and `gradedAt` copied from the read. Only the changed `score` differs.
+- An item comment is `feedback.graderFeedback.content` (HTML) on that item, beside the untouched `itemFeedback`; it is read back as `feedback.grader_feedback.content` and does not appear as a Canvas submission comment. Fudge points are the top-level `fudge_points` and may take the total above points possible (10.5/10 was kept).
+- Each POST returns a new result whose `id` is the version identifier. Its embedded `quiz_session.metadata` includes the student's full name.
+- The Canvas submission followed within the same second: score, `graded_at`, `workflow_state: graded`, `grader_id` of the New Quizzes tool; `posted_at` unchanged under the automatic post policy.
+
+Not yet observed: Grade by question, the first save of a never-graded item, a manual post policy, and a second attempt.

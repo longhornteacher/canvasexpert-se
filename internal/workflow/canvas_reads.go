@@ -208,6 +208,7 @@ type Submission struct {
 	GradeMatchesCurrentSubmission *bool                  `json:"grade_matches_current_submission"`
 	AssignmentVisible             *bool                  `json:"assignment_visible"`
 	PostedAt                      *string                `json:"posted_at"`
+	ExternalToolURL               string                 `json:"external_tool_url"`
 	PostedAtPresent               bool                   `json:"-"`
 	GroupID                       int64                  `json:"group_id"`
 	Group                         *SubmissionGroup       `json:"group"`

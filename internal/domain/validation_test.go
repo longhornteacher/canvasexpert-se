@@ -84,6 +84,17 @@ func TestNewQuizResultsAreCommentOnly(t *testing.T) {
 	if _, err := ValidateResults(&d); err != nil {
 		t.Fatalf("valid comment-only operation rejected: %v", err)
 	}
+	// Feedback on every part replaces the closing feedback in the full layout.
+	c := d.Students[0].CommentOnly
+	c.Feedback, c.Components[0].Feedback = "", "Name the detail that supports the claim."
+	if _, err := ValidateResults(&d); err != nil {
+		t.Fatalf("per-part feedback without closing feedback rejected: %v", err)
+	}
+	c.Header = "none"
+	if _, err := ValidateResults(&d); err == nil {
+		t.Fatal("header none accepted an empty closing feedback")
+	}
+	c.Header, c.Feedback = "", "Your evidence supports the claim."
 	d.Students[0].Grade = &GradeOperation{Assessment: MustDecimal("16")}
 	if _, err := ValidateResults(&d); err == nil {
 		t.Fatal("comment-only operation accepted an extra grade payload")

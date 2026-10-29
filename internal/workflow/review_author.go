@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -246,6 +247,8 @@ func studentSide(it qfItem) string {
 			l = append(l, x.Label)
 		}
 		return "<p>Sort into: " + html.EscapeString(strings.Join(it.Categories, ", ")) + "</p>" + listHTML("ul", l)
+	case "HOTSPOT":
+		return "<p><i>Image: " + html.EscapeString(filepath.Base(it.Image)) + " (students click the correct region).</i></p>"
 	case "ESSAY":
 		return "<p><i>Written response.</i></p>"
 	case "FILEUPLOAD":
@@ -273,6 +276,10 @@ func answerKey(it qfItem) string {
 		return strings.Join(c, "\n")
 	case "ESSAY", "FILEUPLOAD":
 		return ""
+	case "HOTSPOT":
+		if it.Region != nil {
+			return fmt.Sprintf("%s region, %d points", it.Region.Type, len(it.Region.Coordinates))
+		}
 	}
 	parts := []string{}
 	for _, raw := range []json.RawMessage{it.Answer, it.Accept, it.Items} {

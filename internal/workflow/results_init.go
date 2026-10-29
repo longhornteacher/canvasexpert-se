@@ -94,6 +94,11 @@ func InitResults(root, packetRel string, now time.Time) (string, error) {
 		if ev := work.DiscussionEvidence; ev != nil && ev.Digest != "" {
 			fmt.Fprintf(&b, "      evidence: {digest: %s}\n", quoteYAML(ev.Digest))
 		}
+		if packet.Assignment.NewQuiz {
+			// Each written part writes its item points and item comment; remove
+			// this when a part cannot name one written item.
+			b.WriteString("      item_scores: true\n")
+		}
 		b.WriteString("      components: []\n      feedback: \"\"\n")
 	}
 	b.WriteString("---\n\nResults scaffold from results-init. Fill interpretation, each student's components and feedback, then validate.\n")

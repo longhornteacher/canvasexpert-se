@@ -130,6 +130,16 @@ type PageQueryInput struct {
 	GroupID int64  `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID for a group Page"`
 }
 
+type ReplaceTextInput struct {
+	Course           string                     `json:"course" jsonschema:"Configured course nickname"`
+	Target           string                     `json:"target" jsonschema:"page or assignment"`
+	Query            string                     `json:"query" jsonschema:"Exact Page ID or Canvas Page link; for an assignment, its exact assignment ID"`
+	Replacements     []workflow.BodyReplacement `json:"replacements" jsonschema:"Exact find/replace pairs applied in order to the stored Canvas HTML; each find must match once unless all is true"`
+	ExpectUpdatedAt  string                     `json:"expect_updated_at,omitempty" jsonschema:"Optional baseline: updated_at from a prior pull or replace report; holds if Canvas changed since"`
+	ExpectBodySHA256 string                     `json:"expect_body_sha256,omitempty" jsonschema:"Optional baseline: body_sha256 from a prior replace report; holds if the body changed since"`
+	Push             bool                       `json:"push,omitempty" jsonschema:"Send the edit now. Pages: true. Assignments: true only after the teacher's go-ahead in the conversation, or when the request already asked for the change"`
+}
+
 type PageRevisionsInput struct {
 	Course     string `json:"course" jsonschema:"Configured course nickname"`
 	PageID     int64  `json:"page_id" jsonschema:"Exact numeric Canvas Page ID"`
@@ -206,7 +216,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		fmt.Fprintf(os.Stderr, "Could not add some CE-SE starter files: %v\n", err)
 	}
 	s := &Server{root: root, ctx: ctx, reviews: map[string]*reviewTask{}}
-	server := mcp.NewServer(&mcp.Implementation{Name: "canvasexpert-se", Version: AdapterVersion()}, &mcp.ServerOptions{Instructions: "Before any teacher task, read AGENTS.md using read_workspace_file, then read the relevant playbook. Commands and grading/planning session files remain in UserInstall. Reusable teacher setup, including course configuration, student settings/notes, instructions, playbooks, guides and preferences, uses UserInstall by default or the explicitly configured UserSync authority. Private roster and contact files also use that authority but are never model context; UserSync is a provider-synchronized local directory, and reads always use its current contents. Check engine_info operation rules-location if the active authority is unclear. Read list_courses with its default configured source for saved nicknames and current selections; request source canvas only for connection testing or additional course discovery. Treat the structured courses list as setup status and ignore obsolete starter text in a preserved document body. Use engine_reference for Engine commands and file contracts. Keep .cse files and private teacher-only browser pages out of model context. Preserve honest computed grades, unsent work, and the teacher's requested scope. Before posting scores, creating assignments or quizzes, or editing assignments, report the work in the conversation and wait for the teacher's go-ahead there, unless the request already included the write."})
+	server := mcp.NewServer(&mcp.Implementation{Name: "canvasexpert-se", Version: AdapterVersion()}, &mcp.ServerOptions{Instructions: "Before any teacher task, read AGENTS.md using read_workspace_file, then read the relevant playbook. Commands and grading/planning session files remain in UserInstall. Reusable teacher setup, including course configuration, student settings/notes, instructions, playbooks, guides and preferences, uses UserInstall by default or the explicitly configured UserSync authority. Private roster and contact files also use that authority but are never model context; UserSync is a provider-synchronized local directory, and reads always use its current contents. Check engine_info operation rules-location if the active authority is unclear. Read list_courses with its default configured source for saved nicknames and current selections; request source canvas only for connection testing or additional course discovery. Treat the structured courses list as setup status and ignore obsolete starter text in a preserved document body. Use engine_reference for Engine commands and file contracts. Keep .cse files and private teacher-only browser pages out of model context. Students appear as a stable student_ref and a saved alias (a Pokemon name) while the teacher has student names hidden; refer to students by alias and ask the teacher for the alias rather than searching Canvas for a real name. Preserve honest computed grades, unsent work, and the teacher's requested scope. Before posting scores, creating assignments or quizzes, or editing assignments, report the work in the conversation and wait for the teacher's go-ahead there, unless the request already included the write."})
 	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection. A course with an owner belongs to that teammate; the team list says whether their Canvas key is on this PC.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
 		return s.listCourses(ctx, in)
 	})
@@ -374,6 +384,13 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.longCommand(ctx, args...)
 	})
+	addActionTool(server, "replace_text", "Make a small exact correction in an existing course Page body or assignment description without regenerating it. Reads the live item into a fresh pulled file, holds if the optional baseline no longer matches or any find text matches zero or several places (unless all), and saves an edit of only the body. With push, the existing Page/assignment push sends it and keeps the edit if Canvas changed again; without push, the returned path waits for push_document after the teacher's go-ahead. Report held outcomes and their fresh version honestly.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in ReplaceTextInput) (TextOutput, error) {
+		args, err := replaceTextArgs(in)
+		if err != nil {
+			return TextOutput{}, err
+		}
+		return s.command(ctx, args...)
+	})
 	addReadTool(server, "list_page_revisions", "Read revision metadata for an exact course or group Page. Set revision_id to also read that revision's historical body; this does not identify every contributor or simultaneous edits.", func(ctx context.Context, _ *mcp.CallToolRequest, in PageRevisionsInput) (TextOutput, error) {
 		args := []string{"page-history", in.Course, strconv.FormatInt(in.PageID, 10)}
 		if in.GroupID != 0 {
@@ -441,7 +458,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "set_quiz_accommodations", "set_tags", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "set_quiz_accommodations", "set_tags", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false
@@ -557,4 +574,35 @@ func (s *Server) listCourses(ctx context.Context, in ListCoursesInput) (TextOutp
 	default:
 		return TextOutput{}, errors.New("source must be configured or canvas")
 	}
+}
+
+// replaceTextArgs builds the replace-text command; arguments go to the Engine
+// directly, never through a shell.
+func replaceTextArgs(in ReplaceTextInput) ([]string, error) {
+	if err := requireCourse(in.Course); err != nil {
+		return nil, err
+	}
+	if in.Target != "page" && in.Target != "assignment" {
+		return nil, errors.New("target must be page or assignment")
+	}
+	if len(in.Replacements) == 0 {
+		return nil, errors.New("at least one replacement is required")
+	}
+	args := []string{"replace-text", in.Course, in.Target, in.Query}
+	for _, r := range in.Replacements {
+		args = append(args, "--find", r.Find, "--replace", r.Replace)
+		if r.All {
+			args = append(args, "--all")
+		}
+	}
+	if in.ExpectUpdatedAt != "" {
+		args = append(args, "--expect-updated-at", in.ExpectUpdatedAt)
+	}
+	if in.ExpectBodySHA256 != "" {
+		args = append(args, "--expect-sha256", in.ExpectBodySHA256)
+	}
+	if in.Push {
+		args = append(args, "--push")
+	}
+	return args, nil
 }

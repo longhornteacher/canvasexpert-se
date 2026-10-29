@@ -286,6 +286,12 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 		holdOutcome(&c.Outcome, "new submission attempt since pull; pull-work for this student")
 		return save()
 	}
+	// Item scores go in first; the comment waits until they have landed.
+	if c.ItemScores && !definite(c.ItemScoresOutcome) {
+		if err := s.postItemScores(ctx, doc, c, v, source, live, save); err != nil || !definite(c.ItemScoresOutcome) {
+			return err
+		}
+	}
 	if definite(c.Outcome) {
 		return nil
 	}
@@ -304,7 +310,20 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 		return save()
 	}
 	text := workspace.ReplaceStudentName(c.Feedback, source.student)
-	if !c.FeedbackOnly() {
+	if c.ItemScores {
+		// Each item's rationale is in its own item comment; the whole comment
+		// states the quiz total Canvas reported, then any closing remarks.
+		if c.QuizScore == "" {
+			holdOutcome(&c.Outcome, "Canvas did not report the quiz total after the item scores; check SpeedGrader")
+			return save()
+		}
+		whole := fmt.Sprintf("Score: %s (attempt %d)", c.QuizScore, c.Attempt.Attempt)
+		if strings.TrimSpace(text) != "" {
+			whole += "\n\n" + strings.TrimSpace(text)
+		}
+		text = whole
+	}
+	if !c.FeedbackOnly() && !c.ItemScores {
 		computed, err := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, c.Components, doc.Assignment.Points)
 		if err != nil {
 			return err
@@ -317,6 +336,7 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 		if err != nil {
 			return err
 		}
+		text = workspace.ReplaceStudentName(text, source.student)
 	}
 	var matches int
 	for _, existing := range commentsForAttempt(live, c.Attempt.Attempt) {
@@ -352,7 +372,7 @@ func resultComplete(r domain.StudentResult) bool {
 		return gradeComplete(r.Grade)
 	}
 	if r.Operation == "comment-only" {
-		return r.CommentOnly != nil && definite(r.CommentOnly.Outcome)
+		return r.CommentOnly != nil && definite(r.CommentOnly.Outcome) && (!r.CommentOnly.ItemScores || definite(r.CommentOnly.ItemScoresOutcome))
 	}
 	return r.ReviseFeedback != nil && definite(r.ReviseFeedback.Outcome)
 }
@@ -379,6 +399,13 @@ func postReport(r domain.StudentResult) StudentPostReport {
 		p.Revision = r.CommentOnly.Outcome
 		p.Status = p.Revision.Status
 		p.Message = p.Revision.Message
+		// Item scores come first; until they land, they are what to report.
+		if items := r.CommentOnly.ItemScoresOutcome; r.CommentOnly.ItemScores {
+			p.Outcomes.Grade = items
+			if items.Status != "" && !definite(items) {
+				p.Status, p.Message = items.Status, "item points: "+items.Message
+			}
+		}
 	} else if r.LateOnly != nil {
 		p.Outcomes.Late = r.LateOnly.Outcome
 		p.Status = r.LateOnly.Outcome.Status
@@ -691,6 +718,7 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 		if e != nil {
 			return e
 		}
+		text = workspace.ReplaceStudentName(text, source.student)
 		// Once an add has begun, retain its exact text across retries even if a
 		// teacher subsequently changes the entered grade or the file's feedback.
 		if g.Outcomes.Comment.PostedText != "" && (ambiguous(g.Outcomes.Comment) || g.Outcomes.Comment.ID > 0) {
@@ -868,6 +896,7 @@ func (s *Service) postRevision(ctx context.Context, doc *domain.ResultsDocument,
 		if e != nil {
 			return e
 		}
+		text = workspace.ReplaceStudentName(text, source.student)
 	}
 	if ambiguous(r.Outcome) {
 		if current.Comment == r.Outcome.PostedText {

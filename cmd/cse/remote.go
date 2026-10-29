@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "pull-quiz": {2, 2}, "rubrics": {1, 2}, "pull-rubric": {2, 2}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "push-quiz": {2, 3}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "quiz-accommodations": {3, 4}, "set-tags": {1, 2}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}}
+	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "pull-quiz": {2, 2}, "rubrics": {1, 2}, "pull-rubric": {2, 2}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "push-quiz": {2, 3}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "quiz-accommodations": {3, 4}, "set-tags": {1, 2}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}, "replace-text": {5, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -474,6 +474,34 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		for _, limitation := range r.Limitations {
 			fmt.Fprintln(out, limitation)
 		}
+	case "replace-text":
+		req, err := parseReplaceText(args)
+		if err != nil {
+			return fail(inputError(err), progress)
+		}
+		report, e := service.ReplaceBody(ctx, req)
+		if report.Path != "" {
+			fmt.Fprintf(out, "%s: %s %s %s\n", report.Status, req.Target, req.Query, report.Path)
+			fmt.Fprintf(out, "baseline read: updated_at %s, body_sha256 %s\n", knownText(report.UpdatedAt), report.BodySHA256)
+		}
+		for i, n := range report.Counts {
+			fmt.Fprintf(out, "replacement %d: %d match(es)\n", i+1, n)
+		}
+		if report.Page != nil && report.Page.URL != "" {
+			fmt.Fprintln(out, report.Page.URL)
+		}
+		if report.Assignment != nil && report.Assignment.URL != "" {
+			fmt.Fprintln(out, report.Assignment.URL)
+		}
+		if report.Message != "" {
+			fmt.Fprintln(out, report.Message)
+		}
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		if report.Status != "completed" && report.Status != "succeeded" && report.Status != "prepared" {
+			return 3
+		}
 	case "pull-page":
 		groupID, err := parseOptionalPageGroup(args[2:])
 		if err != nil {
@@ -544,7 +572,11 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return 3
 		}
 	case "api":
-		return fail(apiGet(ctx, c, args[0], out), progress)
+		var hide *identityRedactor
+		if config.Aliases {
+			hide = newIdentityRedactor(root, c.Origin())
+		}
+		return fail(apiGet(ctx, c, args[0], out, hide), progress)
 	case "courses":
 		client := c
 		if len(args) > 0 {
@@ -1084,6 +1116,61 @@ func parseGroupsArgs(args []string) (int64, int64, int64, bool, error) {
 		i++
 	}
 	return setID, memberID, groupID, allGroups, nil
+}
+
+// parseReplaceText reads COURSE page|assignment TARGET followed by one or more
+// --find TEXT --replace TEXT [--all] pairs and optional baseline/push flags.
+func parseReplaceText(args []string) (workflow.BodyReplaceRequest, error) {
+	req := workflow.BodyReplaceRequest{Course: args[0], Target: args[1], Query: args[2]}
+	if req.Target != "page" && req.Target != "assignment" {
+		return req, fmt.Errorf("replace-text target must be page or assignment")
+	}
+	for i := 3; i < len(args); i++ {
+		value := func() (string, error) {
+			if i+1 >= len(args) {
+				return "", fmt.Errorf("%s requires a value", args[i])
+			}
+			i++
+			return args[i], nil
+		}
+		switch args[i] {
+		case "--find":
+			v, e := value()
+			if e != nil {
+				return req, e
+			}
+			if i+2 >= len(args) || args[i+1] != "--replace" {
+				return req, fmt.Errorf("each --find needs a following --replace (use \"\" to delete)")
+			}
+			i += 2
+			req.Replacements = append(req.Replacements, workflow.BodyReplacement{Find: v, Replace: args[i]})
+		case "--all":
+			if len(req.Replacements) == 0 {
+				return req, fmt.Errorf("--all follows the --find/--replace pair it applies to")
+			}
+			req.Replacements[len(req.Replacements)-1].All = true
+		case "--expect-updated-at":
+			v, e := value()
+			if e != nil {
+				return req, e
+			}
+			req.ExpectUpdatedAt = v
+		case "--expect-sha256":
+			v, e := value()
+			if e != nil {
+				return req, e
+			}
+			req.ExpectBodySHA256 = v
+		case "--push":
+			req.Push = true
+		default:
+			return req, fmt.Errorf("unknown replace-text option %q", args[i])
+		}
+	}
+	if len(req.Replacements) == 0 {
+		return req, fmt.Errorf("replace-text requires at least one --find TEXT --replace TEXT pair")
+	}
+	return req, nil
 }
 
 func parseOptionalPageGroup(args []string) (int64, error) {

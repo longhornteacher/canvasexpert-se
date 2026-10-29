@@ -364,7 +364,7 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		return s.command(ctx, "post", path)
 	})
-	addActionTool(server, "push_quiz", "Create or resume a Canvas New Quiz from a QuizForge file, including supported auto-scored and written items and hub differentiation. Create after describing the quiz in the conversation and receiving the teacher's go-ahead there, or when the request already included creating it; resuming a partly created quiz follows its playbook. Written work is graded by the teacher in SpeedGrader. Preserve saved IDs and report actual outcomes; this does not edit existing question content. Saved accommodations are checked before publication; pending setter semantics hold affected quizzes. skip_accommodations requires the teacher to explicitly request publication without applying them for this invocation.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in QuizInput) (TextOutput, error) {
+	addActionTool(server, "push_quiz", "Create or resume a Canvas New Quiz from a QuizForge file, including supported auto-scored and written items and hub differentiation. Create after describing the quiz in the conversation and receiving the teacher's go-ahead there, or when the request already included creating it; resuming a partly created quiz follows its playbook. Written work is scored through post_results with item scores (score.md). Preserve saved IDs and report actual outcomes; this does not edit existing question content. Saved accommodations are checked before publication; pending setter semantics hold affected quizzes. skip_accommodations requires the teacher to explicitly request publication without applying them for this invocation.", true, func(ctx context.Context, _ *mcp.CallToolRequest, in QuizInput) (TextOutput, error) {
 		if err := requireCourse(in.Course); err != nil {
 			return TextOutput{}, err
 		}
@@ -405,7 +405,7 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		return s.command(ctx, args...)
 	})
-	addReadTool(server, "canvas_get", "Read-only Canvas API GET for data no specific Engine tool covers. Returns raw JSON, potentially including real student names; keep teacher-only data out of feedback. Returns one page; supply page/per_page for more. Uses your own Canvas key, so it cannot reach a teammate's course. Cannot issue arbitrary HTTP writes.", func(ctx context.Context, _ *mcp.CallToolRequest, in CanvasGetInput) (TextOutput, error) {
+	addReadTool(server, "canvas_get", "Read-only Canvas API GET for data no specific Engine tool covers. Returns raw JSON. While student names are hidden, people's names in user objects become saved aliases (or \"(name hidden)\") and logins, SIS IDs and emails are dropped; names inside messages, student work and file names are not changed. Keep teacher-only data out of feedback. Returns one page; supply page/per_page for more. Uses your own Canvas key, so it cannot reach a teammate's course. Cannot issue arbitrary HTTP writes.", func(ctx context.Context, _ *mcp.CallToolRequest, in CanvasGetInput) (TextOutput, error) {
 		if !strings.HasPrefix(in.Path, "/api/v1/") && !strings.HasPrefix(in.Path, "/api/quiz/v1/") {
 			return TextOutput{}, errors.New("path must begin /api/v1/ or /api/quiz/v1/")
 		}

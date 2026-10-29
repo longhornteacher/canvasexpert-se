@@ -448,9 +448,11 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 				c.Submission = text
 			}
 		}
+		name := func(s string) string { return s }
 		if store != nil {
 			if st, e := store.Resolve(doc.Assignment.Instance, r.StudentRef); e == nil {
-				feedback = workspace.ReplaceStudentName(feedback, st)
+				name = func(s string) string { return workspace.ReplaceStudentName(s, st) }
+				feedback = name(feedback)
 			}
 		}
 		if c.Hold == "" && r.Grade != nil && doc.Basis() != nil {
@@ -478,6 +480,29 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			}
 		} else if r.CommentOnly != nil && r.CommentOnly.FeedbackOnly() {
 			c.Comment = feedback
+		} else if r.CommentOnly != nil && r.CommentOnly.ItemScores && doc.Basis() != nil {
+			// What goes into the quiz: each item's points and its own comment,
+			// then any closing remarks as the whole-assignment comment.
+			parts, e := partPoints(&doc, writtenItems, v.Interpretation)
+			if e != nil {
+				c.Hold = e.Error()
+			} else {
+				items := render.QuizItems(*doc.Basis(), v.Interpretation, r.CommentOnly.Components, parts)
+				var b strings.Builder
+				b.WriteString("Written into the quiz (item points and item comments):")
+				for _, ic := range v.Interpretation.Components {
+					it := items[ic.Key]
+					b.WriteString(fmt.Sprintf("\n\n%s %s/%s", ic.Label, trimZeros(it.Points.String()), trimZeros(parts[ic.Key].String())))
+					if it.Comment != "" {
+						b.WriteString("\n" + it.Comment)
+					}
+				}
+				b.WriteString(fmt.Sprintf("\n\nWhole-assignment comment:\nScore: X/%s (attempt %d), X being the quiz total Canvas reports after the write", trimZeros(doc.Assignment.Points.String()), r.CommentOnly.Attempt.Attempt))
+				if strings.TrimSpace(feedback) != "" {
+					b.WriteString("\n\n" + feedback)
+				}
+				c.Comment = b.String()
+			}
 		} else if r.CommentOnly != nil && doc.Basis() != nil {
 			computed, e := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, r.CommentOnly.Components, doc.Assignment.Points)
 			parts, pe := partPoints(&doc, writtenItems, v.Interpretation)
@@ -495,6 +520,8 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 				}
 			}
 		}
+		// Per-part feedback can name the student too.
+		c.Comment = name(c.Comment)
 		m.Cards = append(m.Cards, c)
 	}
 	return m, nil
