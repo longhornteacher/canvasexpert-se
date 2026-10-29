@@ -137,7 +137,7 @@ At the teacher's direction L1 ran on a real student instead of the test account:
 - **Write:** `post` with `item_scores: true`, both essays scored 5/10 with item comments and no closing remarks. `item_scores_outcome: succeeded`, new result version 24994274; the whole comment was `not-requested`. The POST built from never-graded items (sent with `gradeStatus: graded`) was accepted, and the read included `authoritative_result.fudge_points` (the write requires it).
 - **Canvas:** score 80 (70 + 5 + 5), `workflow_state: graded`, `graded_at` 16:46:03Z within the write, `grader_id` -794 (the New Quizzes tool), `posted_at` unchanged under the automatic post policy, no submission comment added.
 - **Rerun:** a second `post` sent nothing (`graded_at` unchanged).
-- **Pending:** a look at the two item comments in SpeedGrader and in the student's results view. One Dev `cse api` re-read right after returned empty output; the same read through MCP succeeded; not investigated further.
+- **SpeedGrader (teacher screenshot, same day):** Q9 shows 5 / 10 points and Graded, with the Engine's item comment, hand-copy exemplar included, in that question's Additional Comments. The student's own results view was not checked. One Dev `cse api` re-read right after returned empty output; the same read through MCP succeeded; not investigated further.
 
 L1 passes for one student. L2–L8 remain.
 
