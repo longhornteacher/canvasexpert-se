@@ -141,7 +141,15 @@ At the teacher's direction L1 ran on a real student instead of the test account:
 
 L1 passes for one student. L2–L8 remain.
 
-**Guard update (same day):** a teacher's SpeedGrader Update that changed only Q9's item comment left the Canvas submission's score **and `graded_at`** unchanged (read right after). A `graded_at` check alone would have let the Engine overwrite that comment, so the re-score was not posted. Pulls now record `observed_quiz_result`, the attempt's current result version, for each New Quiz student with written items (one native session per assignment, then `/grade` and the quiz session per student), plus `observed_graded_at`. Item scores hold when the live version, score or `graded_at` differs, or when the pull recorded no version.
+**Guard update (same day):** a teacher's SpeedGrader Update that changed only Q9's item comment left the Canvas submission's score **and `graded_at`** unchanged (read right after). A `graded_at` check alone would have let the Engine overwrite that comment, so the re-score was not posted. Pulls now record `observed_quiz_result`, the attempt's current result version, for each New Quiz student with written items (one native session per assignment, then `/grade` and the quiz session per student), plus `observed_graded_at`. Item scores hold when the live version, score or `graded_at` differs, or when the pull recorded no version. The comment-only save had moved the result version from the Engine's 24994274 to 24995808; the next pull (Dev 9543289) recorded a version for all 23 students in about 17 s.
+
+### 3.3 L3, L4, L8 record (2026-10-29, same student, teacher-directed)
+
+- **L8 passed.** After a fresh pull, the teacher changed the Q10 item comment and points and added fudge points in SpeedGrader (score 80 → 84, `graded_at` moved). Posting the pre-edit re-score held with "the quiz was graded in Canvas since the pull; not overwritten" and wrote nothing; Canvas kept 84.
+- **L4 passed.** After another fresh pull (version 24996021), a re-score scoring only Q9 (same 5 points, new comment wording) created result version 24996112.
+- **L3 passed on the total.** Across that write the score stayed 84: the teacher's fudge points and Q10 points survived because every unnamed item and `fudge_points` go back as read. The exact fudge value and the Q10 comment text were not read back separately. `graded_at` stayed 17:37:34Z, again unchanged by a save that left the score alone.
+
+Remaining: L2 (file upload), L6 (two attempts), L7 (manual post policy).
 
 ### 3.4 Done when
 
