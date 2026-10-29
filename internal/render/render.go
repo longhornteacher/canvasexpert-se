@@ -108,7 +108,6 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 	}
 	// One part on an ordinary assignment is the overall line already.
 	showParts := in.OmitAssessment || len(in.Interpretation.Components) > 1
-	exemplarBelow := domain.MustDecimal(domain.ExemplarBelow).Rat()
 	var blocks []string
 	for _, component := range in.Interpretation.Components {
 		score := components[component.Key]
@@ -158,10 +157,7 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		if len(criteria) > 1 {
 			lines = append(lines, criteria...)
 		}
-		text := strings.TrimSpace(score.Feedback)
-		if exemplar := strings.TrimSpace(score.Exemplar); exemplar != "" && possible.Sign() > 0 && new(big.Rat).Quo(earned, possible).Cmp(exemplarBelow) < 0 {
-			text = strings.TrimSpace(text + " (Hand-copy exemplar: " + exemplar + ")")
-		}
+		text := partText(score, earned, possible)
 		if text != "" {
 			lines = append(lines, text)
 		}
@@ -182,23 +178,32 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 	return out.String(), nil
 }
 
-// ItemPoints gives each New Quiz part that names a written item its points on
-// the quiz's scale: the item's points times the part's earned share of its
-// rubric points, rounded once to two places. The comment shows the same
-// numbers, so what is posted and what students read agree.
-func ItemPoints(rubric domain.Rubric, interp domain.Interpretation, components []domain.ComponentScore, partPoints map[string]domain.Decimal) map[string]domain.Decimal {
+// QuizItem is one New Quiz part as written into the quiz result: its points
+// on the quiz's scale and its own comment.
+type QuizItem struct {
+	Points  domain.Decimal
+	Comment string
+}
+
+// QuizItems gives each New Quiz part that names a written item its points on
+// the quiz's scale (the item's points times the part's earned share of its
+// rubric points, rounded once to two places) and its comment (the part's
+// feedback, with the hand-copy exemplar below the threshold). The comment
+// layout uses the same numbers and text.
+func QuizItems(rubric domain.Rubric, interp domain.Interpretation, components []domain.ComponentScore, partPoints map[string]domain.Decimal) map[string]QuizItem {
 	scores := make(map[string]domain.ComponentScore, len(components))
 	for _, c := range components {
 		scores[c.Key] = c
 	}
-	out := map[string]domain.Decimal{}
+	out := map[string]QuizItem{}
 	for _, component := range interp.Components {
 		max, ok := partPoints[component.Key]
 		if !ok {
 			continue
 		}
-		byID := make(map[string]domain.Decimal, len(scores[component.Key].Criteria))
-		for _, cs := range scores[component.Key].Criteria {
+		score := scores[component.Key]
+		byID := make(map[string]domain.Decimal, len(score.Criteria))
+		for _, cs := range score.Criteria {
 			byID[cs.CriterionID] = cs.Points
 		}
 		earned, possible := new(big.Rat), new(big.Rat)
@@ -211,9 +216,20 @@ func ItemPoints(rubric domain.Rubric, interp domain.Interpretation, components [
 			}
 			possible.Add(possible, criterion.Points.Rat())
 		}
-		out[component.Key] = scalePart(max.Rat(), earned, possible)
+		out[component.Key] = QuizItem{Points: scalePart(max.Rat(), earned, possible), Comment: partText(score, earned, possible)}
 	}
 	return out
+}
+
+// partText is a part's own feedback, with its hand-copy exemplar when the
+// part earned under the exemplar threshold.
+func partText(score domain.ComponentScore, earned, possible *big.Rat) string {
+	text := strings.TrimSpace(score.Feedback)
+	below := domain.MustDecimal(domain.ExemplarBelow).Rat()
+	if exemplar := strings.TrimSpace(score.Exemplar); exemplar != "" && possible.Sign() > 0 && new(big.Rat).Quo(earned, possible).Cmp(below) < 0 {
+		text = strings.TrimSpace(text + " (Hand-copy exemplar: " + exemplar + ")")
+	}
+	return text
 }
 
 func scalePart(max, earned, possible *big.Rat) domain.Decimal {

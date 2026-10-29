@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -33,9 +34,9 @@ func (t anyHostTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 // itemScoreFixture fakes Canvas and the New Quizzes hosts for one student
 // whose essay item 8001 (quiz item 21, 15 points) is scored 80/100 on the
 // rubric, so 12 item points.
-func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool) (s *Service, resultsPath string, posts, comments *int, body *map[string]any) {
+func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closing string) (s *Service, resultsPath string, posts, comments *int, body *map[string]any, commentText *string) {
 	t.Helper()
-	posts, comments, body = new(int), new(int), new(map[string]any)
+	posts, comments, body, commentText = new(int), new(int), new(map[string]any), new(string)
 	assignment := fixtureAssignment()
 	assignment.NewQuiz = true
 	quizID := int64(10)
@@ -64,11 +65,11 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool) (s *Se
 		case r.URL.Path == "/api/quiz_sessions/qs1":
 			io.WriteString(w, `{"authoritative_result":{"id":"900","fudge_points":null}}`)
 		case r.URL.Path == "/api/quiz_sessions/qs1/results/900/session_item_results":
-			score, status := "0.0", "ungraded"
+			score, status, grader := "0.0", "ungraded", ""
 			if landed {
-				score, status = "12.0", "graded"
+				score, status, grader = "12.0", "graded", `,"grader_feedback":{"content":"<p>Clear claim. Next, add a second example.</p>"}`
 			}
-			io.WriteString(w, `[{"item_id":"8001","attempt":2,"score":`+score+`,"points_possible":15.0,"position":1,"graded_at":null,"grading_method":"manual_grading","feedback":{"item_feedback":{}},"scored_data":{"grade_status":"`+status+`","value":"<p>Current response.</p>"}}]`)
+			io.WriteString(w, `[{"item_id":"8001","attempt":2,"score":`+score+`,"points_possible":15.0,"position":1,"graded_at":null,"grading_method":"manual_grading","feedback":{"item_feedback":{}`+grader+`},"scored_data":{"grade_status":"`+status+`","value":"<p>Current response.</p>"}}]`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/quiz_sessions/qs1/results":
 			*posts++
 			_ = json.NewDecoder(r.Body).Decode(body)
@@ -81,6 +82,9 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool) (s *Se
 			io.WriteString(w, `{"id":"901","score":12.0,"status":"graded"}`)
 		case r.Method == http.MethodPut:
 			*comments++
+			var put map[string]map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&put)
+			*commentText = fmt.Sprint(put["comment"]["text_comment"])
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			t.Errorf("unexpected request %s %s host=%s", r.Method, r.URL.Path, r.Host)
@@ -125,16 +129,16 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool) (s *Se
 	results := domain.ResultsDocument{Schema: 1, Kind: "results", Packet: "courses/TEST/packet.md", Assignment: snapshot,
 		Interpretation: domain.Interpretation{Mapping: "repeated", Rationale: "Use the rubric for the essay.", Components: []domain.Component{{Key: "essay", Label: "Q1 Essay", Weight: domain.MustDecimal("1"), ItemID: "21"}}},
 		Students: []domain.StudentResult{{StudentRef: student.Ref, Operation: "comment-only", CommentOnly: &domain.CommentOnlyOperation{Attempt: ref, ItemScores: true,
-			Components: []domain.ComponentScore{{Key: "essay", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "c1", Points: domain.MustDecimal("80")}}}}, Feedback: "Strong evidence."}}}}
+			Components: []domain.ComponentScore{{Key: "essay", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "c1", Points: domain.MustDecimal("80")}}, Feedback: "Clear claim. Next, add a second example."}}, Feedback: closing}}}}
 	resultsPath = filepath.Join(s.Root, "courses", "TEST", "results.md")
 	if err = workspace.WriteDocument(resultsPath, results, "results"); err != nil {
 		t.Fatal(err)
 	}
-	return s, resultsPath, posts, comments, body
+	return s, resultsPath, posts, comments, body, commentText
 }
 
 func TestItemScoresPostBeforeTheCommentAndNeverRepeat(t *testing.T) {
-	s, path, posts, comments, body := itemScoreFixture(t, "15", false)
+	s, path, posts, comments, body, commentText := itemScoreFixture(t, "15", false, "Strong evidence overall.")
 	report, err := s.Post(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
@@ -146,13 +150,19 @@ func TestItemScoresPostBeforeTheCommentAndNeverRepeat(t *testing.T) {
 	if row["itemId"] != "8001" || row["score"] != float64(12) || row["scoredData"].(map[string]any)["gradeStatus"] != "graded" || (*body)["fudge_points"] != nil {
 		t.Fatalf("item score body: %#v", *body)
 	}
+	if grader := row["feedback"].(map[string]any)["graderFeedback"]; fmt.Sprint(grader) != "map[content:<p>Clear claim. Next, add a second example.</p>]" {
+		t.Fatalf("item comment: %v", grader)
+	}
+	if *commentText != "Strong evidence overall." {
+		t.Fatalf("the whole-assignment comment should carry only the closing remarks, got %q", *commentText)
+	}
 	if _, err = s.Post(context.Background(), path); err != nil || *posts != 1 || *comments != 1 {
 		t.Fatalf("rerun wrote again: posts=%d comments=%d err=%v", *posts, *comments, err)
 	}
 }
 
 func TestItemScoresHoldWhenCanvasWasGradedSinceThePull(t *testing.T) {
-	s, path, posts, comments, _ := itemScoreFixture(t, "14", false)
+	s, path, posts, comments, _, _ := itemScoreFixture(t, "14", false, "Strong evidence overall.")
 	report, err := s.Post(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +173,7 @@ func TestItemScoresHoldWhenCanvasWasGradedSinceThePull(t *testing.T) {
 }
 
 func TestUncertainItemScoreWriteReconcilesInsteadOfRepeating(t *testing.T) {
-	s, path, posts, comments, _ := itemScoreFixture(t, "15", true)
+	s, path, posts, comments, _, _ := itemScoreFixture(t, "15", true, "Strong evidence overall.")
 	report, err := s.Post(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
@@ -177,5 +187,16 @@ func TestUncertainItemScoreWriteReconcilesInsteadOfRepeating(t *testing.T) {
 	}
 	if *posts != 1 || *comments != 1 || report.Students[0].Status != "completed" || report.Students[0].Outcomes.Grade.Status != "preserved" {
 		t.Fatalf("rerun should find the landed scores and post only the comment: posts=%d comments=%d report=%#v", *posts, *comments, report.Students)
+	}
+}
+
+func TestItemCommentsAloneSendNoWholeComment(t *testing.T) {
+	s, path, posts, comments, _, _ := itemScoreFixture(t, "15", false, "")
+	report, err := s.Post(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *posts != 1 || *comments != 0 || report.Students[0].Status != "completed" || report.Students[0].Revision.Status != "not-requested" {
+		t.Fatalf("posts=%d comments=%d report=%#v", *posts, *comments, report.Students)
 	}
 }

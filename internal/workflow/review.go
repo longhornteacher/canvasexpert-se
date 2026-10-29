@@ -480,6 +480,30 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 			}
 		} else if r.CommentOnly != nil && r.CommentOnly.FeedbackOnly() {
 			c.Comment = feedback
+		} else if r.CommentOnly != nil && r.CommentOnly.ItemScores && doc.Basis() != nil {
+			// What goes into the quiz: each item's points and its own comment,
+			// then any closing remarks as the whole-assignment comment.
+			parts, e := partPoints(&doc, writtenItems, v.Interpretation)
+			if e != nil {
+				c.Hold = e.Error()
+			} else {
+				items := render.QuizItems(*doc.Basis(), v.Interpretation, r.CommentOnly.Components, parts)
+				var b strings.Builder
+				b.WriteString("Written into the quiz (item points and item comments):")
+				for _, ic := range v.Interpretation.Components {
+					it := items[ic.Key]
+					b.WriteString(fmt.Sprintf("\n\n%s %s/%s", ic.Label, trimZeros(it.Points.String()), trimZeros(parts[ic.Key].String())))
+					if it.Comment != "" {
+						b.WriteString("\n" + it.Comment)
+					}
+				}
+				if strings.TrimSpace(feedback) == "" {
+					b.WriteString("\n\nWhole-assignment comment: none")
+				} else {
+					b.WriteString("\n\nWhole-assignment comment:\n" + feedback)
+				}
+				c.Comment = b.String()
+			}
 		} else if r.CommentOnly != nil && doc.Basis() != nil {
 			computed, e := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, r.CommentOnly.Components, doc.Assignment.Points)
 			parts, pe := partPoints(&doc, writtenItems, v.Interpretation)

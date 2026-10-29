@@ -87,17 +87,15 @@ func TestNewQuizGradingPostsTheObservedBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if score, status, attempt, ok := g.ItemScore("1002"); !ok || score != "4.0" || status != "graded" || attempt != "1" {
-		t.Fatalf("read item 1002: %s %s %s %v", score, status, attempt, ok)
+	if it, ok := g.Item("1002"); !ok || it.Score != "4.0" || it.GradeStatus != "graded" || it.Attempt != "1" || it.Comment != "" {
+		t.Fatalf("read item 1002: %#v %v", it, ok)
 	}
-	version, err := g.PostScores(context.Background(), map[string]string{"1002": "5"})
+	version, err := g.PostScores(context.Background(), map[string]string{"1002": "5"}, map[string]string{"1002": "<p>Synthetic item comment.</p>"})
 	if err != nil || version != "9000002" {
 		t.Fatalf("post: %q %v", version, err)
 	}
-	// SpeedGrader's captured request, less the item comment the Engine does
-	// not send.
+	// SpeedGrader's captured request: score, item comment and fudge points.
 	want := decodeAny(t, fixture(t, "post_results_request.json")).(map[string]any)
-	delete(want["results"].([]any)[1].(map[string]any)["feedback"].(map[string]any), "graderFeedback")
 	if got := decodeAny(t, posted); !reflect.DeepEqual(got, want) {
 		gotJSON, _ := json.MarshalIndent(got, "", " ")
 		t.Fatalf("posted body differs from the observed request:\n%s", gotJSON)
@@ -115,11 +113,11 @@ func TestNewQuizGradingHoldsWhatItCannotConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = g.PostScores(context.Background(), map[string]string{"1002": "5"}); err == nil || posted != nil {
+	if _, err = g.PostScores(context.Background(), map[string]string{"1002": "5"}, nil); err == nil || posted != nil {
 		t.Fatal("wrote without knowing the current fudge points")
 	}
 	g.FudgePoints = json.RawMessage("null")
-	if _, err = g.PostScores(context.Background(), map[string]string{"4040": "5"}); err == nil || posted != nil {
+	if _, err = g.PostScores(context.Background(), map[string]string{"4040": "5"}, nil); err == nil || posted != nil {
 		t.Fatal("wrote a score for an item that is not in the result")
 	}
 }

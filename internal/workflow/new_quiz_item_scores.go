@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/url"
 	"sort"
 	"strconv"
@@ -11,10 +12,12 @@ import (
 
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/render"
+	"canvasexpertse/internal/workspace"
 )
 
-// postItemScores writes each part's item points into the New Quiz result
-// before the comment, using the internal call SpeedGrader uses. It sends at
+// postItemScores writes each part's item points and item comment into the
+// New Quiz result before any whole-assignment comment, using the internal
+// call SpeedGrader uses. It sends at
 // most one write per run: a pending or uncertain write is reconciled against
 // the quiz result and never repeated blindly, and a grade someone entered in
 // Canvas since the pull is not overwritten.
@@ -24,8 +27,8 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 	if err != nil {
 		return err
 	}
-	points := render.ItemPoints(*doc.Basis(), v.Interpretation, c.Components, parts)
-	want := map[string]string{}
+	items := render.QuizItems(*doc.Basis(), v.Interpretation, c.Components, parts)
+	want, comments := map[string]string{}, map[string]string{}
 	for _, ic := range v.Interpretation.Components {
 		entry := ""
 		for _, item := range source.writtenItems {
@@ -40,7 +43,10 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 			holdOutcome(o, fmt.Sprintf("two parts score item %s; give each written item one part", ic.ItemID))
 			return save()
 		}
-		want[entry] = points[ic.Key].String()
+		want[entry] = items[ic.Key].Points.String()
+		if text := workspace.ReplaceStudentName(items[ic.Key].Comment, source.student); text != "" {
+			comments[entry] = commentHTML(text)
+		}
 	}
 	summary := itemScoreSummary(want)
 
@@ -56,21 +62,21 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 	}
 	landed := true
 	for entry, score := range want {
-		current, _, attempt, ok := g.ItemScore(entry)
+		current, ok := g.Item(entry)
 		if !ok {
 			holdOutcome(o, "item "+entry+" is not in the current quiz result")
 			return save()
 		}
-		if attempt != strconv.Itoa(c.Attempt.Attempt) {
-			holdOutcome(o, fmt.Sprintf("the quiz result is for attempt %s, not the pulled attempt %d; pull-work for this student", attempt, c.Attempt.Attempt))
+		if current.Attempt != strconv.Itoa(c.Attempt.Attempt) {
+			holdOutcome(o, fmt.Sprintf("the quiz result is for attempt %s, not the pulled attempt %d; pull-work for this student", current.Attempt, c.Attempt.Attempt))
 			return save()
 		}
-		if !sameNumber(current, score) {
+		if !sameNumber(current.Score, score) || current.Comment != comments[entry] {
 			landed = false
 		}
 	}
 	if landed {
-		*o = domain.ActionOutcome{Status: "preserved", PostedText: summary, Message: "the quiz result already shows these item points"}
+		*o = domain.ActionOutcome{Status: "preserved", PostedText: summary, Message: "the quiz result already shows these item points and comments"}
 		return save()
 	}
 	if ambiguous(*o) {
@@ -85,7 +91,7 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 	if err := save(); err != nil {
 		return err
 	}
-	version, err := g.PostScores(ctx, want)
+	version, err := g.PostScores(ctx, want, comments)
 	if err != nil {
 		*o = failedOutcome(err)
 		o.PostedText = summary
@@ -119,6 +125,20 @@ func newQuizSessionIDs(sub Submission) (participant, quiz string) {
 	return "", ""
 }
 
+// commentHTML turns plain item feedback into the paragraphs SpeedGrader
+// stores: blank lines separate paragraphs, single line breaks stay breaks.
+func commentHTML(text string) string {
+	var b strings.Builder
+	text = strings.ReplaceAll(strings.TrimSpace(text), "\r\n", "\n")
+	for _, para := range strings.Split(text, "\n\n") {
+		if para = strings.TrimSpace(para); para == "" {
+			continue
+		}
+		b.WriteString("<p>" + strings.ReplaceAll(html.EscapeString(para), "\n", "<br>") + "</p>")
+	}
+	return b.String()
+}
+
 func itemScoreSummary(want map[string]string) string {
 	keys := make([]string, 0, len(want))
 	for k := range want {
@@ -146,4 +166,13 @@ func sameScore(live *json.Number, pulled *domain.Decimal) bool {
 		return live == nil && pulled == nil
 	}
 	return sameNumber(live.String(), pulled.String())
+}
+
+// trimZeros shows a decimal without trailing zeros: 10.0 reads 10, 7.50
+// reads 7.5.
+func trimZeros(s string) string {
+	if strings.Contains(s, ".") {
+		s = strings.TrimRight(strings.TrimRight(s, "0"), ".")
+	}
+	return s
 }

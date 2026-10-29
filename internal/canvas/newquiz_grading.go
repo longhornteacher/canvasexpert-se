@@ -83,27 +83,39 @@ func (c *Client) NewQuizGrading(ctx context.Context, courseID, assignmentID int6
 	return g, nil
 }
 
-// ItemScore reads one item's current score and grade status.
-func (g *NewQuizGrading) ItemScore(entryID string) (score string, status string, attempt string, ok bool) {
+// NewQuizItemResult is one item's current state in the quiz result.
+type NewQuizItemResult struct {
+	Score, GradeStatus, Attempt string
+	// Comment is the grader's item comment (HTML), empty when there is none.
+	Comment string
+}
+
+// Item reads one item's current score, grade status, attempt and grader
+// comment.
+func (g *NewQuizGrading) Item(entryID string) (NewQuizItemResult, bool) {
 	for _, it := range g.Items {
 		if fmt.Sprint(it["item_id"]) != entryID {
 			continue
 		}
 		scored, _ := it["scored_data"].(map[string]any)
-		return fmt.Sprint(it["score"]), fmt.Sprint(scored["grade_status"]), fmt.Sprint(it["attempt"]), true
+		feedback, _ := it["feedback"].(map[string]any)
+		grader, _ := feedback["grader_feedback"].(map[string]any)
+		comment, _ := grader["content"].(string)
+		return NewQuizItemResult{Score: fmt.Sprint(it["score"]), GradeStatus: fmt.Sprint(scored["grade_status"]), Attempt: fmt.Sprint(it["attempt"]), Comment: comment}, true
 	}
-	return "", "", "", false
+	return NewQuizItemResult{}, false
 }
 
 // PostScores sends SpeedGrader's result write: every item of the attempt,
-// with only the named items' scores changed and their grade status set to
-// graded, and the fudge points read with the result. It returns the new
-// result version's ID. There is no retry.
-func (g *NewQuizGrading) PostScores(ctx context.Context, scores map[string]string) (string, error) {
+// with only the named items' scores changed, their grade status set to
+// graded and, where given, their grader comment (HTML) set, and the fudge
+// points read with the result. It returns the new result version's ID.
+// There is no retry.
+func (g *NewQuizGrading) PostScores(ctx context.Context, scores, comments map[string]string) (string, error) {
 	if g.FudgePoints == nil {
 		return "", fmt.Errorf("current fudge points were not readable: %w", &Error{Kind: "validation"})
 	}
-	body, err := newQuizResultBody(g.Items, scores, g.FudgePoints)
+	body, err := newQuizResultBody(g.Items, scores, comments, g.FudgePoints)
 	if err != nil {
 		return "", err
 	}
@@ -161,8 +173,9 @@ func camelize(v any) any {
 
 // newQuizResultBody builds the observed request: each read row in camelCase
 // at every level, without grading_method, with errors {} and graderId null;
-// gradedAt stays as read. Every named item must be in the result.
-func newQuizResultBody(items []map[string]any, scores map[string]string, fudge json.RawMessage) (map[string]any, error) {
+// gradedAt stays as read. An item comment is feedback.graderFeedback.content
+// beside the untouched itemFeedback. Every named item must be in the result.
+func newQuizResultBody(items []map[string]any, scores, comments map[string]string, fudge json.RawMessage) (map[string]any, error) {
 	seen := map[string]bool{}
 	results := make([]any, 0, len(items))
 	for _, it := range items {
@@ -180,6 +193,14 @@ func newQuizResultBody(items []map[string]any, scores map[string]string, fudge j
 			}
 			scored["gradeStatus"] = "graded"
 			seen[id] = true
+		}
+		if comment, ok := comments[id]; ok && comment != "" {
+			feedback, _ := row["feedback"].(map[string]any)
+			if feedback == nil {
+				feedback = map[string]any{}
+				row["feedback"] = feedback
+			}
+			feedback["graderFeedback"] = map[string]any{"content": comment}
 		}
 		results = append(results, row)
 	}
