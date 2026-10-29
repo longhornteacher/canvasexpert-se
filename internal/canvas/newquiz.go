@@ -52,7 +52,9 @@ type NewQuizFile struct {
 // NewQuizFiles follows the native SpeedGrader read path for one Canvas user
 // and attempt. PAT-authenticated requests stay on Canvas; derived tokens are
 // sent only to the validated backend and quiz hosts supplied by Canvas.
-func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userID int64, attempt int, itemIDs map[string]bool) ([]NewQuizFile, error) {
+// participantSessionID, from the submission's launch URL, skips the
+// participants lookup, which returned 404 live on 2026-10-28.
+func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userID int64, attempt int, itemIDs map[string]bool, participantSessionID string) ([]NewQuizFile, error) {
 	if courseID <= 0 || assignmentID <= 0 || userID <= 0 || attempt < 1 || len(itemIDs) == 0 {
 		return nil, &Error{Kind: "validation"}
 	}
@@ -61,38 +63,40 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 		return nil, err
 	}
 	httpc, backend, nativeToken := n.httpc, n.backend, n.token
-	type participant struct {
-		CanvasUserID int64 `json:"canvas_user_id"`
-		Sessions     []struct {
-			ID string `json:"id"`
-		} `json:"participant_sessions"`
-	}
-	var participantRaw json.RawMessage
-	if err = secureJSON(ctx, httpc, http.MethodGet, backend+"/api/assignments/"+url.PathEscape(n.resource)+"/participants?no_pagination=true", "Bearer "+nativeToken, "application/json", nil, &participantRaw); err != nil {
-		return nil, fmt.Errorf("participants step failed: %w", err)
-	}
-	var participants []participant
-	if len(participantRaw) > 0 && participantRaw[0] == '[' {
-		err = json.Unmarshal(participantRaw, &participants)
-	} else {
-		var envelope struct {
-			Data []participant `json:"data"`
-		}
-		err = json.Unmarshal(participantRaw, &envelope)
-		participants = envelope.Data
-	}
-	if err != nil {
-		return nil, fmt.Errorf("participants step failed: %w", &Error{Kind: "validation"})
-	}
-	var participantSession string
-	for _, p := range participants {
-		if p.CanvasUserID == userID && len(p.Sessions) > 0 {
-			participantSession = p.Sessions[0].ID
-			break
-		}
-	}
+	participantSession := participantSessionID
 	if participantSession == "" {
-		return nil, fmt.Errorf("participants step found no matching student session: %w", &Error{Kind: "not_found"})
+		type participant struct {
+			CanvasUserID int64 `json:"canvas_user_id"`
+			Sessions     []struct {
+				ID string `json:"id"`
+			} `json:"participant_sessions"`
+		}
+		var participantRaw json.RawMessage
+		if err = secureJSON(ctx, httpc, http.MethodGet, backend+"/api/assignments/"+url.PathEscape(n.resource)+"/participants?no_pagination=true", "Bearer "+nativeToken, "application/json", nil, &participantRaw); err != nil {
+			return nil, fmt.Errorf("participants step failed: %w", err)
+		}
+		var participants []participant
+		if len(participantRaw) > 0 && participantRaw[0] == '[' {
+			err = json.Unmarshal(participantRaw, &participants)
+		} else {
+			var envelope struct {
+				Data []participant `json:"data"`
+			}
+			err = json.Unmarshal(participantRaw, &envelope)
+			participants = envelope.Data
+		}
+		if err != nil {
+			return nil, fmt.Errorf("participants step failed: %w", &Error{Kind: "validation"})
+		}
+		for _, p := range participants {
+			if p.CanvasUserID == userID && len(p.Sessions) > 0 {
+				participantSession = p.Sessions[0].ID
+				break
+			}
+		}
+		if participantSession == "" {
+			return nil, fmt.Errorf("participants step found no matching student session: %w", &Error{Kind: "not_found"})
+		}
 	}
 	var result struct {
 		Host         string `json:"host"`

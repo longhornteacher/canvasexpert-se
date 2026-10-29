@@ -211,8 +211,8 @@ func autoScoredTotal(items []writtenQuizItem, row quizReportRow) (*domain.AutoSc
 	return &domain.AutoScored{Earned: domain.RoundRat(earned, 2), Possible: domain.RoundRat(possible, 2), Items: len(items)}, ""
 }
 
-func (s *Service) downloadNewQuizFiles(ctx context.Context, relDir, studentRef string, userID int64, courseID, assignmentID int64, attempt int, row newQuizRow, budget *int64) []domain.WrittenFile {
-	files, err := s.Client.NewQuizFiles(ctx, courseID, assignmentID, userID, attempt, sliceSet(row.FileItemIDs))
+func (s *Service) downloadNewQuizFiles(ctx context.Context, relDir, studentRef string, userID int64, courseID, assignmentID int64, attempt int, row newQuizRow, budget *int64, participantSessionID string) []domain.WrittenFile {
+	files, err := s.Client.NewQuizFiles(ctx, courseID, assignmentID, userID, attempt, sliceSet(row.FileItemIDs), participantSessionID)
 	if err != nil {
 		for i := range row.Files {
 			row.Files[i].Status = "not-retrieved"

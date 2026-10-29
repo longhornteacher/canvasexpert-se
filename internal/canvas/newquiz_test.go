@@ -53,8 +53,12 @@ func TestTrustedInstructureOriginAndCanvasENV(t *testing.T) {
 }
 
 func TestNewQuizFilesKeepsTokensOnTheirHostsAndChecksItemAttempt(t *testing.T) {
-	for _, resource := range []string{`"resource"`, `123`} {
+	for _, resource := range []string{`"resource"`, `123`, "known-session"} {
 		t.Run(resource, func(t *testing.T) {
+			knownSession := resource == "known-session"
+			if knownSession {
+				resource = `123`
+			}
 			var ts *httptest.Server
 			ts = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -77,6 +81,9 @@ func TestNewQuizFilesKeepsTokensOnTheirHostsAndChecksItemAttempt(t *testing.T) {
 					}
 					io.WriteString(w, `{"access_token":"native-jwt","entry_path":{"resourceId":`+resource+`}}`)
 				case r.URL.Path == "/api/assignments/"+strings.Trim(resource, `"`)+"/participants":
+					if knownSession {
+						t.Errorf("participants route called although the submission named the session")
+					}
 					if r.Header.Get("Authorization") != "Bearer native-jwt" || r.Header.Get("Accept") != "application/json" {
 						t.Errorf("participants headers wrong: %#v", r.Header)
 					}
@@ -109,7 +116,11 @@ func TestNewQuizFilesKeepsTokensOnTheirHostsAndChecksItemAttempt(t *testing.T) {
 			c.origin, _ = url.Parse("https://canvas.instructure.com")
 			var requests atomic.Int64
 			c.http = &http.Client{Transport: countingTransport{hostRewriteTransport{destination: dest, base: ts.Client().Transport}, &requests}}
-			files, err := c.NewQuizFiles(context.Background(), 1, 2, 5, 1, map[string]bool{"99": true})
+			session := ""
+			if knownSession {
+				session = "ps"
+			}
+			files, err := c.NewQuizFiles(context.Background(), 1, 2, 5, 1, map[string]bool{"99": true}, session)
 			if err != nil || len(files) != 1 || files[0].Name != "answer.docx" || files[0].Size != 4 {
 				t.Fatalf("files %#v, %v", files, err)
 			}
