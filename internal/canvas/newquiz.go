@@ -99,21 +99,26 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 		}
 	}
 	var result struct {
-		Host         string `json:"host"`
-		Token        string `json:"token"`
-		SessionID    string `json:"quiz_api_quiz_session_id"`
-		OldSessionID string `json:"quiz_session_id"`
+		Host         string           `json:"host"`
+		Token        string           `json:"token"`
+		SessionID    nativeResourceID `json:"quiz_api_quiz_session_id"`
+		OldSessionID nativeResourceID `json:"quiz_session_id"`
 	}
-	if err = secureJSON(ctx, httpc, http.MethodGet, backend+"/api/participant_sessions/"+url.PathEscape(participantSession)+"/results", "Bearer "+nativeToken, "application/json", nil, &result); err != nil {
-		return nil, fmt.Errorf("participant results step failed: %w", err)
+	// The grading read (what SpeedGrader uses) carries each file's URL in the
+	// item results; the older results read is the fallback.
+	if err = secureJSON(ctx, httpc, http.MethodGet, backend+"/api/participant_sessions/"+url.PathEscape(participantSession)+"/grade", "Bearer "+nativeToken, "", nil, &result); err != nil {
+		if err = secureJSON(ctx, httpc, http.MethodGet, backend+"/api/participant_sessions/"+url.PathEscape(participantSession)+"/results", "Bearer "+nativeToken, "application/json", nil, &result); err != nil {
+			return nil, fmt.Errorf("participant results step failed: %w", err)
+		}
 	}
 	quizHost, err := trustedInstructureOrigin(result.Host)
 	if err != nil || result.Token == "" {
 		return nil, fmt.Errorf("quiz host step failed: %w", &Error{Kind: "validation"})
 	}
-	quizSession := result.SessionID
+	// Canvas sends these session IDs as numbers live; strings stay accepted.
+	quizSession := string(result.SessionID)
 	if quizSession == "" {
-		quizSession = result.OldSessionID
+		quizSession = string(result.OldSessionID)
 	}
 	if quizSession == "" {
 		return nil, fmt.Errorf("participant results step failed: %w", &Error{Kind: "validation"})
@@ -132,13 +137,10 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 	var itemResults []struct {
 		ItemID  json.Number `json:"item_id"`
 		Attempt int         `json:"attempt"`
-		Scored  struct {
-			Value []struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
-				URL  string `json:"url"`
-				Size int64  `json:"size"`
-			} `json:"value"`
+		// Value is a file list on upload items and text on essays, so it
+		// is decoded only for the requested upload items.
+		Scored struct {
+			Value json.RawMessage `json:"value"`
 		} `json:"scored_data"`
 	}
 	if err = secureJSON(ctx, httpc, http.MethodGet, quizHost+"/api/quiz_sessions/"+url.PathEscape(quizSession)+"/results/"+url.PathEscape(session.Authoritative.ID.String())+"/session_item_results", result.Token, "Signature", nil, &itemResults); err != nil {
@@ -157,7 +159,16 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 			continue
 		}
 		matchedAttempt = true
-		for _, f := range it.Scored.Value {
+		var uploaded []struct {
+			ID   json.RawMessage `json:"id"`
+			Name string          `json:"name"`
+			URL  string          `json:"url"`
+			Size int64           `json:"size"`
+		}
+		if json.Unmarshal(it.Scored.Value, &uploaded) != nil {
+			continue
+		}
+		for _, f := range uploaded {
 			if f.Name != "" && f.URL != "" && f.Size >= 0 {
 				files = append(files, NewQuizFile{ItemID: itemID, Name: f.Name, Size: f.Size, URL: f.URL})
 			}
