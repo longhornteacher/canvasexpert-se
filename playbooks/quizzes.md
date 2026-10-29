@@ -4,6 +4,8 @@ Use this for any Canvas New Quiz: auto-scored items, written items (`ESSAY`, `FI
 
 Before design, read `context/teaching-profile.md`, `context/grading.md` and relevant teacher references. Apply this teacher's grade/subject, instructional priorities, standards and feedback guidance; ask only for missing details that matter to this quiz. Never adopt developer examples as this teacher's policy.
 
+Follow `teacher-context.md`: read the course notes and prepare private expectations and a grade-appropriate model for every written item, including why it meets the rubric. Review these with the quiz. After accepted creation, save them under `context/courses/<course-id>/assignments/<assignment-id>.md` using the associated assignment ID and actual Canvas written-item IDs when available; mark unresolved mappings and pending rubric attachment. Authored QuizForge IDs are not Canvas item IDs. Keep exact-question models private until their intended release, and record useful teacher choices at their proper scope.
+
 Read teacher rules and design references from the effective teacher-rules location (UserInstall by default, configured UserSync otherwise), using logical MCP paths where available. Run commands and save course drafts, assets and outcomes in UserInstall. UserSync holds rules; its provider carries their edits between PCs.
 
 New Quizzes are supported for regular authoring and use, including written-response scoring with `score.md`. Work within the limits below; pending live or student-view verification is not a prohibition or a preliminary test required for each task.

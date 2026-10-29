@@ -6,6 +6,8 @@ When an existing rubric may fit, use `list_rubrics` and `pull_rubric` to inspect
 
 Before designing content, read `context/teaching-profile.md`, relevant teacher reference notes and `context/grading.md` through logical MCP paths or the effective teacher-rules root. Use saved grade/subject, priorities, standards and feedback guidance; ask only for missing details needed for this task. Preserve teacher choices and never use developer class names or differentiation tags as colleague defaults.
 
+Follow `teacher-context.md`: read the target course's notes and prepare reusable assignment expectations with a model for each written prompt, calibrated in language and thinking to the actual grade and taught skills. Include them in the authoring review. Keep the working note with the local draft; after an accepted create, save it in `context/courses/<course-id>/assignments/<assignment-id>.md` using the returned IDs. Publish only the model intended for students, not the private expectations note. Record useful teacher corrections at their proper scope as you work.
+
 ## Standards
 
 Apply `TEACHER.md`: 100 points by default, grade-level rigor in plain, concise wording, a one-line Learning Target and three-step directions at the top, a grade-representative exemplar for writing assignments, accessible images and links, and a "Corrections available" line. A writing assignment includes its rubric in the create draft (`rubric`, totaling the assignment's points, STAAR-shaped as `TEACHER.md` describes); don't ask whether to add one. Once the content is shaped, check the course's Green tag with `list_tags` and add a Green tier when it has students, then offer Silver/Red/Blue once unless saved choices settle it (Hub section below).
