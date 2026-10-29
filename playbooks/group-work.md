@@ -26,6 +26,8 @@ Self sign-up is a group-set setting. Explain the actual choice to students throu
 
 ## Build club spaces and conversations
 
+Run the review in `review.md` on club Pages, discussion prompts and role sheets before pushing them; group scoring is reviewed as `score.md` describes.
+
 Create a course unit hub or other course Page using `native-content.md`. For each club, create a group Page with the exact course and `group_id`: a reading plan, evidence notebook or meeting log can be member-editable with `editing_roles: [members]`. Group Pages cannot be placed directly in course modules. Keep a simple starter that invites student writing, and never push that starter again over a populated notebook. Pull before editing; if the body conflicts, preserve the unsent draft and merge only the requested change into a fresh pull. A title-only edit preserves the current student body. `cse page-history COURSE PAGE_ID --group GROUP_ID` reads revision history, but revisions do not prove who contributed or capture every simultaneous edit.
 
 Author discussions within the supported scopes:
@@ -70,7 +72,7 @@ A graded discussion is an ordinary individual assignment whose evidence is a con
 
 Write ordinary `kind: results` rows. Each `grade` or `comment-only` needs `evidence` copying the student's `digest` from the pulled work; list any other participant's entry you relied on in `context_refs`. Feedback is individual: group discussion children are still graded per student, with no shared grade. Missing-response assessments also require complete relevant coverage when posting; an unreadable club does not invalidate an independently complete club. If a student edits a post after the pull, that student is held for re-pull and the others still post. A checkpointed discussion is graded in SpeedGrader; the Engine holds a `grade` row for it. Offer `operation: comment-only` so the written feedback still reaches the student, and the teacher enters the checkpoint grades in SpeedGrader.
 
-New Quiz written-work scoring is the New Quiz section of `score.md` and uses the comment-only path: no quiz/item grade, rubric assessment or late timing is written, and the teacher enters item points in SpeedGrader.
+New Quiz written-work scoring is the New Quiz section of `score.md`: the Engine writes each written item's points and comment into the quiz, with no rubric assessment or late timing.
 
 ## Resume and report
 
