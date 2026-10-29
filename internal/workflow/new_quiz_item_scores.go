@@ -83,8 +83,8 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 		o.Status, o.Message = "uncertain", "item score write remains uncertain; check SpeedGrader before repeating it"
 		return save()
 	}
-	if !sameScore(live.Score, source.work.ObservedScore) {
-		holdOutcome(o, "the quiz score changed in Canvas since the pull; not overwritten, pull-work for this student")
+	if !sameScore(live.Score, source.work.ObservedScore) || gradedSince(live.GradedAt, source.work.ObservedGradedAt) {
+		holdOutcome(o, "the quiz was graded in Canvas since the pull; not overwritten, pull-work for this student")
 		return save()
 	}
 	*o = domain.ActionOutcome{Status: "pending", PostedText: summary}
@@ -159,6 +159,16 @@ func sameNumber(a, b string) bool {
 	x, e1 := domain.ParseDecimal(a)
 	y, e2 := domain.ParseDecimal(b)
 	return e1 == nil && e2 == nil && x.Cmp(y) == 0
+}
+
+// gradedSince reports a SpeedGrader save after the pull, including one that
+// changed only an item comment and left the score alone. Older pulls did not
+// record graded_at; for them only the score comparison applies.
+func gradedSince(live *string, pulled string) bool {
+	if pulled == "" {
+		return false
+	}
+	return live == nil || *live != pulled
 }
 
 func sameScore(live *json.Number, pulled *domain.Decimal) bool {

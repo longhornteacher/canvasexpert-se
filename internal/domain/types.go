@@ -291,6 +291,9 @@ type StudentWorkDocument struct {
 	EnteredGrade           *Decimal          `yaml:"entered_grade,omitempty"`
 	ObservedEnteredScore   *Decimal          `yaml:"observed_entered_score,omitempty"`
 	ObservedScore          *Decimal          `yaml:"observed_score,omitempty"`
+	// ObservedGradedAt is Canvas's graded_at at pull time. Any SpeedGrader
+	// save moves it, so a later difference means someone graded since.
+	ObservedGradedAt string `yaml:"observed_graded_at,omitempty"`
 	ObservedPointsDeducted *Decimal          `yaml:"observed_points_deducted,omitempty"`
 	EnteredGradeReason     string            `yaml:"entered_grade_reason,omitempty"`
 	Excused                bool              `yaml:"excused"`

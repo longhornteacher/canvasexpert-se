@@ -141,6 +141,8 @@ At the teacher's direction L1 ran on a real student instead of the test account:
 
 L1 passes for one student. L2–L8 remain.
 
+**Guard update (same day):** pulls now record `observed_graded_at`, and item scores hold when the live `graded_at` differs, so a SpeedGrader edit that changes only an item comment is not overwritten. That every SpeedGrader save moves `graded_at` was seen for score changes; a comment-only save is what L8 checks.
+
 ### 3.4 Done when
 
 Step A is recorded with fixtures; Engine path and local tests are in; L1–L8 pass on account 2. Then update `score.md`, `new-quiz-written-work-spec.md`, `SCORING-RULES.md`, root `AGENTS.md` (the "teacher enters item points in SpeedGrader" sentence) and both capability records, stating plainly that this uses an undocumented internal New Quizzes call; the SpeedGrader-by-hand path stays as the fallback. Until then the comment-only capability stays as it is.

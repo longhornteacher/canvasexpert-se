@@ -34,7 +34,7 @@ func (t anyHostTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 // itemScoreFixture fakes Canvas and the New Quizzes hosts for one student
 // whose essay item 8001 (quiz item 21, 15 points) is scored 80/100 on the
 // rubric, so 12 item points.
-func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closing string) (s *Service, resultsPath string, posts, comments *int, body *map[string]any, commentText *string) {
+func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closing string, liveGradedAt ...string) (s *Service, resultsPath string, posts, comments *int, body *map[string]any, commentText *string) {
 	t.Helper()
 	posts, comments, body, commentText = new(int), new(int), new(map[string]any), new(string)
 	assignment := fixtureAssignment()
@@ -44,6 +44,11 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closin
 	assignmentJSON, _ := json.Marshal(assignment)
 	live := fixtureSubmission(5)
 	live.Score = (*json.Number)(&liveScore)
+	pulledGradedAt := "2026-10-07T13:00:00Z"
+	live.GradedAt = &pulledGradedAt
+	if len(liveGradedAt) > 0 {
+		live.GradedAt = &liveGradedAt[0]
+	}
 	landed := false
 	live.ExternalToolURL = "https://quiz-lti.instructure.com/lti/launch?participant_session_id=ps1&quiz_session_id=qs1"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +121,7 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closin
 	}
 	ref := attemptRef(live)
 	pulled := domain.MustDecimal("15")
-	work := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: student.Ref, Alias: student.Alias, AssignmentID: 10, ObservedScore: &pulled, Current: domain.AttemptWork{Ref: ref, WrittenResponses: []domain.WrittenResponse{{ItemID: "21", Type: "essay", Text: "Current response."}}}, EnteredGradeKnown: true}
+	work := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: student.Ref, Alias: student.Alias, AssignmentID: 10, ObservedScore: &pulled, ObservedGradedAt: pulledGradedAt, Current: domain.AttemptWork{Ref: ref, WrittenResponses: []domain.WrittenResponse{{ItemID: "21", Type: "essay", Text: "Current response."}}}, EnteredGradeKnown: true}
 	workPath := "courses/TEST/" + student.Ref + ".md"
 	if err = workspace.WriteDocument(filepath.Join(s.Root, filepath.FromSlash(workPath)), work, "work"); err != nil {
 		t.Fatal(err)
@@ -167,7 +172,7 @@ func TestItemScoresHoldWhenCanvasWasGradedSinceThePull(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *posts != 0 || *comments != 0 || report.Students[0].Status != "held" || !strings.Contains(report.Students[0].Message, "changed in Canvas since the pull") {
+	if *posts != 0 || *comments != 0 || report.Students[0].Status != "held" || !strings.Contains(report.Students[0].Message, "graded in Canvas since the pull") {
 		t.Fatalf("expected a hold with no writes: posts=%d comments=%d report=%#v", *posts, *comments, report.Students)
 	}
 }
@@ -198,5 +203,18 @@ func TestItemCommentsAloneSendNoWholeComment(t *testing.T) {
 	}
 	if *posts != 1 || *comments != 0 || report.Students[0].Status != "completed" || report.Students[0].Revision.Status != "not-requested" {
 		t.Fatalf("posts=%d comments=%d report=%#v", *posts, *comments, report.Students)
+	}
+}
+
+// A SpeedGrader save that changed only an item comment leaves the score
+// alone but moves graded_at; the Engine must not overwrite it.
+func TestItemScoresHoldWhenOnlyGradedAtMoved(t *testing.T) {
+	s, path, posts, comments, _, _ := itemScoreFixture(t, "15", false, "Strong evidence overall.", "2026-10-29T16:00:00Z")
+	report, err := s.Post(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *posts != 0 || *comments != 0 || report.Students[0].Status != "held" {
+		t.Fatalf("expected a hold with no writes: posts=%d comments=%d report=%#v", *posts, *comments, report.Students)
 	}
 }

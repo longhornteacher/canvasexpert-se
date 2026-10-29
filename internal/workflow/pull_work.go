@@ -514,6 +514,9 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				doc.EnteredGradeKnown, doc.EnteredGrade, doc.EnteredGradeReason = s.enteredGrade(sub)
 				doc.ObservedEnteredScore = decimalPointer(sub.EnteredScore)
 				doc.ObservedScore = decimalPointer(sub.Score)
+				if sub.GradedAt != nil {
+					doc.ObservedGradedAt = *sub.GradedAt
+				}
 				doc.ObservedPointsDeducted = decimalPointer(sub.PointsDeducted)
 				doc.Current = s.attemptWork(sub, attachments[attemptKey{st.Ref, sub.Attempt}])
 				if a.NewQuiz {
