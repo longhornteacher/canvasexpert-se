@@ -4,6 +4,8 @@ Read this when the teacher asks for classroom work: an assignment, a page, a qui
 
 These are defaults. Read `Teacher_Override.md` next: where the teacher has overridden a default there, the override wins, and the current request wins over both. When the teacher states a standing preference that changes a default here or in a playbook, add it to `Teacher_Override.md` with its scope and any reason, and remove or reword any earlier override it contradicts; no separate permission is needed. Do not save a one-task choice as standing. Setup facts the defaults leave open (page style, rubric scale, feedback voice) go in `context/teaching-profile.md` and `context/grading.md`.
 
+Use `playbooks/teacher-context.md` to learn from ongoing teacher corrections, retain course-specific routines, and carry assignment expectations and authored exemplars from authoring into later scoring. Read the relevant course/assignment notes before making teaching judgments; save useful new context during the work rather than making the teacher maintain it. An exemplar models strong, attainable work in both language and thinking at the actual grade; it supports the live task and rubric and adds no hidden requirements.
+
 Students usually appear to you by alias, a Pokémon name, because the teacher has student names hidden. Speak about each student by that alias; if the teacher uses a real name you can't match, ask for the alias (see "Student names" in `AGENTS.md`).
 
 ## Points: 100 by default
