@@ -324,6 +324,29 @@ func TestMCPSharedRulesRefreshesAcrossConnectedClients(t *testing.T) {
 		t.Fatalf("client B did not observe current rules: %s", readB)
 	}
 	call(b, "write_workspace_file", map[string]any{"path": "context/grading.md", "content": "stale", "expected_sha256": oldHash}, true)
+	// Authoring on one PC leaves reusable course/assignment guidance for scoring
+	// on another, without copying its local drafts or student results.
+	for relative, body := range map[string]string{
+		"context/courses/12/notes.md":          "Canvas origin: https://school.example\nCourse ID: 12\nGrade: 7\n",
+		"context/courses/12/assignments/34.md": "Canvas origin: https://school.example\nCourse ID: 12\nAssignment ID: 34\nAuthored model and rubric expectations\n",
+	} {
+		call(a, "write_workspace_file", map[string]any{"path": relative, "content": body}, false)
+		if read := call(b, "read_workspace_file", map[string]any{"path": relative}, false); !strings.Contains(read, body) || !strings.Contains(read, "authority_root: "+syncRoot) {
+			t.Fatalf("client B did not read shared teaching context: %s", read)
+		}
+		updated := body + "Teacher correction retained\n"
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(body)))
+		call(b, "write_workspace_file", map[string]any{"path": relative, "content": updated, "expected_sha256": hash}, false)
+		call(a, "write_workspace_file", map[string]any{"path": relative, "content": "stale model", "expected_sha256": hash}, true)
+		if read := call(a, "read_workspace_file", map[string]any{"path": relative}, false); !strings.Contains(read, updated) {
+			t.Fatalf("teacher correction lost: %s", read)
+		}
+		for _, install := range []string{installA, installB} {
+			if _, err := os.Stat(filepath.Join(install, filepath.FromSlash(relative))); !os.IsNotExist(err) {
+				t.Fatalf("shared teaching context duplicated in UserInstall: %s: %v", relative, err)
+			}
+		}
+	}
 	listing := call(b, "list_workspace_files", map[string]any{"path": "context", "recursive": true}, false)
 	var listed struct {
 		Entries []struct {

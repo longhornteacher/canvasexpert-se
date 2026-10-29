@@ -4,6 +4,16 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 1.8.1 (2026-10-29)
+
+Reusable teacher preferences, course notes and assignment expectations in UserSync.
+
+- Agents remember standing preferences and clear ongoing corrections in `Teacher_Override.md` or the relevant course/assignment scope, with a date and source. One-task decisions stay scoped; uncertain observations are tentative rather than new policy.
+- Course notes live in `context/courses/<course-id>/notes.md`; assignment expectations and authored written-response models live in `context/courses/<course-id>/assignments/<assignment-id>.md`. These paths use configured UserSync, or UserInstall when no Sync folder is selected. The Engine seeds outlines without replacing existing teacher files. Drafts, student submissions, results and session records stay in UserInstall.
+- Authoring prepares and reviews models for strong, attainable work at the actual grade in both language and thinking, then saves reusable expectations after accepted creation. Editing updates affected guidance after accepted substantive changes. Scoring checks the saved origin, assignment/item IDs, prompt, sources and rubric against the normal current pull before reuse; models add no hidden requirements. Explicit local scoring bases and interpretations can be reused across PCs without sharing student results.
+- Standing instructions and the authoring, editing, scoring, setup and review playbooks now follow `teacher-context.md`. The Capabilities page distinguishes local file-routing evidence from pending agent adoption, provider delivery and classroom calibration.
+- ZIP installs update from a temporary extraction rather than extracting over the teacher's folder, preserving teacher context and unfinished work.
+
 ## 1.8.0 (2026-10-29)
 
 Engine-written New Quiz item scores and item comments, working uploaded-file pulls, agentic review of student-facing content, hot-spot quiz items, small text corrections and hidden student names in raw Canvas reads.

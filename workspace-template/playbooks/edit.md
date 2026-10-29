@@ -2,6 +2,8 @@
 
 Canvas Live is authoritative, so always start from a fresh pull. What the teacher's words mean and when to write are in `AGENTS.md`.
 
+Read the relevant course/assignment context under `teacher-context.md`. After an accepted change to prompts, source material, points or rubric expectations, update that assignment's reusable expectations and affected models from the accepted outcomes; keep unsent changes with the local draft. A missing note is not a prerequisite for an edit. Saved guidance never overrides the fresh Canvas pull.
+
 ## Pull, edit, push
 
 ```powershell

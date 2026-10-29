@@ -13,15 +13,17 @@ func gitInstallRoot(t *testing.T, git bool) string {
 	t.Helper()
 	root := t.TempDir()
 	files := map[string]string{
-		"context/courses.md":    "---\nschema: 1\n---\n",
-		"context/grading.md":    "teacher grading",
-		"engine/manifest.txt":   testManifest,
-		"playbooks/score.md":    "shipped playbook",
-		"AGENTS.md":             "shipped agents",
-		"CLAUDE.md":             "shipped claude",
-		"Teacher_Override.md":   "teacher override",
-		"Creation Taste.txt":    "teacher guide",
-		"README.md":             "product readme",
+		"context/courses.md":                   "---\nschema: 1\n---\n",
+		"context/grading.md":                   "teacher grading",
+		"context/courses/12/notes.md":          "course habits",
+		"context/courses/12/assignments/34.md": "assignment expectations and authored model",
+		"engine/manifest.txt":                  testManifest,
+		"playbooks/score.md":                   "shipped playbook",
+		"AGENTS.md":                            "shipped agents",
+		"CLAUDE.md":                            "shipped claude",
+		"Teacher_Override.md":                  "teacher override",
+		"Creation Taste.txt":                   "teacher guide",
+		"README.md":                            "product readme",
 	}
 	for name, body := range files {
 		p := filepath.Join(root, filepath.FromSlash(name))
@@ -108,6 +110,18 @@ func TestSyncInGitInstallLeavesTrackedFilesAlone(t *testing.T) {
 			_, contextInSync := os.Stat(filepath.Join(sync, "context", "grading.md"))
 			if overrideInSync != nil || contextInSync != nil {
 				t.Fatalf("teacher files must reach UserSync: override %v context %v", overrideInSync, contextInSync)
+			}
+			for relative, want := range map[string]string{
+				"context/courses/12/notes.md":          "course habits",
+				"context/courses/12/assignments/34.md": "assignment expectations and authored model",
+			} {
+				resolved, err := ResolveTeacherPath(root, relative)
+				if err != nil || resolved != filepath.Join(sync, filepath.FromSlash(relative)) {
+					t.Fatalf("teaching context did not resolve to UserSync: %q %v", resolved, err)
+				}
+				if body, err := os.ReadFile(resolved); err != nil || string(body) != want {
+					t.Fatalf("teaching context lost during binding: %s: %q %v", relative, body, err)
+				}
 			}
 			playbookPath, err := ResolveTeacherPath(root, "playbooks/score.md")
 			if err != nil {

@@ -11,7 +11,7 @@ Five roles, each with a fixed job. Only the author writes.
 | **Author** (you) | the request, sources, teacher context | the product, and a response to every finding | skips the review or writes to Canvas before it ends |
 | **Fact-checker** | the product and its sources | each provable item: found, with the exact source text and location, or not found | edits, judges quality |
 | **Logic reviewer** | the product and the task (directions, prompt, rubric, interpretation) | findings, each with the passage, its reason and a suggested fix | edits, rescores, sees your reasoning |
-| **Pedagogy reviewer** | the product, `TEACHER.md`, `Teacher_Override.md`, `context/teaching-profile.md`, `context/grading.md`, the grade, course and tier | findings, each with the passage, its reason and a suggested fix | edits, rescores, sees your reasoning |
+| **Pedagogy reviewer** | the product, `TEACHER.md`, `Teacher_Override.md`, `context/teaching-profile.md`, `context/grading.md`, relevant course/assignment notes, the grade, course and tier | findings, each with the passage, its reason and a suggested fix | edits, rescores, sees your reasoning |
 | **Arbiter** | the findings, your responses, the passages they concern and the standards they cite; possible-AI-use flags with their checked evidence; any fact the fact-checker and you still disagree on | a ruling on each | edits, re-reads the whole product, re-checks settled facts |
 
 Run each role as a separate helper agent when your app can start one: one helper per role for each product or assignment, never one per student. Give the fact-checker the cheapest capable model; it only has to find and quote. Give the reviewers a model at least as strong as yours, and the arbiter the strongest available. Hand each helper file paths and its brief, not a summary of the work: a summary is exactly what the review exists to check. Helpers follow `AGENTS.md`: aliases only, no `.cse/` or contact files, and no student work sent to the web or any outside service.
@@ -54,6 +54,7 @@ Do the teaching choices fit this teacher, this grade and these students? Judge a
 - quiz design: distractors are real misconceptions, choices survive shuffling, the longest choice doesn't give the answer away
 - tiers scaffold the same standard and never lower it; Green supports actually support emergent bilingual students
 - feedback is specific, actionable and in the teacher's saved voice and `feedback_guidance`
+- authored exemplars (including private models saved for later scoring) show strong, attainable work at the actual grade in both language and thinking, using taught skills; they neither demand adult polish nor excuse shallow thinking, and add no hidden rubric requirements (see `teacher-context.md`)
 - nothing private (accommodations, tier reasons, teacher notes, flags) shows in student-facing text
 
 The teacher's explicit choices are settled: flag a likely problem with one, but treat it as the teacher's decision, not a defect.
