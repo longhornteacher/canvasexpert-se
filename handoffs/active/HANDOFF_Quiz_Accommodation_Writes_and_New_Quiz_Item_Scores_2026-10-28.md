@@ -4,7 +4,7 @@ Date: 2026-10-28. To: whoever picks this up in Dev (CE-SE repo, `dev` branch). R
 
 This handoff carries the open remainder of two retired handoffs: [Canvas 2026 additions](../retired/HANDOFF_Canvas_2026_Additions_2026-10-28.md) (Parts B and C) and [Retire review page and New Quiz item scores](../retired/HANDOFF_Retire_Review_Page_and_New_Quiz_Item_Scores_2026-10-28.md) (Part 2). Their execution records hold the dated evidence for what landed; this file is the instruction for what is left. Read the [shared execution notes](../README.md#execution-notes-for-the-active-handoffs) for the check commands and live-write rules.
 
-**Status 2026-10-29:** Part A's Q6 is answered (teacher-confirmed 2026-10-29); only Q7, the course/quiz combination, is open, and course sync stays frozen. Part B is un-parked and its Step A save is recorded (§3.1 capture record), so the §3.2 Engine work can start. Do not guess an undocumented protocol and write to Canvas to "see what happens"; do not test on a real student's record or attempt. When the evidence below is unavailable, stop and say exactly which observation is missing.
+**Status 2026-10-29:** Part A's Q6 is answered (teacher-confirmed 2026-10-29); only Q7, the course/quiz combination, is open, and course sync stays frozen. Part B is **complete** (2026-10-29): Step A captured, Engine built, L1–L8 passed live, and the playbooks use item scores (§3.4 record). Do not guess an undocumented protocol and write to Canvas to "see what happens"; do not test on a real student's record or attempt. When the evidence below is unavailable, stop and say exactly which observation is missing.
 
 ---
 
@@ -163,6 +163,10 @@ L1–L8 have all passed. Before `score.md` offers item scores, the §3.2 team gu
 ### 3.4 Done when
 
 Step A is recorded with fixtures; Engine path and local tests are in; L1–L8 pass on account 2. Then update `score.md`, `new-quiz-written-work-spec.md`, `SCORING-RULES.md`, root `AGENTS.md` (the "teacher enters item points in SpeedGrader" sentence) and both capability records, stating plainly that this uses an undocumented internal New Quizzes call; the SpeedGrader-by-hand path stays as the fallback. Until then the comment-only capability stays as it is.
+
+### 3.4 completion record (2026-10-29)
+
+All §3.4 conditions are met. Team-course guards: `post` applies course key routing, the `(CE)` consent check, the manual post policy and the per-student hidden-grade hold to every operation before dispatch, so item scores in a teammate's course use the same guards with no new code. `score.md`, `quizzes.md`, `edit.md`, `group-work.md`, the results scaffold (`item_scores: true` for New Quizzes), the New Quiz example, the written-work spec, `SCORING-RULES.md`, `ARCHITECTURE.md`, root `AGENTS.md`, `formats.md`, the `push_quiz` tool text and both capability records now describe item scores, name the undocumented internal call, and keep SpeedGrader entry as the fallback for a part that cannot name one item or a held student. Also fixed during the live plan: uploaded-file pulls (the 1.7.0 open item) and the post report's display of a hold that happens before item scores. Still unobserved, recorded as optional: item comments in the student's own results view, L9 regrade survival, L10 restoring an earlier version, L11 mid-run token expiry.
 
 ## 4. Not in this handoff
 

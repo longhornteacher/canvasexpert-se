@@ -31,11 +31,14 @@ students:
     operation: comment-only
     comment_only:
       attempt: {attempt: 1, submitted_at: "2026-01-01T12:00:00Z"}
+      item_scores: true
       components:
         - key: written_response
           evidence: present
           criteria: [{criterion_id: evidence, points: 3}, {criterion_id: reasoning, points: 4}]
-      feedback: "Synthetic feedback grounded in the written response."
+          feedback: "Synthetic strength in the response. Next, a synthetic next step."
+          exemplar: "Synthetic short model answer to hand-copy."
+      feedback: ""
 ---
 
-Synthetic result fixture. Replace all identity, attempt and packet fields with the actual pull before teacher use. The Engine leads with the auto-scored subtotal recorded in the pulled work (for example `Questions Canvas scored: 14/20`) and the written response in its quiz points from `item_id` (for example `Written response: 10.5/15`), then the rubric lines, without an aggregate quiz assessment, and posts only a submission comment. The teacher enters per-item points in SpeedGrader.
+Synthetic result fixture. Replace all identity, attempt and packet fields with the actual pull before teacher use. With `item_scores: true` the Engine writes the written item's points on its quiz scale from `item_id` (here 7/10 on the rubric, so 10.5 of a 15-point item) and the part's `feedback` as that item's comment, with the hand-copy `exemplar` because the part earned under 90%. The closing `feedback` is empty, so no whole-assignment comment is posted, and Canvas computes the quiz total. Without `item_scores` (a part that cannot name one item, such as a choice among prompts), the Engine posts one whole-assignment comment leading with the auto-scored subtotal and each part's item points, and the teacher enters those points in SpeedGrader.

@@ -2,7 +2,7 @@
 
 Status (2026-10-11): **parts 1–3 are implemented with local tests; the Engine/MCP paths have not been validated live.** Earlier Canvas Live hand-runs on CS8 quiz 3698192 covered one student's typed response, one byte-exact DOCX download, and one comment post. Those runs are evidence for the APIs, not proof that the new Engine implementation works against Canvas. See the dated results at the end of [the probe handoff](../handoffs/retired/NEW-QUIZ-SCORING-PROBE.md).
 
-Teacher direction (2026-10-12): **New Quizzes, including written-response items, are open for regular authoring, use and scoring within these supported limits.** Use the scoped pull and comment-only conversation/post workflow in UserInstall. The teacher enters item points in SpeedGrader; CE-SE writes no New Quiz item grade, quiz grade, rubric assessment or late timing. Pending live/human checks describe the evidence level and are not a prerequisite for ordinary teacher use. Dev holds implementation and seed instructions; optional UserSync remains independent of UserInstall.
+Teacher direction (2026-10-12): **New Quizzes, including written-response items, are open for regular authoring, use and scoring within these supported limits.** Use the scoped pull and comment-only conversation/post workflow in UserInstall. Since 2026-10-29 CE-SE writes each written item's points and item comment (`comment_only.item_scores`, through an undocumented internal New Quizzes call, checked live 2026-10-29; see Item-score write protocol below); Canvas computes the quiz grade. CE-SE writes no rubric assessment or late timing. Where a part cannot name one item, the teacher enters those points in SpeedGrader. Pending live/human checks describe the evidence level and are not a prerequisite for ordinary teacher use. Dev holds implementation and seed instructions; optional UserSync remains independent of UserInstall.
 
 Design stance (teacher decision): keep the Engine lean. A mechanistic step that worked in development testing is treated as working until Canvas or the teacher says otherwise. No read-backs, confirmation reports or retry frameworks after a write.
 
@@ -86,7 +86,7 @@ Still not tested: a student with several attempts, several files in one item, a 
 
 ## Teacher workflow this serves
 
-The agent writes the whole-assignment comment with all per-criterion scores **before** the teacher opens SpeedGrader, so the teacher can read the scores in the comment while typing the per-item points. Students see the comment; the quiz grade is the teacher's.
+With item scores the Engine writes each item's points and comment into the quiz on the teacher's go-ahead, so the teacher has nothing to type. Without them (a part that cannot name one item), the agent writes the whole-assignment comment with all per-criterion scores before the teacher opens SpeedGrader, so the teacher can read the scores in the comment while typing the per-item points. Students see the comment; the quiz grade is the teacher's.
 
 ## Evidence discipline
 

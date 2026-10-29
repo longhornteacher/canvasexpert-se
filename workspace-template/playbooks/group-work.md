@@ -72,7 +72,7 @@ A graded discussion is an ordinary individual assignment whose evidence is a con
 
 Write ordinary `kind: results` rows. Each `grade` or `comment-only` needs `evidence` copying the student's `digest` from the pulled work; list any other participant's entry you relied on in `context_refs`. Feedback is individual: group discussion children are still graded per student, with no shared grade. Missing-response assessments also require complete relevant coverage when posting; an unreadable club does not invalidate an independently complete club. If a student edits a post after the pull, that student is held for re-pull and the others still post. A checkpointed discussion is graded in SpeedGrader; the Engine holds a `grade` row for it. Offer `operation: comment-only` so the written feedback still reaches the student, and the teacher enters the checkpoint grades in SpeedGrader.
 
-New Quiz written-work scoring is the New Quiz section of `score.md` and uses the comment-only path: no quiz/item grade, rubric assessment or late timing is written, and the teacher enters item points in SpeedGrader.
+New Quiz written-work scoring is the New Quiz section of `score.md`: the Engine writes each written item's points and comment into the quiz, with no rubric assessment or late timing.
 
 ## Resume and report
 
