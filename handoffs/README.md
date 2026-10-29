@@ -8,7 +8,7 @@ Execution-readiness review: **2026-10-28**, against the current Dev working tree
 
 | Handoff | Execution status | What the review clarified |
 |---|---|---|
-| [Quiz accommodation writes and New Quiz item scores](active/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md) | Consolidated 2026-10-28 from the open remainder of the two retired handoffs below. Both parts are **blocked on Canvas evidence**: accommodation POST semantics (merge/replace, clearing, unpublished acceptance, repeat behavior, course/quiz combination) and an observed SpeedGrader item-score save. No teacher-controlled student account exists; the built-in Test Student may suffice for the accommodation setting probe only. | Which test identity is available, what each observation enables, and the item-score Engine design to build only after the save is observed. |
+| [Quiz accommodation writes and New Quiz item scores](active/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md) | Consolidated 2026-10-28 from the open remainder of the two retired handoffs below. Part A writes are implemented and the student-side timer/attempt effect was teacher-confirmed on 2026-10-29; only the course/quiz combination is open. Part B (Engine-written New Quiz item scores) is un-parked and its SpeedGrader save was captured on the CS8 test account on 2026-10-29, so the Engine work is **ready to start**. | Which test identity is available, what each observation enables, and the item-score Engine design to build only after the save is observed. |
 
 <a id="execution-notes-for-the-three-active-handoffs"></a>
 

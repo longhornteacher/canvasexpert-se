@@ -1,0 +1,41 @@
+[
+ {
+  "answer_feedback": "<p>Why this is the best answer: a place and a time.</p>",
+  "attempt": 1,
+  "feedback": {"item_feedback": {}},
+  "graded_at": "2026-01-05T15:00:00.000+00:00",
+  "grading_method": "manual_grading",
+  "item_id": "1001",
+  "points_possible": 2.0,
+  "position": 1,
+  "regrade_info": {},
+  "score": 2.0,
+  "scored_data": {"correct": true, "value": {"choice-a": {"result_score": 1, "user_responded": true}}}
+ },
+ {
+  "answer_feedback": null,
+  "attempt": 1,
+  "feedback": {"item_feedback": {}},
+  "graded_at": "2026-01-05T15:00:00.000+00:00",
+  "grading_method": "manual_grading",
+  "item_id": "1002",
+  "points_possible": 5.0,
+  "position": 2,
+  "regrade_info": {},
+  "score": 4.0,
+  "scored_data": {"grade_status": "graded", "value": "<p>A synthetic essay sentence.</p>"}
+ },
+ {
+  "answer_feedback": null,
+  "attempt": 1,
+  "feedback": {"item_feedback": {}},
+  "graded_at": "2026-01-05T15:00:00.000+00:00",
+  "grading_method": "manual_grading",
+  "item_id": "1003",
+  "points_possible": 3.0,
+  "position": 3,
+  "regrade_info": {},
+  "score": 3.0,
+  "scored_data": {"grade_status": "graded", "value": [{"name": "sample.docx", "id": 5001, "size": 1200, "url": "https://quiz-uploads.example.invalid/media_upload/acct/file"}]}
+ }
+]
