@@ -395,7 +395,7 @@ func postReport(r domain.StudentResult) StudentPostReport {
 		// Item scores come first; until they land, they are what to report.
 		if items := r.CommentOnly.ItemScoresOutcome; r.CommentOnly.ItemScores {
 			p.Outcomes.Grade = items
-			if !definite(items) {
+			if items.Status != "" && !definite(items) {
 				p.Status, p.Message = items.Status, "item points: "+items.Message
 			}
 		}
