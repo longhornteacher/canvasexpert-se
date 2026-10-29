@@ -4,6 +4,8 @@ Read this when the teacher asks for classroom work: an assignment, a page, a qui
 
 These are defaults. Read `Teacher_Override.md` next: where the teacher has overridden a default there, the override wins, and the current request wins over both. When the teacher states a standing preference that changes a default here or in a playbook, add it to `Teacher_Override.md` with its scope and any reason, and remove or reword any earlier override it contradicts; no separate permission is needed. Do not save a one-task choice as standing. Setup facts the defaults leave open (page style, rubric scale, feedback voice) go in `context/teaching-profile.md` and `context/grading.md`.
 
+Students usually appear to you by alias, a Pokémon name, because the teacher has student names hidden. Speak about each student by that alias; if the teacher uses a real name you can't match, ask for the alias (see "Student names" in `AGENTS.md`).
+
 ## Points: 100 by default
 
 Assignments and quizzes total 100 points unless the teacher says otherwise. Rubrics balance to 100 (4 criteria at 25, 5 at 20). Quiz items are weighted evenly or deliberately to sum to 100 (10 items at 10). A quiz that mixes auto-scored and written items gives the written items about 40% of the points: 12 multiple choice at 5 and 2 short responses at 20. Percentages are what students, parents and the gradebook read at a glance. If a request does not divide evenly, propose the nearest clean split and say so; the Engine never invents points, so state the values you choose.

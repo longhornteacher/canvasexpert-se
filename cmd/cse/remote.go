@@ -544,7 +544,11 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return 3
 		}
 	case "api":
-		return fail(apiGet(ctx, c, args[0], out), progress)
+		var hide *identityRedactor
+		if config.Aliases {
+			hide = newIdentityRedactor(root, c.Origin())
+		}
+		return fail(apiGet(ctx, c, args[0], out, hide), progress)
 	case "courses":
 		client := c
 		if len(args) > 0 {

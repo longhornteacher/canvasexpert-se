@@ -44,7 +44,7 @@ New Quizzes, including written-response items, are open for regular authoring, u
 | `push_quiz` | Supported QuizForge New Quiz authoring/resumption, including written items and hub differentiation. Saved accommodations are checked before publication; required-but-unapplied settings hold publication. `skip_accommodations: true` requires an explicit teacher request to bypass this stage for that invocation only; audience/identity guards remain. Counts only for saved settings; no automatic accommodation POST is enabled. |
 | `upload_file` | Explicit course/access/folder asset upload with a reusable course receipt and deliberate new-upload option. |
 | `list_quiz_points`, `set_quiz_points` | Inspect or change exact decimal New Quiz question points. |
-| `canvas_get` | Existing read-only Canvas API GET escape hatch, one page per call. |
+| `canvas_get` | Existing read-only Canvas API GET escape hatch, one page per call. While student names are hidden, names in user objects become saved aliases or "(name hidden)" and logins, SIS IDs and emails are dropped. |
 | `start_local_ui`, `local_ui_status` | Teacher-only hub, setup, and student editor pages; return URLs/status without private page contents. |
 
 ### Workflow
@@ -120,7 +120,7 @@ The teacher alone operates the private setup form; the agent sees only non-secre
 - Recursive listing is bounded to 2,000 entries.
 - File tools block hidden components, `.cse/` and `engine/`, including linked paths such as junctions/symlinks beneath the workspace. Reads are limited to the allowed instruction/context/playbook/course roots; course drafts and assets stay under `courses/`.
 - The credential and private identity mapping are not file-tool inputs or returned setup/student page contents.
-- Student writing can itself contain real names. Unlike pseudonymized `pull_work`, `canvas_get` returns raw Canvas JSON and can include real names. Teacher notes read from context also enter model context; keep them out of student-facing output.
+- Student writing can itself contain real names. `canvas_get` returns raw Canvas JSON; with student names hidden it replaces names in user objects with aliases, but names people typed into messages, submissions and file names remain. Teacher notes read from context also enter model context; keep them out of student-facing output.
 - Report the Engine's held/partial/uncertain output accurately, preserve receipts and saved IDs, and continue independent items.
 
 ## Checks

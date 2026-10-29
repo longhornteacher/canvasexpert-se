@@ -405,7 +405,7 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		return s.command(ctx, args...)
 	})
-	addReadTool(server, "canvas_get", "Read-only Canvas API GET for data no specific Engine tool covers. Returns raw JSON, potentially including real student names; keep teacher-only data out of feedback. Returns one page; supply page/per_page for more. Uses your own Canvas key, so it cannot reach a teammate's course. Cannot issue arbitrary HTTP writes.", func(ctx context.Context, _ *mcp.CallToolRequest, in CanvasGetInput) (TextOutput, error) {
+	addReadTool(server, "canvas_get", "Read-only Canvas API GET for data no specific Engine tool covers. Returns raw JSON. While student names are hidden, people's names in user objects become saved aliases (or \"(name hidden)\") and logins, SIS IDs and emails are dropped; names inside messages, student work and file names are not changed. Keep teacher-only data out of feedback. Returns one page; supply page/per_page for more. Uses your own Canvas key, so it cannot reach a teammate's course. Cannot issue arbitrary HTTP writes.", func(ctx context.Context, _ *mcp.CallToolRequest, in CanvasGetInput) (TextOutput, error) {
 		if !strings.HasPrefix(in.Path, "/api/v1/") && !strings.HasPrefix(in.Path, "/api/quiz/v1/") {
 			return TextOutput{}, errors.New("path must begin /api/v1/ or /api/quiz/v1/")
 		}
