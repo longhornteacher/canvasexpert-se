@@ -92,6 +92,34 @@ func TestRenderNewQuizLeadsWithAutoScoredSubtotal(t *testing.T) {
 	}
 }
 
+func TestRenderItemFeedbackBlocksAndExemplarThreshold(t *testing.T) {
+	rubric := domain.Rubric{Title: "R", Criteria: []domain.Criterion{{ID: "a", Description: "Explanation", Points: domain.MustDecimal("10")}}}
+	interpretation := domain.Interpretation{Mapping: "repeated", Rationale: "private", Components: []domain.Component{{Key: "q11", Label: "Q11", Weight: domain.MustDecimal("1")}, {Key: "q12", Label: "Q12", Weight: domain.MustDecimal("1")}}}
+	part := func(key, points, feedback string) domain.ComponentScore {
+		return domain.ComponentScore{Key: key, Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal(points)}}, Feedback: feedback, Exemplar: "A locked backup keeps a clean copy."}
+	}
+	auto := &domain.AutoScored{Earned: domain.MustDecimal("54"), Possible: domain.MustDecimal("60"), Items: 10}
+	// 9/10 is exactly 90%, so it gets no exemplar; 8.9/10 is under and does.
+	in := FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: []domain.ComponentScore{part("q11", "9", "Clear analogy."), part("q12", "8.9", "Name the second effect.")}, Assessment: domain.MustDecimal("0"), AssignmentPoints: domain.MustDecimal("60"), OmitAssessment: true, AutoScored: auto, PartPoints: map[string]domain.Decimal{"q11": domain.MustDecimal("12"), "q12": domain.MustDecimal("14")}}
+	computed, err := domain.ComputeAssessment(rubric, interpretation, in.Components, in.AssignmentPoints)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Assessment = computed.Posted
+	got, err := RenderFeedback(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Questions Canvas scored: 54/60\n\nQ11 10.8/12\nClear analogy.\n\nQ12 12.46/14\nName the second effect. (Hand-copy exemplar: A locked backup keeps a clean copy.)"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	in.Header = "none"
+	if _, err := RenderFeedback(in); err == nil {
+		t.Fatal("header none with only per-part feedback must ask for the closing feedback")
+	}
+}
+
 func TestMarkdownHTMLSafeSubsetAndHTMLText(t *testing.T) {
 	got, err := MarkdownHTML("# Directions\n\nAnswer both prompts.\n\n- First\n- Second\n\n```text\nx < y\n```")
 	if err != nil {

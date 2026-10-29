@@ -6,6 +6,7 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 - New Quiz feedback for a missed question: Canvas shows a choice's feedback only for the choice picked, so `push_quiz` now also puts each correct MC/MA choice's rationale in the question's incorrect feedback, green and naming the choice. A student who misses a question sees why their answer isn't right and why the correct one is. Local tests only; the quiz player's display is not yet viewed. Existing quizzes can be fixed through the New Quiz content edit flow.
 - Scoring sessions flag possible AI use or copying for the teacher's review: `score.md` sets out the signals, the threshold, and the private in-conversation report with quoted suspect phrases. Writing far above grade level is flagged, strongly when the student is known to work at or below it (on-level section, Silver/Green tier, weaker earlier work). A flag never changes the score or reaches students or families.
+- Per-item scoring feedback: a component may carry its own `feedback` and a hand-copy `exemplar`. The comment then reads one block per item (`Q11 Remote execution 10/12`, its feedback, and the exemplar only when the item earned under 90% of its points) instead of a score summary followed by repeated criterion lines.
 
 ## 1.7.0 (2026-10-28)
 

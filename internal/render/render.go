@@ -17,8 +17,10 @@ type FeedbackInput struct {
 	Components       []domain.ComponentScore
 	Assessment       domain.Decimal
 	AssignmentPoints domain.Decimal
-	Feedback         string
-	OmitAssessment   bool
+	// Feedback closes the comment. It may be empty when every part carries
+	// its own feedback.
+	Feedback       string
+	OmitAssessment bool
 	// AutoScored leads a New Quiz comment with the auto-scored subtotal from
 	// the pulled report; it is never a whole-quiz total.
 	AutoScored *domain.AutoScored
@@ -41,11 +43,20 @@ type FeedbackInput struct {
 
 // RenderFeedback produces a deterministic Canvas comment. The order is the
 // scores, each part's rubric lines, and the teacher's conversational feedback.
+// When parts carry their own feedback, each part is one block instead: its
+// score line, its feedback and, below the exemplar threshold, its hand-copy
+// exemplar.
 func RenderFeedback(in FeedbackInput) (string, error) {
 	if err := domain.ValidateInterpretation(in.Rubric, in.Interpretation); err != nil {
 		return "", fmt.Errorf("invalid interpretation: %w", err)
 	}
-	if strings.TrimSpace(in.Feedback) == "" {
+	itemLayout := false
+	for _, c := range in.Components {
+		if strings.TrimSpace(c.Feedback) != "" {
+			itemLayout = true
+		}
+	}
+	if strings.TrimSpace(in.Feedback) == "" && !(domain.ItemFeedback(in.Components) && (in.Header == "" || in.Header == "full")) {
 		return "", fmt.Errorf("conversational feedback is required")
 	}
 	if !in.AssignmentPoints.IsSet() || in.AssignmentPoints.Sign() <= 0 {
@@ -97,6 +108,7 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 	}
 	// One part on an ordinary assignment is the overall line already.
 	showParts := in.OmitAssessment || len(in.Interpretation.Components) > 1
+	exemplarBelow := domain.MustDecimal(domain.ExemplarBelow).Rat()
 	var blocks []string
 	for _, component := range in.Interpretation.Components {
 		score := components[component.Key]
@@ -104,7 +116,7 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		for _, criterionScore := range score.Criteria {
 			byID[criterionScore.CriterionID] = criterionScore
 		}
-		lines := []string{component.Label}
+		var criteria []string
 		earned, possible := new(big.Rat), new(big.Rat)
 		for _, rubricCriterion := range in.Rubric.Criteria {
 			if in.Interpretation.Mapping == "direct" && !contains(component.CriterionIDs, rubricCriterion.ID) {
@@ -113,11 +125,13 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 			cs := byID[rubricCriterion.ID]
 			earned.Add(earned, cs.Points.Rat())
 			possible.Add(possible, rubricCriterion.Points.Rat())
-			lines = append(lines, fmt.Sprintf("- %s %s/%s", rubricCriterion.Description, shortNumber(cs.Points), shortNumber(rubricCriterion.Points)))
+			criteria = append(criteria, fmt.Sprintf("- %s %s/%s", rubricCriterion.Description, shortNumber(cs.Points), shortNumber(rubricCriterion.Points)))
 		}
-		blocks = append(blocks, strings.Join(lines, "\n"))
-		if !showParts {
-			continue
+		if !itemLayout {
+			blocks = append(blocks, strings.Join(append([]string{component.Label}, criteria...), "\n"))
+			if !showParts {
+				continue
+			}
 		}
 		// A part's maximum is its share of the assignment points; on a New
 		// Quiz it is the written item's Canvas points, or the rubric points
@@ -137,7 +151,25 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		if possible.Sign() > 0 {
 			part.Mul(max, new(big.Rat).Quo(earned, possible))
 		}
-		top = append(top, fmt.Sprintf("%s: %s/%s", component.Label, shortNumber(domain.RoundRat(part, 2)), shortNumber(domain.RoundRat(max, 2))))
+		points := fmt.Sprintf("%s/%s", shortNumber(domain.RoundRat(part, 2)), shortNumber(domain.RoundRat(max, 2)))
+		if !itemLayout {
+			top = append(top, component.Label+": "+points)
+			continue
+		}
+		// A part with one criterion would repeat its score line, so only a
+		// breakdown of several criteria is shown.
+		lines := []string{component.Label + " " + points}
+		if len(criteria) > 1 {
+			lines = append(lines, criteria...)
+		}
+		text := strings.TrimSpace(score.Feedback)
+		if exemplar := strings.TrimSpace(score.Exemplar); exemplar != "" && possible.Sign() > 0 && new(big.Rat).Quo(earned, possible).Cmp(exemplarBelow) < 0 {
+			text = strings.TrimSpace(text + " (Hand-copy exemplar: " + exemplar + ")")
+		}
+		if text != "" {
+			lines = append(lines, text)
+		}
+		blocks = append(blocks, strings.Join(lines, "\n"))
 	}
 	var out strings.Builder
 	if len(top) > 0 {
@@ -145,10 +177,12 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		out.WriteString("\n\n")
 	}
 	out.WriteString(strings.Join(blocks, "\n\n"))
-	out.WriteString("\n\n")
 	// comment[text_comment] is plain text. Preserve the teacher's supplied
 	// feedback exactly so quoted prose and code are never reinterpreted.
-	out.WriteString(in.Feedback)
+	if strings.TrimSpace(in.Feedback) != "" {
+		out.WriteString("\n\n")
+		out.WriteString(in.Feedback)
+	}
 	return out.String(), nil
 }
 
