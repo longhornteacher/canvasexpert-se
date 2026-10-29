@@ -440,6 +440,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 			}
 			var newQuizRows map[int64]newQuizRow
 			var newQuizDownloadBudget int64
+			var nqVersions quizVersionReader
 			if a.NewQuiz {
 				newQuizRows, packet.WrittenItems, e = newQuizResponses(ctx, s.Client, course.ID, a.ID)
 				if e != nil {
@@ -528,6 +529,9 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 					doc.Current.WrittenResponses = row.Responses
 					doc.Current.AutoScored, doc.Current.AutoScoredNote = row.AutoScored, row.AutoScoredNote
 					doc.Current.WrittenFiles = s.downloadNewQuizFiles(ctx, relDir, st.Ref, sub.UserID, course.ID, a.ID, sub.Attempt, row, &newQuizDownloadBudget)
+					if len(row.Responses) > 0 || len(row.FileItemIDs) > 0 {
+						doc.ObservedQuizResult = s.quizResultVersion(ctx, &nqVersions, course.ID, a.ID, sub)
+					}
 				}
 				for _, prior := range priorAttempts(sub) {
 					doc.Prior = append(doc.Prior, s.attemptWork(prior, attachments[attemptKey{st.Ref, prior.Attempt}]))

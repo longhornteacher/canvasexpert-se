@@ -44,7 +44,10 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closin
 	assignmentJSON, _ := json.Marshal(assignment)
 	live := fixtureSubmission(5)
 	live.Score = (*json.Number)(&liveScore)
-	pulledGradedAt := "2026-10-07T13:00:00Z"
+	pulledGradedAt, pulledResult := "2026-10-07T13:00:00Z", "900"
+	if liveScore == "result-changed" {
+		liveScore, pulledResult = "15", "899"
+	}
 	live.GradedAt = &pulledGradedAt
 	if len(liveGradedAt) > 0 {
 		live.GradedAt = &liveGradedAt[0]
@@ -121,7 +124,7 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closin
 	}
 	ref := attemptRef(live)
 	pulled := domain.MustDecimal("15")
-	work := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: student.Ref, Alias: student.Alias, AssignmentID: 10, ObservedScore: &pulled, ObservedGradedAt: pulledGradedAt, Current: domain.AttemptWork{Ref: ref, WrittenResponses: []domain.WrittenResponse{{ItemID: "21", Type: "essay", Text: "Current response."}}}, EnteredGradeKnown: true}
+	work := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: student.Ref, Alias: student.Alias, AssignmentID: 10, ObservedScore: &pulled, ObservedGradedAt: pulledGradedAt, ObservedQuizResult: pulledResult, Current: domain.AttemptWork{Ref: ref, WrittenResponses: []domain.WrittenResponse{{ItemID: "21", Type: "essay", Text: "Current response."}}}, EnteredGradeKnown: true}
 	workPath := "courses/TEST/" + student.Ref + ".md"
 	if err = workspace.WriteDocument(filepath.Join(s.Root, filepath.FromSlash(workPath)), work, "work"); err != nil {
 		t.Fatal(err)
@@ -210,6 +213,19 @@ func TestItemCommentsAloneSendNoWholeComment(t *testing.T) {
 // alone but moves graded_at; the Engine must not overwrite it.
 func TestItemScoresHoldWhenOnlyGradedAtMoved(t *testing.T) {
 	s, path, posts, comments, _, _ := itemScoreFixture(t, "15", false, "Strong evidence overall.", "2026-10-29T16:00:00Z")
+	report, err := s.Post(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *posts != 0 || *comments != 0 || report.Students[0].Status != "held" {
+		t.Fatalf("expected a hold with no writes: posts=%d comments=%d report=%#v", *posts, *comments, report.Students)
+	}
+}
+
+// An item-comment-only SpeedGrader save changes neither the Canvas score nor
+// graded_at (observed 2026-10-29), only the quiz result version.
+func TestItemScoresHoldWhenTheQuizResultChangedSinceThePull(t *testing.T) {
+	s, path, posts, comments, _, _ := itemScoreFixture(t, "result-changed", false, "Strong evidence overall.")
 	report, err := s.Post(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)

@@ -141,7 +141,7 @@ At the teacher's direction L1 ran on a real student instead of the test account:
 
 L1 passes for one student. L2–L8 remain.
 
-**Guard update (same day):** pulls now record `observed_graded_at`, and item scores hold when the live `graded_at` differs, so a SpeedGrader edit that changes only an item comment is not overwritten. That every SpeedGrader save moves `graded_at` was seen for score changes; a comment-only save is what L8 checks.
+**Guard update (same day):** a teacher's SpeedGrader Update that changed only Q9's item comment left the Canvas submission's score **and `graded_at`** unchanged (read right after). A `graded_at` check alone would have let the Engine overwrite that comment, so the re-score was not posted. Pulls now record `observed_quiz_result`, the attempt's current result version, for each New Quiz student with written items (one native session per assignment, then `/grade` and the quiz session per student), plus `observed_graded_at`. Item scores hold when the live version, score or `graded_at` differs, or when the pull recorded no version.
 
 ### 3.4 Done when
 

@@ -294,6 +294,10 @@ type StudentWorkDocument struct {
 	// ObservedGradedAt is Canvas's graded_at at pull time. Any SpeedGrader
 	// save moves it, so a later difference means someone graded since.
 	ObservedGradedAt string `yaml:"observed_graded_at,omitempty"`
+	// ObservedQuizResult is a New Quiz attempt's current result version at
+	// pull time. Every SpeedGrader save, even an item-comment-only one, makes
+	// a new version, so item scores hold when it has changed.
+	ObservedQuizResult string `yaml:"observed_quiz_result,omitempty"`
 	ObservedPointsDeducted *Decimal          `yaml:"observed_points_deducted,omitempty"`
 	EnteredGradeReason     string            `yaml:"entered_grade_reason,omitempty"`
 	Excused                bool              `yaml:"excused"`

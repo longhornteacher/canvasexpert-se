@@ -32,23 +32,74 @@ type NewQuizGrading struct {
 	token string
 }
 
-// NewQuizGrading reads the current result of the attempt behind one
-// participant session. quizSessionID, when known from the Canvas submission,
-// must match the session the grading token is for.
-func (c *Client) NewQuizGrading(ctx context.Context, courseID, assignmentID int64, participantSessionID, quizSessionID string) (*NewQuizGrading, error) {
-	if courseID <= 0 || assignmentID <= 0 || strings.TrimSpace(participantSessionID) == "" {
+// NewQuizSession is one assignment's native New Quizzes session, shared by
+// the students read through it. Its token stays unexported.
+type NewQuizSession struct {
+	n *nqNative
+}
+
+// NewQuizSession opens the native session for one assignment.
+func (c *Client) NewQuizSession(ctx context.Context, courseID, assignmentID int64) (*NewQuizSession, error) {
+	if courseID <= 0 || assignmentID <= 0 {
 		return nil, &Error{Kind: "validation"}
 	}
 	n, err := c.newQuizNative(ctx, courseID, assignmentID)
 	if err != nil {
 		return nil, err
 	}
+	return &NewQuizSession{n: n}, nil
+}
+
+// ResultVersion reads the ID of the attempt's current result. Every
+// SpeedGrader save creates a new one, including a save that changes only an
+// item comment.
+func (s *NewQuizSession) ResultVersion(ctx context.Context, participantSessionID, quizSessionID string) (string, error) {
+	g, err := s.session(ctx, participantSessionID, quizSessionID)
+	if err != nil {
+		return "", err
+	}
+	return g.ResultID, nil
+}
+
+// NewQuizGrading reads the current result of the attempt behind one
+// participant session. quizSessionID, when known from the Canvas submission,
+// must match the session the grading token is for.
+func (c *Client) NewQuizGrading(ctx context.Context, courseID, assignmentID int64, participantSessionID, quizSessionID string) (*NewQuizGrading, error) {
+	if strings.TrimSpace(participantSessionID) == "" {
+		return nil, &Error{Kind: "validation"}
+	}
+	s, err := c.NewQuizSession(ctx, courseID, assignmentID)
+	if err != nil {
+		return nil, err
+	}
+	g, err := s.session(ctx, participantSessionID, quizSessionID)
+	if err != nil {
+		return nil, err
+	}
+	var raw json.RawMessage
+	if err = secureJSON(ctx, g.httpc, http.MethodGet, g.host+"/api/quiz_sessions/"+url.PathEscape(g.QuizSessionID)+"/results/"+url.PathEscape(g.ResultID)+"/session_item_results", g.token, "Signature", nil, &raw); err != nil {
+		return nil, fmt.Errorf("item results step failed: %w", err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if dec.Decode(&g.Items) != nil || len(g.Items) == 0 {
+		return nil, fmt.Errorf("item results step failed: %w", &Error{Kind: "validation"})
+	}
+	return g, nil
+}
+
+// session reads the grading token and the quiz session's current result.
+func (s *NewQuizSession) session(ctx context.Context, participantSessionID, quizSessionID string) (*NewQuizGrading, error) {
+	n := s.n
+	if strings.TrimSpace(participantSessionID) == "" {
+		return nil, &Error{Kind: "validation"}
+	}
 	var grade struct {
 		Host      string           `json:"host"`
 		Token     string           `json:"token"`
 		SessionID nativeResourceID `json:"quiz_api_quiz_session_id"`
 	}
-	if err = secureJSON(ctx, n.httpc, http.MethodGet, n.backend+"/api/participant_sessions/"+url.PathEscape(participantSessionID)+"/grade", "Bearer "+n.token, "", nil, &grade); err != nil {
+	if err := secureJSON(ctx, n.httpc, http.MethodGet, n.backend+"/api/participant_sessions/"+url.PathEscape(participantSessionID)+"/grade", "Bearer "+n.token, "", nil, &grade); err != nil {
 		return nil, fmt.Errorf("grading session step failed: %w", err)
 	}
 	host, err := trustedInstructureOrigin(grade.Host)
@@ -71,15 +122,6 @@ func (c *Client) NewQuizGrading(ctx context.Context, courseID, assignmentID int6
 	}
 	g.ResultID = id.String()
 	g.FudgePoints = session.Authoritative["fudge_points"]
-	var raw json.RawMessage
-	if err = secureJSON(ctx, n.httpc, http.MethodGet, host+"/api/quiz_sessions/"+url.PathEscape(g.QuizSessionID)+"/results/"+url.PathEscape(g.ResultID)+"/session_item_results", grade.Token, "Signature", nil, &raw); err != nil {
-		return nil, fmt.Errorf("item results step failed: %w", err)
-	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	if dec.Decode(&g.Items) != nil || len(g.Items) == 0 {
-		return nil, fmt.Errorf("item results step failed: %w", &Error{Kind: "validation"})
-	}
 	return g, nil
 }
 

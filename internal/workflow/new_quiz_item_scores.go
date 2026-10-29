@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/render"
 	"canvasexpertse/internal/workspace"
@@ -83,7 +84,11 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 		o.Status, o.Message = "uncertain", "item score write remains uncertain; check SpeedGrader before repeating it"
 		return save()
 	}
-	if !sameScore(live.Score, source.work.ObservedScore) || gradedSince(live.GradedAt, source.work.ObservedGradedAt) {
+	if source.work.ObservedQuizResult == "" {
+		holdOutcome(o, "this pull did not record the quiz result version; pull-work for this student")
+		return save()
+	}
+	if g.ResultID != source.work.ObservedQuizResult || !sameScore(live.Score, source.work.ObservedScore) || gradedSince(live.GradedAt, source.work.ObservedGradedAt) {
 		holdOutcome(o, "the quiz was graded in Canvas since the pull; not overwritten, pull-work for this student")
 		return save()
 	}
@@ -102,6 +107,35 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 		o.ID = id
 	}
 	return save()
+}
+
+// quizVersionReader opens one native New Quizzes session per assignment
+// during a pull and reads each attempt's current result version through it.
+type quizVersionReader struct {
+	session *canvas.NewQuizSession
+	failed  bool
+}
+
+// quizResultVersion records an attempt's current result version, or nothing
+// when it cannot be read; item scores then hold until a fresh pull.
+func (s *Service) quizResultVersion(ctx context.Context, r *quizVersionReader, courseID, assignmentID int64, sub Submission) string {
+	ps, qs := newQuizSessionIDs(sub)
+	if ps == "" || r.failed {
+		return ""
+	}
+	if r.session == nil {
+		session, err := s.Client.NewQuizSession(ctx, courseID, assignmentID)
+		if err != nil {
+			r.failed = true
+			return ""
+		}
+		r.session = session
+	}
+	version, err := r.session.ResultVersion(ctx, ps, qs)
+	if err != nil {
+		return ""
+	}
+	return version
 }
 
 // newQuizSessionIDs reads the participant and quiz session IDs from the
