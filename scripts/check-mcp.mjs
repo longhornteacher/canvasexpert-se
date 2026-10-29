@@ -50,6 +50,10 @@ function request(method, params) {
     child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
   });
 }
+// Examples are compared as LF text: a Windows checkout may give them CRLF.
+async function readExample(file) {
+  return (await readFile(file, 'utf8')).replace(/\r\n/g, '\n');
+}
 async function call(name, args = {}, expectError = false, structured = false) {
   const reply = await request('tools/call', { name, arguments: args });
   assert.equal(Boolean(reply.error || reply.result?.isError), expectError, JSON.stringify(reply));
@@ -63,7 +67,10 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 57);
+  assert.equal(names.length, 58);
+  const replaceTextTool = discovered.result.tools.find(t => t.name === 'replace_text');
+  for (const field of ['course', 'target', 'push']) assert.ok(replaceTextTool?.inputSchema.properties[field], `replace_text missing ${field}`);
+  assert.equal(replaceTextTool.annotations.readOnlyHint, false);
   assert.ok(!names.includes('start_review'), 'retired scoring page remains exposed');
   for (const name of ['start_parent_review', 'review_status', 'save_draft_pdf']) assert.ok(names.includes(name), `missing ${name}`);
   assert.equal(discovered.result.tools.find(t => t.name === 'validate_document').inputSchema.properties.show.type, 'string');
@@ -209,16 +216,16 @@ try {
   assert.equal(JSON.parse(await call('read_workspace_asset', { path: 'courses/asset.bin' })).base64, asset.toString('base64'));
   await call('write_draft', { path: 'courses/quiz.json', content: JSON.stringify({ title: 'Synthetic', items: [{ id: 'q1', type: 'ESSAY', prompt: 'Explain.', points: 5 }] }) });
   await call('validate_quiz', { path: 'courses/quiz.json' });
-  const quizExample = await readFile('engine-docs/examples/synthetic-quizforge-mixed.md', 'utf8');
+  const quizExample = await readExample('engine-docs/examples/synthetic-quizforge-mixed.md');
   await call('write_draft', { path: 'courses/mixed-quiz.txt', content: quizExample });
   await call('validate_quiz', { path: 'courses/mixed-quiz.txt' });
   await call('write_draft', { path: 'courses/invalid-settings.json', content: JSON.stringify({ title: 'Settings typo', metadata: { canvas: { allowed_atempts: 2 } }, items: [{ id: 'q1', type: 'ESSAY', prompt: 'Explain.', points: 5 }] }) });
   await call('validate_quiz', { path: 'courses/invalid-settings.json' }, true);
-  const assignment = (await readFile('engine-docs/examples/synthetic-assignment-create.md', 'utf8')).replace('course: DEMO', 'course: CS8');
-  const quizEditExample = await readFile('engine-docs/examples/synthetic-new-quiz-edit.md', 'utf8');
-  const rubricLibraryExample = await readFile('engine-docs/examples/synthetic-rubric-library.md', 'utf8');
-  const rubricReferenceExample = await readFile('engine-docs/examples/synthetic-assignment-rubric-reference.md', 'utf8');
-  const tagsExample = await readFile('engine-docs/examples/synthetic-tags.md', 'utf8');
+  const assignment = (await readExample('engine-docs/examples/synthetic-assignment-create.md')).replace('course: DEMO', 'course: CS8');
+  const quizEditExample = await readExample('engine-docs/examples/synthetic-new-quiz-edit.md');
+  const rubricLibraryExample = await readExample('engine-docs/examples/synthetic-rubric-library.md');
+  const rubricReferenceExample = await readExample('engine-docs/examples/synthetic-assignment-rubric-reference.md');
+  const tagsExample = await readExample('engine-docs/examples/synthetic-tags.md');
   await call('write_draft', { path: 'courses/CS8/drafts/tags.md', content: tagsExample });
   await call('validate_document', { path: 'courses/CS8/drafts/tags.md' });
   await call('write_draft', { path: 'courses/CS8/drafts/tags-invalid.md', content: tagsExample.replace('Support: [s-example-1]', 'Support: null') });
@@ -237,41 +244,41 @@ try {
   await call('validate_document', { path: 'courses/CS8/drafts/invalid-quiz-edit.md' }, true);
   await call('write_draft', { path: 'courses/assignment.md', content: assignment });
   await call('validate_document', { path: 'courses/assignment.md' });
-  const groupAssignment = (await readFile('engine-docs/examples/synthetic-group-assignment.md', 'utf8')).replace('course: ELA7', 'course: CS8');
+  const groupAssignment = (await readExample('engine-docs/examples/synthetic-group-assignment.md')).replace('course: ELA7', 'course: CS8');
   await call('write_draft', { path: 'courses/group-assignment.md', content: groupAssignment });
   await call('validate_document', { path: 'courses/group-assignment.md' });
-  const clubRefresh = await readFile('engine-docs/examples/synthetic-individual-club-refresh.md', 'utf8');
+  const clubRefresh = await readExample('engine-docs/examples/synthetic-individual-club-refresh.md');
   await call('write_draft', { path: 'courses/individual-club-refresh.md', content: clubRefresh });
   await call('validate_document', { path: 'courses/individual-club-refresh.md' });
-  const clubPage = await readFile('engine-docs/examples/synthetic-individual-club-page.md', 'utf8');
+  const clubPage = await readExample('engine-docs/examples/synthetic-individual-club-page.md');
   await call('write_draft', { path: 'courses/individual-club-page.md', content: clubPage });
   await call('validate_document', { path: 'courses/individual-club-page.md' });
-  const clubQuiz = await readFile('engine-docs/examples/synthetic-individual-club-quiz.md', 'utf8');
+  const clubQuiz = await readExample('engine-docs/examples/synthetic-individual-club-quiz.md');
   await call('write_draft', { path: 'courses/individual-club-quiz.md', content: clubQuiz });
   await call('validate_quiz', { path: 'courses/individual-club-quiz.md' });
   // The integrated book-club unit example embeds one QuizForge block; validate it
   // and confirm the example still documents all three resource kinds.
-  const unitExample = await readFile('engine-docs/examples/synthetic-book-club-unit.md', 'utf8');
+  const unitExample = await readExample('engine-docs/examples/synthetic-book-club-unit.md');
   for (const kind of ['kind: page', 'kind: assignment', '<QUIZFORGE_JSON>', 'prepare-audience']) {
     assert.ok(unitExample.includes(kind), `book-club unit example must document ${kind}`);
   }
   const unitQuiz = unitExample.slice(unitExample.indexOf('<QUIZFORGE_JSON>'), unitExample.indexOf('</QUIZFORGE_JSON>') + '</QUIZFORGE_JSON>'.length);
   await call('write_draft', { path: 'courses/book-club-unit-quiz.txt', content: unitQuiz });
   await call('validate_quiz', { path: 'courses/book-club-unit-quiz.txt' });
-  const clubAudience = await readFile('engine-docs/examples/synthetic-individual-club-assignment.md', 'utf8');
+  const clubAudience = await readExample('engine-docs/examples/synthetic-individual-club-assignment.md');
   await call('write_draft', { path: 'courses/individual-club-assignment.md', content: clubAudience });
   await call('validate_document', { path: 'courses/individual-club-assignment.md' });
   await call('prepare_audience', { course: '', path: 'courses/individual-club-assignment.md' }, true);
-  const assignmentDates = await readFile('engine-docs/examples/synthetic-assignment-dates.md', 'utf8');
+  const assignmentDates = await readExample('engine-docs/examples/synthetic-assignment-dates.md');
   await call('write_draft', { path: 'courses/assignment-dates.md', content: assignmentDates });
   await call('validate_document', { path: 'courses/assignment-dates.md' });
-  const discussionPacket = await readFile('engine-docs/examples/synthetic-discussion-packet.yaml', 'utf8');
+  const discussionPacket = await readExample('engine-docs/examples/synthetic-discussion-packet.yaml');
   await call('write_draft', { path: 'courses/discussion-packet.yaml', content: discussionPacket });
   await call('validate_document', { path: 'courses/discussion-packet.yaml' });
-  const discussionReply = await readFile('engine-docs/examples/synthetic-discussion-reply.md', 'utf8');
+  const discussionReply = await readExample('engine-docs/examples/synthetic-discussion-reply.md');
   await call('write_draft', { path: 'courses/discussion-reply.md', content: discussionReply });
   await call('validate_document', { path: 'courses/discussion-reply.md' });
-  const sampleResults = await readFile('engine-docs/examples/synthetic-results-two.md', 'utf8');
+  const sampleResults = await readExample('engine-docs/examples/synthetic-results-two.md');
   await call('write_draft', { path: 'courses/sample.md', content: sampleResults.replace('      assessment: 7', '      teacher_note: PRIVATE-TEACHER-NOTE\n      assessment: 7') });
   const sample = JSON.parse(await call('validate_document', { path: 'courses/sample.md', show: 'synthetic-student-01' }));
   assert.equal(sample.student_ref, 'synthetic-student-01');
