@@ -149,7 +149,16 @@ L1 passes for one student. L2–L8 remain.
 - **L4 passed.** After another fresh pull (version 24996021), a re-score scoring only Q9 (same 5 points, new comment wording) created result version 24996112.
 - **L3 passed on the total.** Across that write the score stayed 84: the teacher's fudge points and Q10 points survived because every unnamed item and `fudge_points` go back as read. The teacher then confirmed in SpeedGrader that Q9 showed the Engine's new wording, while Q10 kept the teacher's comment and points and the fudge points remained. `graded_at` stayed 17:37:34Z, again unchanged by a save that left the score alone.
 
-Remaining: L2 (file upload), L6 (two attempts), L7 (manual post policy).
+### 3.3 L2, L6, L7 record (2026-10-29, CS8 test account)
+
+CS8 disposable quiz 3710957 (q1 choice 2, q2 essay 5, q3 file upload 3), test account 105645 by alias, Dev builds ddb872a/961115b. The teacher set Score to keep to Latest and the grade posting policy to Manual.
+
+- **File pulls (prerequisite):** pulls first returned the upload `not-retrieved` at the participants step (404). Fixed in ddb872a; the next pull downloaded the DOCX at its Canvas size (13,395 bytes).
+- **L6 passed.** Results for attempt 1 were prepared; the account then submitted attempt 2. Posting the attempt-1 file held with "new submission attempt since pull" and wrote nothing. A `--session` pull then found attempt 2 (needs grading 1), with a new participant and quiz session, its essay text and its upload in `files/attempt-2/`.
+- **L7 passed.** Switching the policy to Manual left the already-posted submission posted (`posted_at` kept); the teacher's Hide grades cleared `posted_at` (the first try did not take). The Engine's item-score write then left `posted_at` empty while the score changed.
+- **L2 passed.** One write scored the essay (2.5/5) and the upload (3/3) with item comments, version 24997899; the upload's file list went back as read. Canvas showed 7.5, `workflow_state: graded`, `graded_at` 18:20:17Z, `posted_at` null. The gradebook followed a few seconds after the write here, not in the same second.
+
+L1–L8 have all passed. Before `score.md` offers item scores, the §3.2 team guards (`(CE)` consent, hidden grades in a teammate's course) still need checking against the item-score path.
 
 ### 3.4 Done when
 
