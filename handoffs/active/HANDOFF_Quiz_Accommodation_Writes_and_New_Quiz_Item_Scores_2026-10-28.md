@@ -129,6 +129,18 @@ Built in Dev. Differences from the plan above, kept deliberately small:
 
 L1 essay score posts and gradebook total matches · L2 essay + file upload with item comments · L3 teacher's fudge points preserved · L4 re-score creates a new version · L5 rerun makes no POST · L6 two attempts: stale unfinished attempt-1 result holds, attempt 2 stays discoverable · L7 manual post policy keeps the grade hidden · L8 teacher's later SpeedGrader edit is not overwritten. L1–L8 are release evidence. Record L9 (question regrade survival), L10 (restore earlier version) and L11 (mid-run token expiry, only with two test accounts) as run or unobserved.
 
+### 3.3 L1 record (2026-10-29, teacher-directed, real class)
+
+At the teacher's direction L1 ran on a real student instead of the test account: PAP LANG ARTS 7 (course 120669), New Quiz assignment 3708517 "The Last Human Light: Plan Your Features ECR" (100 points: eight auto-scored items worth 80, two 10-point essays), one student by alias, attempt 1, Pending Review at 70 with both essays never graded. Dev build 4be18b2 run with `--workspace` against UserInstall, not the classroom MCP connection.
+
+- **Pull:** `pull-work COURSE 3708517 --session` read the 23 needing-grading students read-only in about 11 s. The results file held only the one student. While setting up, the Dev `cse api` read returned the student only by saved alias, the first live evidence for raw-read name hiding.
+- **Write:** `post` with `item_scores: true`, both essays scored 5/10 with item comments and no closing remarks. `item_scores_outcome: succeeded`, new result version 24994274; the whole comment was `not-requested`. The POST built from never-graded items (sent with `gradeStatus: graded`) was accepted, and the read included `authoritative_result.fudge_points` (the write requires it).
+- **Canvas:** score 80 (70 + 5 + 5), `workflow_state: graded`, `graded_at` 16:46:03Z within the write, `grader_id` -794 (the New Quizzes tool), `posted_at` unchanged under the automatic post policy, no submission comment added.
+- **Rerun:** a second `post` sent nothing (`graded_at` unchanged).
+- **Pending:** a look at the two item comments in SpeedGrader and in the student's results view. One Dev `cse api` re-read right after returned empty output; the same read through MCP succeeded; not investigated further.
+
+L1 passes for one student. L2–L8 remain.
+
 ### 3.4 Done when
 
 Step A is recorded with fixtures; Engine path and local tests are in; L1–L8 pass on account 2. Then update `score.md`, `new-quiz-written-work-spec.md`, `SCORING-RULES.md`, root `AGENTS.md` (the "teacher enters item points in SpeedGrader" sentence) and both capability records, stating plainly that this uses an undocumented internal New Quizzes call; the SpeedGrader-by-hand path stays as the fallback. Until then the comment-only capability stays as it is.
