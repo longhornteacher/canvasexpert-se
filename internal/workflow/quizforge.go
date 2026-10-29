@@ -9,11 +9,15 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"canvasexpertse/internal/canvas"
 )
 
 var qfEnvelope = regexp.MustCompile(`(?s)<QUIZFORGE_JSON>(.*?)</QUIZFORGE_JSON>`)
@@ -63,7 +67,12 @@ type qfItem struct {
 	RubricHint      json.RawMessage `json:"rubric_hint"`
 	LengthGuidance  json.RawMessage `json:"length_guidance"`
 	Notes           json.RawMessage `json:"notes"`
+	// HOTSPOT: a local image file (relative to the quiz file) and the correct
+	// region the student must click, in proportions of the image size.
+	Image  string    `json:"image"`
+	Region *qfRegion `json:"region"`
 
+	imagePath string // resolved by ReadQuizForge
 	rationale *qfRationale
 	unknown   []string
 }
@@ -99,7 +108,7 @@ func (it *qfItem) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 	var err error
-	it.unknown, err = unknownQuizKeys(raw, "id type prompt points stimulus_id choices answer evaluation pairs distractors items header categories accept answer_mode options case_sensitive fuzzy_match metadata word_limit_min word_limit_max accepted_formats rubric_hint length_guidance notes")
+	it.unknown, err = unknownQuizKeys(raw, "id type prompt points stimulus_id choices answer evaluation pairs distractors items header categories accept answer_mode options case_sensitive fuzzy_match metadata word_limit_min word_limit_max accepted_formats rubric_hint length_guidance notes image region")
 	return err
 }
 
@@ -111,6 +120,14 @@ func (c *qfChoice) UnmarshalJSON(raw []byte) error {
 	var err error
 	c.unknown, err = unknownQuizKeys(raw, "id text correct metadata notes")
 	return err
+}
+
+type qfRegion struct {
+	Type        string `json:"type"` // oval, square or polygon
+	Coordinates []struct {
+		X float64 `json:"x"`
+		Y float64 `json:"y"`
+	} `json:"coordinates"`
 }
 
 type qfPair struct {
@@ -132,7 +149,7 @@ type qfRationale struct {
 	} `json:"choices"`
 }
 
-var qfScoredTypes = map[string]bool{"MC": true, "MA": true, "TF": true, "MATCHING": true, "FITB": true, "ORDERING": true, "CATEGORIZATION": true, "NUMERICAL": true}
+var qfScoredTypes = map[string]bool{"MC": true, "MA": true, "TF": true, "MATCHING": true, "FITB": true, "ORDERING": true, "CATEGORIZATION": true, "NUMERICAL": true, "HOTSPOT": true}
 
 // ReadQuizForge reads a QuizForge file (envelope or bare JSON) and validates it
 // including Canvas settings. Unknown item/choice keys warn; misplaced inline
@@ -153,8 +170,46 @@ func ReadQuizForge(path string) (QuizForge, error) {
 	if e = q.validate(); e != nil {
 		return q, e
 	}
+	if e = q.resolveImages(filepath.Dir(path)); e != nil {
+		return q, e
+	}
 	_, e = q.settings()
 	return q, e
+}
+
+// resolveImages checks each hot-spot image before anything is written to
+// Canvas: it must exist, be a PNG, JPEG, GIF or WebP by content, and fit the limit.
+func (q *QuizForge) resolveImages(dir string) error {
+	for i := range q.Items {
+		it := &q.Items[i]
+		if it.Type != "HOTSPOT" {
+			continue
+		}
+		label := fmt.Sprintf("item %d (HOTSPOT %s)", i+1, it.ID)
+		if !filepath.IsLocal(it.Image) {
+			return fmt.Errorf("%s: image %q must be a path inside the quiz file's folder", label, it.Image)
+		}
+		p := filepath.Join(dir, it.Image)
+		f, e := os.Open(p)
+		if e != nil {
+			return fmt.Errorf("%s: image file %q cannot be opened", label, it.Image)
+		}
+		st, e := f.Stat()
+		head := make([]byte, 512)
+		n, _ := io.ReadFull(f, head)
+		f.Close()
+		if e != nil || st.IsDir() {
+			return fmt.Errorf("%s: image %q is not a file", label, it.Image)
+		}
+		if st.Size() == 0 || st.Size() > canvas.MaxQuizMediaBytes {
+			return fmt.Errorf("%s: image %q must be between 1 byte and 20 MiB", label, it.Image)
+		}
+		if canvas.QuizMediaType(head[:n]) == "" {
+			return fmt.Errorf("%s: image %q must be a PNG, JPEG, GIF or WebP file", label, it.Image)
+		}
+		it.imagePath = p
+	}
+	return nil
 }
 
 func (q *QuizForge) validate() error {
@@ -362,6 +417,39 @@ func (it *qfItem) validateShape() error {
 	case "FITB":
 		_, e := it.fitbBlanks()
 		return e
+	case "HOTSPOT":
+		return it.validateHotspot()
+	}
+	return nil
+}
+
+func (it *qfItem) validateHotspot() error {
+	if it.ID == "" {
+		return fmt.Errorf("a HOTSPOT item needs an id")
+	}
+	if strings.TrimSpace(it.Image) == "" {
+		return fmt.Errorf("needs image: a local image file path, relative to the quiz file")
+	}
+	r := it.Region
+	if r == nil {
+		return fmt.Errorf("needs region: {\"type\": \"oval|square|polygon\", \"coordinates\": [{\"x\":0.1,\"y\":0.2}, ...]}")
+	}
+	switch r.Type {
+	case "oval", "square":
+		if len(r.Coordinates) != 2 {
+			return fmt.Errorf("a %s region needs exactly two coordinates (oval: center then width/height; square: top-left then bottom-right)", r.Type)
+		}
+	case "polygon":
+		if len(r.Coordinates) < 3 {
+			return fmt.Errorf("a polygon region needs at least three coordinates")
+		}
+	default:
+		return fmt.Errorf("region type must be oval, square or polygon")
+	}
+	for _, c := range r.Coordinates {
+		if c.X < 0 || c.X > 1 || c.Y < 0 || c.Y > 1 || math.IsNaN(c.X) || math.IsNaN(c.Y) {
+			return fmt.Errorf("region coordinates are proportions of the image size and must be between 0 and 1")
+		}
 	}
 	return nil
 }
@@ -614,6 +702,8 @@ func (it qfItem) build() map[string]any {
 		return it.buildNumeric()
 	case "FITB":
 		return it.buildFITB()
+	case "HOTSPOT":
+		return it.buildHotspot()
 	case "MATCHING":
 		return it.buildMatching()
 	case "ORDERING":
@@ -655,6 +745,19 @@ func (it qfItem) buildFileUpload() map[string]any {
 	data := map[string]any{"files_count": "1", "restrict_count": false, "restrict_types": len(formats) > 0, "valid_types": formats}
 	return wrap(map[string]any{"title": it.title("FILEUPLOAD"), "item_body": it.Prompt, "interaction_type_slug": "file-upload",
 		"interaction_data": data, "scoring_algorithm": "None", "scoring_data": map[string]any{"value": ""}, "feedback": map[string]any{}})
+}
+
+// buildHotspot leaves image_url empty; PushQuiz fills it after the image upload.
+// Shape from the New Quizzes Items API reference; not yet checked in Canvas Live.
+func (it qfItem) buildHotspot() map[string]any {
+	coords := make([]map[string]any, len(it.Region.Coordinates))
+	for i, c := range it.Region.Coordinates {
+		coords[i] = map[string]any{"x": c.X, "y": c.Y}
+	}
+	return wrap(map[string]any{"title": it.title("HOTSPOT"), "item_body": it.Prompt, "interaction_type_slug": "hot-spot",
+		"interaction_data": map[string]any{"image_url": ""}, "properties": map[string]any{},
+		"scoring_data":      map[string]any{"value": map[string]any{"type": it.Region.Type, "coordinates": coords}},
+		"scoring_algorithm": "HotSpot", "feedback": it.neutralFeedback()})
 }
 
 func (it qfItem) buildChoice() map[string]any {
