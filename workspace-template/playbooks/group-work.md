@@ -26,6 +26,8 @@ Self sign-up is a group-set setting. Explain the actual choice to students throu
 
 ## Build club spaces and conversations
 
+Run the review in `review.md` on club Pages, discussion prompts and role sheets before pushing them; group scoring is reviewed as `score.md` describes.
+
 Create a course unit hub or other course Page using `native-content.md`. For each club, create a group Page with the exact course and `group_id`: a reading plan, evidence notebook or meeting log can be member-editable with `editing_roles: [members]`. Group Pages cannot be placed directly in course modules. Keep a simple starter that invites student writing, and never push that starter again over a populated notebook. Pull before editing; if the body conflicts, preserve the unsent draft and merge only the requested change into a fresh pull. A title-only edit preserves the current student body. `cse page-history COURSE PAGE_ID --group GROUP_ID` reads revision history, but revisions do not prove who contributed or capture every simultaneous edit.
 
 Author discussions within the supported scopes:
