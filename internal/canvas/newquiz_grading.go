@@ -25,7 +25,10 @@ type NewQuizGrading struct {
 	// FudgePoints is the current result's fudge_points exactly as read
 	// (null or a number); nil means the field was absent, so it is unknown.
 	FudgePoints json.RawMessage
-	Items       []map[string]any
+	// Score and PointsPossible are the current result's quiz total as Canvas
+	// reports it (auto-scored items, written items and fudge points).
+	Score, PointsPossible string
+	Items                 []map[string]any
 
 	httpc *http.Client
 	host  string
@@ -122,6 +125,10 @@ func (s *NewQuizSession) session(ctx context.Context, participantSessionID, quiz
 	}
 	g.ResultID = id.String()
 	g.FudgePoints = session.Authoritative["fudge_points"]
+	var score, possible json.Number
+	if json.Unmarshal(session.Authoritative["score"], &score) == nil && json.Unmarshal(session.Authoritative["points_possible"], &possible) == nil {
+		g.Score, g.PointsPossible = score.String(), possible.String()
+	}
 	return g, nil
 }
 
@@ -151,8 +158,8 @@ func (g *NewQuizGrading) Item(entryID string) (NewQuizItemResult, bool) {
 // PostScores sends SpeedGrader's result write: every item of the attempt,
 // with only the named items' scores changed, their grade status set to
 // graded and, where given, their grader comment (HTML) set, and the fudge
-// points read with the result. It returns the new result version's ID.
-// There is no retry.
+// points read with the result. It returns the new result version's ID and
+// stores the new quiz total in Score and PointsPossible. There is no retry.
 func (g *NewQuizGrading) PostScores(ctx context.Context, scores, comments map[string]string) (string, error) {
 	if g.FudgePoints == nil {
 		return "", fmt.Errorf("current fudge points were not readable: %w", &Error{Kind: "validation"})
@@ -162,7 +169,9 @@ func (g *NewQuizGrading) PostScores(ctx context.Context, scores, comments map[st
 		return "", err
 	}
 	var out struct {
-		ID json.Number `json:"id"`
+		ID             json.Number `json:"id"`
+		Score          json.Number `json:"score"`
+		PointsPossible json.Number `json:"points_possible"`
 	}
 	if err = secureJSON(context.WithoutCancel(ctx), g.httpc, http.MethodPost, g.host+"/api/quiz_sessions/"+url.PathEscape(g.QuizSessionID)+"/results", g.token, "Signature", body, &out); err != nil {
 		// A lost connection or a server error after the body was sent may
@@ -176,6 +185,7 @@ func (g *NewQuizGrading) PostScores(ctx context.Context, scores, comments map[st
 	if out.ID == "" {
 		return "", fmt.Errorf("item score write returned no result version: %w", &Error{Kind: "validation", Uncertain: true})
 	}
+	g.Score, g.PointsPossible = out.Score.String(), out.PointsPossible.String()
 	return out.ID.String(), nil
 }
 

@@ -497,10 +497,9 @@ func buildResultsReview(root, path string) (ReviewModel, error) {
 						b.WriteString("\n" + it.Comment)
 					}
 				}
-				if strings.TrimSpace(feedback) == "" {
-					b.WriteString("\n\nWhole-assignment comment: none")
-				} else {
-					b.WriteString("\n\nWhole-assignment comment:\n" + feedback)
+				b.WriteString(fmt.Sprintf("\n\nWhole-assignment comment:\nScore: X/%s (attempt %d), X being the quiz total Canvas reports after the write", trimZeros(doc.Assignment.Points.String()), r.CommentOnly.Attempt.Attempt))
+				if strings.TrimSpace(feedback) != "" {
+					b.WriteString("\n\n" + feedback)
 				}
 				c.Comment = b.String()
 			}

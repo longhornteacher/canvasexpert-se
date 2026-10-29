@@ -222,3 +222,18 @@ func TestHeaderLetsTheTeacherControlWhatLeadsTheComment(t *testing.T) {
 		t.Fatalf("late work must mark the earned overall line: %q %v", got, err)
 	}
 }
+
+func TestQuizItemsCommentLeadsWithItemScoreAndAddsExemplarBelowNinety(t *testing.T) {
+	rubric := domain.Rubric{Criteria: []domain.Criterion{{ID: "c", Description: "Claim", Points: domain.MustDecimal("2")}}}
+	interp := domain.Interpretation{Mapping: "repeated", Components: []domain.Component{{Key: "q9", Label: "Q9", Weight: domain.MustDecimal("1")}}}
+	parts := map[string]domain.Decimal{"q9": domain.MustDecimal("10")}
+	score := func(points string) []domain.ComponentScore {
+		return []domain.ComponentScore{{Key: "q9", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "c", Points: domain.MustDecimal(points)}}, Feedback: "Clear claim. Next, add a reason.", Exemplar: "A model sentence."}}
+	}
+	if got := QuizItems(rubric, interp, score("1"), parts)["q9"]; got.Points.String() != "5.00" && got.Points.String() != "5" || got.Comment != "5/10\nClear claim. Next, add a reason.\nExemplar: A model sentence." {
+		t.Fatalf("below 90%%: %#v", got)
+	}
+	if got := QuizItems(rubric, interp, score("2"), parts)["q9"]; got.Comment != "10/10\nClear claim. Next, add a reason." {
+		t.Fatalf("full credit should have no exemplar: %#v", got)
+	}
+}

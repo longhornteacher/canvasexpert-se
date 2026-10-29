@@ -310,11 +310,18 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 		return save()
 	}
 	text := workspace.ReplaceStudentName(c.Feedback, source.student)
-	if c.ItemScores && strings.TrimSpace(text) == "" {
-		// Each item's rationale is in its own item comment; there are no
-		// closing remarks to send as a whole-assignment comment.
-		c.Outcome = domain.ActionOutcome{Status: "not-requested", Message: "item comments carry the feedback"}
-		return save()
+	if c.ItemScores {
+		// Each item's rationale is in its own item comment; the whole comment
+		// states the quiz total Canvas reported, then any closing remarks.
+		if c.QuizScore == "" {
+			holdOutcome(&c.Outcome, "Canvas did not report the quiz total after the item scores; check SpeedGrader")
+			return save()
+		}
+		whole := fmt.Sprintf("Score: %s (attempt %d)", c.QuizScore, c.Attempt.Attempt)
+		if strings.TrimSpace(text) != "" {
+			whole += "\n\n" + strings.TrimSpace(text)
+		}
+		text = whole
 	}
 	if !c.FeedbackOnly() && !c.ItemScores {
 		computed, err := domain.ComputeAssessment(*doc.Basis(), v.Interpretation, c.Components, doc.Assignment.Points)

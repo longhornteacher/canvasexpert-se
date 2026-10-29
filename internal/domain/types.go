@@ -491,6 +491,9 @@ type CommentOnlyOperation struct {
 	// It uses an undocumented internal New Quizzes call.
 	ItemScores        bool          `yaml:"item_scores,omitempty"`
 	ItemScoresOutcome ActionOutcome `yaml:"item_scores_outcome,omitempty"`
+	// QuizScore is the quiz total Canvas reported once item scores landed,
+	// as X/Y; the whole-assignment comment states it. The Engine owns it.
+	QuizScore string `yaml:"quiz_score,omitempty"`
 }
 
 func (c CommentOnlyOperation) FeedbackOnly() bool {

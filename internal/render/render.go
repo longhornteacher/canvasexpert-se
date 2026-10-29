@@ -216,9 +216,25 @@ func QuizItems(rubric domain.Rubric, interp domain.Interpretation, components []
 			}
 			possible.Add(possible, criterion.Points.Rat())
 		}
-		out[component.Key] = QuizItem{Points: scalePart(max.Rat(), earned, possible), Comment: partText(score, earned, possible)}
+		points := scalePart(max.Rat(), earned, possible)
+		out[component.Key] = QuizItem{Points: points, Comment: itemComment(score, points, max, earned, possible)}
 	}
 	return out
+}
+
+// itemComment is a New Quiz item's own comment: its score on the item's
+// points, the part's explanation and, when the part earned under the
+// exemplar threshold, its exemplar.
+func itemComment(score domain.ComponentScore, points, max domain.Decimal, earned, possible *big.Rat) string {
+	lines := []string{shortNumber(points) + "/" + shortNumber(domain.RoundRat(max.Rat(), 2))}
+	if text := strings.TrimSpace(score.Feedback); text != "" {
+		lines = append(lines, text)
+	}
+	below := domain.MustDecimal(domain.ExemplarBelow).Rat()
+	if exemplar := strings.TrimSpace(score.Exemplar); exemplar != "" && possible.Sign() > 0 && new(big.Rat).Quo(earned, possible).Cmp(below) < 0 {
+		lines = append(lines, "Exemplar: "+exemplar)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // partText is a part's own feedback, with its hand-copy exemplar when the

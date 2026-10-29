@@ -91,8 +91,8 @@ func TestNewQuizGradingPostsTheObservedBody(t *testing.T) {
 		t.Fatalf("read item 1002: %#v %v", it, ok)
 	}
 	version, err := g.PostScores(context.Background(), map[string]string{"1002": "5"}, map[string]string{"1002": "<p>Synthetic item comment.</p>"})
-	if err != nil || version != "9000002" {
-		t.Fatalf("post: %q %v", version, err)
+	if err != nil || version != "9000002" || g.Score != "10.5" || g.PointsPossible != "10.0" {
+		t.Fatalf("post: %q %v total %s/%s", version, err, g.Score, g.PointsPossible)
 	}
 	// SpeedGrader's captured request: score, item comment and fudge points.
 	want := decodeAny(t, fixture(t, "post_results_request.json")).(map[string]any)

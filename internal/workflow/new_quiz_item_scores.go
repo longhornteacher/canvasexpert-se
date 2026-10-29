@@ -78,6 +78,7 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 	}
 	if landed {
 		*o = domain.ActionOutcome{Status: "preserved", PostedText: summary, Message: "the quiz result already shows these item points and comments"}
+		c.QuizScore = quizTotal(g)
 		return save()
 	}
 	if ambiguous(*o) {
@@ -103,6 +104,7 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 		return save()
 	}
 	*o = domain.ActionOutcome{Status: "succeeded", PostedText: summary, Message: "quiz result version " + version}
+	c.QuizScore = quizTotal(g)
 	if id, e := strconv.ParseInt(version, 10, 64); e == nil {
 		o.ID = id
 	}
@@ -136,6 +138,14 @@ func (s *Service) quizResultVersion(ctx context.Context, r *quizVersionReader, c
 		return ""
 	}
 	return version
+}
+
+// quizTotal is the quiz total Canvas reported, as X/Y, or empty if unknown.
+func quizTotal(g *canvas.NewQuizGrading) string {
+	if g.Score == "" || g.PointsPossible == "" {
+		return ""
+	}
+	return trimZeros(g.Score) + "/" + trimZeros(g.PointsPossible)
 }
 
 // newQuizSessionIDs reads the participant and quiz session IDs from the

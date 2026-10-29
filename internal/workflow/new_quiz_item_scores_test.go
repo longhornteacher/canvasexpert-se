@@ -71,11 +71,15 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closin
 		case r.URL.Path == "/api/participant_sessions/ps1/grade":
 			io.WriteString(w, `{"host":"https://quiz.instructure.com","token":"grading-token","quiz_api_quiz_session_id":"qs1"}`)
 		case r.URL.Path == "/api/quiz_sessions/qs1":
-			io.WriteString(w, `{"authoritative_result":{"id":"900","fudge_points":null}}`)
+			total := "5.0"
+			if landed {
+				total = "17.0"
+			}
+			io.WriteString(w, `{"authoritative_result":{"id":"900","fudge_points":null,"score":`+total+`,"points_possible":20.0}}`)
 		case r.URL.Path == "/api/quiz_sessions/qs1/results/900/session_item_results":
 			score, status, grader := "0.0", "ungraded", ""
 			if landed {
-				score, status, grader = "12.0", "graded", `,"grader_feedback":{"content":"<p>Clear claim. Next, add a second example.</p>"}`
+				score, status, grader = "12.0", "graded", `,"grader_feedback":{"content":"<p>12/15<br>Clear claim. Next, add a second example.</p>"}`
 			}
 			io.WriteString(w, `[{"item_id":"8001","attempt":2,"score":`+score+`,"points_possible":15.0,"position":1,"graded_at":null,"grading_method":"manual_grading","feedback":{"item_feedback":{}`+grader+`},"scored_data":{"grade_status":"`+status+`","value":"<p>Current response.</p>"}}]`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/quiz_sessions/qs1/results":
@@ -87,7 +91,7 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closin
 				return
 			}
 			w.WriteHeader(http.StatusCreated)
-			io.WriteString(w, `{"id":"901","score":12.0,"status":"graded"}`)
+			io.WriteString(w, `{"id":"901","score":17.0,"points_possible":20.0,"status":"graded"}`)
 		case r.Method == http.MethodPut:
 			*comments++
 			var put map[string]map[string]any
@@ -158,11 +162,11 @@ func TestItemScoresPostBeforeTheCommentAndNeverRepeat(t *testing.T) {
 	if row["itemId"] != "8001" || row["score"] != float64(12) || row["scoredData"].(map[string]any)["gradeStatus"] != "graded" || (*body)["fudge_points"] != nil {
 		t.Fatalf("item score body: %#v", *body)
 	}
-	if grader := row["feedback"].(map[string]any)["graderFeedback"]; fmt.Sprint(grader) != "map[content:<p>Clear claim. Next, add a second example.</p>]" {
+	if grader := row["feedback"].(map[string]any)["graderFeedback"]; fmt.Sprint(grader) != "map[content:<p>12/15<br>Clear claim. Next, add a second example.</p>]" {
 		t.Fatalf("item comment: %v", grader)
 	}
-	if *commentText != "Strong evidence overall." {
-		t.Fatalf("the whole-assignment comment should carry only the closing remarks, got %q", *commentText)
+	if *commentText != "Score: 17/20 (attempt 2)\n\nStrong evidence overall." {
+		t.Fatalf("the whole-assignment comment should state Canvas's total and attempt, then the closing remarks; got %q", *commentText)
 	}
 	if _, err = s.Post(context.Background(), path); err != nil || *posts != 1 || *comments != 1 {
 		t.Fatalf("rerun wrote again: posts=%d comments=%d err=%v", *posts, *comments, err)
@@ -198,14 +202,14 @@ func TestUncertainItemScoreWriteReconcilesInsteadOfRepeating(t *testing.T) {
 	}
 }
 
-func TestItemCommentsAloneSendNoWholeComment(t *testing.T) {
-	s, path, posts, comments, _, _ := itemScoreFixture(t, "15", false, "")
+func TestItemScoresWholeCommentStatesTheQuizTotal(t *testing.T) {
+	s, path, posts, comments, _, commentText := itemScoreFixture(t, "15", false, "")
 	report, err := s.Post(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *posts != 1 || *comments != 0 || report.Students[0].Status != "completed" || report.Students[0].Revision.Status != "not-requested" {
-		t.Fatalf("posts=%d comments=%d report=%#v", *posts, *comments, report.Students)
+	if *posts != 1 || *comments != 1 || report.Students[0].Status != "completed" || *commentText != "Score: 17/20 (attempt 2)" {
+		t.Fatalf("posts=%d comments=%d text=%q report=%#v", *posts, *comments, *commentText, report.Students)
 	}
 }
 
