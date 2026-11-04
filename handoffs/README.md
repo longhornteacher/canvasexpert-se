@@ -52,7 +52,7 @@ A second pass the same day checked the named files, symbols and call sites again
 
 ## Architecture review: direction agreed
 
-The [unified architecture review](Unified%20Architecture%20Review.md) (2026-11-04) combines the [Opus55](Opus55%20Architecture%20Review.md) and [Sol 61](Sol%2061%20Architecture%20Review.md) reviews of Dev at `f58ecaf` into candidate slices A–I. The developer answered its twelve questions the same day; its Developer decisions table governs the slices and their order. It is a planning document, not an execution handoff: each slice still gets bounded execution before code changes.
+The [unified architecture review](Unified%20Architecture%20Review.md) (2026-11-04) combines the Opus55 and Sol 61 reviews (in git history at `a1b4817`) of Dev at `f58ecaf` into candidate slices A–I. The developer answered its twelve questions the same day; its Developer decisions table governs the slices and their order. It is a planning document, not an execution handoff: each slice still gets bounded execution before code changes.
 
 ## Completed work and evidence
 
@@ -72,7 +72,7 @@ The retired [targeted scoring session brief](retired/TARGETED-SCORING-SESSION.md
 
 The [Family Contact handoff](retired/FAMILY-ANNOUNCEMENTS.md) is complete in Dev. General family messages reuse the parent-update review, private recipient routing and Outlook delivery, with course/group/student audiences, per-message previews, inline images and file attachments. Full Go tests, vet and the compiled 40-tool MCP smoke passed; actual classic Outlook inspection confirmed a visible inline cover and an ordinary file attachment. No family email was sent. The [current contract](../docs/family-contact-flow.md) carries the supported flow and remaining evidence limits.
 
-The retired [book-group audience brief](retired/BOOK-GROUP-AUDIENCES.md) records all five slices implemented, validated and committed in Dev: individual assignment audiences and refresh, course Page audiences, New Quiz audiences, and the integrated shared-module unit. Its original pause checkpoint is retained as history and superseded by the dated execution records. The preserved [source handoff](CSSE_Book_Group_Audiences_Codex_Brief.md) remains unchanged. Canvas Live access, student views and UserInstall/UserSync adoption remain separate observations; no release or adoption is claimed by this Dev work.
+The retired [book-group audience brief](retired/BOOK-GROUP-AUDIENCES.md) records all five slices implemented, validated and committed in Dev: individual assignment audiences and refresh, course Page audiences, New Quiz audiences, and the integrated shared-module unit. Its original pause checkpoint is retained as history and superseded by the dated execution records. Its original source handoff was removed on 2026-11-04 as a duplicate; it remains in git history. Canvas Live access, student views and UserInstall/UserSync adoption remain separate observations; no release or adoption is claimed by this Dev work.
 
 The [group, timing and parent-report fixes](retired/REVIEW-REGRESSION-FIXES.md) are complete and reviewed in Dev: all nine Engine findings have fixes and normal-suite regressions, and group-work guidance/evidence records are reconciled. Full tests, vet, diff checks and the compiled 38-tool MCP smoke passed before the audience integration. Distribution and UserInstall/UserSync adoption were not part of this work.
 

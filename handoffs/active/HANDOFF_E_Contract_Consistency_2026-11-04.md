@@ -93,7 +93,7 @@ Edit `internal/localui/capabilities.go` and `docs/engine-capabilities.md` togeth
 - **`docs/SCORING-RULES.md:3`**: "Teacher policy updated 2026-10-18", while the body has decisions from 2026-10-24/28/29. Update the date.
 - **Active quiz handoff** (`handoffs/active/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md`): **keep active.** Q7 (the course/quiz accommodation combination) is unobserved; the §2.3 done-when (a live push of an Engine-built timed quiz) is unmet; a disposable quiz still needs deleting; and L9–L11 are optional. Correct its stale §0 bullets (~13 "a write requires all three values", ~16 "No accommodation POST is sent", ~18 "the teacher enters item points in SpeedGrader") with a dated note saying they were superseded, and keep the records.
 - **Retirement candidates:** `docs/REVIEW-2026-10-19.md` and `docs/book-club-group-work-discovery.md` are linked as evidence from `capabilities.go` (~82, ~135), `engine-capabilities.md` (~21, ~69) and `group-work/README.md:151`. Leave them; they are live evidence links. Retiring them is out of scope.
-- **The deleted handoff.** `handoffs/CSSE_Book_Group_Audiences_Codex_Brief.md` (a duplicate of `retired/BOOK-GROUP-AUDIENCES.md`) was deleted in the developer's working tree on 2026-11-04 but not committed. `handoffs/README.md` still links it. If the developer confirms the deletion, update that README link to point at the retired brief.
+- **The duplicate book-group source handoff** was removed on purpose on 2026-11-04, and the index link was updated then. Nothing to do.
 
 ## Done when
 

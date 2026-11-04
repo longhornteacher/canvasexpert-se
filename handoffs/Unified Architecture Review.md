@@ -2,7 +2,7 @@
 
 ## Agreements first
 
-This combines [Opus55 Architecture Review](Opus55%20Architecture%20Review.md) and [Sol 61 Architecture Review](Sol%2061%20Architecture%20Review.md), both reviewing Dev at `f58ecaf` on 2026-11-03. Their common direction is to keep the architecture and repair specific boundaries, not replace it.
+This combines the Opus55 and Sol 61 architecture reviews (removed from the tree on 2026-11-04; in git history at `a1b4817` under `handoffs/`), both reviewing Dev at `f58ecaf` on 2026-11-03. Their common direction is to keep the architecture and repair specific boundaries, not replace it.
 
 1. **Keep the single Go Engine and feature-specific workflows.** Both describe sound layering and useful reuse across CLI, MCP and WebUI. Preserve the Engine/playbook division: educational judgment belongs in playbooks/context; identity, arithmetic, storage and safe Canvas writes belong in the Engine.
 2. **Preserve teacher work and existing safety semantics.** Retain exact scoring, identity and attempt checks, independent action outcomes, private family review, credential separation and the UserInstall/UserSync ownership model. Proposed changes should close a particular gap without weakening those guarantees.
