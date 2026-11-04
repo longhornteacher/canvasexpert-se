@@ -186,12 +186,6 @@ Historical proposed choices for the first implementation slice:
 4. District Skyward URL and manual versus scheduled initiation. No sending cadence has been chosen.
 5. Teacher preview/send interaction (batch-approved send versus Drafts only) and handling of contacts with text enabled but no enabled email destination.
 
-Proposed flow: **select scope → read current Canvas data → decide send/skip → draft → teacher review → send → record outcomes**. Review/send details remain a proposal. Preserve unsent drafts, respect each contact's enabled email destinations, and distinguish accepted, failed, and uncertain delivery before retrying. Outlook's Sent Items is the teacher-visible record.
-
-Possible coding slices, after direction is agreed:
-
-1. Reporting reads, status/score evidence, and correction classification.
-2. Compact email drafts, the class-wide Band post, and the private parent review page with its MCP start/status tools.
-3. Classic Outlook delivery from the review page (Go COM) and per-recipient outcomes. A small Go COM send probe to the teacher's own address could come first, to confirm the Engine route through Cowork/Work.
+Proposed flow: **select scope → read current Canvas data → decide send/skip → draft → teacher review → send → record outcomes**. This flow is implemented: private review page, classic Outlook delivery and per-recipient outcomes (see [current capabilities](engine-capabilities.md) for the evidence and its limits). Preserve unsent drafts, respect each contact's enabled email destinations, and distinguish accepted, failed, and uncertain delivery before retrying. Outlook's Sent Items is the teacher-visible record.
 
 Use focused checks for date boundaries, missing versus ungraded/excused work, score provenance, private recipient routing, and the agreed sending rules. Validate actual per-item access and delivery when those capabilities are implemented. Update [capability evidence](engine-capabilities.md) and [WebUI capability data](../internal/localui/capabilities.go) together when implementation or verification status changes.

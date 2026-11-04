@@ -1,10 +1,17 @@
 # Playbook ownership and updates
 
-Working design decisions from the teacher/developer conversation, 2026-10-17.
-This document records agreed direction and what has been built. Items marked
+Working design decisions from the teacher/developer conversation, 2026-10-17,
+with the git-install rule (2026-10-21) first. This document records agreed
+direction and what has been built. Items marked
 shipped or built are implemented; the rest is direction only. Read alongside ARCHITECTURE.md
 and SCORING-RULES.md; implementation changes to those contracts remain
 separate work.
+
+## Current rule: git installs (decided 2026-10-21)
+
+Git installs win over ZIP installs. In a git install git owns the shipped playbooks, `TEACHER.md` and the root `AGENTS.md`/`CLAUDE.md`, and an update replaces them. A teacher's choices live in `Teacher_Override.md`, `context/` and their own root guides, which git never tracks. An agent never edits a shipped file in a git install; a preference goes in `Teacher_Override.md`. An edit that is found at update time is converted into an override once, the old file is kept under `playbook-old/<date>/`, and the file is reset to the shipped text. The `shipped/` copies and the `kept` merge belong to ZIP installs only. UserSync carries `context/` and `Teacher_Override.md`, not playbooks. See [the migration plan](../handoffs/retired/GIT-INSTALL-MIGRATION.md).
+
+Add shipped playbooks under `workspace-template/playbooks/`; the package script includes matching Markdown playbooks in the flattened UserInstall tree, and the Engine seeds them from the same template. `inbox.md` follows this standard path and remains teacher-editable in ZIP installs and git-owned in git installs.
 
 ## Product intent
 
@@ -165,19 +172,19 @@ does not need to request a file edit or know the storage layout.
   teacher's work. Keep the existing teacher decision while a conflict remains
   unresolved; avoid an installation-time questionnaire about every change.
 
-## Update direction
+## ZIP-fallback installs: update direction
 
-**Built 2026-10-17.** Install and update use the same machinery, whether the
-teacher unzips a new version and says "install" or "update", or the agent
-downloads the release ZIP itself.
+Built 2026-10-17 for ZIP installs. A git install does not use this machinery
+(see the current rule above). Install and update use the same machinery,
+whether the teacher unzips a new version and says "install" or "update", or
+the agent downloads the release ZIP itself.
 
-- The ZIP carries only the Engine, launchers and a bootstrap `AGENTS.md`. It
-  no longer carries playbooks, `TEACHER.md`, `Teacher_Override.md` or
-  `context/`, so extracting it over an existing UserInstall cannot overwrite
-  the teacher's setup or edited playbooks. On first run in a freshly extracted
-  folder, the bundled Engine lays down the starter files. With UserSync, the
-  ZIP's `AGENTS.md` and `CLAUDE.md` would replace UserInstall's local pointer
-  files; `playbooks update` archives those copies and restores the pointers.
+- The fallback ZIP carries the playbooks and `TEACHER.md` (it excludes only
+  `context/` and `Teacher_Override.md`). Unzip a new ZIP into a new folder and
+  update from that temporary extraction; never extract it over a teacher's
+  folder, where it would overwrite edited playbooks. With UserSync, the ZIP's
+  `AGENTS.md` and `CLAUDE.md` would replace UserInstall's local pointer files;
+  `playbooks update` archives those copies and restores the pointers.
 - `cse playbooks update` (MCP `engine_info` operation `update-playbooks`)
   adds missing files, replaces a playbook only when it still matches the
   previous shipped copy, and reports any other difference as `kept`. With no
@@ -238,7 +245,11 @@ Live (CS8, 2026-10-17, Test Student), including a real lateness write with a
 past due date: Canvas recorded late, deducted 2 points from the earned 16, and
 the comment read `Overall: 16/20 (late)`.
 
-## First real update (2026-10-17)
+## History: first ZIP-era update and plan (2026-10-17)
+
+Dated record of the ZIP-era work; the git rule above is current. Its ZIP
+description predates the ZIP carrying playbooks, so extract-over is no longer
+safe.
 
 The teacher's own UserInstall (UserSync mode, rules in OneDrive) was updated
 to the new Engine (revision 41dface) by swapping in `engine/cse.exe` beside the
@@ -278,23 +289,18 @@ full template, update restored both, every playbook was current, and the
 teacher's settings, bell schedule and override file were unchanged. Offline
 doctor passed.
 
-## Remaining work
+
+### Remaining work (as of 2026-10-17)
 
 - Push `dev` and publish a release when the teacher decides (deferred
   2026-10-17).
 - A colleague's real update, and an agent (not the developer) doing the
   reconciliation in the background, remain unobserved.
 
-## Done looks like
+### Done looks like (ZIP-era target)
 
 A colleague with saved preferences (for example a standing review skip, a
 different correction window and their own Skyward link) unzips a newer CE-SE,
 points their agent at it and starts working. Every saved preference still
 applies, new shipped improvements apply where they don't conflict, and the
 teacher was not asked to merge anything.
-
-## Git installs (decided 2026-10-21)
-
-A git install inverts the ownership above: git owns the shipped playbooks, `TEACHER.md` and the root `AGENTS.md`/`CLAUDE.md`, and an update replaces them. A teacher's choices live in `Teacher_Override.md`, `context/` and their own root guides, which git never tracks. An agent never edits a shipped file in a git install; a preference goes in `Teacher_Override.md`. An edit that is found at update time is converted into an override once, the old file is kept under `playbook-old/<date>/`, and the file is reset to the shipped text. The `shipped/` copies and the `kept` merge belong to ZIP installs only. UserSync carries `context/` and `Teacher_Override.md`, not playbooks. See [the migration plan](../handoffs/retired/GIT-INSTALL-MIGRATION.md).
-
-Add shipped playbooks under `workspace-template/playbooks/`; the package script includes matching Markdown playbooks in the flattened UserInstall tree, and the Engine seeds them from the same template. `inbox.md` follows this standard path and remains teacher-editable in ZIP installs and git-owned in git installs.
