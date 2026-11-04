@@ -194,7 +194,7 @@ func TestFileUploadTransportFailureIsUncertainAndRedirectIsNotFollowed(t *testin
 }
 
 func TestUploadFinalizationRejectsWrongOriginPathAndStudent(t *testing.T) {
-	for _, raw := range []string{"https://storage.example/api/v1/files/99/create_success", allowedOrigin + "/api/v1/courses/900001/assignments", allowedOrigin + "/api/v1/files/99/create_success?as_user_id=6", allowedOrigin + "/api/v1/files/99/create_success?as_user_id=5&as_user_id=6", "http://pearland.instructure.com/api/v1/files/99", allowedOrigin + "/api/v1/files/0"} {
+	for _, raw := range []string{"https://storage.example/api/v1/files/99/create_success", allowedOrigin + "/api/v1/courses/900001/assignments", allowedOrigin + "/api/v1/files/99/create_success?as_user_id=6", allowedOrigin + "/api/v1/files/99/create_success?as_user_id=5&as_user_id=6", "http://school.example/api/v1/files/99", allowedOrigin + "/api/v1/files/0"} {
 		if _, e := probeFinalizePath(raw, 5); e == nil {
 			t.Fatal("accepted unsafe finalization", raw)
 		}

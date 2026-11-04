@@ -24,7 +24,9 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
-const allowedOrigin = "https://pearland.instructure.com"
+// allowedOrigin is the one Canvas site the probe may touch. Dev tool: the developer supplies it
+// in CSE_PROBE_ORIGIN (for example https://school.instructure.com); no school is built in.
+var allowedOrigin = strings.TrimRight(strings.TrimSpace(os.Getenv("CSE_PROBE_ORIGIN")), "/")
 
 // courseID is the one authorized disposable-test course. Its real ID stays out of
 // the public repo: CSE_PROBE_COURSE_ID, or dev-reference/course-ids.json in UserSync.
@@ -72,6 +74,9 @@ func run(ctx context.Context, args []string) error {
 			return fmt.Errorf("--state requires a path followed by a command")
 		}
 		selectedState, args = args[1], args[2:]
+	}
+	if len(args) > 0 && args[0] != "help" && allowedOrigin == "" {
+		return fmt.Errorf("set CSE_PROBE_ORIGIN to the Canvas origin the probe may use, for example https://school.instructure.com")
 	}
 	if len(args) == 0 || args[0] == "help" {
 		fmt.Println("Optional leading --state PATH. Unattended helpers: select --assignment ID | configure-fixture [--assignment ID] [--submission-types online_text_entry,online_upload] | create-module --name '[CSE UNATTENDED] ...' | read-module | submit-file --file SYNTHETIC_PATH. Read-only field probe: field-read course | image-files | page ID | new-quiz ID | assignment ID ([CSE FIELD PROBE] objects only). Use a separate state per assignment; configure only unpublished exact named fixtures, then select. select never adopts legacy coursework.")
