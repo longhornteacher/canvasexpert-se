@@ -69,7 +69,7 @@ These hold unless the teacher says otherwise. Honest values and privacy are not 
 }
 ```
 
-For the default layout, every student in the report appears once, with a reason for `skip` and `flag`. A `send` decision is valid when the saved `work_due` inventory is nonempty even if there are no Missing/0 or correction selections. If it is empty, choose `skip` with the no-required-work reason or `flag` when report data is incomplete; Due Soon by itself does not create an email. An old report without `scope`, or with invalid scope data, must not be sent or printed: retain its drafts and outcomes, then pull a fresh report.
+For the default layout, every student in the report appears once, with a reason for `skip` and `flag`. A `send` decision is valid when the saved `work_due` inventory is nonempty even if there are no Missing/0 or correction selections. If it is empty, choose `skip` with the no-required-work reason or `flag` when report data is incomplete; Due Soon by itself does not create an email. Slips in drafts.json (an assignment not in the report, a skip with no reason, a student left out) do not block: the item is not shown and a left-out student is not sent.
 
 ## Weekly update
 
@@ -88,13 +88,13 @@ When the teacher requests the weekly update layout for the full current term, pu
 
 Include each student. The weekly layout sends an update even when the work inventory is empty or the score meets the normal skip cutoff; flag unresolved report data instead of inventing an all-clear. It requires one course per student and routes to enabled parents only. The Engine constructs the subject and Missing and Failing lists from the saved report, keeps unreleased grades private, and omits the default inventory, corrections and due-soon sections. It uses the configured `class_name`, `failing_below`, tutoring link (the Extra help block is left out when `tutoring_url` is blank) and `sign_off`. Student names, aliases and references do not belong in the message. Review through `start_parent_review`; **Fill Outlook Drafts only** creates drafts without sending.
 
-## Printable student reports
+## Printable grade sheets
 
-When the teacher wants reports to hand out in class, use the same run: pull the report, write `drafts.json` as above (decisions still apply to email), then `print_student_reports` with the run folder (CLI: `.\cse.cmd student-report RUN_FOLDER`). The Engine saves one PDF in the teacher's Downloads folder, one student per page, and opens it. Tell the teacher the file name; it holds student names, so do not open or read it.
+When the teacher wants grade sheets to hand out (a progress report or grade check), pull the report with `pull_parent_report` and `full_period: true` so the whole term is listed, then run `print_student_reports` with the run folder (CLI: `.\cse.cmd student-report RUN_FOLDER`). `drafts.json` is not needed; if one exists, each student's optional `student_intro` (written to the student, one short sentence, `{{student_name}}` allowed) opens their sheet. The Engine saves one PDF in the teacher's Downloads folder, one student per page, and opens it. Tell the teacher the file name; it holds student names, so do not open or read it.
 
-- Every student in the run gets a sheet, including skipped students, so the handout singles no one out. A student with no Missing/0 items gets the Engine's encouraging empty-state message.
-- The sheet lists every resolved Missing/0, Due Soon item and every `work_due` inventory row from the report. Only your `corrections` choices carry over, because eligibility is your judgment; Missing/0 items never repeat under Corrections. It uses the saved period scope, not today's date.
-- Optional `student_intro` per student, written to the student ("you"), one short sentence. Same rules as `intro`: no scores, no invented work. `{{student_name}}` works here too.
+- Every student in the report gets a sheet.
+- Each sheet is one table in due-date order: assignment, due date and current grade. Work already due shows the current Canvas score, or Missing, Not submitted, Awaiting grading, Grade not released or No grade recorded. Work not yet due shows a check box and "(check this off once completed)", plus "Canvas shows this turned in" when it was turned in early.
+- Only published work the student can see, with the student's own due date, is listed. Work with no due date is not listed; tell the teacher if they expected it.
 
 ## If something cannot proceed
 

@@ -194,20 +194,33 @@ func TestDraftValidation(t *testing.T) {
 		return err
 	}
 	for name, mut := range map[string]func(*ParentDrafts){
-		"unknown assignment": func(d *ParentDrafts) { d.Students[0].Missing[0].AssignmentID = 99 },
-		"typed score":        func(d *ParentDrafts) { d.Students[0].Missing[0].Note = "You earned 7/10" },
-		"missing decision":   func(d *ParentDrafts) { d.Students = d.Students[:1] },
-		"skip without why":   func(d *ParentDrafts) { d.Students[1] = ParentStudentDraft{Ref: b.Ref, Decision: "skip"} },
+		"other run":       func(d *ParentDrafts) { d.RunID = "R2" },
+		"unknown student": func(d *ParentDrafts) { d.Students[0].Ref = "s-nobody" },
+		"twice":           func(d *ParentDrafts) { d.Students[1] = d.Students[0] },
+		"bad decision":    func(d *ParentDrafts) { d.Students[1] = ParentStudentDraft{Ref: b.Ref, Decision: "maybe"} },
 	} {
 		if err := load(mut); err == nil {
 			t.Errorf("%s: expected a validation error", name)
 		}
 		parentFixtureRewrite(t, svc, dir)
 	}
+	// Bookkeeping slips do not block the teacher: an unknown assignment is not
+	// shown, a skip needs no reason, an absent student is simply not sent.
+	for name, mut := range map[string]func(*ParentDrafts){
+		"unknown assignment": func(d *ParentDrafts) { d.Students[0].Missing[0].AssignmentID = 99 },
+		"note with numbers":  func(d *ParentDrafts) { d.Students[0].Missing[0].Note = "Lab 3/4 is on the shelf" },
+		"missing decision":   func(d *ParentDrafts) { d.Students = d.Students[:1] },
+		"skip without why":   func(d *ParentDrafts) { d.Students[1] = ParentStudentDraft{Ref: b.Ref, Decision: "skip"} },
+	} {
+		if err := load(mut); err != nil {
+			t.Errorf("%s: blocked: %v", name, err)
+		}
+		parentFixtureRewrite(t, svc, dir)
+	}
 }
 
-func TestLegacyParentRunIsPreservedAndCannotBeSentOrPrinted(t *testing.T) {
-	svc, dir, _, _ := parentFixtureRun(t)
+func TestPrintNeedsOnlyTheReport(t *testing.T) {
+	svc, dir, a, _ := parentFixtureRun(t)
 	reportPath := filepath.Join(dir, "report.json")
 	raw, err := os.ReadFile(reportPath)
 	if err != nil {
@@ -217,61 +230,23 @@ func TestLegacyParentRunIsPreservedAndCannotBeSentOrPrinted(t *testing.T) {
 	if err = json.Unmarshal(raw, &report); err != nil {
 		t.Fatal(err)
 	}
-	report.Scope = nil
+	report.Scope = nil // an older report without saved scope
 	raw, _ = json.Marshal(report)
 	if err = os.WriteFile(reportPath, raw, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	draftsPath := filepath.Join(dir, "drafts.json")
-	outcomesPath := filepath.Join(dir, "outcomes.json")
-	if err = saveParentOutcomes(dir, ParentOutcomes{Schema: 2, Students: map[string]ParentDelivery{"s-legacy": {State: "sent", At: "2026-10-16T12:00:00Z"}}}); err != nil {
+	if err = os.WriteFile(filepath.Join(dir, "drafts.json"), []byte("{not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	draftsBefore, _ := os.ReadFile(draftsPath)
-	outcomesBefore, _ := os.ReadFile(outcomesPath)
-	if _, err = LoadParentRun(svc.Root, dir); err == nil || !strings.Contains(err.Error(), "pull a fresh parent report") {
-		t.Fatalf("legacy run error = %v", err)
+	sheets, _, err := svc.BuildStudentSheets(dir)
+	if err != nil || len(sheets) != 2 || sheets[0].Name != a.Name || !strings.Contains(sheets[0].HTML, "Completed project") {
+		t.Fatalf("print blocked or incomplete: %v %+v", err, sheets)
 	}
-	if _, _, err = svc.BuildStudentSheets(dir); err == nil || !strings.Contains(err.Error(), "pull a fresh parent report") {
-		t.Fatalf("legacy print error = %v", err)
-	}
-	draftsAfter, _ := os.ReadFile(draftsPath)
-	outcomesAfter, _ := os.ReadFile(outcomesPath)
-	if string(draftsBefore) != string(draftsAfter) || string(outcomesBefore) != string(outcomesAfter) {
-		t.Fatal("legacy run rejection changed saved drafts or delivery outcomes")
-	}
-}
-
-func TestEmptyRecentInventoryCannotProduceSendDraft(t *testing.T) {
-	svc, dir, _, _ := parentFixtureRun(t)
-	var report ParentReportPacket
-	raw, _ := os.ReadFile(filepath.Join(dir, "report.json"))
-	if err := json.Unmarshal(raw, &report); err != nil {
+	if err = os.Remove(filepath.Join(dir, "drafts.json")); err != nil {
 		t.Fatal(err)
 	}
-	for i := range report.Students {
-		course := &report.Students[i].Courses[0]
-		course.WorkDue = []ParentWorkDueItem{}
-		course.Missing, course.Corrections, course.History = nil, nil, nil
-	}
-	raw, _ = json.Marshal(report)
-	if err := os.WriteFile(filepath.Join(dir, "report.json"), raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	var drafts ParentDrafts
-	raw, _ = os.ReadFile(filepath.Join(dir, "drafts.json"))
-	if err := json.Unmarshal(raw, &drafts); err != nil {
-		t.Fatal(err)
-	}
-	for i := range drafts.Students {
-		drafts.Students[i].Missing = nil
-	}
-	raw, _ = json.Marshal(drafts)
-	if err := os.WriteFile(filepath.Join(dir, "drafts.json"), raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := LoadParentRun(svc.Root, dir); err == nil || !strings.Contains(err.Error(), "no work due in this report window") {
-		t.Fatalf("empty-window send should request skip or flag: %v", err)
+	if sheets, _, err = svc.BuildStudentSheets(dir); err != nil || len(sheets) != 2 {
+		t.Fatalf("print without drafts.json: %v", err)
 	}
 }
 
@@ -307,7 +282,7 @@ func TestStudentSheetsCoverEveryStudentWithoutLinksOrAddresses(t *testing.T) {
 		if !strings.Contains(s.HTML, "prepared with AI tools") || !strings.Contains(s.HTML, "only your nickname, “") {
 			t.Fatalf("AI notice missing: %s", s.HTML)
 		}
-		if !strings.Contains(s.HTML, ">Missing/0</h3>") || !strings.Contains(s.HTML, "Lab &lt;1&gt;") || !strings.Contains(s.HTML, "Completed project") {
+		if !strings.Contains(s.HTML, ">Current grade</th>") || !strings.Contains(s.HTML, "Lab &lt;1&gt;") || !strings.Contains(s.HTML, "Missing") || !strings.Contains(s.HTML, "10 / 10") {
 			t.Fatalf("sheet = %s", s.HTML)
 		}
 	}
@@ -328,7 +303,7 @@ func TestParentRenderMissingZeroFirstAndKeepsHistory(t *testing.T) {
 	run := &ParentRun{Report: ParentReportPacket{AsOf: now.Format(time.RFC3339), Scope: parentTestScope(now)}, students: map[string]ParentReportStudent{rs.Ref: rs}}
 	sd := ParentStudentDraft{Ref: rs.Ref, Decision: "send", Missing: []ParentItemRef{{AssignmentID: 1}}, Corrections: []ParentItemRef{{AssignmentID: 2}}, History: []ParentItemRef{{AssignmentID: 1}}}
 	student := workspace.Student{Name: "Ada Lovelace", FirstName: "Ada"}
-	for name, rendered := range map[string]Rendered{"email": run.Render(sd, student), "student sheet": run.RenderStudent(sd, student)} {
+	for name, rendered := range map[string]Rendered{"email": run.Render(sd, student)} {
 		html := rendered.HTML
 		missing := strings.Index(html, ">Missing/0</h3>")
 		corrections := strings.Index(html, ">Corrections")
@@ -343,13 +318,17 @@ func TestParentRenderMissingZeroFirstAndKeepsHistory(t *testing.T) {
 			t.Fatalf("%s: zero must appear in Missing/0 and history, without a correction duplicate: %s", name, html)
 		}
 	}
-	// Existing section-membership validation rejects an agent selecting a
-	// Missing/0 item as a correction, rather than inventing another policy gate.
+	// A Missing/0 item selected as a correction is not blocked; it is simply
+	// not shown, because only the report's own corrections render.
 	run.Report.RunID, run.Report.Students, run.Report.Scope = "R1", []ParentReportStudent{rs}, parentTestScope(now)
 	sd.Corrections = []ParentItemRef{{AssignmentID: 1}}
 	run.Drafts = ParentDrafts{Schema: 1, Kind: "parent-drafts", RunID: "R1", Students: []ParentStudentDraft{sd}}
-	if err := run.validate(); err == nil || !strings.Contains(err.Error(), "report corrections list") {
-		t.Fatalf("Missing/0 selected as correction must fail membership validation: %v", err)
+	if err := run.validate(); err != nil {
+		t.Fatal(err)
+	}
+	html := run.Render(sd, student).HTML
+	if c, h := strings.Index(html, ">Corrections"), strings.Index(html, ">Work due in this period</h3>"); c >= 0 && strings.Contains(html[c:h], "Submitted zero") {
+		t.Fatalf("Missing/0 rendered as a correction: %s", html)
 	}
 }
 
@@ -417,7 +396,7 @@ func TestLoadParentRunRecomputesAdvisorySkipEligibility(t *testing.T) {
 	}
 }
 
-func TestSkippedStudentGetsOnTrackSheetAndOnlyChosenCorrections(t *testing.T) {
+func TestGradeSheetShowsCurrentGradeOnly(t *testing.T) {
 	s := "96"
 	now := time.Date(2026, 10, 16, 15, 0, 0, 0, time.UTC)
 	first, current := "70.0", "90.0"
@@ -426,14 +405,16 @@ func TestSkippedStudentGetsOnTrackSheetAndOnlyChosenCorrections(t *testing.T) {
 		WorkDue:     []ParentWorkDueItem{{ParentReportItem: ParentReportItem{AssignmentID: 6, Title: "Lab 6", URL: "u6", DueAt: "2026-10-15T18:00:00-05:00"}, Status: "graded", Possible: "100.0", First: &first, Current: &current}},
 	}}}
 	run := &ParentRun{Report: ParentReportPacket{AsOf: now.Format(time.RFC3339), Scope: parentTestScope(now), Students: []ParentReportStudent{rs}}, students: map[string]ParentReportStudent{"s-1": rs}}
-	got := run.RenderStudent(ParentStudentDraft{Ref: "s-1", Decision: "skip", Reason: "on track"}, workspace.Student{Name: "Ada Lovelace"}).HTML
-	for _, want := range []string{"Ada Lovelace", "No Missing/0 work in this report window.", "Work due in this period", "70 / 100", "90 / 100"} {
+	got := run.RenderStudent(ParentStudentDraft{Ref: "s-1"}, workspace.Student{Name: "Ada Lovelace"}).HTML
+	for _, want := range []string{"Ada Lovelace", "Lab 6", "Thu Oct 15", "90 / 100"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in %s", want, got)
 		}
 	}
-	if strings.Contains(got, "Quiz needing judgment") {
-		t.Fatal("a correction the agent did not choose appeared")
+	for _, unwanted := range []string{"Quiz needing judgment", "70 / 100", "href"} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("unexpected %q in %s", unwanted, got)
+		}
 	}
 }
 
@@ -451,3 +432,4 @@ func TestParentsAreToWhenNoStudentEmail(t *testing.T) {
 		t.Fatalf("to=%v cc=%v parents=%d err=%v", to, cc, parents, err)
 	}
 }
+

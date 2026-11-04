@@ -49,6 +49,10 @@ A posted current zero is Missing; an unscored, overdue assignment marked missing
 
 This layout is local implementation evidence, not proof of a new Canvas Live read, Outlook draft, client adoption or family delivery.
 
+## Printed grade sheets
+
+The printed sheet is a grade check, not the email: one table per course in due-date order with assignment, due date and current grade. `work_due` rows show the current Canvas score or the existing status text (unreleased grades stay private); `upcoming` rows show a check box. Every pull builds `upcoming` in the same per-student pass as the rest of the report, with the same published, visibility and student-effective due-date rules, and resolves visibility through the period end. Printing reads only `report.json`; drafts and parent-update settings are optional, and no scope or draft check can block it. Email validation keeps only the run match, known students, send/skip/flag decisions and, for the weekly layout, the full-period requirement and announcement privacy checks. Local tests only (2026-11-04).
+
 ## Correction eligibility and evidence
 
 The Engine supplies finished-work candidates inside the correction window, excluding Missing/0. The agent includes work where the student lost points and can still improve it, following the teacher's own correction system when provided. Student-visible, teacher-provided rationales or exemplars can guide corrections, either per item or for the whole assignment; they are not a prerequisite for availability. Identify the actual content; a generic feedback comment or an isolated keyword does not establish guidance. Hidden answer keys are not parent-facing correction guidance.

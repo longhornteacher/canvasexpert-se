@@ -321,6 +321,10 @@ For a requested full-term weekly update email, first pull with `pull_parent_repo
 
 The Engine builds the week subject and Missing and Failing sections from the saved report and addresses enabled parents only. It supports a send decision for a student with no items; incomplete data must be held rather than presented as an all-clear. The default layout uses schema 1 and keeps its existing inventory and skip rules. Review and the teacher's action remain required for Outlook drafts or sending.
 
+## Printed grade sheets
+
+Every parent report also saves, per course, an `upcoming` list: published work the student can see whose student-effective due date is after `as_of` and on or before the period end, each with `turned_in` when Canvas shows a submission. `print_student_reports` needs only `report.json`: it prints one table per student, `work_due` rows with the current Canvas score or status text and `upcoming` rows with a check box. `drafts.json` is optional and supplies only `student_intro`. Pull with `full_period: true` for the whole term. Undated work is not listed.
+
 ## Exact feedback sample (offline)
 
 `cse validate RESULTS --show STUDENT_REF` / MCP `validate_document {path, show: STUDENT_REF}` validates normally, then returns only the selected student reference, packet alias, hold status and exact student comment from the shared posting/draft renderer. An unknown reference is an error. Held rows return their reason and omit the final comment. No submission text, teacher notes or private contacts are returned; no Canvas connection is needed. Without `show`, ordinary validation output is unchanged. Item-score posting awaits its separate protocol evidence; this sample does not invent quiz totals or posted item outcomes.

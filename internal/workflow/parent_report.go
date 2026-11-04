@@ -68,8 +68,19 @@ type ParentReportCourse struct {
 	DueSoon           []ParentReportItem  `json:"due_soon,omitempty"`
 	History           []ParentHistoryItem `json:"history,omitempty"`
 	WorkDue           []ParentWorkDueItem `json:"work_due"`
+	// Upcoming lists all work due after as_of through the period end, for
+	// the printed grade sheet.
+	Upcoming []ParentUpcomingItem `json:"upcoming,omitempty"`
 	// correctionDays is the configured window; zero means the default.
 	correctionDays int
+	// upcomingEnd, when set, is the exclusive end of the Upcoming list.
+	upcomingEnd time.Time
+}
+
+// ParentUpcomingItem is published, visible work not yet due for this student.
+type ParentUpcomingItem struct {
+	ParentReportItem
+	TurnedIn bool `json:"turned_in,omitempty"`
 }
 
 // ParentWorkDueItem is one required assignment whose effective due date is in
@@ -163,6 +174,15 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		}
 		scope.RecentStartAt = recentStart.Format(time.RFC3339)
 	}
+	// Every pull lists upcoming work to the period end for the printed grade
+	// sheet, and resolves visibility that far ahead.
+	upcomingLoc, _ := time.LoadLocation(calendar.Timezone)
+	periodEnd, e := time.ParseInLocation("2006-01-02", period.EndDate, upcomingLoc)
+	if e != nil {
+		return "", ParentReportPacket{}, e
+	}
+	upcomingEnd := periodEnd.AddDate(0, 0, 1)
+	resolveEnd := upcomingEnd
 	want := map[string]bool{}
 	for _, r := range refs {
 		want[r] = true
@@ -272,7 +292,7 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 			if en.score == nil {
 				rc.Flags = append(rc.Flags, "course score unavailable from Canvas")
 			}
-			studentSubs, incomplete := completeStudentSubmissionsWithResolver(ctx, resolver, id, assignments, perStudent[id], recentStart, now, dueSoonEnd)
+			studentSubs, incomplete := completeStudentSubmissionsWithResolver(ctx, resolver, id, assignments, perStudent[id], recentStart, now, resolveEnd)
 			for _, note := range incomplete {
 				rc.Flags = append(rc.Flags, note)
 			}
@@ -284,6 +304,7 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 				}
 			}
 			rc.correctionDays = config.CorrectionDays
+			rc.upcomingEnd = upcomingEnd
 			buildStudentReportScoped(&rc, studentSubs, versions[id], byAssignment, now, loc, recentStart, dueSoonEnd)
 			courseWorkCount += len(rc.WorkDue)
 			rs := byRef[en.st.Ref]
@@ -672,6 +693,9 @@ func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, version
 		} else if a.GradingType != "not_graded" && !gradeNotReleased && !positiveGrade && !submitted && due.After(now) && due.Before(dueSoonEnd) {
 			rs.DueSoon = append(rs.DueSoon, item)
 		}
+		if !rs.upcomingEnd.IsZero() && due.After(now) && due.Before(rs.upcomingEnd) {
+			rs.Upcoming = append(rs.Upcoming, ParentUpcomingItem{ParentReportItem: item, TurnedIn: submitted})
+		}
 
 		vs := versions[sub.AssignmentID]
 		var hist ParentHistoryItem
@@ -741,6 +765,7 @@ func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, version
 		return rs.Corrections[i].CorrectionDeadline < rs.Corrections[j].CorrectionDeadline
 	})
 	sort.Slice(rs.DueSoon, func(i, j int) bool { return rs.DueSoon[i].DueAt < rs.DueSoon[j].DueAt })
+	sort.Slice(rs.Upcoming, func(i, j int) bool { return rs.Upcoming[i].DueAt < rs.Upcoming[j].DueAt })
 }
 
 // Gradebook history can contain a resave of the same score. Keep the report's
