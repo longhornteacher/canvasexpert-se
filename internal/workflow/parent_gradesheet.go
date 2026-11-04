@@ -134,7 +134,7 @@ func (r *ParentRun) RenderStudent(sd ParentStudentDraft, student workspace.Stude
 		portal = r.Config.GradePortalName
 		fmt.Fprintf(&b, `<p style="margin:18px 0 4px">Official grades: %s.</p>`, esc(portal))
 	}
-	b.WriteString(aiNotice("This sheet was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check " + portal + " for official grades. For privacy, the AI never saw your real name, only your nickname, “" + rs.Alias + ".”"))
+	b.WriteString(aiNotice("This sheet was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check " + portal + " for official grades. For privacy, the AI never saw your real name."))
 	b.WriteString(`</div>`)
 	return Rendered{Subject: student.Name, HTML: b.String()}
 }
