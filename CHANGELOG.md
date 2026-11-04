@@ -5,6 +5,8 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 ## Unreleased
 
 - An open Students page no longer overwrites newer student settings. If a roster refresh or an assistant update changed the table after the page opened, Save stops, shows the newest settings and fills the teacher's typed changes back in to check and save again.
+- Parent reports pull about twice as fast or more: assignments the bulk Canvas feed leaves out are now read once per assignment for the whole class instead of once per student, and the two whole-course feeds are read at the same time. A full-term ELA7 pull went from 2–4 minutes to under a minute.
+- Agents now ask which class you mean when a short name such as "ELA7" could be more than one course, and go straight to the grade-sheet steps for a progress report.
 - Printed grade sheets are now a plain grade check: each student's page lists every assignment by due date with its current grade, and a check box for work not yet due. Printing needs only the pulled report, so missing or imperfect drafts no longer stop it.
 - Parent update emails no longer stop over bookkeeping slips in the drafts (a skip without a reason, a student left out, an assignment not in the report, a note with numbers). Checks that protect families stay.
 - Full-period parent reports pulled more than two weeks into a grading period can be printed and sent again. Print and send had rejected them with "recent_start_at does not match the saved period and as_of", because they recalculated the default two-week window instead of checking the saved window against the period.

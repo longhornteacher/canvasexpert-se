@@ -261,6 +261,16 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		for _, a := range assignments {
 			byAssignment[a.ID] = a
 		}
+		// The two whole-course feeds are independent; read them together.
+		type feedResult struct {
+			rows []Submission
+			err  error
+		}
+		feedDone := make(chan feedResult, 1)
+		go func() {
+			rows, err := gradeVersions(ctx, s.Client, course.ID)
+			feedDone <- feedResult{rows, err}
+		}()
 		subs, e := courseSubmissions(ctx, s.Client, course.ID)
 		if e != nil {
 			return "", ParentReportPacket{}, e
@@ -273,7 +283,8 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		// the same attempt hides the first score. The gradebook history feed
 		// keeps every grading version.
 		versions := map[int64]map[int64][]Submission{}
-		feed, e := gradeVersions(ctx, s.Client, course.ID)
+		fr := <-feedDone
+		feed, e := fr.rows, fr.err
 		if e != nil {
 			packet.Notes = append(packet.Notes, course.Nickname+": gradebook history unavailable; first scores come from submission history and may miss same-attempt regrades")
 		}
@@ -512,29 +523,40 @@ func completeStudentSubmissionsWithResolver(ctx context.Context, resolver *paren
 			continue
 		}
 		// Canvas's course-wide feed can report false visibility for every
-		// student even when the assignment-scoped feed reports true. Resolve
-		// these in one assignment read, retaining genuine invisible rows.
-		if ok && sub.AssignmentVisible != nil && !*sub.AssignmentVisible {
-			batch, loaded := resolver.batches[a.ID]
-			if !loaded {
+		// student even when the assignment-scoped feed reports true, and it
+		// omits rows. Resolve both from one assignment-scoped read shared by
+		// every student, instead of one read per student; a student absent
+		// from that complete list is not assigned the work. Only a failed
+		// list read falls back to the per-student read below.
+		batch, loaded := resolver.batches[a.ID]
+		if !loaded {
+			var rows []Submission
+			path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?include[]=submission_history&include[]=submission_comments&include[]=visibility&per_page=100", courseID, a.ID)
+			if err := c.List(ctx, path, &rows); err == nil {
 				batch = map[int64]Submission{}
-				var rows []Submission
-				path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?include[]=submission_history&include[]=submission_comments&include[]=visibility&per_page=100", courseID, a.ID)
-				if err := c.List(ctx, path, &rows); err == nil {
-					for _, row := range rows {
-						if row.UserID > 0 && (row.AssignmentID == 0 || row.AssignmentID == a.ID) {
-							if row.AssignmentID == 0 {
-								row.AssignmentID = a.ID
-							}
-							batch[row.UserID] = row
+				for _, row := range rows {
+					if row.UserID > 0 && (row.AssignmentID == 0 || row.AssignmentID == a.ID) {
+						if row.AssignmentID == 0 {
+							row.AssignmentID = a.ID
 						}
+						batch[row.UserID] = row
 					}
 				}
-				resolver.batches[a.ID] = batch
 			}
-			if resolved, found := batch[studentID]; found && resolved.AssignmentVisible != nil {
+			resolver.batches[a.ID] = batch // nil records a failed read
+		}
+		if batch != nil {
+			resolved, found := batch[studentID]
+			switch {
+			case !found:
+				delete(byAssignment, a.ID)
+				continue
+			case resolved.AssignmentVisible != nil && ok:
 				sub.AssignmentVisible = resolved.AssignmentVisible
 				byAssignment[a.ID] = sub
+				continue
+			case resolved.AssignmentVisible != nil:
+				byAssignment[a.ID] = resolved
 				continue
 			}
 		}
