@@ -6,6 +6,19 @@ A handoff is bounded execution work for an agent session. It should say whether 
 
 Execution-readiness review: **2026-10-28**, against the current Dev working tree. The remaining handoffs are written for **6.1 Terra or 6.1 Sol** to execute one bounded slice at a time. Readiness here means the scope, integration points, contracts, checks and unresolved evidence are explicit; it does not mean the features are built or the undocumented Canvas behavior is known.
 
+**Architecture slices (2026-11-04).** Written from the [unified review](Unified%20Architecture%20Review.md) and the developer's decisions, with facts mapped at `2818e36`. Each is self-contained; the source reviews are not needed. Run them one at a time, in this order: B and C, then D1 and E, then I and G, then H, then D2 and F. Slice A is done.
+
+| Handoff | Kind | Scope |
+|---|---|---|
+| [B: native New Quiz write safeguards](active/HANDOFF_B_Native_New_Quiz_Write_Safeguards_2026-11-04.md) | implement | item-score writes classified like ordinary writes; teammate audit; teammate-named key errors |
+| [C: family review reconnect notes](active/HANDOFF_C_Family_Review_Reconnect_Notes_2026-11-04.md) | implement | reconnected review keeps the reviewed file as its subject; revision notes return |
+| [D: release identity and update transition](active/HANDOFF_D_Release_Identity_and_Update_Transition_2026-11-04.md) | D1 implement; D2 spec first | refuse to replace a released artifact set; specify update ordering, rollback and restart before coding |
+| [E: contract consistency](active/HANDOFF_E_Contract_Consistency_2026-11-04.md) | implement, 3 passes | MCP descriptions, seed, ARCHITECTURE, capabilities page, help/annotations, stale docs |
+| [F: write cancellation lifecycle](active/HANDOFF_F_Write_Cancellation_Lifecycle_2026-11-04.md) | spec first | what cancelling a write means; structured partial results; `push_quiz` write-ahead |
+| [G: parent email defaults and deadline math](active/HANDOFF_G_Parent_Email_Defaults_and_Deadline_Math_2026-11-04.md) | implement, 2 parts | generic email keys with old-key compatibility; Engine adds "+N school days" |
+| [H: durable data check](active/HANDOFF_H_Durable_Data_Check_2026-11-04.md) | verify; ask one question | routing test, first-connect completeness, past family messages |
+| [I: routing, ownership and cleanup](active/HANDOFF_I_Routing_Ownership_and_Cleanup_2026-11-04.md) | implement, 3 parts | WebUI routing fails closed; git-owned files refused; ZIP-to-git steps; unused review code |
+
 | Handoff | Execution status | What the review clarified |
 |---|---|---|
 | [Quiz accommodation writes and New Quiz item scores](active/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md) | Consolidated 2026-10-28 from the open remainder of the two retired handoffs below. Part A writes are implemented and the student-side timer/attempt effect was teacher-confirmed on 2026-10-29; only the course/quiz combination is open. Part B (Engine-written New Quiz item scores) is **complete** (2026-10-29): captured, built, L1–L8 passed live, and the playbooks use it. | Which test identity is available, what each observation enables, and the item-score Engine design to build only after the save is observed. |

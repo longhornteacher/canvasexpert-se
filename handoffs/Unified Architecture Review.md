@@ -141,6 +141,8 @@ Decide supported cross-PC continuation and the evidence needed for a useful warn
 
 ## Proposed implementation order after direction is agreed
 
+Execution handoffs for B–I are in `handoffs/active/` (`HANDOFF_<slice>_…_2026-11-04.md`) and listed in the [handoff index](README.md). They carry the current code facts and supersede this section's candidate wording where they differ.
+
 Updated 2026-11-04 to follow the developer decisions above:
 
 1. **A:** reproduced student-save loss and cross-adapter overwrite, in separate bounded slices, with the narrow local-guard exception added to ARCHITECTURE.
