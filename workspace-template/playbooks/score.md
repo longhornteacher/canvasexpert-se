@@ -8,7 +8,7 @@ Read this playbook and grading/calendar references through their logical MCP pat
 
 A rubric shared by several assignments is assessed through the ordinary live rubric and exact criterion IDs. To inspect or offer a reusable rubric for future work, see edit.md; save a personal library entry only when the teacher asks. Never alter an existing definition to fit a grade.
 
-Use `teacher-context.md` for reusable guidance: read this course's notes and the exact assignment's expectations/models from `context/courses/<course-id>/assignments/<assignment-id>.md`. Reconcile origin, IDs, prompts, sources and rubric/points with the normal fresh pull before using them. Authored models calibrate strong, attainable grade-level work; they add no requirements or phrase-matching test. Recalibrate stale guidance for the affected prompt and continue independent work. Missing notes do not block scoring; save useful new assignment guidance and any established local scoring basis/interpretation there without student work or results.
+Use `teacher-context.md` for reusable guidance: read this course's notes, this class's open entries in `context/reteach.md`, and the exact assignment's expectations/models from `context/courses/<course-id>/assignments/<assignment-id>.md`. Reconcile origin, IDs, prompts, sources and rubric/points with the normal fresh pull before using them. Authored models calibrate strong, attainable grade-level work; they add no requirements or phrase-matching test. Recalibrate stale guidance for the affected prompt and continue independent work. Missing notes do not block scoring; save useful new assignment guidance and any established local scoring basis/interpretation there without student work or results.
 
 ## Pull
 
@@ -118,7 +118,8 @@ Start each results file with `init_results` and the packet path from the pull re
 
 When the scoring is done and valid, report it here rather than sending the teacher to a page. Keep it short, one block per assignment (and per class when sections differ):
 
-- overall impressions: what most students did well, the most common gap or misconception, and anything surprising, in two or three sentences
+- overall impressions: what most students did well, the most common gap or misconception, and anything surprising or concerning, in two or three sentences. Name trends: the same gap in another class, or one already open for this class in `context/reteach.md` ("still mixing up theme and topic, as on the last essay")
+- reteach needs you added to or updated in `context/reteach.md` for this class, one line each (see `teacher-context.md`)
 - how many students were scored and the distribution in assignment points, including median and rough spread ("median 7/10; most 6–9; four below 5"). Offer one or two hypothetical curve options only when the distribution warrants it and state their numerical effect. No curve is applied; applying one requires a separately requested feature. For a New Quiz, report ranges per written part in item points; Canvas computes the quiz total once item scores are written, so quote a total only from Canvas. Never guess a total or silently apply effort floors to item points or fudge points
 - one typical, non-held student’s exact Engine-rendered comment by alias, from `.\cse.cmd validate RESULTS --show STUDENT_REF` (MCP `validate_document {path, show: STUDENT_REF}`). Use the returned text verbatim, never paraphrase it. The sample exposes no submission or private teacher notes; held selections return only the reason. With item scores the sample lists what goes into the quiz: each item's points and comment, then any whole-assignment comment
 - each held student by alias with the specific reason, and missing submissions as a count

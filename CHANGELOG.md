@@ -4,6 +4,9 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+- Scoring check-ins name trends: a gap shared with another class or one already open for this class.
+- Reteach needs by class in `context/reteach.md` (UserSync when configured). After scoring, the agent records skills a class needs retaught, with counts, assignment evidence, a spiral idea and status, and tells the teacher. Planning, unit-quiz spiral items and later scoring read the class's open entries. No student names, aliases or individual scores are stored there.
+
 ## 1.8.1 (2026-10-29)
 
 Reusable teacher preferences, course notes and assignment expectations in UserSync.
