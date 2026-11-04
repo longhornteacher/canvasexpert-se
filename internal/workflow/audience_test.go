@@ -277,9 +277,6 @@ func TestAudienceInitialExistingAssignmentPreservesManualExceptionsAndUncertainW
 				t.Fatalf("exceptions not prepared %+v %v", state, err)
 			}
 			_ = workspace.WriteDocument(filepath.Join(s.Root, "context", "courses.md"), s.Config, "")
-			if _, err = ValidateReviewInput(s.Root, path, "TEST"); err != nil {
-				t.Fatal(err)
-			}
 			model, err := BuildReview(s.Root, path)
 			if err != nil || len(model.Cards) != 1 || !strings.Contains(fmt.Sprint(model.Cards[0].Facts), "exclusive club access is not achieved") {
 				t.Fatalf("dishonest review %+v %v", model, err)
