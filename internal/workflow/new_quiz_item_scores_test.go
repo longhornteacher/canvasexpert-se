@@ -2,12 +2,14 @@ package workflow
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -236,5 +238,43 @@ func TestItemScoresHoldWhenTheQuizResultChangedSinceThePull(t *testing.T) {
 	}
 	if *posts != 0 || *comments != 0 || report.Students[0].Status != "held" {
 		t.Fatalf("expected a hold with no writes: posts=%d comments=%d report=%#v", *posts, *comments, report.Students)
+	}
+}
+
+// A teammate's key writes item scores through the native client; the team
+// log must record that write once, redacted, and nothing for token requests.
+func TestTeammateItemScoreWriteIsLoggedOnceAndRedacted(t *testing.T) {
+	s, _, posts, _, _, _ := itemScoreFixture(t, "15", false, "Strong evidence overall.")
+	origin, _ := url.Parse(s.Client.Origin())
+	insecure := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	previous := http.DefaultTransport
+	http.DefaultTransport = anyHostTransport{destination: origin, base: insecure}
+	t.Cleanup(func() { http.DefaultTransport = previous })
+	owner := workspace.Teammate{Label: "turner", Name: "Ms. Turner", CanvasUserID: 77}
+	s.InstallRoot = s.Root
+	s.Keys = fakeKeys{origin: origin.String(), turner: true}
+	c, err := s.teammateClient(&routeState{}, owner, domain.Course{Nickname: "TEST", ID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := c.NewQuizGrading(context.Background(), 1, 10, "ps1", "qs1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = g.PostScores(context.Background(), map[string]string{"8001": "12"}, nil); err != nil || *posts != 1 {
+		t.Fatalf("posts=%d err=%v", *posts, err)
+	}
+	entries, err := workspace.ReadTeamLog(s.InstallRoot, "turner", 10)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("want exactly one log entry (token requests are not writes): %+v %v", entries, err)
+	}
+	if e := entries[0]; e.Method != "POST" || e.Path != "/api/quiz_sessions/:session/results" || e.Course != "TEST" || e.Status != 200 {
+		t.Fatalf("entry: %+v", e)
+	}
+	raw, _ := os.ReadFile(filepath.Join(s.InstallRoot, ".cse", "team-log.jsonl"))
+	for _, secret := range []string{"qs1", "ps1", turnerToken, "grading-token", "native-jwt"} {
+		if strings.Contains(string(raw), secret) {
+			t.Fatalf("log leaked %q: %s", secret, raw)
+		}
 	}
 }

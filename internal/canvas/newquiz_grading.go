@@ -30,9 +30,10 @@ type NewQuizGrading struct {
 	Score, PointsPossible string
 	Items                 []map[string]any
 
-	httpc *http.Client
-	host  string
-	token string
+	httpc  *http.Client
+	host   string
+	token  string
+	client *Client
 }
 
 // NewQuizSession is one assignment's native New Quizzes session, shared by
@@ -48,7 +49,7 @@ func (c *Client) NewQuizSession(ctx context.Context, courseID, assignmentID int6
 	}
 	n, err := c.newQuizNative(ctx, courseID, assignmentID)
 	if err != nil {
-		return nil, err
+		return nil, c.mapNative(err)
 	}
 	return &NewQuizSession{n: n}, nil
 }
@@ -81,7 +82,7 @@ func (c *Client) NewQuizGrading(ctx context.Context, courseID, assignmentID int6
 	}
 	var raw json.RawMessage
 	if err = secureJSON(ctx, g.httpc, http.MethodGet, g.host+"/api/quiz_sessions/"+url.PathEscape(g.QuizSessionID)+"/results/"+url.PathEscape(g.ResultID)+"/session_item_results", g.token, "Signature", nil, &raw); err != nil {
-		return nil, fmt.Errorf("item results step failed: %w", err)
+		return nil, g.client.mapNative(fmt.Errorf("item results step failed: %w", err))
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
@@ -103,7 +104,7 @@ func (s *NewQuizSession) session(ctx context.Context, participantSessionID, quiz
 		SessionID nativeResourceID `json:"quiz_api_quiz_session_id"`
 	}
 	if err := secureJSON(ctx, n.httpc, http.MethodGet, n.backend+"/api/participant_sessions/"+url.PathEscape(participantSessionID)+"/grade", "Bearer "+n.token, "", nil, &grade); err != nil {
-		return nil, fmt.Errorf("grading session step failed: %w", err)
+		return nil, n.mapped(fmt.Errorf("grading session step failed: %w", err))
 	}
 	host, err := trustedInstructureOrigin(grade.Host)
 	if err != nil || grade.Token == "" || grade.SessionID == "" {
@@ -112,12 +113,12 @@ func (s *NewQuizSession) session(ctx context.Context, participantSessionID, quiz
 	if quizSessionID != "" && string(grade.SessionID) != quizSessionID {
 		return nil, fmt.Errorf("the quiz session changed since Canvas reported this attempt: %w", &Error{Kind: "validation"})
 	}
-	g := &NewQuizGrading{QuizSessionID: string(grade.SessionID), httpc: n.httpc, host: host, token: grade.Token}
+	g := &NewQuizGrading{QuizSessionID: string(grade.SessionID), httpc: n.httpc, host: host, token: grade.Token, client: n.client}
 	var session struct {
 		Authoritative map[string]json.RawMessage `json:"authoritative_result"`
 	}
 	if err = secureJSON(ctx, n.httpc, http.MethodGet, host+"/api/quiz_sessions/"+url.PathEscape(g.QuizSessionID), grade.Token, "Signature", nil, &session); err != nil {
-		return nil, fmt.Errorf("quiz session step failed: %w", err)
+		return nil, n.mapped(fmt.Errorf("quiz session step failed: %w", err))
 	}
 	var id json.Number
 	if json.Unmarshal(session.Authoritative["id"], &id) != nil || id == "" {
@@ -173,15 +174,19 @@ func (g *NewQuizGrading) PostScores(ctx context.Context, scores, comments map[st
 		Score          json.Number `json:"score"`
 		PointsPossible json.Number `json:"points_possible"`
 	}
-	if err = secureJSON(context.WithoutCancel(ctx), g.httpc, http.MethodPost, g.host+"/api/quiz_sessions/"+url.PathEscape(g.QuizSessionID)+"/results", g.token, "Signature", body, &out); err != nil {
-		// A lost connection or a server error after the body was sent may
-		// still have created a result version.
+	path := "/api/quiz_sessions/" + url.PathEscape(g.QuizSessionID) + "/results"
+	if err = secureJSON(context.WithoutCancel(ctx), g.httpc, http.MethodPost, g.host+path, g.token, "Signature", body, &out); err != nil {
+		// A write that may have landed is uncertain, as for ordinary Canvas
+		// writes: lost connection, timeout, redirect or server error, or a
+		// success whose body could not be used.
 		var ce *Error
-		if errors.As(err, &ce) && (ce.Kind == "transport" || ce.Status >= 500) {
+		if errors.As(err, &ce) && (ce.Kind == "transport" || writeStatusUncertain(ce.Status) || (ce.Status >= 200 && ce.Status < 300)) {
 			ce.Uncertain = true
 		}
-		return "", fmt.Errorf("item score write failed: %w", err)
+		g.noteWrite(path, err)
+		return "", g.client.mapNative(fmt.Errorf("item score write failed: %w", err))
 	}
+	g.noteWrite(path, nil)
 	if out.ID == "" {
 		return "", fmt.Errorf("item score write returned no result version: %w", &Error{Kind: "validation", Uncertain: true})
 	}
@@ -262,4 +267,29 @@ func newQuizResultBody(items []map[string]any, scores, comments map[string]strin
 		}
 	}
 	return map[string]any{"results": results, "fudge_points": fudge}, nil
+}
+
+// noteWrite reports the grading write to the client's audit hook once, with
+// the path only (no host, token or query).
+func (g *NewQuizGrading) noteWrite(path string, err error) {
+	if g.client == nil || g.client.OnWrite == nil {
+		return
+	}
+	status, uncertain := 200, false
+	if err != nil {
+		status = 0
+		var ce *Error
+		if errors.As(err, &ce) {
+			status, uncertain = ce.Status, ce.Uncertain
+		}
+	}
+	g.client.OnWrite(http.MethodPost, path, status, uncertain)
+}
+
+// mapNative applies the client's error mapping, tolerating a nil client.
+func (c *Client) mapNative(err error) error {
+	if c != nil && c.MapError != nil {
+		return c.MapError(err)
+	}
+	return err
 }
