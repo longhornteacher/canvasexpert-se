@@ -104,6 +104,9 @@ func (s *Server) trackReusedHub(pageURL string) (TextOutput, error) {
 }
 
 func (s *Server) startSession(ctx context.Context, kind string, args []string) (TextOutput, error) {
+	if err := s.staleAdapter(args); err != nil {
+		return TextOutput{}, err
+	}
 	full := append([]string{"--workspace", s.root}, args...)
 	var cmd *exec.Cmd
 	if s.newSessionCommand != nil {

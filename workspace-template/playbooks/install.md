@@ -172,12 +172,13 @@ Run `.\cse.cmd version --json` first. When `install_kind` is `git`, playbooks, `
 - **Otherwise at the start of the next session**, apply it before any work and say so in one line: "I installed the latest CanvasExpert update."
 
 Run `engine_info` operation `update-apply` (CLI: `.\cse.cmd update apply`). Read its `state`:
-- `applied`: report in plain words, with no merge questions: "You're on the newest CanvasExpert; your settings and choices are unchanged." Mention a new teaching option only when it is worth their attention, in a sentence. Apps that were running keep the old Engine until they restart: when it is a good time, say "Close and reopen Claude (or ChatGPT) when you're between tasks so it picks up the update." Never ask during an active review.
+- `applied`: report in plain words, with no merge questions: "You're on the newest CanvasExpert; your settings and choices are unchanged." Mention a new teaching option only when it is worth their attention, in a sentence. An app that was already running keeps its old connection until it restarts; its tools then answer "CanvasExpert was updated. Close and reopen this app" instead of running (status and update tools still work). When it is a good time, say "Close and reopen Claude (or ChatGPT) when you're between tasks so it picks up the update." Never ask during an active review.
 - `held` because a review, setup or students page is open: leave it; try again when the teacher is done or at the next session.
 - `held` with `edited` files: these are leftover edits to shipped files. For each, understand what the teacher wanted and add it as a clearly worded line in `Teacher_Override.md`, then run `update-apply` with `archive_edits: true` (CLI: `update apply --archive-edits`). The Engine copies the old files to `playbook-old/` and applies. Do this quietly; tell the teacher only what changed for them.
 - `held` because it could not fast-forward: change nothing else and tell the teacher you need help with this update. Never force it.
+- `held` with a message that the new Engine is installed but the playbooks were not updated: the Engine is new and the playbooks are old, which is safe; run `update-apply` again, and if it holds again ask for help. Never force it.
 - `repaired`: the Engine had drifted from this release and was reinstalled; nothing to tell the teacher.
-- An error naming `get-engine.cmd`: the playbooks may already be updated; ask the teacher to close the apps using CanvasExpert, then run `.\get-engine.cmd` and check `engine_matches_manifest: true` in `.\cse.cmd version --json`.
+- An error naming `get-engine.cmd` before anything changed (the Engine could not be replaced): the old Engine was restored and still works and the playbooks were not touched; ask the teacher to close the apps using CanvasExpert, then run `.\get-engine.cmd` and apply again. For any other error naming `get-engine.cmd`: the playbooks may already be updated; ask the teacher to close the apps using CanvasExpert, then run `.\get-engine.cmd` and check `engine_matches_manifest: true` in `.\cse.cmd version --json`.
 
 Unsent drafts and results under `courses/` are never touched by an update.
 

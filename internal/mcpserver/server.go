@@ -474,7 +474,30 @@ func addTool[In any](server *mcp.Server, name, description string, annotations m
 	})
 }
 
+// staleAdapterNotice is returned instead of running a command when this adapter is older than
+// the Engine now installed. After an update, os.Executable still names the old path, which now
+// holds the new Engine, so an old adapter would start new child Engines (mixed versions) until
+// the app is restarted. Status and update commands stay allowed so the agent can still explain.
+const staleAdapterNotice = "CanvasExpert was updated. Close and reopen this app so it loads the new version; nothing was run."
+
+func (s *Server) staleAdapter(args []string) error {
+	if BuildKind != "release" || len(args) == 0 || args[0] == "version" || args[0] == "update" {
+		return nil
+	}
+	m, ok, err := workspace.ReadEngineManifest(s.root)
+	if err != nil || !ok || m.Identity == "" {
+		return nil
+	}
+	if workspace.ArtifactIdentity(Version, BuildKind, Revision, BuiltAt) != m.Identity {
+		return errors.New(staleAdapterNotice)
+	}
+	return nil
+}
+
 func (s *Server) command(ctx context.Context, args ...string) (TextOutput, error) {
+	if err := s.staleAdapter(args); err != nil {
+		return TextOutput{}, err
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return TextOutput{}, err
