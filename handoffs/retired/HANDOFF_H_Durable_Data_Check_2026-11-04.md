@@ -1,3 +1,5 @@
+> **Retired 2026-11-04 — complete.** Developer decision on past family messages (2026-11-04): option (a), contact details only. They are already durable in UserSync, so nothing was built for (b) a run listing or (c) a cross-PC sent-messages summary. The routing test, the first-connect fix (connecting to a non-empty UserSync now copies this PC's missing durable files once, never overwriting UserSync) and the ARCHITECTURE inventory are in Dev (commit 64bbb5b). Historical instructions follow; do not execute them again.
+
 # HANDOFF H: Durable teacher data is stored and retrievable
 
 Date: 2026-11-04. Slice H of the [unified architecture review](../Unified%20Architecture%20Review.md), reframed by developer decisions 1 and 4. Layer: **Engine storage** (`internal/workspace`, `internal/workflow`) and **docs**. It is mostly verification; fix only a concrete gap.

@@ -1,3 +1,5 @@
+> **Retired 2026-11-04 — implemented in Dev** (developer approved the full spec the same day). Cancelling `post_results` or `push_quiz`, or reaching the time limit, lets the item in flight finish and stops before the next; exit 3 returns a structured result; `push_quiz` writes its sidecar atomically with a `creating` marker; held errors are typed. Local tests only, including a stand-in child process; no cancellation was observed against live Canvas, and commands other than `post` and `push-quiz` are still killed on cancel. Historical instructions and the approved spec follow; do not execute them again.
+
 # HANDOFF F: What cancelling a write means (spec first)
 
 Date: 2026-11-04. Slice F of the [unified architecture review](../Unified%20Architecture%20Review.md). Layer: **Engine / MCP adapter** (`internal/mcpserver`, CLI exit codes).

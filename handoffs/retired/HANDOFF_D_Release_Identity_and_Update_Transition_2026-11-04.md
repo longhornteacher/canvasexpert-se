@@ -1,3 +1,5 @@
+> **Retired 2026-11-04 — implemented in Dev.** D1 (commit 1500227): a `-Release` package refuses to replace a released artifact set. D2 (developer approved the full spec the same day; commit dfb8e86): update-apply checks holds and the fast-forward first, installs the staged Engine, then fast-forwards; `get-engine.cmd` restores the old files if it cannot finish; the Engine check covers the extension; a running older adapter returns a restart notice. Local tests and a real `get-engine.cmd` run on a throwaway folder; no teacher update has run the new sequence. Historical instructions and the approved spec follow; do not execute them again.
+
 # HANDOFF D: One artifact set per release; a coherent update transition
 
 Date: 2026-11-04. Slice D of the [unified architecture review](../Unified%20Architecture%20Review.md). Layer: **Dev packaging scripts** (D1) and **Engine update lifecycle** (D2).
