@@ -81,3 +81,20 @@ Run the full check list from the execution notes.
 ## Not in this slice
 
 A job framework, persistent job queue, cross-PC continuation, changing `longCommand` pulls.
+
+---
+
+## F spec (proposed 2026-11-04, awaiting developer approval; no F code written)
+
+1. **Meaning of cancel.** Finish the in-flight write, record its outcome, then stop before the next independent item (the recommended default). This applies to the batch writers that use `Server.command`: `post_results`, `push_document`, `push_quiz`, `set_tags`, `set_quiz_accommodations`, `assign_to`, `assign_modules_by_tag`, `upload_file`, `replace_text`, `prepare_audience`, `inbox_set_state`. Single-request writes (`inbox_reply`, `set_file_access`, `set_quiz_points`) have no next item; they just finish. `copy_module` and `copy_assignment` already run detached (`longCommand`) and keep doing so.
+   - **How the child is told to stop.** Close the child's **stdin**. The adapter starts write commands with a stdin pipe it never writes to; on cancel or timeout it closes the pipe and sets a grace period (`cmd.WaitDelay`) before the hard kill. A small goroutine in the child (`io.Copy(io.Discard, os.Stdin)` returning) sets a "stop requested" flag. Why stdin: it works for a console-less Windows child (where `os.Interrupt` cannot be delivered), needs no files to clean up and no new IPC.
+   - **Where the child honors it.** Only between independent items (students in `post`, actions in a push, tag memberships), never inside a request. The flag is checked before an item starts and the write itself runs under a context that is not cancelled by the flag, so an in-flight request is never aborted mid-send. Items not started stay as they were (`pending`/untouched), and the report lists them as "stopped before start".
+   - **Fallback.** If the child does not exit within the grace period (proposed 2 minutes), kill it, as today. The receipts below then reconcile on rerun.
+2. **Discovering outcomes after reconnect.** Rerunning the same tool with the same inputs is enough for `post_results` and `push_document` (pending/uncertain records reconcile against live Canvas; no replay), for the pulls (`longCommand` same-inputs collection) and for `inbox_reply` (the `after_message` guard). No status tool or job system is added. For a cancelled batch the rerun simply continues with the items that were not started.
+3. **`push_quiz`.** Yes. Write the sidecar atomically (temp file and rename, as `WriteDocument` does) and record a `creating` marker before the create request, so a kill between create and sidecar leaves a trace the rerun can match against the live quiz by title and settings instead of only holding on "already exists". Small change in `quiz_author.go`; matches `push_document`.
+4. **Structured partial results.** Yes. In MCP, exit code 3 becomes a normal result (not a tool error) with `Outcome: "partial"` or `"held"` and the Engine's outcome text; other nonzero exits stay errors. Replace the `"held:"` substring check in `workflowError` with a typed held error (`errors.As`), keeping exit 3 for the CLI. This removes the dependence on message wording.
+5. **Timeout.** Keep 15 minutes (`commandTimeout`); a batch that long is unusual. At the limit the behavior is the same as cancel: graceful stop, then the report says "stopped at the time limit; run again to continue".
+
+### Smallest approved scope (proposed)
+
+Items 4 and 3 first (they are independent, cheap, and remove the generic-error and no-marker cases), then item 1 (stdin stop, `WaitDelay`, between-item checks in `post` and the push loops). Tests: a cancelled `post_results` over a fake server records the in-flight item and does not start the next; a rerun reconciles; exit 3 maps to a structured result; the `push_quiz` marker survives a kill between create and sidecar. If you want less, do 4 and 3 only and leave the hard kill as is.

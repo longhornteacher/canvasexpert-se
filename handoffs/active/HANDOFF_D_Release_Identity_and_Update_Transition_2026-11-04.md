@@ -131,3 +131,34 @@ Add a focused test per changed failure point: `GetEngine` stub failing at each s
 ## Not in this slice
 
 Reproducible builds, an installer, changes to the ZIP fallback, or any real update of the developer's UserInstall.
+
+---
+
+## D1 status (2026-11-04): done
+
+Implemented in commit `1500227` and fixture-tested (first `-Release -UpdateBranch` succeeds; a second identical run, and a run into a fresh output folder after the branch has the version, both refuse with assets and branch untouched; non-release builds unchanged). Nothing was pushed or tagged.
+
+## D2 spec (proposed 2026-11-04, awaiting developer approval; no D2 code written)
+
+### What was checked
+
+- **`os.Executable()` after the swap.** A test program renamed its own running `.exe` and put a new file at the old path; `os.Executable()` kept returning the **old path**, which now holds the **new** binary. `Server.command` launches children from `os.Executable()` (`server.go:478`). So after `update-apply`, a still-running old adapter starts **new** child Engines: old adapter code plus new Engine, with no warning. This is the real mixed-version case, and it exists on every successful update until the app restarts.
+- `get-engine.cmd` today leaves no Engine at all if the move of the new `cse.exe` fails after `cse.exe` was renamed to `cse.exe.previous` (exit 6 at `:106-110`), and keeps no backup of the old MCPB.
+- `engineMatches` (`gitupdate.go:226-232`) compares only `cse.exe`.
+
+### Answers
+
+1. **Order.** Moving the Engine swap before the merge does not remove failure classes by itself (the swap can still fail at rename), but it changes which mismatch is left behind. A new Engine with old playbooks is the safer one (the Engine keeps old commands); an old Engine with new playbooks can send the agent to commands that do not exist. Recommended sequence: (a) check every hold condition first, with no changes: open pages, tracked edits, and `git merge-base --is-ancestor HEAD origin/userinstall` (a fast-forward check that needs no merge); (b) swap the staged Engine; (c) `git merge --ff-only`. After (a), (c) failing is very rare. If it does fail, the report says the Engine is new and playbooks are old, and the next `update-apply` still sees the pending commits and finishes it.
+2. **Rollback.** Yes. In `get-engine.cmd`, rename both `cse.exe` and the MCPB to `*.previous` before moving anything; if any move fails, rename the `*.previous` files back and exit 6. The install is never left without an Engine, and a failed MCPB move no longer leaves a half-new set. This is a small, contained change to one script and is worth doing regardless of the other answers.
+3. **Completeness.** Yes: `engineMatches` checks every `sha256.*` asset in `engine/manifest.txt` (`cse.exe` and the MCPB), so a stale MCPB reports `repaired` instead of `current`.
+4. **Running adapter.** The restart line alone is not enough, because of the mixed-version case above. Recommended: before the adapter starts any child Engine, compare its own compiled identity (`workspace.ArtifactIdentity`) with the `identity=` line in `engine/manifest.txt`; on mismatch return one plain notice ("CanvasExpert was updated. Close and reopen this app so it loads the new version.") instead of running. `engine_info` `version` and `update-status` stay allowed so the agent can still explain. The check is a single small file read per tool call. Not recommended: killing the adapter or trying to reload in place.
+5. **What the teacher is told in each state** (agent-facing text already in `install.md` "Updates"; the spec only adds the new notice):
+   - `held` (page open, edits, cannot fast-forward): nothing changed; try later, or the existing edits and fast-forward wording.
+   - `repaired`: nothing to tell.
+   - `applied`: "You're on the newest CanvasExpert; your settings and choices are unchanged." plus the close-and-reopen line, now backed by the notice above.
+   - Engine swap failed (exit 6): nothing changed and the old Engine still works (after item 2); ask them to close the apps, then run `.\get-engine.cmd`.
+   - Merge failed after a successful swap: the Engine is new and playbooks old; the next apply finishes it.
+
+### Smallest approved scope (proposed)
+
+Items 2 and 3 (script rollback, full `engineMatches`), item 1 (preflight, then swap, then merge) and item 4 (restart notice), each with a focused test: stubbed `GetEngine` failing at each step, a stale MCPB, and an adapter whose identity differs from the manifest. If you would rather keep it smaller, items 2 and 3 alone remove the unbootable-install case and the false `current`.
