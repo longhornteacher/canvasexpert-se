@@ -1,6 +1,7 @@
 package localui
 
 import (
+	"fmt"
 	"bytes"
 	"context"
 	"html/template"
@@ -77,17 +78,23 @@ func (h *Hub) clientForCourse(ctx context.Context, courseID int64) (*canvas.Clie
 	if err != nil {
 		return nil, err
 	}
+	// Fail closed like the commands: if the course list or team cannot be read, or an owner is
+	// not on the team, never fall back to your own key (it could be the wrong key for a
+	// teammate's course).
 	config, _, err := h.readConfig()
 	if err != nil {
-		return c, nil
+		return nil, fmt.Errorf("your saved courses (context/courses.md) could not be read, so nothing was fetched or changed: %w", err)
+	}
+	team, err := workspace.ReadTeam(h.root)
+	if err != nil {
+		return nil, err
+	}
+	if err = workspace.CheckOwners(config, team); err != nil {
+		return nil, err
 	}
 	for _, course := range config.Courses {
 		if course.ID != courseID || course.Owner == "" {
 			continue
-		}
-		team, err := workspace.ReadTeam(h.root)
-		if err != nil {
-			return nil, err
 		}
 		service := &workflow.Service{Root: h.root, Client: c, Config: config, Team: team, Keys: hubKeys{h}, InstallRoot: h.root}
 		scoped, err := service.ForCourse(ctx, course)
