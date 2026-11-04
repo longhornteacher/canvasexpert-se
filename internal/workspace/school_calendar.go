@@ -213,17 +213,7 @@ func (c SchoolCalendar) CountSchoolTime(deadline, submitted time.Time) (SchoolTi
 	if first.Before(calendarStart) || coverageLast.After(calendarEnd) {
 		return SchoolTimeResult{}, fmt.Errorf("school calendar does not cover the counted interval %s through %s", first.Format("2006-01-02"), coverageLast.Format("2006-01-02"))
 	}
-	closed := make(map[string]bool, len(c.NonSchoolDates))
-	for _, d := range c.NonSchoolDates {
-		closed[d] = true
-	}
-	for _, r := range c.NonSchoolRanges {
-		rs, _ := parseCalendarDate(r.StartDate)
-		re, _ := parseCalendarDate(r.EndDate)
-		for d := rs; !d.After(re); d = d.AddDate(0, 0, 1) {
-			closed[d.Format("2006-01-02")] = true
-		}
-	}
+	closed := c.closedDates()
 
 	var seconds int64
 	var skipped []string
@@ -247,6 +237,56 @@ func (c SchoolCalendar) CountSchoolTime(deadline, submitted time.Time) (SchoolTi
 	}
 	sort.Strings(skipped)
 	return SchoolTimeResult{Status: status, SecondsLate: seconds, SkippedDates: skipped}, nil
+}
+
+// closedDates is every configured closure (single dates and expanded ranges) as YYYY-MM-DD.
+func (c SchoolCalendar) closedDates() map[string]bool {
+	closed := make(map[string]bool, len(c.NonSchoolDates))
+	for _, d := range c.NonSchoolDates {
+		closed[d] = true
+	}
+	for _, r := range c.NonSchoolRanges {
+		rs, _ := parseCalendarDate(r.StartDate)
+		re, _ := parseCalendarDate(r.EndDate)
+		for d := rs; !d.After(re); d = d.AddDate(0, 0, 1) {
+			closed[d.Format("2006-01-02")] = true
+		}
+	}
+	return closed
+}
+
+// AddSchoolDays returns base's local wall-clock time on the n-th school day after base's
+// local date, in the calendar timezone. A school day is a weekday that is not a configured
+// closure, the same rule CountSchoolTime uses. Counting starts from the next calendar day,
+// so a base on a non-school day still works. The result is built as a local time, so a DST
+// change keeps the wall clock. It errors when the calendar does not cover the result.
+func (c SchoolCalendar) AddSchoolDays(base time.Time, n int) (time.Time, error) {
+	if base.IsZero() || n < 1 {
+		return time.Time{}, fmt.Errorf("a base time and at least one school day are required")
+	}
+	if err := c.Validate(); err != nil {
+		return time.Time{}, err
+	}
+	loc, _ := time.LoadLocation(c.Timezone)
+	calendarStart, _ := dateInLocation(c.StartDate, loc)
+	calendarEnd, _ := dateInLocation(c.EndDate, loc)
+	local := base.In(loc)
+	day := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+	if day.Before(calendarStart) || day.After(calendarEnd) {
+		return time.Time{}, fmt.Errorf("school calendar does not cover the base date %s", day.Format("2006-01-02"))
+	}
+	closed := c.closedDates()
+	for counted := 0; counted < n; {
+		day = day.AddDate(0, 0, 1)
+		if day.After(calendarEnd) {
+			return time.Time{}, fmt.Errorf("school calendar ends before %d school days after %s", n, local.Format("2006-01-02"))
+		}
+		if day.Weekday() == time.Saturday || day.Weekday() == time.Sunday || closed[day.Format("2006-01-02")] {
+			continue
+		}
+		counted++
+	}
+	return time.Date(day.Year(), day.Month(), day.Day(), local.Hour(), local.Minute(), local.Second(), local.Nanosecond(), loc), nil
 }
 
 func parseCalendarDate(value string) (time.Time, error) {

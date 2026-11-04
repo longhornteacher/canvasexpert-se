@@ -27,6 +27,11 @@ type LateTimingStudentDecision struct {
 	FirstGenuine         domain.AttemptRef `yaml:"first_genuine" json:"first_genuine"`
 	AccommodatedDeadline string            `yaml:"accommodated_deadline,omitempty" json:"accommodated_deadline,omitempty"`
 	AccommodationBasis   string            `yaml:"accommodation_basis,omitempty" json:"accommodation_basis,omitempty"`
+	// AllowanceSchoolDays asks the Engine to count N school days after the base
+	// (Canvas's effective due date unless AllowanceBase names another documented
+	// deadline). Use it instead of AccommodatedDeadline; never both.
+	AllowanceSchoolDays int    `yaml:"allowance_school_days,omitempty" json:"allowance_school_days,omitempty" jsonschema:"Approved allowance as a whole number of school days; the Engine counts it from the base using the school calendar. Use instead of accommodated_deadline, with accommodation_basis. Send nothing when Canvas's date already includes the allowance"`
+	AllowanceBase       string `yaml:"allowance_base,omitempty" json:"allowance_base,omitempty" jsonschema:"Optional RFC3339 base for allowance_school_days when it is not the pulled Canvas effective due date"`
 }
 
 type LateTimingGroupDecision struct {
@@ -103,15 +108,34 @@ func validateLateTimingDecision(row LateTimingStudentDecision) error {
 	if err := validateDateTime(row.FirstGenuine.SubmittedAt, "first_genuine.submitted_at"); err != nil {
 		return err
 	}
-	if row.AccommodatedDeadline != "" {
+	if row.AllowanceSchoolDays < 0 {
+		return fmt.Errorf("allowance_school_days must be a positive number of school days")
+	}
+	if row.AllowanceSchoolDays > 0 && row.AccommodatedDeadline != "" {
+		return fmt.Errorf("send accommodated_deadline or allowance_school_days, not both")
+	}
+	if row.AllowanceBase != "" {
+		if row.AllowanceSchoolDays == 0 {
+			return fmt.Errorf("allowance_base requires allowance_school_days")
+		}
+		if err := validateDateTime(row.AllowanceBase, "allowance_base"); err != nil {
+			return err
+		}
+	}
+	switch {
+	case row.AccommodatedDeadline != "":
 		if err := validateDateTime(row.AccommodatedDeadline, "accommodated_deadline"); err != nil {
 			return err
 		}
 		if strings.TrimSpace(row.AccommodationBasis) == "" {
 			return fmt.Errorf("accommodation_basis is required with accommodated_deadline")
 		}
-	} else if row.AccommodationBasis != "" {
-		return fmt.Errorf("accommodation_basis requires accommodated_deadline")
+	case row.AllowanceSchoolDays > 0:
+		if strings.TrimSpace(row.AccommodationBasis) == "" {
+			return fmt.Errorf("accommodation_basis is required with allowance_school_days")
+		}
+	case row.AccommodationBasis != "":
+		return fmt.Errorf("accommodation_basis requires accommodated_deadline or allowance_school_days")
 	}
 	return nil
 }
@@ -369,7 +393,26 @@ func (s *Service) calculateTiming(choice LateTimingStudentDecision, canvasDue st
 		return nil, "selected first genuine submission time is malformed"
 	}
 	calendar := workspace.SchoolCalendar{}
-	if submitted.After(deadline) {
+	allowanceBase := ""
+	if choice.AllowanceSchoolDays > 0 {
+		// The Engine counts the approved allowance; the agent decided eligibility, N and
+		// that Canvas's date does not already include it.
+		base := due
+		if choice.AllowanceBase != "" {
+			if base, err = time.Parse(time.RFC3339Nano, choice.AllowanceBase); err != nil {
+				return nil, "allowance base is malformed"
+			}
+		}
+		if calendar, err = workspace.ReadSchoolCalendar(s.Root); err != nil {
+			return nil, "school calendar is unavailable to count the allowance: " + err.Error()
+		}
+		if deadline, err = calendar.AddSchoolDays(base, choice.AllowanceSchoolDays); err != nil {
+			return nil, "allowance cannot be counted: " + err.Error()
+		}
+		allowanceBase = base.Format(time.RFC3339)
+		basis = strings.TrimSpace(choice.AccommodationBasis)
+	}
+	if submitted.After(deadline) && calendar.Timezone == "" {
 		calendar, err = workspace.ReadSchoolCalendar(s.Root)
 		if err != nil {
 			return nil, "school calendar is unavailable for a late interval: " + err.Error()
@@ -382,7 +425,7 @@ func (s *Service) calculateTiming(choice LateTimingStudentDecision, canvasDue st
 	if !observed.StatusKnown || !observed.SecondsLateKnown || !observed.LateKnown {
 		return nil, "current Canvas timing was not fully observed; pull the assignment again"
 	}
-	provenance := &domain.SchoolTimeProvenance{Attempt: source.Ref, SubmittedAt: source.Ref.SubmittedAt, Deadline: deadline.Format(time.RFC3339), Status: counted.Status, SecondsLate: counted.SecondsLate, SkippedDates: append([]string(nil), counted.SkippedDates...)}
+	provenance := &domain.SchoolTimeProvenance{Attempt: source.Ref, SubmittedAt: source.Ref.SubmittedAt, Deadline: deadline.Format(time.RFC3339), Status: counted.Status, SecondsLate: counted.SecondsLate, SkippedDates: append([]string(nil), counted.SkippedDates...), AllowanceSchoolDays: choice.AllowanceSchoolDays, AllowanceBase: allowanceBase}
 	timing := &domain.LateTiming{Status: counted.Status, SecondsLate: counted.SecondsLate, DueAt: due.Format(time.RFC3339), Basis: basis, SchoolTime: provenance, Observed: observed}
 	return timing, ""
 }
