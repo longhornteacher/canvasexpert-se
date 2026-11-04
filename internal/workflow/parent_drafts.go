@@ -24,15 +24,27 @@ func trimPoint(v string) string { return strings.TrimSuffix(v, ".0") }
 // ParentConfig is context/parent-updates.md front matter.
 type ParentConfig struct {
 	Schema int `yaml:"schema"`
-	// The YAML keys keep their original names for compatibility; the values
-	// are each teacher's own grade portal and tutoring sign-up.
-	SkywardURL      string `yaml:"skyward_url"`
+	// The values are each teacher's own grade portal and tutoring sign-up. The
+	// generic keys are canonical; the older skyward_url and bobcat_hour_* keys
+	// still work and are folded into them by loadParentConfig.
+	GradePortalURL  string `yaml:"grade_portal_url"`
 	GradePortalName string `yaml:"grade_portal_name"`
+	TutoringURL     string `yaml:"tutoring_url"`
+	TutoringLabel   string `yaml:"tutoring_label"`
+	TutoringText    string `yaml:"tutoring_text"`
+	// ClassName names the class in the weekly update; blank gives a generic wording.
+	ClassName string `yaml:"class_name"`
+	// FailingBelow is the percent under which the weekly update lists work as
+	// failing. Zero means the default, 70.
+	FailingBelow int    `yaml:"failing_below"`
+	SignOff      string `yaml:"sign_off"`
+	SkipScore    int    `yaml:"skip_score"`
+
+	// Older key names, read only when the matching generic key is blank.
+	SkywardURL      string `yaml:"skyward_url"`
 	BobcatHourURL   string `yaml:"bobcat_hour_url"`
 	BobcatHourLabel string `yaml:"bobcat_hour_label"`
 	BobcatHourTxt   string `yaml:"bobcat_hour_text"`
-	SignOff         string `yaml:"sign_off"`
-	SkipScore       int    `yaml:"skip_score"`
 	// CorrectionDays is both the report window and how long after the due date a
 	// correction stays open. Zero means the default, 14.
 	CorrectionDays int `yaml:"correction_days"`
@@ -42,6 +54,30 @@ func loadParentConfig(root string) (ParentConfig, error) {
 	var config ParentConfig
 	if _, err := workspace.ReadTeacherDocument(root, "context/parent-updates.md", &config); err != nil && !os.IsNotExist(err) {
 		return config, fmt.Errorf("context/parent-updates.md: %w", err)
+	}
+	for _, pair := range []struct {
+		current *string
+		legacy  string
+		now     string
+		old     string
+	}{
+		{&config.GradePortalURL, config.SkywardURL, "grade_portal_url", "skyward_url"},
+		{&config.TutoringURL, config.BobcatHourURL, "tutoring_url", "bobcat_hour_url"},
+		{&config.TutoringLabel, config.BobcatHourLabel, "tutoring_label", "bobcat_hour_label"},
+		{&config.TutoringText, config.BobcatHourTxt, "tutoring_text", "bobcat_hour_text"},
+	} {
+		switch {
+		case *pair.current == "":
+			*pair.current = pair.legacy
+		case pair.legacy != "" && pair.legacy != *pair.current:
+			return config, fmt.Errorf("context/parent-updates.md: %s and %s are both set to different values; keep only %s", pair.now, pair.old, pair.now)
+		}
+	}
+	if config.FailingBelow == 0 {
+		config.FailingBelow = 70
+	}
+	if config.FailingBelow < 1 || config.FailingBelow > 100 {
+		return config, fmt.Errorf("context/parent-updates.md: failing_below must be between 1 and 100")
 	}
 	if config.SkipScore == 0 {
 		config.SkipScore = 90
@@ -55,11 +91,11 @@ func loadParentConfig(root string) (ParentConfig, error) {
 	if config.GradePortalName == "" {
 		config.GradePortalName = "the school's grade portal"
 	}
-	if config.BobcatHourLabel == "" {
-		config.BobcatHourLabel = "Tutoring"
+	if config.TutoringLabel == "" {
+		config.TutoringLabel = "Tutoring"
 	}
-	if config.BobcatHourTxt == "" {
-		config.BobcatHourTxt = "Sign up for tutorials and clubs"
+	if config.TutoringText == "" {
+		config.TutoringText = "Sign up for tutorials and clubs"
 	}
 	return config, nil
 }
@@ -169,8 +205,8 @@ func (r *ParentRun) validate() error {
 		if err != nil || e != nil || !start.Equal(recent) {
 			return fmt.Errorf("weekly update requires a full-period parent report; pull a fresh report with full_period")
 		}
-		if strings.TrimSpace(r.Config.SignOff) == "" || strings.TrimSpace(r.Config.BobcatHourURL) == "" {
-			return fmt.Errorf("weekly update requires sign_off and bobcat_hour_url in context/parent-updates.md")
+		if strings.TrimSpace(r.Config.SignOff) == "" {
+			return fmt.Errorf("weekly update requires sign_off in context/parent-updates.md")
 		}
 		if err := r.validateWeeklyAnnouncements(); err != nil {
 			return err
@@ -670,8 +706,8 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 	}
 	if forStudent {
 		fmt.Fprintf(&b, `<p style="margin:18px 0 4px">Official grades: %s.</p>`, esc(r.Config.GradePortalName))
-		if r.Config.BobcatHourURL != "" {
-			fmt.Fprintf(&b, `<p style="margin:4px 0"><b>%s:</b> %s.</p>`, esc(r.Config.BobcatHourLabel), esc(r.Config.BobcatHourTxt))
+		if r.Config.TutoringURL != "" {
+			fmt.Fprintf(&b, `<p style="margin:4px 0"><b>%s:</b> %s.</p>`, esc(r.Config.TutoringLabel), esc(r.Config.TutoringText))
 		}
 		if r.Config.SignOff != "" {
 			fmt.Fprintf(&b, `<p style="margin:14px 0 0">%s</p>`, esc(r.Config.SignOff))
@@ -680,11 +716,11 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 		b.WriteString(`</div>`)
 		return Rendered{Subject: student.Name, HTML: b.String()}
 	}
-	if r.Config.SkywardURL != "" {
-		fmt.Fprintf(&b, `<p style="margin:18px 0 4px"><a href="%s">%s</a> &mdash; official grades</p>`, esc(r.Config.SkywardURL), esc(r.Config.GradePortalName))
+	if r.Config.GradePortalURL != "" {
+		fmt.Fprintf(&b, `<p style="margin:18px 0 4px"><a href="%s">%s</a> &mdash; official grades</p>`, esc(r.Config.GradePortalURL), esc(r.Config.GradePortalName))
 	}
-	if r.Config.BobcatHourURL != "" {
-		fmt.Fprintf(&b, `<p style="margin:4px 0"><b>%s:</b> <a href="%s">%s</a>.</p>`, esc(r.Config.BobcatHourLabel), esc(r.Config.BobcatHourURL), esc(r.Config.BobcatHourTxt))
+	if r.Config.TutoringURL != "" {
+		fmt.Fprintf(&b, `<p style="margin:4px 0"><b>%s:</b> <a href="%s">%s</a>.</p>`, esc(r.Config.TutoringLabel), esc(r.Config.TutoringURL), esc(r.Config.TutoringText))
 	}
 	b.WriteString(r.ReplyNotes[sd.Ref])
 	if r.Config.SignOff != "" {
@@ -736,6 +772,14 @@ func sortedHist(items []ParentHistoryItem, picked []ParentItemRef, order func([]
 	return out
 }
 
+// failingBelow is the configured cutoff, or 70 when the config was built without loadParentConfig.
+func (r *ParentRun) failingBelow() int {
+	if r.Config.FailingBelow == 0 {
+		return 70
+	}
+	return r.Config.FailingBelow
+}
+
 // renderWeekly derives all academic facts from the saved, scoped inventory.
 func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 	course := r.students[sd.Ref].Courses[0]
@@ -747,7 +791,13 @@ func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 	day := asOf.In(loc)
 	monday := day.AddDate(0, 0, -(int(day.Weekday())+6)%7)
 	months := []string{"Jan.", "Feb.", "March", "April", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."}
-	subject := fmt.Sprintf("ELA 7 Update – Week of %s %d", months[int(monday.Month())-1], monday.Day())
+	className := strings.TrimSpace(r.Config.ClassName)
+	subject := fmt.Sprintf("Class update – Week of %s %d", months[int(monday.Month())-1], monday.Day())
+	greetingClass := "class"
+	if className != "" {
+		subject = fmt.Sprintf("%s Update – Week of %s %d", className, months[int(monday.Month())-1], monday.Day())
+		greetingClass = className
+	}
 	rows := append([]ParentWorkDueItem(nil), course.WorkDue...)
 	sort.SliceStable(rows, func(i, j int) bool {
 		a, _ := time.Parse(time.RFC3339, rows[i].DueAt)
@@ -783,7 +833,7 @@ func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 			continue
 		}
 		percent := value * 100 / possible
-		if percent >= 70 {
+		if percent >= float64(r.failingBelow()) {
 			continue
 		}
 		score := ""
@@ -801,7 +851,7 @@ func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 		failing = append(failing, fmt.Sprintf("<li>%s – %s%s</li>", link, score, marker))
 	}
 	var b strings.Builder
-	b.WriteString(`<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.4;color:#1f2933;max-width:640px"><p>Hello,</p><p>Here's a quick ELA update.</p>`)
+	b.WriteString(`<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.4;color:#1f2933;max-width:640px"><p>Hello,</p><p>Here's a quick ` + html.EscapeString(greetingClass) + ` update.</p>`)
 	fmt.Fprintf(&b, "<p><strong>Work that needs attention (%s)</strong></p>", html.EscapeString(r.Report.Scope.PeriodName))
 	if len(missing)+len(failing) == 0 {
 		fmt.Fprintf(&b, "<p>No missing or failing work in %s right now.</p>", html.EscapeString(r.Report.Scope.PeriodName))
@@ -810,7 +860,7 @@ func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 		b.WriteString("<p>Missing:</p><ul>" + strings.Join(missing, "") + "</ul>")
 	}
 	if len(failing) > 0 {
-		b.WriteString("<p>Failing (below 70):</p><ul>" + strings.Join(failing, "") + "</ul>")
+		fmt.Fprintf(&b, "<p>Failing (below %d):</p><ul>%s</ul>", r.failingBelow(), strings.Join(failing, ""))
 	}
 	if len(missing) > 0 {
 		b.WriteString("<p>All missing work should be done as soon as possible.</p>")
@@ -819,7 +869,9 @@ func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 	var md bytes.Buffer
 	_ = goldmark.Convert([]byte(r.Drafts.Announcements[course.Course]), &md)
 	b.WriteString(md.String())
-	fmt.Fprintf(&b, `<p><strong>Extra help</strong><br>Sign up for Bobcat Hour tutorials at <a href="%s">flex.securly.com</a>.</p>`, html.EscapeString(r.Config.BobcatHourURL))
+	if r.Config.TutoringURL != "" {
+		fmt.Fprintf(&b, `<p><strong>Extra help</strong><br>%s: <a href="%s">%s</a>.</p>`, html.EscapeString(r.Config.TutoringLabel), html.EscapeString(r.Config.TutoringURL), html.EscapeString(r.Config.TutoringText))
+	}
 	fmt.Fprintf(&b, "<p>Thank you,<br>%s</p></div>", html.EscapeString(r.Config.SignOff))
 	return Rendered{Subject: subject, HTML: b.String()}
 }

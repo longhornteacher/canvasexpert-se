@@ -1,6 +1,6 @@
 # Parent Update Flow
 
-Updated 2026-10-26 · Default and weekly ELA layouts; Canvas Live and Outlook evidence remains separately identified; Band is dropped
+Updated 2026-10-26 · Default and weekly update layouts; Canvas Live and Outlook evidence remains separately identified; Band is dropped
 
 Purpose: preserve the current parent-report contract and the evidence behind it. Read alongside [ARCHITECTURE.md](ARCHITECTURE.md) and [SCORING-RULES.md](SCORING-RULES.md). Sections explicitly marked historical record earlier design choices; the current playbook and rules below govern fresh reports.
 
@@ -17,13 +17,13 @@ Reviewed 2026-10-20: [Family Contact](family-contact-flow.md) extends the same p
 - **Work due in this period** shows every assignment in the saved due-date inventory, including complete/perfect, awaiting-grading and ungraded work. First/current score provenance appears when available; unknown values remain clearly unavailable.
 - Direct parents to the teacher's configured grade portal for the official course grade. Portal and tutoring links are teacher-owned setup; the seed leaves them blank.
 - Include **Due Soon**.
-- Include the teacher's configured tutoring or clubs link, when supplied. This teacher's original choice was **Bobcat Hour: [Sign up for tutorials and clubs](https://flex.securly.com/login)**; it is not a product default.
+- Include the teacher's own tutoring or clubs link, if any; it is not a product default.
 - Skip after Missing/0 classification when every included course meets `skip_score` (90 by default) and no Missing/0 items remain. An empty retrospective inventory is also eligible for a no-required-work skip. Incomplete-data flags take precedence. The report exposes advisory student-level `skip_eligible`.
 - **No parent-response requests. Agents must not invent work for adults or students.** Actions and instructions must come from actual coursework, published deadlines, existing feedback, or teacher-provided opportunities.
 
 ## Email shape
 
-The following describes the default layout; the weekly ELA layout below is an explicit alternative.
+The following describes the default layout; the weekly update layout below is an explicit alternative.
 
 Keep student/course identity and an “As of” timestamp compact. Put actions before history; explain score labels once. Assignment titles are the links.
 
@@ -41,7 +41,7 @@ Grade history exists so families can see where a score was raised, by a curve or
 
 Historical design: a brief class-wide Band post with no student names was considered. Band was dropped on 2026-10-16 and has no current draft or delivery action.
 
-## Weekly ELA layout
+## Weekly update layout
 
 A schema 2 `weekly_update` draft provides one teacher-authored Markdown announcement per exact course nickname and a decision for each student. The Engine derives the subject and the Missing and Failing lists from the saved report, omits the default inventory, Corrections and Due Soon sections from the email, and addresses enabled parents only. It does not include student names in the subject or body. It requires one course per student and permits an empty-state email even when the default skip rule applies. Unresolved report evidence remains a hold, not an all-clear. The normal printable report retains its inventory.
 

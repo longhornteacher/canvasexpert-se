@@ -99,33 +99,14 @@ Neither choice makes that decision disposable during a product update.
   fields on an existing grade, and review remains the normal posting gate.
 
 The school calendar, bell schedule and timezone remain in shipped starter
-context; they are the expensive content to recreate. Strip identifying
-information (school name) rather than removing that content.
-
-The bell schedule source is the 2026-2027 school bell schedule PDF the teacher
-supplied on 2026-10-17. It has four day types:
-
-| Period | Bobcat Hour (Mon-Thu) | Homeroom | Homeroom First | House Days / pep rally (Homeroom Last) |
-|---|---|---|---|---|
-| Homeroom | | 10:23-10:53 (after 2nd) | 8:35-9:05 | 2:30-3:55 |
-| 1st | 8:35-9:25 | 8:35-9:25 | 9:09-9:59 | 8:35-9:15 |
-| 2nd | 9:29-10:21 (announcements 9:30) | 9:29-10:19 | 10:03-10:53 | 9:20-10:00 |
-| 3rd | 10:25-11:15 | 10:57-11:47 | 10:57-11:47 | 10:05-10:45 |
-| 4th | 11:19-12:09 | 11:51-1:13 (A 11:51-12:21, B 12:43-1:13) | 11:51-1:13 (A 11:51-12:26, B 12:38-1:13) | 11:35-12:55 (A 11:35-12:10, B 12:20-12:55) |
-| Bobcat Hour | 12:11-1:13 | | | |
-| 5th | 1:17-2:07 | 1:17-2:07 | 1:17-2:07 | 10:50-11:30 (before 4th) |
-| 6th | 2:11-3:01 | 2:11-3:01 | 2:11-3:01 | 1:00-1:40 |
-| 7th | 3:05-3:55 | 3:05-3:55 | 3:05-3:55 | 1:45-2:25 |
-
-House Days are the pep rally schedule. The PDF lists 5th before 4th on House
-Days, and the times confirm that order. Monday-Thursday use the Bobcat Hour
-schedule and Friday the Homeroom schedule. Homeroom First and House Days are
-called ad hoc; none are scheduled yet.
+context under generic names (`context/school-calendar.md`); they are the
+expensive content to recreate. The bell-schedule table there is an example with
+example times for the teacher to replace.
 
 ## Teacher-owned setup
 
-- The Skyward address and the Flex/Bobcat Hour link are this teacher's setup,
-  not shipped defaults. They are two URLs, cheap for any teacher to supply.
+- The grade-portal address and the tutoring sign-up link are each teacher's
+  setup, not shipped defaults. They are two URLs, cheap for any teacher to supply.
 - Other teachers' corresponding links, course choices, preferences and notes
   belong to their own setup.
 - Standing overrides, course-specific differences and task-specific exceptions
@@ -218,9 +199,9 @@ authority over teacher choices.
    changed to 18 in Canvas, the follow-up added the exemplar comment and the
    grade stayed 18.
 4. **Built 2026-10-17.** The shipped `context/parent-updates.md` and the
-   Engine no longer default to Pearland's Skyward and Bobcat Hour. Teachers
+   Engine no longer default to one school's portal and tutoring program. Teachers
    supply a portal name and address and an optional tutoring label, text and
-   link (`grade_portal_name`, `bobcat_hour_label` are new; old key names are
+   link (`grade_portal_name` and a tutoring label key were added; old key names are
    kept). Blank fields are left out of the email. Existing installs keep their
    saved values.
 5. **Shipped 2026-10-17.** New Quiz comments lead with item lines and never an
@@ -259,8 +240,7 @@ left seven `context/` files alone and reported nine files `kept` because the
 install had no `shipped/adopted.txt`. Each of the nine exactly matched a past
 template version in Dev's git history, so none held teacher edits; they were
 replaced with the new seed and archived under `playbook-old/`. A second update
-reported every file current or teacher-owned. `grade_portal_name: "Skyward
-Family Access"` and `bobcat_hour_label: "Bobcat Hour"` were added to the saved
+reported every file current or teacher-owned. The teacher's grade-portal and tutoring labels were added to the saved
 parent-update settings, and offline doctor passed.
 
 That first run matched files against Dev's git history by hand. The Engine
@@ -300,7 +280,7 @@ doctor passed.
 ### Done looks like (ZIP-era target)
 
 A colleague with saved preferences (for example a standing review skip, a
-different correction window and their own Skyward link) unzips a newer CE-SE,
+different correction window and their own grade-portal link) unzips a newer CE-SE,
 points their agent at it and starts working. Every saved preference still
 applies, new shipped improvements apply where they don't conflict, and the
 teacher was not asked to merge anything.

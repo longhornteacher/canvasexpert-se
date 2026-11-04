@@ -66,4 +66,4 @@ A club unit is three independent resources sharing one audience: a course Page, 
 
 ## Parent-update email (outside Canvas)
 
-The weekly ELA layout uses Canvas assignment titles, links, effective dates, released current scores and deductions as read-only source data; it does not write these fields to Canvas. Teacher-supplied course announcements are rendered as Markdown in the local Outlook email. Local rendering tests do not establish Outlook client display or observer access to Canvas links; those remain pending human validation.
+The weekly update layout uses Canvas assignment titles, links, effective dates, released current scores and deductions as read-only source data; it does not write these fields to Canvas. Teacher-supplied course announcements are rendered as Markdown in the local Outlook email. Local rendering tests do not establish Outlook client display or observer access to Canvas links; those remain pending human validation.

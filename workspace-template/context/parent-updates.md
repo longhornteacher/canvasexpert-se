@@ -1,12 +1,16 @@
 ---
 schema: 1
-# Your school's family grade portal. Parent emails link to it for the official course grade. Leave the address blank and the email leaves the portal line out; the printable report still shows the name.
-skyward_url: ""
+# Your school's family grade portal. Parent emails link to it for the official course grade. Leave the address blank and the email leaves the portal line out; the printable report still shows the name. (Older key names skyward_url and bobcat_hour_* still work.)
+grade_portal_url: ""
 grade_portal_name: ""
-# Optional tutoring or clubs sign-up shown in every email footer. Leave the address blank to leave it out.
-bobcat_hour_url: ""
-bobcat_hour_label: ""
-bobcat_hour_text: ""
+# Optional tutoring or clubs sign-up shown in the email footer and the weekly update's Extra help line. Leave the address blank to leave it out.
+tutoring_url: ""
+tutoring_label: ""
+tutoring_text: ""
+# The class named in the weekly update's subject and greeting, for example "Science 6". Blank gives "Class update".
+class_name: ""
+# Work scoring under this percent is listed as Failing in the weekly update (1 to 100).
+failing_below: 70
 # How the email closes, for example "Your teacher".
 sign_off: ""
 # Every included Canvas course score at or above this, with no resolved Missing/0 items, means no email is needed.
