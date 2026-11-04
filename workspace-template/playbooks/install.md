@@ -198,6 +198,18 @@ Before copying, save the files being replaced into `engine/pre-update-<date>/`; 
 
 If the teacher downloaded the ZIP in a browser, Windows marks its files as coming from the internet, and double-clicking `webui.cmd` or the desktop shortcut then shows a security warning every time. With the teacher's OK, clear that mark once before first use, as the file's Properties → Unblock does: `Get-ChildItem -LiteralPath "<folder>" -Recurse -File | Unblock-File`. Files fetched with curl and tar never carry it.
 
+### Moving a ZIP install to git
+
+Only when the teacher asks, or agrees to your offer, to switch an extracted-ZIP folder to git updates (git must be installed). The git version of every product file wins; the teacher's own choices belong in `Teacher_Override.md` and `context/`, which git never touches.
+
+1. Close the apps using CanvasExpert. Copy the root guides (`AGENTS.md`, `CLAUDE.md`, `TEACHER.md`, `TEACHING-ASSISTANT.md`, `README.md`) and the `playbooks\` folder into `engine\pre-git-migration-<date>\`. Leave that backup in place.
+2. In the folder, run `git init -b userinstall`, `git remote add origin https://github.com/longhornteacher/canvasexpert-se.git`, `git fetch origin userinstall`, then `git checkout -f -B userinstall origin/userinstall`. This replaces the shipped files with git's versions and leaves `context/`, `courses/`, `Teacher_Override.md` and `.cse/` alone.
+3. Run `.\get-engine.cmd`, then `.\cse.cmd version --json` and confirm `install_kind` is `git` and `engine_matches_manifest` is `true`.
+4. Compare each backed-up playbook and guide with the new one. For every difference that is the teacher's choice (not just an older shipped wording), say what you found in plain words and, with the teacher's yes, add it as a clearly worded line in `Teacher_Override.md` or in `context/`. Never put it back into a shipped file.
+5. If the install used UserSync, the playbooks there are no longer read; they are only a source for step 4. Do not delete them.
+
+From then on follow "Updates" above. The backup is the only copy of the old files; keep it until the teacher says it can go.
+
 ### Select the correct UserInstall
 
 By default `.\cse.cmd install` connects every supported app whose configuration folder exists: Claude (`cowork`), ChatGPT/Codex (`work`) and Antigravity (`antigravity`). `.\cse.cmd install --inspect` shows the read-only hints it uses; they do not prove an app is installed, running or in a supported mode. Do not read whole client configuration files or private settings. All connected apps point at this same UserInstall, so they share one Canvas credential and course list.

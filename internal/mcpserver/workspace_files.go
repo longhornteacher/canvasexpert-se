@@ -47,6 +47,9 @@ func (s *Server) registerWorkspaceTools(server *mcp.Server) {
 		if strings.EqualFold(firstComponent(in.Path), "courses") {
 			return TextOutput{}, errors.New("use write_draft or write_asset for courses files")
 		}
+		if workspace.IsGitOwnedPath(s.root, in.Path) {
+			return TextOutput{}, errors.New("this file is part of CanvasExpert and is replaced by updates; put the teacher's choice in Teacher_Override.md (or context/) instead")
+		}
 		if strings.EqualFold(firstComponent(in.Path), "shipped") {
 			return TextOutput{}, errors.New("shipped/ holds read-only reference copies of the shipped playbooks")
 		}
