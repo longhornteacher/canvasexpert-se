@@ -273,6 +273,13 @@ func SetRulesLocation(root, syncRoot string, template fs.FS, base string) (Rules
 			if err := initializeReusableData(source, syncPath); err != nil {
 				return RulesLocation{}, err
 			}
+			// The local copies are archived below and then shadowed by UserSync, so any other
+			// durable file UserSync lacks (school calendar, parent-update settings, grading
+			// rules, Teacher_Override.md, course notes, ...) must be copied first. Existing
+			// UserSync files always win.
+			if err := copyMissingShared(source, syncPath, shared); err != nil {
+				return RulesLocation{}, err
+			}
 		}
 		if template != nil {
 			if _, err := scaffoldRules(syncPath, template, base, shared); err != nil {
@@ -407,6 +414,47 @@ func rejectLinkedPrefixes(root, relative string) error {
 			} else if !os.IsNotExist(e) {
 				return e
 			}
+		}
+	}
+	return nil
+}
+
+// copyMissingShared copies shared files that do not yet exist at dest and never overwrites one.
+func copyMissingShared(source, dest string, isShared func(string) bool) error {
+	files, err := sharedFiles(source, isShared)
+	if err != nil {
+		return err
+	}
+	for _, rel := range files {
+		src, err := ConstrainPath(source, rel)
+		if err != nil {
+			return err
+		}
+		dst, err := ConstrainPath(dest, rel)
+		if err != nil {
+			return err
+		}
+		if err := rejectLinkedPrefixes(dest, rel); err != nil {
+			return err
+		}
+		if _, err := os.Stat(dst); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		body, err := os.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			return err
+		}
+		mode := os.FileMode(0644)
+		if strings.HasPrefix(rel, ".cse/") {
+			mode = 0600
+		}
+		if err := WriteFile(dst, body, mode); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -111,6 +111,29 @@ PAT and Canvas origin live in per-machine Windows Credential Manager. Never expo
 
 Workspace context maps course nicknames (CS8, ELA7PAP, ELA7), grading preferences and student notes. Plain files support authoring/resumption; pulled data is disposable, while unsent work and ordinary returned IDs/outcomes are preserved. One teacher uses one machine at a time; no cross-PC locks, sync merge system, backup ledger or permanent gradebook. The one exception is a short same-PC commit guard: a compare-and-replace of one file is exclusive across local Engine processes (connected apps), and the Students page refuses a save when the student table changed after the page opened. Neither coordinates other PCs or resumes an interrupted session elsewhere.
 
+## Durable and local data
+
+Anything meant to outlive a session is stored in its durable home and can be found again there: UserSync when configured (UserInstall otherwise), reached through `ResolveTeacherPath` (`context/`, root guides, `Teacher_Override.md`) or `ResolveRulesPath` (the private `.cse` tables). A configured but missing UserSync is an error, never a fallback to stale local data. In a git install, `playbooks/` and the shipped root guides stay local and git-owned. Connecting a PC to a UserSync folder that already has files copies this PC's missing durable files once and never overwrites an existing UserSync file.
+
+| Durable (UserSync when configured) | Where |
+|---|---|
+| Student table, aliases and private settings | `.cse/students.csv` |
+| Parent and student contact details | `.cse/student-contacts.json` |
+| Course rosters | `.cse/rosters.json` |
+| Courses, student notes | `context/courses.md`, `context/students.md` |
+| Course notes, assignment expectations, reteach, grading rules, parent-update settings, school calendar | `context/…` |
+| Team list and teammate notes | `context/team.md`, `context/team/<label>.md` |
+| Teacher choices and the teacher's own root guides | `Teacher_Override.md`, root `.md`/`.txt` |
+
+| Local by design (UserInstall) | Why |
+|---|---|
+| Grading and planning session files, results and their posting receipts, review state (`<file>.review.json`) | One PC works a session at a time; sessions are not durable across PCs |
+| Family-contact and parent-update runs (`contact.json`, `drafts.json`, `outcomes.json`, `assets/` under `courses/<course>/…`) | A run is session work; it holds the record of what was sent, on the PC that sent it |
+| Team log `.cse/team-log.jsonl`, Collab copy records `courses/_team-copies` | Per-PC audit and copy state |
+| Credentials, Engine, machine integration, `playbook-old/`, `shipped/` | Per machine |
+
+The routing and first-connect behavior are covered by `internal/workspace/durable_routing_test.go`. See also the [unified architecture review](../handoffs/Unified%20Architecture%20Review.md).
+
 ## Current scope and future capabilities
 
 Saved quiz settings (Dev, 2026-10-28): private Quiz time and Fewer choices use the active teacher-setup student table, separately from deadline Extra time. `from_saved` planning privately intersects active enrollments with the exact published assignment's Canvas `assignment_visibility` and computes whole extra minutes without exposing student settings. `push_quiz` applies these settings before publication (unpublished quizzes use all active students when unrestricted or the quiz's own individual overrides when restricted), preserving accepted item/settings/audience stages and recording accommodation status/count/digest only. A failed or unconfirmed POST holds publication and a rerun resends the whole array; an explicit invocation-only `skip_accommodations` records skipped while other guards remain. Observed on CS8: Canvas merges, 0/false clear and values are absolute, so resending is safe; saved Standard/false settings never clear manual Canvas accommodations. Applying saved settings through an Engine-built quiz is locally tested only.
