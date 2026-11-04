@@ -37,7 +37,7 @@ Code/Codex use Dev to develop CE-SE and UserInstall for teacher work. Your Claud
 
 Updates come quietly: your assistant checks for a new version in the background, and when your work is done it asks "Can I install the latest?" (or installs it at the start of your next session if you were busy). Your `context/` files, `Teacher_Override.md` and your own guides are never replaced. In a ZIP install the Engine adds missing starter files, replaces a playbook you never edited, and keeps one you edited while the assistant merges the new improvements into it.
 
-New Quizzes support regular authoring, use and written-response scoring, including essays and file uploads. CE-SE provides criterion scores and feedback in a submission comment; you enter written-item points in SpeedGrader. Ask your agent to follow the current quiz and scoring playbooks for the limits.
+New Quizzes support regular authoring, use and written-response scoring, including essays and file uploads. CE-SE writes each written item's points and comment into the quiz and posts a summary comment; you enter points in SpeedGrader only where a part cannot name one item, or for a student the Engine held because the quiz was saved in SpeedGrader since the pull. Ask your agent to follow the current quiz and scoring playbooks for the limits.
 
 ## Contact families
 

@@ -46,6 +46,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   link                          Record this program's location for workspace cse.cmd
   rules-location                Show teacher-rules authority; use --sync PATH or --local to set it
   playbooks status              Compare active teacher rules with this Engine's seed
+  playbooks update              Adopt this Engine's seed without overriding teacher edits (ZIP install; a git install changes nothing)
   update status|stage [--if-due]|apply [--archive-edits]
                                 Git install: check, stage (no live change) or apply an update
   playbooks replace PATH --expected-sha256 HASH
@@ -91,9 +92,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   audience-report COURSE [--module TITLE|ID] Show who can see each module and item; flags items in several modules
   set-file-access COURSE FILE_ID --access course|hidden|locked Change an existing course file's access
   pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
-  prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
-  prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
-  prepare-late-timing FILE  Check first-genuine choices against pulled work and propose timing changes; never writes to Canvas
+  prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only timing changes; never writes to Canvas
   parent-report COURSE [REF ...] Read parent-update facts (missing, corrections, due soon, history) into courses/COURSE/parent-updates/
   copy-assignment SOURCE QUERY TARGET [--module-id ID] [--assignment-group-id ID] [--published] Copy with destination files; unpublished by default
   copy-module SOURCE "MODULE" COURSE [COURSE ...] Copy one module by exact title, once, into each course (each teacher's own key); never re-copies
