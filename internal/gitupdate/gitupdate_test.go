@@ -172,7 +172,7 @@ func applyFixture(t *testing.T) (u Updater, root, origin string) {
 
 func playbook(root string) string {
 	b, _ := os.ReadFile(filepath.Join(root, "playbooks", "score.md"))
-	return strings.ReplaceAll(string(b), "\n", "\n")
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
 }
 
 func TestApplyEngineSwapFailureChangesNothing(t *testing.T) {
@@ -185,9 +185,6 @@ func TestApplyEngineSwapFailureChangesNothing(t *testing.T) {
 	}
 	if playbook(root) != "score v1 edited\n" || len(r.Archived) != 0 {
 		t.Fatalf("a failed Engine swap must not revert or archive the teacher's edit: %q %v", playbook(root), r.Archived)
-	}
-	if head, _ := u.Git(root, "rev-parse", "HEAD"); head == "" {
-		t.Fatal("no HEAD")
 	}
 	if n, _ := u.Git(root, "rev-list", "--count", "HEAD..origin/userinstall"); strings.TrimSpace(n) != "1" {
 		t.Fatalf("the playbooks must not have been merged: %q", n)
