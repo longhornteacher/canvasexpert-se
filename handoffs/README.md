@@ -37,9 +37,9 @@ This 2026-10-28 readiness review changed handoff documentation only, checked off
 
 A second pass the same day checked the named files, symbols and call sites against the Dev tree (they hold; `hideGrades`/`gradeVisibleHold` live in `team_consent.go`) and removed recovery machinery that idempotent writes do not need, per root `AGENTS.md`: content-edit resume is a three-way live/observed/desired compare, not a pending-intent store. Quiz accommodations rerun the whole absolute-value array unless §3.1 shows otherwise, and course-level sync (Canvas 2026 §4.5) is frozen until the teacher asks, so Part C does not wait on it. Tag management resumes by re-resolving names and memberships, with one removal flag rather than two. Invalid saved quiz settings fail loading like the existing flags. Non-idempotent writes (New Quiz result versions) keep their pending/accepted records.
 
-## Architecture reviews awaiting direction
+## Architecture review: direction agreed
 
-The [unified architecture review](Unified%20Architecture%20Review.md) (2026-11-04) combines the [Opus55](Opus55%20Architecture%20Review.md) and [Sol 61](Sol%2061%20Architecture%20Review.md) reviews of Dev at `f58ecaf` into candidate slices and twelve open questions. It is a planning document, not an execution handoff: no slice starts until the developer agrees direction and the slice gets its own handoff in `active/`.
+The [unified architecture review](Unified%20Architecture%20Review.md) (2026-11-04) combines the [Opus55](Opus55%20Architecture%20Review.md) and [Sol 61](Sol%2061%20Architecture%20Review.md) reviews of Dev at `f58ecaf` into candidate slices A–I. The developer answered its twelve questions the same day; its Developer decisions table governs the slices and their order. It is a planning document, not an execution handoff: each slice still gets bounded execution before code changes.
 
 ## Completed work and evidence
 

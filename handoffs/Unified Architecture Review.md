@@ -14,9 +14,30 @@ These are reviewer agreements, not a claim that the user has approved every prop
 
 ## Status and use
 
-This is a planning handoff for agreeing direction, then assigning bounded implementation slices. It does not itself start implementation or change product policy. The source reviews remain intact as evidence.
+This is a planning handoff. Direction was agreed on 2026-11-04 (see Developer decisions); bounded implementation slices are next. It does not itself start implementation. The source reviews remain intact as evidence.
 
 For this synthesis, `git fetch` completed, `dev` matched `origin/dev`, and HEAD was `a1b4817`. The two reviews and current root instructions, architecture, scoring rules and handoff index were read. No review probe was rerun, no new code audit was performed, and no Canvas, teacher-install or family-delivery operation was performed. Source findings below retain their original evidence level and require checking against current symbols before implementation.
+
+## Developer decisions — 2026-11-04
+
+The developer answered the twelve questions below. These decisions govern the slices; where a slice's text and a decision disagree, the decision wins.
+
+| # | Decision | Effect on slices |
+|---|---|---|
+| 1 | Local functionality comes before cross-PC family continuity. The goal is not resuming a specific session on another PC; it is that all durable data is reliably stored and retrievable. | A stays first. H is reframed (see below). |
+| 2 | Permit a narrow per-file local commit guard as a stated exception to “no locks.” No cross-PC guarantee of seamless session flow; a laptop dying mid-session is not planned for. | A's adapter fix proceeds; ARCHITECTURE gets the one-line exception. |
+| 3 | Students page: the smallest solution that preserves both newer stored data and unsaved form values. | A's stale-save fix. |
+| 4 | One PC at a time is acceptable. The concern is that durable family data (such as parent email) is stored and accessible, not one week's in-progress family-contact run. | No sent ledger, no run migration, no duplicate-prevention promise. |
+| 5 | Provider conflict-copy warnings wait. | H's warning half is deferred; no backlog item. |
+| 6 | Correct behavior-affecting contracts first. Preserve live consumers and unresolved evidence; retire whole handoffs only when all parts are complete or explicitly carried forward. | E proceeds as contract corrections; any broad rewrite is a later, separate pass. |
+| 7 | Agree the cancellation lifecycle first, then reuse existing task/status and receipt mechanisms. A cancelled batch must not silently continue all writes because its context changed. | F needs a short lifecycle spec before code. |
+| 8 | Fix artifact immutability independently; inspect and specify the smallest coherent update transition before adopting Engine-first. | D splits: release identity now, update transition after inspection. |
+| 9 | Public seed uses general, reusable defaults. PISD's actual calendar dates stay in the seed but under generic names. Identifiable specifics (class names, school tutoring program and link) live in UserSync context. | G email slice: generic keys and wording, old-key compatibility, the developer's current wording moved to their UserSync context. |
+| 10 | Move only deterministic calendar arithmetic to the Engine; eligibility and allowance stay with the teacher/agent. Build for the requested workflow, not a general accommodation language. | G deadline slice: explicit “+N school days” in, date out. |
+| 11 | Git installs trump ZIP. When a former ZIP install moves to git, the git versions of product files win. | I: enforce the git ownership boundary on MCP writes in git installs. Teacher intent still goes to `Teacher_Override.md`/context; check, without redesigning, what the existing conversion does with prior edits. |
+| 12 | Make concrete low-cost corrections; defer discretionary consolidation without a mandatory backlog. Keep useful redacted test evidence; numeric Canvas IDs are not credentials. | I keeps help/annotation/routing fixes; consolidation and the school-account nudge are dropped unless they recur. |
+
+**H reframed.** Cross-PC session continuity and the sent ledger are out. What remains is a durable-data check: confirm each item meant to outlive a session (contacts, student settings/notes, course setup, teacher context, and any family-message record the teacher needs to find later) is written to its durable home (UserSync when configured) and can be retrieved. Fix a concrete gap if one is found; whether a record of sent family messages belongs in durable storage is decided there from what the teacher actually needs to look up, not as duplicate-send prevention.
 
 ## Consolidated findings and candidate slices
 
@@ -118,13 +139,15 @@ Decide supported cross-PC continuation and the evidence needed for a useful warn
 
 ## Proposed implementation order after direction is agreed
 
-This ordering is the synthesis recommendation, not agreement on the sources' different rankings:
+Updated 2026-11-04 to follow the developer decisions above:
 
-1. **A:** reproduced student-save loss and cross-adapter overwrite, in separate bounded slices.
+1. **A:** reproduced student-save loss and cross-adapter overwrite, in separate bounded slices, with the narrow local-guard exception added to ARCHITECTURE.
 2. **B and C:** native write auditing/classification and the reproduced family-review reconnect defect.
-3. **D release identity and E:** package immutability and established contract contradictions. Documentation corrections can proceed independently of the Engine fixes.
-4. **I routing fallback**, then the agreed portions of **F, G and D update lifecycle**, based on the answers below.
-5. **H and discretionary I cleanup:** only where the chosen workflow or demonstrated maintenance benefit warrants them. Do not turn every observation into backlog work.
+3. **D release identity and E:** package immutability and behavior-affecting contract corrections. Documentation corrections can proceed independently of the Engine fixes.
+4. **I routing fallback and git-ownership enforcement**, then **G** (generic email defaults; deadline arithmetic) and **H durable-data check**.
+5. **F and D update transition:** each starts with a short lifecycle/transition spec for the developer, then the smallest implementation.
+
+Deferred without backlog: provider conflict warnings, broad documentation rewrite, command-list consolidation and other discretionary I items.
 
 Each execution handoff should identify owner layer, current symbols, exact behavior, preserved contracts and focused checks. Reproduce meaningful reported defects in normal tests, then run applicable repository checks for the completed slice. These source reviews' successful `go test ./...` and `go vet ./...` runs are historical baseline evidence, not validation of future changes. Development does not authorize real-family sends or live classroom mutations.
 
