@@ -59,6 +59,7 @@ type studentsData struct {
 	Secret, Message, Notice           string
 	DraftKey                          string
 	ClearDraft                        bool
+	Version                           string
 	Rows                              []studentRow
 	Hub, NotesOn                      bool
 	ContactsOn                        bool
@@ -93,9 +94,8 @@ func (h *studentHandler) pageNotice(w http.ResponseWriter, status int, message, 
 	data := h.data
 	data.Appearance = appearanceFor(h.notesRoot, h.secret)
 	data.Secret, data.Message, data.Notice, data.Hub = h.secret, message, notice, h.hub
-	if h.hub {
-		data.DraftKey = "students:" + h.secret
-	}
+	// Drafts keep the teacher's typed edits if a save is turned away as stale.
+	data.DraftKey, data.Version = "students:"+h.secret, h.store.Version
 	data.Rows = nil
 	var contacts *workspace.ContactStore
 	if h.notesRoot != "" {
@@ -195,6 +195,16 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Form request rejected", 403)
 		return
 	}
+	// Apply the form to the table as saved now, never to the copy loaded when
+	// the page opened: a roster refresh or agent pull may have changed it since.
+	if h.notesRoot != "" {
+		fresh, err := workspace.OpenStudents(h.notesRoot)
+		if err != nil {
+			h.page(w, 400, "Could not read the student table; nothing was saved.")
+			return
+		}
+		h.store = fresh
+	}
 	before := append([]workspace.Student(nil), h.store.Rows...)
 	h.data.ClearDraft = false
 	var contacts *workspace.ContactStore
@@ -258,6 +268,13 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+	}
+	// A changed table means this form may hold outdated values for students it
+	// did not touch. Save nothing; show the newest table with the teacher's
+	// typed edits restored on top so they can check and save again.
+	if r.PostForm.Get("students_version") != h.store.Version {
+		h.page(w, 409, "Student settings changed after this page opened (for example, a roster refresh or an update from your assistant). Nothing was saved. The newest settings are shown with your changes filled back in. Check them, then press Save again.")
+		return
 	}
 	edited := map[string]string{}
 	for i := range h.store.Rows {

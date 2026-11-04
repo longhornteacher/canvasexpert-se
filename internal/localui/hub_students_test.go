@@ -179,6 +179,7 @@ func TestStudentsCourseTabsAndScopedSaves(t *testing.T) {
 	form.Set("quiz_minutes_"+byID[4].Ref, "15")
 	form.Set("reduced_choices_"+byID[4].Ref, "on")
 	for i := 0; i < 2; i++ {
+		form.Set("students_version", studentsVersionNow(t, root))
 		w := hubPost(h, "/students", form, h.origin)
 		if w.Code != 200 || !strings.Contains(w.Body.String(), "Saved.") || !strings.Contains(w.Body.String(), `href="/students?course=22" aria-current="page"`) {
 			t.Fatalf("save failed or switched course: %d %s", w.Code, w.Body.String())

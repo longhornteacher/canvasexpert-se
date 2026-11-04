@@ -496,3 +496,46 @@ func TestWorkspaceDiscovery(t *testing.T) {
 		t.Fatal("accepted private listing")
 	}
 }
+
+// Two connected apps are separate Engine processes with separate servers. Both
+// may hold the same starting hash; only one replacement may succeed.
+func TestSeparateAdaptersCannotBothReplaceSameVersion(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "courses"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	a, b := &Server{root: root}, &Server{root: root}
+	start := []byte("teacher draft")
+	if _, err := a.writeDraft(WriteFileInput{Path: "courses/draft.md", Content: string(start)}); err != nil {
+		t.Fatal(err)
+	}
+	oldHash := fmt.Sprintf("%x", sha256.Sum256(start))
+	body := strings.Repeat("x", maxWorkspaceFile-64)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	won := []string{}
+	for i := 0; i < 8; i++ {
+		s := a
+		if i%2 == 1 {
+			s = b
+		}
+		wg.Add(1)
+		go func(i int, s *Server) {
+			defer wg.Done()
+			content := fmt.Sprintf("edit %d\n%s", i, body)
+			if _, err := s.writeDraft(WriteFileInput{Path: "courses/draft.md", Content: content, ExpectedSHA256: oldHash}); err == nil {
+				mu.Lock()
+				won = append(won, content)
+				mu.Unlock()
+			}
+		}(i, s)
+	}
+	wg.Wait()
+	if len(won) != 1 {
+		t.Fatalf("%d writers replaced the same starting version", len(won))
+	}
+	saved, err := os.ReadFile(filepath.Join(root, "courses", "draft.md"))
+	if err != nil || string(saved) != won[0] {
+		t.Fatal("the saved file is not the one acknowledged edit")
+	}
+}

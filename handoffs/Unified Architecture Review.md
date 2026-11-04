@@ -50,6 +50,8 @@ The developer answered the twelve questions below. These decisions govern the sl
 
 **Candidate implementation:** reject stale student saves while retaining entered form values, or apply only intended changes to freshly loaded stable identities. Make the destination-file hash check and replacement exclusive across local Engine processes. Keep these as two bounded fixes, not a general persistence framework.
 
+**Done in Dev 2026-11-04 (local tests only).** The Students page reloads the table on save and refuses a save whose rendered version is outdated, re-showing the newest table with the teacher's typed edits restored from tab drafts (now on the standalone editor too). MCP compare-and-replace takes a per-file OS lock in UserInstall `.cse/locks`, released on process exit. Regressions: `TestStaleStudentSaveKeepsNewerRowsAndSettings`, `TestSeparateAdaptersCannotBothReplaceSameVersion` (fails without the lock). Not observed in a real browser or with two real connected apps.
+
 **Acceptance:** newer mappings/settings and teacher-entered form values survive stale-save handling; two local adapters cannot both successfully replace the same starting version. Convert the source review's temporary probes into focused normal tests; do not depend on the old temporary overlay files. Decide stale-form behavior and the narrow locking exception in questions 2–3 below.
 
 ### B. Make native New Quiz writes honor transport and audit contracts

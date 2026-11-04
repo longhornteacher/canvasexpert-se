@@ -96,7 +96,7 @@ func TestStudentNotesSaveWithoutTouchingHandWrittenNotes(t *testing.T) {
 	if page := hubGet(h, "/students").Body.String(); !strings.Contains(page, "Old note.") {
 		t.Fatal("existing note not shown")
 	}
-	form := url.Values{"request_secret": {"nonce"}, "course": {"11"}, "alias_" + ana.Ref: {ana.Alias}, "alias_" + bo.Ref: {bo.Alias}, "note_" + ana.Ref: {"Reads aloud.\r\nExtra time on essays."}, "note_" + bo.Ref: {""}}
+	form := url.Values{"request_secret": {"nonce"}, "course": {"11"}, "alias_" + ana.Ref: {ana.Alias}, "alias_" + bo.Ref: {bo.Alias}, "note_" + ana.Ref: {"Reads aloud.\r\nExtra time on essays."}, "note_" + bo.Ref: {""}, "students_version": {studentsVersionNow(t, root)}}
 	if w := hubPost(h, "/students", form, h.origin); w.Code != 200 {
 		t.Fatalf("save: %d %s", w.Code, w.Body.String())
 	}

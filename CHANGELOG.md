@@ -4,6 +4,9 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+- An open Students page no longer overwrites newer student settings. If a roster refresh or an assistant update changed the table after the page opened, Save stops, shows the newest settings and fills the teacher's typed changes back in to check and save again.
+- Two connected apps on one PC can no longer both replace the same version of a draft, asset or teacher-context file; the second is told the file changed.
+
 - Scoring check-ins name trends: a gap shared with another class or one already open for this class.
 - Reteach needs by class in `context/reteach.md` (UserSync when configured). After scoring, the agent records skills a class needs retaught, with counts, assignment evidence, a spiral idea and status, and tells the teacher. Planning, unit-quiz spiral items and later scoring read the class's open entries. No student names, aliases or individual scores are stored there.
 
