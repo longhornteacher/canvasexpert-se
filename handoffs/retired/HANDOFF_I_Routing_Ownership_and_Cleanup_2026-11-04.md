@@ -1,3 +1,5 @@
+> **Retired 2026-11-04 — implemented in Dev** (commits 4de2366, d42bf03, f0d1e7f). WebUI course routing fails closed, git installs refuse MCP writes to git-owned files and the seed has ZIP-to-git steps, and unused review code was removed. Historical instructions follow; do not execute them again.
+
 # HANDOFF I: Canvas-key routing fails closed; git ownership is enforced; dead review code goes
 
 Date: 2026-11-04. Slice I of the [unified architecture review](../Unified%20Architecture%20Review.md). Three independent parts, so make three commits:

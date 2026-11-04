@@ -1,3 +1,5 @@
+> **Retired 2026-11-04 — implemented in Dev** (commits 4e37a4b, ca7fe1d). G1: parent email wording comes from `context/parent-updates.md` with general defaults and old-key compatibility. G2: the Engine counts an approved "+N school days". Local tests only. The developer's own UserSync `context/parent-updates.md` was not edited: add `class_name` there to keep today's weekly subject line (the old tutoring keys keep working, but the weekly Extra help line now follows the configured label and text). Historical instructions follow; do not execute them again.
+
 # HANDOFF G: General parent-email defaults; Engine counts accommodated deadlines
 
 Date: 2026-11-04. Slice G of the [unified architecture review](../Unified%20Architecture%20Review.md). Two independent parts:

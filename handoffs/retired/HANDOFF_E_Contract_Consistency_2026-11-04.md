@@ -1,3 +1,5 @@
+> **Retired 2026-11-04 — implemented in Dev** (commits 230a261, 5da7ee8, ad7f9d6). Agent-facing contracts, the capabilities page and evidence record, and stale current-sounding documents match what is built; no capability gained a Canvas Live label. Retired handoff records still contain earlier identifiers (history, not scrubbed). Historical instructions follow; do not execute them again.
+
 # HANDOFF E: Make advertised contracts match what is built
 
 Date: 2026-11-04. Slice E of the [unified architecture review](../Unified%20Architecture%20Review.md). Layer: **Engine tool metadata** (`internal/mcpserver`, `internal/localui/capabilities.go`, CLI help), **seed playbooks** and **docs**.

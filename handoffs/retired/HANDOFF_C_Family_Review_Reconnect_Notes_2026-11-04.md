@@ -1,3 +1,5 @@
+> **Retired 2026-11-04 — implemented in Dev** (commit 772fb21). A reconnected family review keeps the reviewed file as its subject, so revision notes and `outcomes.json` are found after reconnect. Historical instructions follow; do not execute them again.
+
 # HANDOFF C: Family review keeps revision notes after reconnect
 
 Date: 2026-11-04. Slice C of the [unified architecture review](../Unified%20Architecture%20Review.md). Layer: **Engine / MCP adapter** (`internal/mcpserver`). Small, bounded fix.

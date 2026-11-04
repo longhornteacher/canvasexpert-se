@@ -6,18 +6,13 @@ A handoff is bounded execution work for an agent session. It should say whether 
 
 Execution-readiness review: **2026-10-28**, against the current Dev working tree. The remaining handoffs are written for **6.1 Terra or 6.1 Sol** to execute one bounded slice at a time. Readiness here means the scope, integration points, contracts, checks and unresolved evidence are explicit; it does not mean the features are built or the undocumented Canvas behavior is known.
 
-**Architecture slices (2026-11-04).** Written from the [unified review](Unified%20Architecture%20Review.md) and the developer's decisions, with facts mapped at `2818e36`. Each is self-contained; the source reviews are not needed. Run them one at a time, in this order: B and C, then D1 and E, then I and G, then H, then D2 and F. Slice A is done.
+**Architecture slices (2026-11-04).** Written from the [unified review](Unified%20Architecture%20Review.md) and the developer's decisions, with facts mapped at `2818e36`. Each is self-contained; the source reviews are not needed. Slices A, B, C, D1, E, G and I are done and retired (2026-11-04). H is done except its past-family-message option, which awaits the developer's choice. D2 and F each have a written spec awaiting the developer's approval before any code.
 
 | Handoff | Kind | Scope |
 |---|---|---|
-| [B: native New Quiz write safeguards](active/HANDOFF_B_Native_New_Quiz_Write_Safeguards_2026-11-04.md) | implement | item-score writes classified like ordinary writes; teammate audit; teammate-named key errors |
-| [C: family review reconnect notes](active/HANDOFF_C_Family_Review_Reconnect_Notes_2026-11-04.md) | implement | reconnected review keeps the reviewed file as its subject; revision notes return |
-| [D: release identity and update transition](active/HANDOFF_D_Release_Identity_and_Update_Transition_2026-11-04.md) | D1 implement; D2 spec first | refuse to replace a released artifact set; specify update ordering, rollback and restart before coding |
-| [E: contract consistency](active/HANDOFF_E_Contract_Consistency_2026-11-04.md) | implement, 3 passes | MCP descriptions, seed, ARCHITECTURE, capabilities page, help/annotations, stale docs |
-| [F: write cancellation lifecycle](active/HANDOFF_F_Write_Cancellation_Lifecycle_2026-11-04.md) | spec first | what cancelling a write means; structured partial results; `push_quiz` write-ahead |
-| [G: parent email defaults and deadline math](active/HANDOFF_G_Parent_Email_Defaults_and_Deadline_Math_2026-11-04.md) | implement, 2 parts | generic email keys with old-key compatibility; Engine adds "+N school days" |
-| [H: durable data check](active/HANDOFF_H_Durable_Data_Check_2026-11-04.md) | verify; ask one question | routing test, first-connect completeness, past family messages |
-| [I: routing, ownership and cleanup](active/HANDOFF_I_Routing_Ownership_and_Cleanup_2026-11-04.md) | implement, 3 parts | WebUI routing fails closed; git-owned files refused; ZIP-to-git steps; unused review code |
+| [D: release identity and update transition](active/HANDOFF_D_Release_Identity_and_Update_Transition_2026-11-04.md) | D1 done; D2 spec awaiting approval | D1 refuses to replace a released artifact set; D2 spec covers update ordering, rollback and the running-adapter notice |
+| [F: write cancellation lifecycle](active/HANDOFF_F_Write_Cancellation_Lifecycle_2026-11-04.md) | spec awaiting approval | what cancelling a write means; structured partial results; `push_quiz` write-ahead |
+| [H: durable data check](active/HANDOFF_H_Durable_Data_Check_2026-11-04.md) | steps 1-3 done; step 4 awaits an answer | routing test and first-connect fix done; past family messages awaiting the developer's choice |
 
 | Handoff | Execution status | What the review clarified |
 |---|---|---|
@@ -55,6 +50,8 @@ A second pass the same day checked the named files, symbols and call sites again
 The [unified architecture review](Unified%20Architecture%20Review.md) (2026-11-04) combines the Opus55 and Sol 61 reviews (in git history at `a1b4817`) of Dev at `f58ecaf` into candidate slices A–I. The developer answered its twelve questions the same day; its Developer decisions table governs the slices and their order. It is a planning document, not an execution handoff: each slice still gets bounded execution before code changes.
 
 ## Completed work and evidence
+
+The 2026-11-04 architecture slices B, C, E, G and I are retired in `retired/` with banners naming their commits; D1 and H steps 1-3 are done inside their still-active handoffs.
 
 The [Canvas 2026 additions handoff](retired/HANDOFF_Canvas_2026_Additions_2026-10-28.md) is retired (2026-10-28): authenticated direction-image downloads, bulk differentiation tags and shared rubrics (with CS8 Canvas Live library-reuse, New Quiz attachment and Test Student assessment evidence) are complete; the explicit accommodation tool, saved quiz settings, `from_saved` planning and the publication hold are in Dev with local evidence. The [review-page retirement handoff](retired/HANDOFF_Retire_Review_Page_and_New_Quiz_Item_Scores_2026-10-28.md) is retired with Part 1 complete: the scoring/authoring review page and `start_review` are gone, the check-in is in the conversation with an Engine-rendered sample, and family review is unchanged. Accommodation writes and New Quiz item scores moved to the active handoff above. Full uncached tests, vet, the 57-tool compiled MCP smoke and `git diff --check` were rerun and passed at retirement.
 

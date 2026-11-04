@@ -1,3 +1,5 @@
+> **Retired 2026-11-04 — implemented in Dev** (commit b0c89e4). Item-score writes are classified like ordinary writes, logged once to the team log with redacted paths, and a rejected teammate key is named. Local tests only; a teammate item-score write has not been observed live. Throttling was skipped, and `quizmedia.go`/`upload.go` still skip the audit hook (not checked for teammate-key use). Historical instructions follow; do not execute them again.
+
 # HANDOFF B: Native New Quiz writes honor the write contract
 
 Date: 2026-11-04. Slice B of the [unified architecture review](../Unified%20Architecture%20Review.md). Layer: **Engine** (`internal/canvas`, `internal/workflow`). No playbook change expected.
