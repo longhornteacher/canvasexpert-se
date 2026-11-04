@@ -186,6 +186,10 @@ type quizSidecar struct {
 	// Media records each accepted hot-spot image upload by item id, saved before
 	// the item is posted, so a rerun reuses the image instead of uploading again.
 	Media map[string]quizMedia `json:"media,omitempty"`
+	// Creating is the title of a quiz whose create request was about to be sent. If the
+	// process stops before the ID is saved, a rerun adopts the one quiz with this title
+	// instead of holding on "already exists".
+	Creating string `json:"creating,omitempty"`
 }
 
 // quizMedia holds an unsigned image URL and the hash of the uploaded bytes; an
@@ -216,9 +220,15 @@ type QuizPushOptions struct {
 	SkipAccommodations bool
 }
 
+// writeSidecar replaces the sidecar atomically (temp file then rename), so a kill mid-write never
+// leaves a torn record.
 func writeSidecar(path string, rec quizSidecar) error {
 	b, _ := json.Marshal(rec)
-	return os.WriteFile(sidecarPath(path), b, 0o644)
+	tmp := sidecarPath(path) + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, sidecarPath(path))
 }
 
 func sidecarPath(path string) string { return path + ".cse.json" }
@@ -290,6 +300,40 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 		}
 	}
 	id, existing := rec.AssignmentID, 0
+	if id == 0 && rec.Creating != "" {
+		// An earlier push recorded that it was about to create this quiz but stopped before saving
+		// its ID. Adopt the one quiz with that title; if none exists the create never landed.
+		var quizzes []struct {
+			ID    json.Number `json:"id"`
+			Title string      `json:"title"`
+		}
+		if e = s.Client.List(ctx, base, &quizzes); e != nil {
+			return report, e
+		}
+		var found []int64
+		for _, x := range quizzes {
+			if x.Title == rec.Creating {
+				n, _ := x.ID.Int64()
+				found = append(found, n)
+			}
+		}
+		switch {
+		case len(found) == 1 && found[0] > 0:
+			id = found[0]
+			rec.AssignmentID, rec.Creating = id, ""
+			if e = writeSidecar(path, rec); e != nil {
+				report.AssignmentID = id
+				return report, fmt.Errorf("quiz %d was found but its ID could not be saved; write {\"assignment_id\": %d} to %s before rerunning", id, id, sidecarPath(path))
+			}
+		case len(found) == 0:
+			rec.Creating = ""
+			if e = writeSidecar(path, rec); e != nil {
+				return report, e
+			}
+		default:
+			return report, fmt.Errorf("several New Quizzes titled %q exist in this course, so the earlier unfinished push cannot be matched; ask the teacher to delete the extra copies in Canvas before pushing again", rec.Creating)
+		}
+	}
 	if id == 0 {
 		var quizzes []struct {
 			ID    json.Number `json:"id"`
@@ -327,6 +371,13 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 		var created struct {
 			ID json.Number `json:"id"` // Canvas returns the ID as a string
 		}
+		// Write-ahead marker (tier pages from the hub step are kept): a stop between the create
+		// and the saved ID leaves a trace the next run can match against the live quiz.
+		rec = readSidecar(path)
+		rec.Creating = title
+		if e = writeSidecar(path, rec); e != nil {
+			return report, e
+		}
 		if e = s.Client.Write(ctx, "POST", base, map[string]any{"quiz": quiz}, &created); e != nil {
 			return report, e
 		}
@@ -335,7 +386,7 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 			return report, &canvas.Error{Kind: "uncertain", Uncertain: true}
 		}
 		rec = readSidecar(path) // hub delivery may have recorded tier pages
-		rec.AssignmentID = id
+		rec.AssignmentID, rec.Creating = id, ""
 		if e = writeSidecar(path, rec); e != nil {
 			report.AssignmentID = id
 			return report, fmt.Errorf("quiz %d was created but its ID could not be saved; write {\"assignment_id\": %d} to %s before rerunning", id, id, sidecarPath(path))
@@ -360,6 +411,11 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 	}
 	prepared := q.preparedItems()
 	for i := existing; i < len(items) && !itemsAccepted; i++ {
+		if StopRequested() {
+			report.Status = "partial"
+			report.Message = fmt.Sprintf("stopped before item %d of %d because the operation was cancelled or ran out of time; the quiz is saved and unpublished. Rerun the same file to continue", i+1, len(items))
+			return report, nil
+		}
 		if prepared[i].Type == "HOTSPOT" {
 			if e = s.attachHotspotImage(ctx, course.ID, id, path, &rec, prepared[i], items[i]); e != nil {
 				report.Status = "partial"
@@ -389,6 +445,11 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 			report.Message = "items are in, but the tier pages were not completed; rerun the same file"
 			return report, e
 		}
+	}
+	if StopRequested() {
+		report.Status = "partial"
+		report.Message = "stopped after the items were added, before the quiz settings and publication, because the operation was cancelled or ran out of time. Rerun the same file to continue"
+		return report, nil
 	}
 	if complete, e := s.finishQuiz(ctx, course, id, set, &report, path, opts); e != nil {
 		report.Status = "partial"

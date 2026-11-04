@@ -1045,6 +1045,10 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				fmt.Fprintln(out, line)
 			}
 			fmt.Fprintln(out, "Results:", report.Path)
+			if report.StoppedBefore > 0 {
+				fmt.Fprintf(out, "Stopped: "+workflow.StoppedMessage+"\n", report.StoppedBefore)
+				partial = true
+			}
 			if e != nil {
 				return fail(workflowError(e), progress)
 			}
@@ -1071,6 +1075,10 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			fmt.Fprintln(out, line)
 		}
 		fmt.Fprintln(out, "Results:", report.Path)
+		if report.StoppedBefore > 0 {
+			fmt.Fprintf(out, "Stopped: "+workflow.StoppedMessage+"\n", report.StoppedBefore)
+			partial = true
+		}
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}
@@ -1305,7 +1313,7 @@ func workflowError(e error) error {
 	if errors.As(e, &ce) {
 		return e
 	}
-	if strings.Contains(e.Error(), "held:") {
+	if workflow.IsHeld(e) {
 		return &cliError{3, e}
 	}
 	return inputError(e)

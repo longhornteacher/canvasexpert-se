@@ -157,7 +157,7 @@ func (s *Service) SetFileAccess(ctx context.Context, nickname string, fileID int
 	if !fileAccessMatches(live, access) {
 		report.Status = "held"
 		report.Message = "Canvas accepted the change but still reports different access; check the file in Canvas"
-		return report, fmt.Errorf("held: %s", report.Message)
+		return report, &HeldError{Msg: "held: " + report.Message}
 	}
 	report.Status, report.Message = "completed", "file access set and read back from Canvas"
 	return report, nil

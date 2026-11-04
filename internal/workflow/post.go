@@ -29,6 +29,8 @@ type PostReport struct {
 	Owner, Course, Assignment string
 	Hidden                    bool
 	HeldVisible               int
+	// StoppedBefore counts students not started because the operation was asked to stop.
+	StoppedBefore int
 }
 type postSource struct {
 	student      workspace.Student
@@ -162,6 +164,13 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		r := &doc.Students[i]
 		v := validated[i]
 		if resultComplete(*r) || s.Skip[r.StudentRef] {
+			report.Students = append(report.Students, postReport(*r))
+			continue
+		}
+		if StopRequested() {
+			// The write in flight (if any) already finished and was recorded; leave this student
+			// untouched so a rerun starts here.
+			report.StoppedBefore++
 			report.Students = append(report.Students, postReport(*r))
 			continue
 		}

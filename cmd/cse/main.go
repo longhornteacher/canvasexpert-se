@@ -162,6 +162,15 @@ func inputError(e error) error    { return &cliError{2, e} }
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	// The MCP adapter closes this process's stdin to ask a batch write to stop gracefully: finish
+	// the item in flight, then stop before the next one (a console-less Windows child cannot
+	// receive an interrupt). Only the adapter sets this variable.
+	if os.Getenv("CSE_STOP_ON_STDIN_CLOSE") == "1" {
+		go func() {
+			_, _ = io.Copy(io.Discard, os.Stdin)
+			workflow.RequestStop()
+		}()
+	}
 	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }
 func run(ctx context.Context, args []string, out, progress io.Writer) int {

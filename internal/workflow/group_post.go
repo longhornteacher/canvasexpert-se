@@ -37,6 +37,8 @@ type GroupPostReport struct {
 	// Set for a teammate's course; see PostReport.
 	Owner, Course, Assignment string
 	Hidden                    bool
+	// StoppedBefore counts groups not started because the operation was asked to stop.
+	StoppedBefore int
 }
 
 // groupSource is the pulled, constrained evidence behind one results row.
@@ -308,6 +310,10 @@ func (s *Service) PostGroupResults(ctx context.Context, path string) (report Gro
 		row := &doc.Groups[i]
 		v := validated[i]
 		src := sources[row.GroupID]
+		if StopRequested() {
+			report.StoppedBefore++
+			continue
+		}
 		if row.Operation == "individual" {
 			if err = s.postGroupIndividual(ctx, &doc, row, v, src, save); err != nil {
 				return report, err

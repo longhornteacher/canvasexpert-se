@@ -39,6 +39,7 @@ type Server struct {
 	sessionReadyWait  time.Duration
 	pulls             map[string]*pullJob
 	run               func(context.Context, ...string) (TextOutput, error) // nil uses command; tests replace it
+	newChild          func(args []string) *exec.Cmd                         // tests replace the child Engine
 }
 
 type TextOutput struct {
@@ -498,18 +499,34 @@ func (s *Server) command(ctx context.Context, args ...string) (TextOutput, error
 	if err := s.staleAdapter(args); err != nil {
 		return TextOutput{}, err
 	}
-	exe, err := os.Executable()
-	if err != nil {
-		return TextOutput{}, err
-	}
 	full := append([]string{"--workspace", s.root}, args...)
 	// A stalled Canvas call must not hold the client's tool call forever.
 	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, exe, full...)
+	graceful := len(args) > 0 && gracefulStop[args[0]]
+	var cmd *exec.Cmd
+	switch {
+	case s.newChild != nil:
+		cmd = s.newChild(full)
+	default:
+		exe, err := os.Executable()
+		if err != nil {
+			return TextOutput{}, err
+		}
+		if graceful {
+			cmd = exec.Command(exe, full...)
+		} else {
+			cmd = exec.CommandContext(ctx, exe, full...)
+		}
+	}
 	var stdout, stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err = cmd.Run()
+	var err error
+	if graceful {
+		err = runGraceful(ctx, cmd)
+	} else {
+		err = cmd.Run()
+	}
 	result := strings.TrimSpace(stdout.String())
 	if stderr.Len() > 0 {
 		if result != "" {
@@ -517,10 +534,75 @@ func (s *Server) command(ctx context.Context, args ...string) (TextOutput, error
 		}
 		result += strings.TrimSpace(stderr.String())
 	}
+	// A graceful stop that ran out of time is a normal, resumable result.
+	if graceful && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		note := "Stopped at the time limit after finishing the item in progress; nothing was lost. Run the same tool again to continue with the items that were not started."
+		if result != "" {
+			result += "\n"
+		}
+		return TextOutput{Text: result + note, State: "incomplete", Outcome: exit3Outcome(args)}, nil
+	}
 	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 3 {
+			// Exit 3 means some items were held, stopped or not completed: the outcomes are the
+			// result, not a tool failure.
+			return TextOutput{Text: result, State: "incomplete", Outcome: exit3Outcome(args)}, nil
+		}
 		return TextOutput{}, fmt.Errorf("CE-SE command failed: %w\n%s", err, result)
 	}
 	return TextOutput{Text: result}, nil
+}
+
+// gracefulStop lists the batch writers whose child Engine finishes the item in flight and stops
+// before the next one when its stdin is closed. Other commands are killed on cancel as before.
+var gracefulStop = map[string]bool{"post": true, "push-quiz": true}
+
+// stopGrace is how long a stopping child may finish its item before it is killed.
+var stopGrace = 2 * time.Minute
+
+// runGraceful runs cmd with a stdin pipe the child watches. When ctx ends (the client cancelled
+// or the time limit passed) the pipe is closed so the child stops between items; a child that
+// does not exit within stopGrace is killed, and the receipts reconcile on the next run.
+func runGraceful(ctx context.Context, cmd *exec.Cmd) error {
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	if cmd.Env == nil {
+		cmd.Env = os.Environ()
+	}
+	cmd.Env = append(cmd.Env, "CSE_STOP_ON_STDIN_CLOSE=1")
+	if err = cmd.Start(); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err = <-done:
+		return err
+	case <-ctx.Done():
+	}
+	_ = stdin.Close()
+	select {
+	case err = <-done:
+		return err
+	case <-time.After(stopGrace):
+		_ = cmd.Process.Kill()
+		return <-done
+	}
+}
+
+// exit3Outcome names exit code 3: batch commands report partial progress, single-target
+// commands report that they held.
+func exit3Outcome(args []string) string {
+	if len(args) > 0 {
+		switch args[0] {
+		case "post", "push", "push-quiz", "set-tags", "assign-to", "assign-modules", "quiz-accommodations", "upload-file", "prepare-audience", "inbox-set-state":
+			return "partial"
+		}
+	}
+	return "held"
 }
 
 type ListCoursesInput struct {
