@@ -127,6 +127,7 @@ func GetRulesLocation(root string) (RulesLocation, error) {
 			return loc, err
 		}
 	}
+	ensureSyncMarker(syncRoot)
 	return loc, nil
 }
 
@@ -293,6 +294,7 @@ func SetRulesLocation(root, syncRoot string, template fs.FS, base string) (Rules
 	if err := writeRulesBinding(install, syncPath); err != nil {
 		return RulesLocation{}, err
 	}
+	resetSyncDiscovery()
 	return GetRulesLocation(install)
 }
 

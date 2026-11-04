@@ -426,10 +426,13 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		if op == "rules-location" {
 			location, err := workspace.GetRulesLocation(s.root)
+			found := workspace.DiscoverUserSync(s.root)
 			status := struct {
 				workspace.RulesLocation
-				AvailabilityError string `json:"availability_error,omitempty"`
-			}{RulesLocation: location}
+				AvailabilityError string   `json:"availability_error,omitempty"`
+				FoundSync         []string `json:"found_sync,omitempty"`
+				SyncNote          string   `json:"sync_note,omitempty"`
+			}{RulesLocation: location, FoundSync: found, SyncNote: workspace.UnconnectedSyncNote(found)}
 			if err != nil {
 				status.AvailabilityError = err.Error()
 			}

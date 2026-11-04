@@ -108,6 +108,10 @@ func (h *studentHandler) pageNotice(w http.ResponseWriter, status int, message, 
 		} else {
 			data.ContactsOn = true
 		}
+		// Contacts typed here before connecting would be set aside once this PC joins the shared folder.
+		if note := workspace.UnconnectedSyncNote(workspace.DiscoverUserSync(h.notesRoot)); note != "" && data.Message == "" {
+			data.Message = note + " Do that on the Home page before adding contacts here."
+		}
 	}
 	var notes map[string]string
 	if h.notesRoot != "" {

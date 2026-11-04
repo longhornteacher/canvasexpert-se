@@ -513,6 +513,9 @@ type configuredCourses struct {
 	Instance    string          `json:"instance"`
 	Courses     []domain.Course `json:"courses"`
 	Team        []teamStatus    `json:"team"`
+	// FoundSync lists shared folders this PC could use but doesn't yet.
+	FoundSync []string `json:"found_sync,omitempty"`
+	SyncNote  string   `json:"sync_note,omitempty"`
 }
 
 // teamStatus tells the agent who the teammates are and whether their keys are
@@ -569,7 +572,8 @@ func (s *Server) listCourses(ctx context.Context, in ListCoursesInput) (TextOutp
 			return TextOutput{}, err
 		}
 		location, _ := workspace.GetRulesLocation(s.root)
-		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, InstallRoot: location.InstallRoot, RulesRoot: location.RulesRoot, Mode: location.Mode, Instance: config.Instance, Courses: config.Courses, Team: team})
+		found := workspace.DiscoverUserSync(s.root)
+		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, InstallRoot: location.InstallRoot, RulesRoot: location.RulesRoot, Mode: location.Mode, Instance: config.Instance, Courses: config.Courses, Team: team, FoundSync: found, SyncNote: workspace.UnconnectedSyncNote(found)})
 		return TextOutput{Text: string(b)}, err
 	default:
 		return TextOutput{}, errors.New("source must be configured or canvas")

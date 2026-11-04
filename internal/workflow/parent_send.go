@@ -79,6 +79,15 @@ func parentRecipients(root string, st workspace.Student) (to, cc []string, paren
 	return familyRecipients(root, st, false)
 }
 
+// noParentEmailHold explains a held email. On a PC not yet using the teacher's
+// shared folder the contacts exist but aren't here, so it says that instead.
+func noParentEmailHold(root, retry string) string {
+	if note := workspace.UnconnectedSyncNote(workspace.DiscoverUserSync(root)); note != "" {
+		return note + " Do that on the Home page, then " + retry + "."
+	}
+	return "No enabled parent email address on file. Add one on the Students page, then " + retry + "."
+}
+
 func familyRecipients(root string, st workspace.Student, parentsOnly bool) (to, cc []string, parents int, err error) {
 	contacts, err := workspace.OpenContacts(root)
 	if err != nil {
@@ -165,7 +174,7 @@ func (s *Service) BuildParentReview(dir string) (ReviewModel, error) {
 		}
 		switch state := out.Students[sd.Ref].State; {
 		case parents == 0:
-			card.Hold = "No enabled parent email address on file. Add one on the Students page, then ask the agent to review again."
+			card.Hold = noParentEmailHold(s.Root, "ask the agent to review again")
 		case state == "uncertain":
 			card.Hold = "Outlook may already have sent this. Check Sent Items; nothing was resent."
 		case state == "sent":

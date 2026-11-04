@@ -300,6 +300,9 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		if e != nil {
 			fmt.Fprintf(progress, "Teacher rules location unavailable: %v\n", e)
 		}
+		for _, p := range workspace.DiscoverUserSync(root) {
+			fmt.Fprintf(out, "found_sync: %s\n", p)
+		}
 		return 0
 	}
 	if cmd == "mcp" {
