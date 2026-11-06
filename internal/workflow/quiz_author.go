@@ -334,6 +334,7 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 			return report, fmt.Errorf("several New Quizzes titled %q exist in this course, so the earlier unfinished push cannot be matched; ask the teacher to delete the extra copies in Canvas before pushing again", rec.Creating)
 		}
 	}
+	fresh := false
 	if id == 0 {
 		var quizzes []struct {
 			ID    json.Number `json:"id"`
@@ -385,19 +386,21 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 		if id <= 0 {
 			return report, &canvas.Error{Kind: "uncertain", Uncertain: true}
 		}
+		fresh = true
 		rec = readSidecar(path) // hub delivery may have recorded tier pages
 		rec.AssignmentID, rec.Creating = id, ""
 		if e = writeSidecar(path, rec); e != nil {
 			report.AssignmentID = id
 			return report, fmt.Errorf("quiz %d was created but its ID could not be saved; write {\"assignment_id\": %d} to %s before rerunning", id, id, sidecarPath(path))
 		}
-	} else {
-		var have []json.RawMessage
+	}
+	var have []quizEntryRef
+	if !fresh {
 		if e = s.Client.List(ctx, fmt.Sprintf("%s/%d/items", base, id), &have); e != nil {
 			return report, e
 		}
-		existing = len(have)
 	}
+	existing = len(have)
 	report.Path = sidecarPath(path)
 	report.AssignmentID = id
 	report.URL = fmt.Sprintf("%s/courses/%d/assignments/%d", s.Client.Origin(), course.ID, id)
@@ -409,26 +412,47 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 	if itemsAccepted {
 		report.ItemsAdded = len(items)
 	}
-	prepared := q.preparedItems()
-	for i := existing; i < len(items) && !itemsAccepted; i++ {
-		if StopRequested() {
-			report.Status = "partial"
-			report.Message = fmt.Sprintf("stopped before item %d of %d because the operation was cancelled or ran out of time; the quiz is saved and unpublished. Rerun the same file to continue", i+1, len(items))
-			return report, nil
-		}
-		if prepared[i].Type == "HOTSPOT" {
-			if e = s.attachHotspotImage(ctx, course.ID, id, path, &rec, prepared[i], items[i]); e != nil {
+	native := q.hasStimuli() && !itemsAccepted && !inlinedEarlier(have, q.quizSteps())
+	var build *canvas.NewQuizBuild
+	if native {
+		if build, e = s.Client.OpenNewQuizBuild(ctx, course.ID, id); e != nil {
+			if hasStimulusEntry(have) {
 				report.Status = "partial"
-				report.Message = fmt.Sprintf("item %d of %d (%s) was not added because its image was not uploaded; rerun the same file to continue this quiz", i+1, len(items), labels[i])
+				report.Message = "the quiz editor session for the passages did not open; rerun the same file to continue this quiz"
 				return report, e
 			}
+			// Questions already in the quiz come before the first passage, so
+			// copying passages into the remaining questions stays consistent.
+			native = false
+			report.Warnings = append(report.Warnings, "Canvas's quiz editor did not open for this quiz, so each passage was copied into its questions instead of a separate stimulus block")
 		}
-		if e = s.Client.Write(ctx, "POST", fmt.Sprintf("%s/%d/items", base, id), items[i], nil); e != nil {
-			report.Status = "partial"
-			report.Message = fmt.Sprintf("item %d of %d (%s) was not added; rerun the same file to continue this quiz", i+1, len(items), labels[i])
+	}
+	if native {
+		if done, e := s.pushQuizSteps(ctx, q, course.ID, id, path, &rec, build, have, &report); e != nil || !done {
 			return report, e
 		}
-		report.ItemsAdded++
+	} else {
+		prepared := q.preparedItems()
+		for i := existing; i < len(items) && !itemsAccepted; i++ {
+			if StopRequested() {
+				report.Status = "partial"
+				report.Message = fmt.Sprintf("stopped before item %d of %d because the operation was cancelled or ran out of time; the quiz is saved and unpublished. Rerun the same file to continue", i+1, len(items))
+				return report, nil
+			}
+			if prepared[i].Type == "HOTSPOT" {
+				if e = s.attachHotspotImage(ctx, course.ID, id, path, &rec, prepared[i], items[i]); e != nil {
+					report.Status = "partial"
+					report.Message = fmt.Sprintf("item %d of %d (%s) was not added because its image was not uploaded; rerun the same file to continue this quiz", i+1, len(items), labels[i])
+					return report, e
+				}
+			}
+			if e = s.Client.Write(ctx, "POST", fmt.Sprintf("%s/%d/items", base, id), items[i], nil); e != nil {
+				report.Status = "partial"
+				report.Message = fmt.Sprintf("item %d of %d (%s) was not added; rerun the same file to continue this quiz", i+1, len(items), labels[i])
+				return report, e
+			}
+			report.ItemsAdded++
+		}
 	}
 	if rec.Stages != nil && !definite(rec.Stages.Items) {
 		rec.Stages.Items = domain.ActionOutcome{Status: "succeeded"}
@@ -460,6 +484,138 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 	}
 	report.Status = "completed"
 	return report, nil
+}
+
+// quizEntryRef is one entry already in a New Quiz, as the public items list
+// shows it.
+type quizEntryRef struct {
+	ID        json.RawMessage `json:"id"`
+	EntryType string          `json:"entry_type"`
+	Stimulus  json.RawMessage `json:"stimulus_quiz_entry_id"`
+}
+
+func rawID(r json.RawMessage) string {
+	v := strings.Trim(strings.TrimSpace(string(r)), `"`)
+	if v == "null" {
+		return ""
+	}
+	return v
+}
+
+func hasStimulusEntry(have []quizEntryRef) bool {
+	for _, h := range have {
+		if h.EntryType == "Stimulus" {
+			return true
+		}
+	}
+	return false
+}
+
+// inlinedEarlier reports whether an earlier push of this file copied its
+// passages into the questions: entries reach past the first stimulus's place
+// but none is a stimulus.
+func inlinedEarlier(have []quizEntryRef, steps []quizStep) bool {
+	if hasStimulusEntry(have) {
+		return false
+	}
+	for i, st := range steps {
+		if st.stimulus != nil {
+			return len(have) > i
+		}
+	}
+	return false
+}
+
+// pushQuizSteps adds the quiz's entries in order with real stimuli: each
+// STIMULUS becomes a Canvas stimulus and each question naming it is attached
+// (the public items API ignores that link). Entries already in Canvas are
+// matched by position, and an attachment a stopped run left undone is
+// completed. It returns false when it stopped early with a partial report.
+func (s *Service) pushQuizSteps(ctx context.Context, q QuizForge, courseID, id int64, path string, rec *quizSidecar, build *canvas.NewQuizBuild, have []quizEntryRef, report *QuizPushReport) (bool, error) {
+	steps := q.quizSteps()
+	prepared := q.prepareItems(false)
+	payloads := q.buildPayloads(false)
+	labels := q.scoredIDs()
+	stimEntry := map[string]string{}
+	report.ItemsAdded = 0
+	link := func(st quizStep, entryID string, pos int) error {
+		sid := prepared[st.item].StimulusID
+		if sid == "" {
+			return nil
+		}
+		if e := build.LinkToStimulus(ctx, entryID, stimEntry[sid], pos); e != nil {
+			report.Status = "partial"
+			report.Message = fmt.Sprintf("question %s was added but not attached to its passage %s; rerun the same file to attach it", labels[st.item], sid)
+			return e
+		}
+		return nil
+	}
+	for i, h := range have {
+		if i >= len(steps) {
+			break
+		}
+		st := steps[i]
+		if (st.stimulus != nil) != (h.EntryType == "Stimulus") {
+			report.Status = "partial"
+			report.Message = fmt.Sprintf("entry %d of the quiz in Canvas does not match this file, so nothing more was added; ask the teacher to delete the quiz in Canvas and push again", i+1)
+			return false, fmt.Errorf("quiz %d no longer matches its file", id)
+		}
+		if st.stimulus != nil {
+			stimEntry[st.stimulus.ID] = rawID(h.ID)
+			continue
+		}
+		report.ItemsAdded++
+		if prepared[st.item].StimulusID != "" && rawID(h.Stimulus) == "" {
+			if e := link(st, rawID(h.ID), i+1); e != nil {
+				return false, e
+			}
+		}
+	}
+	for i := len(have); i < len(steps); i++ {
+		st, pos := steps[i], i+1
+		if StopRequested() {
+			report.Status = "partial"
+			report.Message = fmt.Sprintf("stopped before entry %d of %d because the operation was cancelled or ran out of time; the quiz is saved and unpublished. Rerun the same file to continue", pos, len(steps))
+			return false, nil
+		}
+		if st.stimulus != nil {
+			title := normalizeStudentText(st.stimulus.stimulusTitle()).(string)
+			body := normalizeStudentText(highlightCodeBlocks(st.stimulus.Prompt)).(string)
+			entryID, e := build.CreateStimulus(ctx, title, body, st.stimulus.stimulusOrientation(), pos)
+			if e != nil {
+				report.Status = "partial"
+				report.Message = fmt.Sprintf("passage %s was not added; rerun the same file to continue this quiz", st.stimulus.ID)
+				return false, e
+			}
+			stimEntry[st.stimulus.ID] = entryID
+			continue
+		}
+		it, payload := prepared[st.item], payloads[st.item]
+		payload["item"].(map[string]any)["position"] = pos
+		if it.Type == "HOTSPOT" {
+			if e := s.attachHotspotImage(ctx, courseID, id, path, rec, it, payload); e != nil {
+				report.Status = "partial"
+				report.Message = fmt.Sprintf("item %d of %d (%s) was not added because its image was not uploaded; rerun the same file to continue this quiz", st.item+1, len(payloads), labels[st.item])
+				return false, e
+			}
+		}
+		var made quizEntryRef
+		if e := s.Client.Write(ctx, "POST", fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes/%d/items", courseID, id), payload, &made); e != nil {
+			report.Status = "partial"
+			report.Message = fmt.Sprintf("item %d of %d (%s) was not added; rerun the same file to continue this quiz", st.item+1, len(payloads), labels[st.item])
+			return false, e
+		}
+		report.ItemsAdded++
+		if it.StimulusID != "" && rawID(made.ID) == "" {
+			report.Status = "partial"
+			report.Message = fmt.Sprintf("question %s was added but Canvas did not return its ID; rerun the same file to attach it to its passage", labels[st.item])
+			return false, &canvas.Error{Kind: "uncertain", Uncertain: true}
+		}
+		if e := link(st, rawID(made.ID), pos); e != nil {
+			return false, e
+		}
+	}
+	return true, nil
 }
 
 // attachHotspotImage uploads the item's image once and sets image_url on its

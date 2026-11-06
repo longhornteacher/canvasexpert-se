@@ -84,6 +84,8 @@ func quizCreateServer(t *testing.T, listed string, creates, itemPosts *int) http
 			_, _ = io.WriteString(w, `[]`)
 		case r.Method == "POST" && r.URL.Path == "/api/v1/courses/1/modules/9/items":
 			_, _ = io.WriteString(w, `{"id":1}`)
+		case strings.HasSuffix(r.URL.Path, "/external_tools/sessionless_launch"):
+			w.WriteHeader(404)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(404)

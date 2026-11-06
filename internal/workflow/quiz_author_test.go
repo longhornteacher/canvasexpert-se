@@ -111,6 +111,7 @@ func TestQuizForgeRejectsWhatCanvasCannotDo(t *testing.T) {
 		"two correct MC":         wrap(`{"type":"MC","prompt":"q","points":1,"choices":[{"text":"a","correct":true},{"text":"b","correct":true}]}`),
 		"fitb 0 blanks":          wrap(`{"type":"FITB","prompt":"q","points":1,"accept":["a"]}`),
 		"bad stim ref":           wrap(`{"type":"TF","prompt":"q","points":1,"answer":true,"stimulus_id":"nope"}`),
+		"unknown stimulus layout": `{"title":"x","items":[{"id":"S","type":"STIMULUS","layout":"left","prompt":"p"},{"type":"TF","prompt":"q","points":1,"answer":true,"stimulus_id":"S"}]}`,
 		"in-stimulus without id": `{"title":"x","items":[{"id":"S","type":"STIMULUS","prompt":"p"},{"type":"TF","prompt":"q","points":1,"answer":true},{"type":"STIMULUS_END"}]}`,
 	}
 	for name, body := range cases {
@@ -150,6 +151,9 @@ func TestPushQuizCreatesResumesAndFinishes(t *testing.T) {
 		case r.Method == "POST" && r.URL.Path == "/api/v1/courses/1/modules/9/items":
 			modulePosts++
 			_, _ = io.WriteString(w, `{"id":1}`)
+		case strings.HasSuffix(r.URL.Path, "/external_tools/sessionless_launch"):
+			// No quiz editor session: passages are copied into their questions.
+			w.WriteHeader(404)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(404)
@@ -159,6 +163,9 @@ func TestPushQuizCreatesResumesAndFinishes(t *testing.T) {
 	report, e := s.PushQuiz(t.Context(), "TEST", path)
 	if e == nil || report.Status != "partial" || report.ItemsAdded != 2 || report.AssignmentID != 55 || puts != 0 {
 		t.Fatalf("expected partial after two items, got %+v, %v", report, e)
+	}
+	if len(report.Warnings) != 1 || !strings.Contains(report.Warnings[0], "copied into its questions") {
+		t.Errorf("the fallback to copied passages must be reported: %v", report.Warnings)
 	}
 	quiz := created["quiz"].(map[string]any)
 	if quiz["points_possible"] != 13.0 || quiz["title"] != "Fear Check" {
