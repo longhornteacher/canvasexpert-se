@@ -6,7 +6,7 @@ Read `TEACHER.md`, `Teacher_Override.md`, relevant teaching context and `context
 
 ## Prepare the message
 
-Use the Engine's `engine_reference` formats for the Family Contact contract. Save the draft in a new `courses/<first course>/family-contact/<run>/` folder in UserInstall using `write_draft`; keep images and files in its `assets/` with `write_asset`. Keep the run and saved outcomes in UserInstall even when teacher preferences use UserSync.
+Use the Engine's `engine_reference` formats for the Family Contact contract. Save the draft in a new `courses/<first course>/family-contact/<run>/` folder in UserInstall using `write_draft`; keep images and files in its `assets/` with `write_asset`. Keep the run and saved outcomes in UserInstall even when teacher preferences use UserSync. If `list_courses` reports `found_sync`, the contacts are in a shared folder this PC isn't using yet; connect it as `setup.md` describes before preparing, rather than asking the teacher to enter contacts again.
 
 Select configured courses, exact collaborative groups or stable student references. Use the Engine's group reads for book-club names and membership; never reconstruct private identities. Choose one version per student. If the teacher wants parents alone, set `recipients: "parents_only"`; otherwise students receive To and enabled parent emails receive CC. The Engine handles addresses privately.
 

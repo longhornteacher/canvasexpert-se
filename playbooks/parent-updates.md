@@ -2,7 +2,7 @@
 
 The judgment calls are yours: what counts as a correction and the wording, within the teacher's sending preferences. The Engine reads Canvas, resolves Missing/0 status and skip eligibility, computes dates and scores, renders the email, looks up parent addresses and sends. You never see an address and never send anything: the teacher reviews every email on a private page and clicks Send there. Background and current rules live in `docs/parent-update-flow.md` in Dev; the teacher does not need that.
 
-Read `AGENTS.md` and `context/parent-updates.md` first. Its grade-portal and tutoring fields start blank. The first time the teacher sends updates, ask once for their grade portal's name and sign-in address and any tutoring sign-up link, and save them there (`skyward_url`, `grade_portal_name`, `bobcat_hour_url`, `bobcat_hour_label`, `bobcat_hour_text`; the key names are historical). Blank fields are fine: a blank tutoring section is left out and the portal name falls back to a default. Also ask once how the teacher wants emails signed and save it as `sign_off`; without it, emails go out unsigned.
+Read `AGENTS.md` and `context/parent-updates.md` first. Its grade-portal and tutoring fields start blank. The first time the teacher sends updates, ask once for their grade portal's name and sign-in address and any tutoring sign-up link, and save them there (`grade_portal_url`, `grade_portal_name`, `tutoring_url`, `tutoring_label`, `tutoring_text`; older `skyward_url` and `bobcat_hour_*` keys still work), and the class name for the weekly update (`class_name`) and the failing cutoff if they want one other than 70 (`failing_below`). Blank fields are fine: a blank tutoring section is left out and the portal name falls back to a default. Also ask once how the teacher wants emails signed and save it as `sign_off`; without it, emails go out unsigned.
 
 ## Steps
 
@@ -69,11 +69,11 @@ These hold unless the teacher says otherwise. Honest values and privacy are not 
 }
 ```
 
-For the default layout, every student in the report appears once, with a reason for `skip` and `flag`. A `send` decision is valid when the saved `work_due` inventory is nonempty even if there are no Missing/0 or correction selections. If it is empty, choose `skip` with the no-required-work reason or `flag` when report data is incomplete; Due Soon by itself does not create an email. An old report without `scope`, or with invalid scope data, must not be sent or printed: retain its drafts and outcomes, then pull a fresh report.
+For the default layout, every student in the report appears once, with a reason for `skip` and `flag`. A `send` decision is valid when the saved `work_due` inventory is nonempty even if there are no Missing/0 or correction selections. If it is empty, choose `skip` with the no-required-work reason or `flag` when report data is incomplete; Due Soon by itself does not create an email. Slips in drafts.json (an assignment not in the report, a skip with no reason, a student left out) do not block: the item is not shown and a left-out student is not sent.
 
-## Weekly ELA update
+## Weekly update
 
-When the teacher requests the weekly ELA layout for the full current term, pull a fresh report with `pull_parent_report` and `full_period: true` (CLI: `parent-report --full-period COURSE [COURSE ...]`), then use `schema: 2`, `layout: "weekly_update"`. Supply an `announcements` object keyed by the exact course nicknames in the report. Each value is teacher-authored Markdown for that course, without student names, aliases, student references, grades or email addresses. Use current teacher-supplied announcements; do not reuse a previous week without confirmation. The Engine validates known aliases, student references and email addresses, but the agent must still keep all private information out.
+When the teacher requests the weekly update layout for the full current term, pull a fresh report with `pull_parent_report` and `full_period: true` (CLI: `parent-report --full-period COURSE [COURSE ...]`), then use `schema: 2`, `layout: "weekly_update"`. Supply an `announcements` object keyed by the exact course nicknames in the report. Each value is teacher-authored Markdown for that course, without student names, aliases, student references, grades or email addresses. Use current teacher-supplied announcements; do not reuse a previous week without confirmation. The Engine validates known aliases, student references and email addresses, but the agent must still keep all private information out.
 
 ```json
 {
@@ -86,15 +86,15 @@ When the teacher requests the weekly ELA layout for the full current term, pull 
 }
 ```
 
-Include each student. The weekly layout sends an update even when the work inventory is empty or the score meets the normal skip cutoff; flag unresolved report data instead of inventing an all-clear. It requires one course per student and routes to enabled parents only. The Engine constructs the subject and Missing and Failing lists from the saved report, keeps unreleased grades private, and omits the default inventory, corrections and due-soon sections. It uses the configured `bobcat_hour_url` and `sign_off`. Student names, aliases and references do not belong in the message. Review through `start_parent_review`; **Fill Outlook Drafts only** creates drafts without sending.
+Include each student. The weekly layout sends an update even when the work inventory is empty or the score meets the normal skip cutoff; flag unresolved report data instead of inventing an all-clear. It requires one course per student and routes to enabled parents only. The Engine constructs the subject and Missing and Failing lists from the saved report, keeps unreleased grades private, and omits the default inventory, corrections and due-soon sections. It uses the configured `class_name`, `failing_below`, tutoring link (the Extra help block is left out when `tutoring_url` is blank) and `sign_off`. Student names, aliases and references do not belong in the message. Review through `start_parent_review`; **Fill Outlook Drafts only** creates drafts without sending.
 
-## Printable student reports
+## Printable grade sheets
 
-When the teacher wants reports to hand out in class, use the same run: pull the report, write `drafts.json` as above (decisions still apply to email), then `print_student_reports` with the run folder (CLI: `.\cse.cmd student-report RUN_FOLDER`). The Engine saves one PDF in the teacher's Downloads folder, one student per page, and opens it. Tell the teacher the file name; it holds student names, so do not open or read it.
+When the teacher wants grade sheets to hand out (a progress report or grade check), go straight here: no `context/parent-updates.md` settings or drafts are needed. Pull the report with `pull_parent_report` and `full_period: true` so the whole term is listed, then run `print_student_reports` with the run folder (CLI: `.\cse.cmd student-report RUN_FOLDER`). `drafts.json` is not needed; if one exists, each student's optional `student_intro` (written to the student, one short sentence, `{{student_name}}` allowed) opens their sheet. The Engine saves one PDF in the teacher's Downloads folder, one student per page, and opens it. Tell the teacher the file name; it holds student names, so do not open or read it.
 
-- Every student in the run gets a sheet, including skipped students, so the handout singles no one out. A student with no Missing/0 items gets the Engine's encouraging empty-state message.
-- The sheet lists every resolved Missing/0, Due Soon item and every `work_due` inventory row from the report. Only your `corrections` choices carry over, because eligibility is your judgment; Missing/0 items never repeat under Corrections. It uses the saved period scope, not today's date.
-- Optional `student_intro` per student, written to the student ("you"), one short sentence. Same rules as `intro`: no scores, no invented work. `{{student_name}}` works here too.
+- Every student in the report gets a sheet.
+- Each sheet is one table in due-date order: assignment, due date and current grade. Work already due shows the current Canvas score, or Missing, Not submitted, Awaiting grading, Grade not released or No grade recorded. Work not yet due shows a check box and "(check this off once completed)", plus "Canvas shows this turned in" when it was turned in early.
+- Only published work the student can see, with the student's own due date, is listed. Work with no due date is not listed; tell the teacher if they expected it.
 
 ## If something cannot proceed
 
