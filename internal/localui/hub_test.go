@@ -361,3 +361,13 @@ func TestHomeShowsCommandsFromTeacherContext(t *testing.T) {
 		t.Error("Home did not fall back to the starter commands with a note")
 	}
 }
+
+// studentsVersionNow is the version a freshly rendered Students page carries.
+func studentsVersionNow(t *testing.T, root string) string {
+	t.Helper()
+	store, err := workspace.OpenStudents(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store.Version
+}

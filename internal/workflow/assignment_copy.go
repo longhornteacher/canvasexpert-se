@@ -248,7 +248,7 @@ func (s *Service) CopyAssignment(ctx context.Context, sourceCourse, query, targe
 					return report, err
 				}
 				if e != nil {
-					return report, fmt.Errorf("file %d could not be copied; assignment held: %w", id, e)
+					return report, &HeldError{Err: fmt.Errorf("file %d could not be copied; assignment held: %w", id, e)}
 				}
 				if copied.ID <= 0 {
 					return report, fmt.Errorf("file %d copy did not return an ID; assignment held", id)

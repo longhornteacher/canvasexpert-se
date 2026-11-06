@@ -394,6 +394,10 @@ type SchoolTimeProvenance struct {
 	Status       string     `yaml:"status" json:"status"`
 	SecondsLate  int64      `yaml:"seconds_late,omitempty" json:"seconds_late,omitempty"`
 	SkippedDates []string   `yaml:"skipped_dates,omitempty" json:"skipped_dates,omitempty"`
+	// AllowanceSchoolDays and AllowanceBase show how the Engine turned an approved
+	// "+N school days" into Deadline; both are empty for an absolute deadline.
+	AllowanceSchoolDays int    `yaml:"allowance_school_days,omitempty" json:"allowance_school_days,omitempty"`
+	AllowanceBase       string `yaml:"allowance_base,omitempty" json:"allowance_base,omitempty"`
 }
 
 type ActionOutcome struct {

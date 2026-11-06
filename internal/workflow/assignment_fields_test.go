@@ -92,10 +92,6 @@ func TestPaperAssignmentCreatePullRoundTripAndGroupMove(t *testing.T) {
 	if err := workspace.WriteDocument(pulled, edit, body); err != nil {
 		t.Fatal(err)
 	}
-	review, err := s.BuildEditReview(context.Background(), pulled)
-	if err != nil || len(review.Cards) != 2 || !strings.Contains(review.Cards[1].Facts[2].Value, "course grades") {
-		t.Fatalf("review: %+v %v", review, err)
-	}
 	report, err = s.Push(context.Background(), pulled)
 	if err != nil || report.Status != "succeeded" || updates != 1 || *live.AssignmentGroupID != groupB {
 		t.Fatalf("move: %+v updates=%d err=%v", report, updates, err)

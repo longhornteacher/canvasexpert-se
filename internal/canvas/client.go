@@ -214,6 +214,11 @@ func retryDelay(h http.Header, fallback time.Duration) time.Duration {
 	}
 	return d
 }
+// writeStatusUncertain reports whether a non-2xx answer to a write leaves it
+// unknown whether the change landed.
+func writeStatusUncertain(status int) bool {
+	return status == 408 || status >= 500 || (status >= 300 && status < 400)
+}
 func statusError(status int, body []byte, write bool) *Error {
 	kind := "transport"
 	switch status {
@@ -233,7 +238,7 @@ func statusError(status int, body []byte, write bool) *Error {
 	case 429:
 		kind = "throttled"
 	}
-	uncertain := write && (status == 408 || status >= 500 || (status >= 300 && status < 400))
+	uncertain := write && writeStatusUncertain(status)
 	if uncertain {
 		kind = "uncertain"
 	}

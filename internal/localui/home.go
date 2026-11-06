@@ -23,7 +23,9 @@ type homeData struct {
 	Students, Monitored                               int
 	CanvasUser                                        string
 	RulesMode, RulesRoot, SyncRoot, RulesError        string
-	Commands                                          []homeCommand
+	FoundSync                                         []string
+	FoundSyncNote                                     string
+	Commands                                         []homeCommand
 	CommandsNote, PickedCourse, FirstPrompt           string
 	TeamWarnings                                      []string
 }
@@ -74,6 +76,13 @@ func (h *Hub) pageData() homeData {
 		data.SyncHealth, data.SyncHealthNote = health, healthNote
 		if loc.Mode == "sync" {
 			data.SyncRoot = loc.RulesRoot
+		} else if rulesErr == nil {
+			data.FoundSync = workspace.DiscoverUserSync(h.root)
+			if len(data.FoundSync) > 0 {
+				data.SyncHealth, data.SyncHealthNote = "Not connected", "This PC has a shared folder it isn't using yet."
+				data.FoundSyncNote = workspace.UnconnectedSyncNote(data.FoundSync)
+				data.SyncRoot = data.FoundSync[0]
+			}
 		}
 		if rulesErr != nil {
 			data.RulesError = rulesErr.Error()

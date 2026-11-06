@@ -24,15 +24,27 @@ func trimPoint(v string) string { return strings.TrimSuffix(v, ".0") }
 // ParentConfig is context/parent-updates.md front matter.
 type ParentConfig struct {
 	Schema int `yaml:"schema"`
-	// The YAML keys keep their original names for compatibility; the values
-	// are each teacher's own grade portal and tutoring sign-up.
-	SkywardURL      string `yaml:"skyward_url"`
+	// The values are each teacher's own grade portal and tutoring sign-up. The
+	// generic keys are canonical; the older skyward_url and bobcat_hour_* keys
+	// still work and are folded into them by loadParentConfig.
+	GradePortalURL  string `yaml:"grade_portal_url"`
 	GradePortalName string `yaml:"grade_portal_name"`
+	TutoringURL     string `yaml:"tutoring_url"`
+	TutoringLabel   string `yaml:"tutoring_label"`
+	TutoringText    string `yaml:"tutoring_text"`
+	// ClassName names the class in the weekly update; blank gives a generic wording.
+	ClassName string `yaml:"class_name"`
+	// FailingBelow is the percent under which the weekly update lists work as
+	// failing. Zero means the default, 70.
+	FailingBelow int    `yaml:"failing_below"`
+	SignOff      string `yaml:"sign_off"`
+	SkipScore    int    `yaml:"skip_score"`
+
+	// Older key names, read only when the matching generic key is blank.
+	SkywardURL      string `yaml:"skyward_url"`
 	BobcatHourURL   string `yaml:"bobcat_hour_url"`
 	BobcatHourLabel string `yaml:"bobcat_hour_label"`
 	BobcatHourTxt   string `yaml:"bobcat_hour_text"`
-	SignOff         string `yaml:"sign_off"`
-	SkipScore       int    `yaml:"skip_score"`
 	// CorrectionDays is both the report window and how long after the due date a
 	// correction stays open. Zero means the default, 14.
 	CorrectionDays int `yaml:"correction_days"`
@@ -42,6 +54,30 @@ func loadParentConfig(root string) (ParentConfig, error) {
 	var config ParentConfig
 	if _, err := workspace.ReadTeacherDocument(root, "context/parent-updates.md", &config); err != nil && !os.IsNotExist(err) {
 		return config, fmt.Errorf("context/parent-updates.md: %w", err)
+	}
+	for _, pair := range []struct {
+		current *string
+		legacy  string
+		now     string
+		old     string
+	}{
+		{&config.GradePortalURL, config.SkywardURL, "grade_portal_url", "skyward_url"},
+		{&config.TutoringURL, config.BobcatHourURL, "tutoring_url", "bobcat_hour_url"},
+		{&config.TutoringLabel, config.BobcatHourLabel, "tutoring_label", "bobcat_hour_label"},
+		{&config.TutoringText, config.BobcatHourTxt, "tutoring_text", "bobcat_hour_text"},
+	} {
+		switch {
+		case *pair.current == "":
+			*pair.current = pair.legacy
+		case pair.legacy != "" && pair.legacy != *pair.current:
+			return config, fmt.Errorf("context/parent-updates.md: %s and %s are both set to different values; keep only %s", pair.now, pair.old, pair.now)
+		}
+	}
+	if config.FailingBelow == 0 {
+		config.FailingBelow = 70
+	}
+	if config.FailingBelow < 1 || config.FailingBelow > 100 {
+		return config, fmt.Errorf("context/parent-updates.md: failing_below must be between 1 and 100")
 	}
 	if config.SkipScore == 0 {
 		config.SkipScore = 90
@@ -55,11 +91,11 @@ func loadParentConfig(root string) (ParentConfig, error) {
 	if config.GradePortalName == "" {
 		config.GradePortalName = "the school's grade portal"
 	}
-	if config.BobcatHourLabel == "" {
-		config.BobcatHourLabel = "Tutoring"
+	if config.TutoringLabel == "" {
+		config.TutoringLabel = "Tutoring"
 	}
-	if config.BobcatHourTxt == "" {
-		config.BobcatHourTxt = "Sign up for tutorials and clubs"
+	if config.TutoringText == "" {
+		config.TutoringText = "Sign up for tutorials and clubs"
 	}
 	return config, nil
 }
@@ -149,172 +185,62 @@ func LoadParentRun(root, dir string) (*ParentRun, error) {
 	return run, nil
 }
 
-var scoreLike = regexp.MustCompile(`\d\s*/\s*\d|%|\bout of\b|\bpoints?\b`)
-
+// validate keeps only checks that protect families or grade honesty: the
+// drafts belong to this run, name students in it, and say send/skip/flag; a
+// weekly update covers the whole period (its "no missing work in Term 2"
+// line would otherwise be false) and its announcements hold no student or
+// address details. Anything the drafts cannot match is simply not shown.
 func (r *ParentRun) validate() error {
-	if err := validateParentReportScope(r.Report); err != nil {
-		return err
-	}
 	d := r.Drafts
 	if d.Kind != "parent-drafts" || !((d.Schema == 1 && d.Layout == "") || (d.Schema == 2 && d.Layout == "weekly_update")) {
 		return fmt.Errorf("drafts.json must have schema 1 with the default layout, or schema 2 with layout weekly_update")
 	}
+	if d.RunID != r.Report.RunID {
+		return fmt.Errorf("drafts.json run_id %q does not match the report run %q", d.RunID, r.Report.RunID)
+	}
 	if d.Layout == "weekly_update" {
-		loc, err := time.LoadLocation(r.Report.Scope.Timezone)
-		if err != nil {
-			return err
-		}
-		start, err := time.ParseInLocation("2006-01-02", r.Report.Scope.PeriodStartDate, loc)
-		recent, e := time.Parse(time.RFC3339, r.Report.Scope.RecentStartAt)
-		if err != nil || e != nil || !start.Equal(recent) {
+		if !r.fullPeriod() {
 			return fmt.Errorf("weekly update requires a full-period parent report; pull a fresh report with full_period")
-		}
-		if strings.TrimSpace(r.Config.SignOff) == "" || strings.TrimSpace(r.Config.BobcatHourURL) == "" {
-			return fmt.Errorf("weekly update requires sign_off and bobcat_hour_url in context/parent-updates.md")
 		}
 		if err := r.validateWeeklyAnnouncements(); err != nil {
 			return err
 		}
 	}
-	if d.RunID != r.Report.RunID {
-		return fmt.Errorf("drafts.json run_id %q does not match the report run %q", d.RunID, r.Report.RunID)
-	}
 	seen := map[string]bool{}
 	for _, sd := range d.Students {
-		rs, ok := r.students[sd.Ref]
-		if !ok {
+		if _, ok := r.students[sd.Ref]; !ok {
 			return fmt.Errorf("student %s is not in the report", sd.Ref)
 		}
 		if seen[sd.Ref] {
 			return fmt.Errorf("student %s appears twice", sd.Ref)
 		}
 		seen[sd.Ref] = true
-		hasWindowWork := false
-		for _, c := range rs.Courses {
-			hasWindowWork = hasWindowWork || len(c.WorkDue) > 0
-		}
-		if e := checkFreeText(sd.Ref, sd.StudentIntro); e != nil {
-			return e
-		}
-		switch sd.Decision {
-		case "send":
-			if d.Layout == "weekly_update" {
-				if len(rs.Courses) != 1 {
-					return fmt.Errorf("%s: weekly update requires exactly one course per student", sd.Ref)
-				}
-				if len(rs.Courses[0].Flags) > 0 {
-					return fmt.Errorf("%s: report has unresolved flags; mark this student flag", sd.Ref)
-				}
-				continue
-			}
-		case "skip", "flag":
-			if strings.TrimSpace(sd.Reason) == "" {
-				return fmt.Errorf("%s: a %s decision needs a reason", sd.Ref, sd.Decision)
-			}
-			continue
-		default:
+		if sd.Decision != "send" && sd.Decision != "skip" && sd.Decision != "flag" {
 			return fmt.Errorf("%s: decision must be send, skip or flag", sd.Ref)
 		}
-		sections := []struct {
-			name  string
-			items []ParentItemRef
-			has   func(c ParentReportCourse, id int64) bool
-		}{
-			{"missing", sd.Missing, func(c ParentReportCourse, id int64) bool {
-				for _, i := range c.Missing {
-					if i.AssignmentID == id {
-						return true
-					}
-				}
-				return false
-			}},
-			{"corrections", sd.Corrections, func(c ParentReportCourse, id int64) bool {
-				for _, i := range c.Corrections {
-					if i.AssignmentID == id {
-						return true
-					}
-				}
-				return false
-			}},
-			{"due_soon", sd.DueSoon, func(c ParentReportCourse, id int64) bool {
-				for _, i := range c.DueSoon {
-					if i.AssignmentID == id {
-						return true
-					}
-				}
-				return false
-			}},
-			{"history", sd.History, func(c ParentReportCourse, id int64) bool {
-				for _, i := range c.History {
-					if i.AssignmentID == id {
-						return true
-					}
-				}
-				return false
-			}},
-		}
-		if hasWindowWork {
-			for _, section := range []struct {
-				name string
-				ids  []ParentItemRef
-			}{
-				{"missing", sd.Missing}, {"corrections", sd.Corrections}, {"history", sd.History},
-			} {
-				for _, ref := range section.ids {
-					present := false
-					for _, c := range rs.Courses {
-						for _, item := range c.WorkDue {
-							present = present || item.AssignmentID == ref.AssignmentID
-						}
-					}
-					if !present {
-						return fmt.Errorf("%s: assignment %d is not in the saved work_due inventory", section.name, ref.AssignmentID)
-					}
-				}
-			}
-		}
-		for _, sec := range sections {
-			for _, it := range sec.items {
-				found := false
-				for _, c := range rs.Courses {
-					found = found || sec.has(c, it.AssignmentID)
-				}
-				if !found {
-					return fmt.Errorf("%s: assignment %d is not in this student's report %s list", sd.Ref, it.AssignmentID, sec.name)
-				}
-				if e := checkFreeText(sd.Ref, it.Note); e != nil {
-					return e
-				}
-			}
-		}
-		if !hasWindowWork {
-			return fmt.Errorf("%s: there is no work due in this report window; mark this student skip with that reason", sd.Ref)
-		}
-		if e := checkFreeText(sd.Ref, sd.Intro); e != nil {
-			return e
-		}
-	}
-	var missing []string
-	for _, s := range r.Report.Students {
-		if !seen[s.Ref] {
-			missing = append(missing, s.Ref)
-		}
-	}
-	if len(missing) > 0 {
-		sort.Strings(missing)
-		return fmt.Errorf("every student in the report needs a decision; missing: %s", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+func (r *ParentRun) fullPeriod() bool {
+	scope := r.Report.Scope
+	if scope == nil {
+		return false
+	}
+	loc, err := time.LoadLocation(scope.Timezone)
+	if err != nil {
+		return false
+	}
+	start, err := time.ParseInLocation("2006-01-02", scope.PeriodStartDate, loc)
+	recent, e := time.Parse(time.RFC3339, scope.RecentStartAt)
+	return err == nil && e == nil && start.Equal(recent)
 }
 
 var announcementEmail = regexp.MustCompile(`(?i)\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b`)
 
 func (r *ParentRun) validateWeeklyAnnouncements() error {
 	for _, course := range r.Report.Courses {
-		text, ok := r.Drafts.Announcements[course]
-		if !ok || strings.TrimSpace(text) == "" {
-			return fmt.Errorf("weekly update requires announcements for course %s", course)
-		}
+		text := r.Drafts.Announcements[course]
 		if announcementEmail.MatchString(text) {
 			return fmt.Errorf("weekly announcements for %s cannot contain email addresses", course)
 		}
@@ -366,105 +292,6 @@ func weeklyHoldReason(s ParentReportStudent) string {
 	return ""
 }
 
-func validateParentReportScope(report ParentReportPacket) error {
-	scope := report.Scope
-	if scope == nil {
-		return fmt.Errorf("this saved parent report has no calendar scope; pull a fresh parent report before sending or printing. Existing drafts and delivery outcomes are preserved")
-	}
-	loc, err := time.LoadLocation(scope.Timezone)
-	if err != nil || scope.Timezone == "" {
-		return fmt.Errorf("saved parent report scope has an invalid timezone")
-	}
-	start, err := time.ParseInLocation("2006-01-02", scope.PeriodStartDate, loc)
-	if err != nil {
-		return fmt.Errorf("saved parent report scope has an invalid period start date")
-	}
-	end, err := time.ParseInLocation("2006-01-02", scope.PeriodEndDate, loc)
-	if err != nil || end.Before(start) || strings.TrimSpace(scope.PeriodName) == "" {
-		return fmt.Errorf("saved parent report scope has invalid period dates or name")
-	}
-	asOf, err := time.Parse(time.RFC3339, report.AsOf)
-	if err != nil {
-		return fmt.Errorf("saved parent report has an invalid as_of timestamp")
-	}
-	localDay := asOf.In(loc).Format("2006-01-02")
-	if localDay < scope.PeriodStartDate || localDay > scope.PeriodEndDate {
-		return fmt.Errorf("saved parent report as_of date does not fall within its saved grading period")
-	}
-	recentStart, err := time.Parse(time.RFC3339, scope.RecentStartAt)
-	if err != nil {
-		return fmt.Errorf("saved parent report scope has an invalid recent_start_at")
-	}
-	recentEnd, err := time.Parse(time.RFC3339, scope.RecentEndAt)
-	if err != nil || !recentEnd.Equal(asOf) {
-		return fmt.Errorf("saved parent report scope recent_end_at must match as_of")
-	}
-	expectedStart := asOf.In(loc).AddDate(0, 0, -daysOrDefault(report.CorrectionDays))
-	if start.After(expectedStart) {
-		expectedStart = start
-	}
-	if !recentStart.Equal(expectedStart) {
-		return fmt.Errorf("saved parent report scope recent_start_at does not match the saved period and as_of")
-	}
-	dueSoonEnd, err := time.Parse(time.RFC3339, scope.DueSoonEndAt)
-	if err != nil {
-		return fmt.Errorf("saved parent report scope has an invalid due_soon_end_at")
-	}
-	expectedSoonEnd := asOf.In(loc).AddDate(0, 0, dueSoonDays)
-	if end.AddDate(0, 0, 1).Before(expectedSoonEnd) {
-		expectedSoonEnd = end.AddDate(0, 0, 1)
-	}
-	if !dueSoonEnd.Equal(expectedSoonEnd) {
-		return fmt.Errorf("saved parent report scope due_soon_end_at does not match the saved period and as_of")
-	}
-	for _, student := range report.Students {
-		for _, course := range student.Courses {
-			if course.WorkDue == nil {
-				return fmt.Errorf("saved parent report course %s is missing its work_due inventory", course.Course)
-			}
-			for _, item := range course.WorkDue {
-				due, parseErr := time.Parse(time.RFC3339, item.DueAt)
-				if parseErr != nil || due.Before(recentStart) || due.After(asOf) {
-					return fmt.Errorf("saved parent report inventory item %d is outside its saved due-date window", item.AssignmentID)
-				}
-			}
-			inventory := map[int64]bool{}
-			for _, item := range course.WorkDue {
-				inventory[item.AssignmentID] = true
-			}
-			for _, item := range course.Missing {
-				if !inventory[item.AssignmentID] {
-					return fmt.Errorf("saved Missing/0 item %d is outside the work_due inventory", item.AssignmentID)
-				}
-			}
-			for _, item := range course.Corrections {
-				if !inventory[item.AssignmentID] {
-					return fmt.Errorf("saved correction item %d is outside the work_due inventory", item.AssignmentID)
-				}
-			}
-			for _, item := range course.History {
-				if !inventory[item.AssignmentID] {
-					return fmt.Errorf("saved history item %d is outside the work_due inventory", item.AssignmentID)
-				}
-			}
-			for _, item := range course.DueSoon {
-				due, parseErr := time.Parse(time.RFC3339, item.DueAt)
-				if parseErr != nil || !due.After(asOf) || !due.Before(dueSoonEnd) {
-					return fmt.Errorf("saved parent report due-soon item %d is outside its saved window", item.AssignmentID)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func checkFreeText(ref, text string) error {
-	if scoreLike.MatchString(strings.ToLower(text)) {
-		return fmt.Errorf("%s: notes cannot contain scores or point values; the Engine fills those in from Canvas", ref)
-	}
-	return nil
-}
-
 // Rendered is one student's email.
 type Rendered struct {
 	Subject, HTML string
@@ -483,28 +310,7 @@ func (r *ParentRun) Render(sd ParentStudentDraft, student workspace.Student) Ren
 	if r.Drafts.Layout == "weekly_update" {
 		return r.renderWeekly(sd)
 	}
-	return r.render(sd, student, false)
-}
-
-// RenderStudent builds the printable sheet handed to the student. Every
-// student gets one: all missing, due-soon and history items come from the
-// report, and only corrections follow the agent's draft (eligibility is
-// judgment). Titles are plain text because links do not work on paper.
-func (r *ParentRun) RenderStudent(sd ParentStudentDraft, student workspace.Student) Rendered {
-	rs := r.students[sd.Ref]
-	all := sd
-	all.Missing, all.DueSoon, all.History = nil, nil, nil
-	for _, c := range rs.Courses {
-		missing := append([]ParentReportItem(nil), c.Missing...)
-		sort.SliceStable(missing, func(i, j int) bool { return missing[i].DueAt < missing[j].DueAt })
-		for _, it := range missing {
-			all.Missing = append(all.Missing, ParentItemRef{AssignmentID: it.AssignmentID, Note: noteFor(sd.Missing, it.AssignmentID)})
-		}
-		for _, it := range c.DueSoon {
-			all.DueSoon = append(all.DueSoon, ParentItemRef{AssignmentID: it.AssignmentID, Note: noteFor(sd.DueSoon, it.AssignmentID)})
-		}
-	}
-	return r.render(all, student, true)
+	return r.render(sd, student)
 }
 
 func noteFor(items []ParentItemRef, id int64) string {
@@ -516,7 +322,7 @@ func noteFor(items []ParentItemRef, id int64) string {
 	return ""
 }
 
-func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, forStudent bool) Rendered {
+func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student) Rendered {
 	rs := r.students[sd.Ref]
 	esc := html.EscapeString
 	name := func(s string) string { return esc(workspace.ReplaceStudentName(s, student)) }
@@ -535,7 +341,7 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 		return t.In(loc).Format("Mon Jan 2")
 	}
 	title := func(i ParentReportItem) string {
-		if i.URL == "" || forStudent {
+		if i.URL == "" {
 			return esc(i.Title)
 		}
 		return fmt.Sprintf(linkFormat, esc(i.URL), esc(i.Title))
@@ -569,29 +375,7 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.4;color:#1f2933;max-width:640px">`)
 	intro := sd.Intro
-	if forStudent {
-		var courses []string
-		for _, c := range rs.Courses {
-			courses = append(courses, c.Course)
-		}
-		fmt.Fprintf(&b, `<p style="margin:0 0 4px;font-size:17px"><b>%s</b> &middot; %s &middot; As of %s</p>`, esc(student.Name), esc(strings.Join(courses, ", ")), esc(asOf.In(loc).Format("Mon Jan 2")))
-		intro = sd.StudentIntro
-		missing := 0
-		for _, c := range rs.Courses {
-			missing += len(c.Missing)
-		}
-		complete := true
-		for _, c := range rs.Courses {
-			if len(c.Flags) > 0 {
-				complete = false
-			}
-		}
-		if missing == 0 && complete {
-			intro = strings.TrimSpace(intro + " No Missing/0 work in this report window.")
-		}
-	} else {
-		fmt.Fprintf(&b, `<p style="margin:0 0 4px"><b>%s</b> &middot; As of %s</p>`, esc(student.FirstName), esc(asOf.In(loc).Format("Mon Jan 2, 3:04 pm")))
-	}
+	fmt.Fprintf(&b, `<p style="margin:0 0 4px"><b>%s</b> &middot; As of %s</p>`, esc(student.FirstName), esc(asOf.In(loc).Format("Mon Jan 2, 3:04 pm")))
 	if r.Report.Scope != nil {
 		scope := r.Report.Scope
 		recentStart, _ := time.Parse(time.RFC3339, scope.RecentStartAt)
@@ -600,9 +384,6 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 	}
 	if intro != "" {
 		fmt.Fprintf(&b, `<p style="margin:6px 0">%s</p>`, name(intro))
-	}
-	if forStudent {
-		fmt.Fprintf(&b, `<p style="margin:6px 0;color:#52606d">Find each assignment in Canvas by its title.</p>`)
 	}
 	multi := len(rs.Courses) > 1
 	for _, c := range rs.Courses {
@@ -618,22 +399,7 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 		}
 		for _, it := range c.WorkDue {
 			current := score(it.Current, it.Possible)
-			status := it.Status
-			if status == "awaiting_grading" {
-				status = "Awaiting grading"
-			} else if status == "grade_not_released" {
-				status = "Grade not released"
-			} else if status == "no_grade" {
-				status = "No grade recorded"
-			} else if status == "recorded_zero" {
-				status = "Recorded zero"
-			} else if status == "not_submitted" {
-				status = "Not submitted"
-			} else if status == "missing" {
-				status = "Missing"
-			} else if status == "graded" {
-				status = "Graded"
-			}
+			status := workDueStatusText(it.Status)
 			first := score(it.First, it.Possible)
 			if it.First == nil {
 				first = "not available"
@@ -656,47 +422,29 @@ func (r *ParentRun) render(sd ParentStudentDraft, student workspace.Student, for
 			}
 			b.WriteString(`</tr>` + strings.Join(rows, "") + `</table>`)
 		}
-		if forStudent {
-			section("Missing/0", []string{"Assignment", "Was due", ""}, miss)
-			section("Corrections you can still make", []string{"Assignment", "Correct by", "Where to look"}, corr)
-			section("Due soon", []string{"Assignment", "Due", ""}, soon)
-			section("Work due in this period", []string{"Assignment", "Due", "Status", "First score", "Current score"}, dueRows)
-			continue
-		}
 		section("Missing/0", []string{"Assignment", "Due", ""}, miss)
 		section("Corrections available", []string{"Assignment", "Correct by", "Where to look"}, corr)
 		section("Due soon", []string{"Assignment", "Due", ""}, soon)
 		section("Work due in this period", []string{"Assignment", "Due", "Status", "First score", "Current score"}, dueRows)
 	}
-	if forStudent {
-		fmt.Fprintf(&b, `<p style="margin:18px 0 4px">Official grades: %s.</p>`, esc(r.Config.GradePortalName))
-		if r.Config.BobcatHourURL != "" {
-			fmt.Fprintf(&b, `<p style="margin:4px 0"><b>%s:</b> %s.</p>`, esc(r.Config.BobcatHourLabel), esc(r.Config.BobcatHourTxt))
-		}
-		if r.Config.SignOff != "" {
-			fmt.Fprintf(&b, `<p style="margin:14px 0 0">%s</p>`, esc(r.Config.SignOff))
-		}
-		b.WriteString(aiNotice("This report was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check " + r.Config.GradePortalName + " for official grades. For privacy, the AI never saw your real name, only your nickname, “" + rs.Alias + ".”"))
-		b.WriteString(`</div>`)
-		return Rendered{Subject: student.Name, HTML: b.String()}
+	if r.Config.GradePortalURL != "" {
+		fmt.Fprintf(&b, `<p style="margin:18px 0 4px"><a href="%s">%s</a> &mdash; official grades</p>`, esc(r.Config.GradePortalURL), esc(r.Config.GradePortalName))
 	}
-	if r.Config.SkywardURL != "" {
-		fmt.Fprintf(&b, `<p style="margin:18px 0 4px"><a href="%s">%s</a> &mdash; official grades</p>`, esc(r.Config.SkywardURL), esc(r.Config.GradePortalName))
-	}
-	if r.Config.BobcatHourURL != "" {
-		fmt.Fprintf(&b, `<p style="margin:4px 0"><b>%s:</b> <a href="%s">%s</a>.</p>`, esc(r.Config.BobcatHourLabel), esc(r.Config.BobcatHourURL), esc(r.Config.BobcatHourTxt))
+	if r.Config.TutoringURL != "" {
+		fmt.Fprintf(&b, `<p style="margin:4px 0"><b>%s:</b> <a href="%s">%s</a>.</p>`, esc(r.Config.TutoringLabel), esc(r.Config.TutoringURL), esc(r.Config.TutoringText))
 	}
 	b.WriteString(r.ReplyNotes[sd.Ref])
 	if r.Config.SignOff != "" {
 		fmt.Fprintf(&b, `<p style="margin:14px 0 0">%s</p>`, esc(r.Config.SignOff))
 	}
-	b.WriteString(aiNotice("This update was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check " + r.Config.GradePortalName + " for official grades. For privacy, the AI never saw your child’s real name or your contact information, only the nickname “" + rs.Alias + ".”"))
+	b.WriteString(aiNotice("This update was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check " + r.Config.GradePortalName + " for official grades. For privacy, the AI never saw your child’s real name or your contact information."))
 	b.WriteString(`</div>`)
 	return Rendered{Subject: fmt.Sprintf("Class update for %s (%s)", student.FirstName, asOf.In(loc).Format("Jan 2")), HTML: b.String()}
 }
 
 // aiNotice closes every email and printed report: the AI's part, where the
-// facts come from, and that it worked only with the student's alias.
+// facts come from, and that the AI never saw the student's real name. Parent
+// text never carries the alias; the Engine fills real names into it.
 func aiNotice(text string) string {
 	return `<p style="margin:18px 0 0;padding-top:8px;border-top:1px solid #e4e7eb;font-size:12px;color:#52606d">` + html.EscapeString(text) + `</p>`
 }
@@ -736,6 +484,14 @@ func sortedHist(items []ParentHistoryItem, picked []ParentItemRef, order func([]
 	return out
 }
 
+// failingBelow is the configured cutoff, or 70 when the config was built without loadParentConfig.
+func (r *ParentRun) failingBelow() int {
+	if r.Config.FailingBelow == 0 {
+		return 70
+	}
+	return r.Config.FailingBelow
+}
+
 // renderWeekly derives all academic facts from the saved, scoped inventory.
 func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 	course := r.students[sd.Ref].Courses[0]
@@ -747,7 +503,13 @@ func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 	day := asOf.In(loc)
 	monday := day.AddDate(0, 0, -(int(day.Weekday())+6)%7)
 	months := []string{"Jan.", "Feb.", "March", "April", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."}
-	subject := fmt.Sprintf("ELA 7 Update – Week of %s %d", months[int(monday.Month())-1], monday.Day())
+	className := strings.TrimSpace(r.Config.ClassName)
+	subject := fmt.Sprintf("Class update – Week of %s %d", months[int(monday.Month())-1], monday.Day())
+	greetingClass := "class"
+	if className != "" {
+		subject = fmt.Sprintf("%s Update – Week of %s %d", className, months[int(monday.Month())-1], monday.Day())
+		greetingClass = className
+	}
 	rows := append([]ParentWorkDueItem(nil), course.WorkDue...)
 	sort.SliceStable(rows, func(i, j int) bool {
 		a, _ := time.Parse(time.RFC3339, rows[i].DueAt)
@@ -783,7 +545,7 @@ func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 			continue
 		}
 		percent := value * 100 / possible
-		if percent >= 70 {
+		if percent >= float64(r.failingBelow()) {
 			continue
 		}
 		score := ""
@@ -801,7 +563,7 @@ func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 		failing = append(failing, fmt.Sprintf("<li>%s – %s%s</li>", link, score, marker))
 	}
 	var b strings.Builder
-	b.WriteString(`<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.4;color:#1f2933;max-width:640px"><p>Hello,</p><p>Here's a quick ELA update.</p>`)
+	b.WriteString(`<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.4;color:#1f2933;max-width:640px"><p>Hello,</p><p>Here's a quick ` + html.EscapeString(greetingClass) + ` update.</p>`)
 	fmt.Fprintf(&b, "<p><strong>Work that needs attention (%s)</strong></p>", html.EscapeString(r.Report.Scope.PeriodName))
 	if len(missing)+len(failing) == 0 {
 		fmt.Fprintf(&b, "<p>No missing or failing work in %s right now.</p>", html.EscapeString(r.Report.Scope.PeriodName))
@@ -810,7 +572,7 @@ func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 		b.WriteString("<p>Missing:</p><ul>" + strings.Join(missing, "") + "</ul>")
 	}
 	if len(failing) > 0 {
-		b.WriteString("<p>Failing (below 70):</p><ul>" + strings.Join(failing, "") + "</ul>")
+		fmt.Fprintf(&b, "<p>Failing (below %d):</p><ul>%s</ul>", r.failingBelow(), strings.Join(failing, ""))
 	}
 	if len(missing) > 0 {
 		b.WriteString("<p>All missing work should be done as soon as possible.</p>")
@@ -819,7 +581,9 @@ func (r *ParentRun) renderWeekly(sd ParentStudentDraft) Rendered {
 	var md bytes.Buffer
 	_ = goldmark.Convert([]byte(r.Drafts.Announcements[course.Course]), &md)
 	b.WriteString(md.String())
-	fmt.Fprintf(&b, `<p><strong>Extra help</strong><br>Sign up for Bobcat Hour tutorials at <a href="%s">flex.securly.com</a>.</p>`, html.EscapeString(r.Config.BobcatHourURL))
+	if r.Config.TutoringURL != "" {
+		fmt.Fprintf(&b, `<p><strong>Extra help</strong><br>%s: <a href="%s">%s</a>.</p>`, html.EscapeString(r.Config.TutoringLabel), html.EscapeString(r.Config.TutoringURL), html.EscapeString(r.Config.TutoringText))
+	}
 	fmt.Fprintf(&b, "<p>Thank you,<br>%s</p></div>", html.EscapeString(r.Config.SignOff))
 	return Rendered{Subject: subject, HTML: b.String()}
 }

@@ -27,7 +27,8 @@ func teamLogFile(installRoot string) string {
 }
 
 // RedactTeamLogPath drops the query and replaces a numeric segment after
-// submissions, users or students with :student.
+// submissions, users or students with :student, and the attempt ID after
+// quiz_sessions or participant_sessions with :session.
 func RedactTeamLogPath(path string) string {
 	path, _, _ = strings.Cut(path, "?")
 	parts := strings.Split(path, "/")
@@ -36,6 +37,10 @@ func RedactTeamLogPath(path string) string {
 		case "submissions", "users", "students":
 			if parts[i] != "" && strings.Trim(parts[i], "0123456789") == "" {
 				parts[i] = ":student"
+			}
+		case "quiz_sessions", "participant_sessions":
+			if parts[i] != "" {
+				parts[i] = ":session"
 			}
 		}
 	}

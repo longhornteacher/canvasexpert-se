@@ -39,6 +39,7 @@ type Server struct {
 	sessionReadyWait  time.Duration
 	pulls             map[string]*pullJob
 	run               func(context.Context, ...string) (TextOutput, error) // nil uses command; tests replace it
+	newChild          func(args []string) *exec.Cmd                         // tests replace the child Engine
 }
 
 type TextOutput struct {
@@ -306,7 +307,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.startReviewSession(ctx, dir, []string{"parent-review", dir})
 	})
-	addActionTool(server, "print_student_reports", "Save one PDF of student reports from a parent-update run folder (report.json and drafts.json), one student per page, in the teacher's Downloads folder, and open it for printing. Every student gets a page. Returns the file path and count only; the PDF holds student names and is outside the workspace. Nothing is sent or written to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
+	addActionTool(server, "print_student_reports", "Save one PDF of student reports from a parent-update run folder (only report.json is needed; drafts.json adds optional intros), one student per page: assignment, due date and current grade, with a check box for work not yet due, in the teacher's Downloads folder, and open it for printing. Every student gets a page. Returns the file path and count only; the PDF holds student names and is outside the workspace. Nothing is sent or written to Canvas.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReviewInput) (TextOutput, error) {
 		dir, err := s.coursePath(in.Folder)
 		if err != nil {
 			return TextOutput{}, err
@@ -458,7 +459,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "set_quiz_accommodations", "set_tags", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false
@@ -474,19 +475,58 @@ func addTool[In any](server *mcp.Server, name, description string, annotations m
 	})
 }
 
+// staleAdapterNotice is returned instead of running a command when this adapter is older than
+// the Engine now installed. After an update, os.Executable still names the old path, which now
+// holds the new Engine, so an old adapter would start new child Engines (mixed versions) until
+// the app is restarted. Status and update commands stay allowed so the agent can still explain.
+const staleAdapterNotice = "CanvasExpert was updated. Close and reopen this app so it loads the new version; nothing was run."
+
+func (s *Server) staleAdapter(args []string) error {
+	if BuildKind != "release" || len(args) == 0 || args[0] == "version" || args[0] == "update" {
+		return nil
+	}
+	m, ok, err := workspace.ReadEngineManifest(s.root)
+	if err != nil || !ok || m.Identity == "" {
+		return nil
+	}
+	if workspace.ArtifactIdentity(Version, BuildKind, Revision, BuiltAt) != m.Identity {
+		return errors.New(staleAdapterNotice)
+	}
+	return nil
+}
+
 func (s *Server) command(ctx context.Context, args ...string) (TextOutput, error) {
-	exe, err := os.Executable()
-	if err != nil {
+	if err := s.staleAdapter(args); err != nil {
 		return TextOutput{}, err
 	}
 	full := append([]string{"--workspace", s.root}, args...)
 	// A stalled Canvas call must not hold the client's tool call forever.
 	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, exe, full...)
+	graceful := len(args) > 0 && gracefulStop[args[0]]
+	var cmd *exec.Cmd
+	switch {
+	case s.newChild != nil:
+		cmd = s.newChild(full)
+	default:
+		exe, err := os.Executable()
+		if err != nil {
+			return TextOutput{}, err
+		}
+		if graceful {
+			cmd = exec.Command(exe, full...)
+		} else {
+			cmd = exec.CommandContext(ctx, exe, full...)
+		}
+	}
 	var stdout, stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err = cmd.Run()
+	var err error
+	if graceful {
+		err = runGraceful(ctx, cmd)
+	} else {
+		err = cmd.Run()
+	}
 	result := strings.TrimSpace(stdout.String())
 	if stderr.Len() > 0 {
 		if result != "" {
@@ -494,10 +534,75 @@ func (s *Server) command(ctx context.Context, args ...string) (TextOutput, error
 		}
 		result += strings.TrimSpace(stderr.String())
 	}
+	// A graceful stop that ran out of time is a normal, resumable result.
+	if graceful && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		note := "Stopped at the time limit after finishing the item in progress; nothing was lost. Run the same tool again to continue with the items that were not started."
+		if result != "" {
+			result += "\n"
+		}
+		return TextOutput{Text: result + note, State: "incomplete", Outcome: exit3Outcome(args)}, nil
+	}
 	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 3 {
+			// Exit 3 means some items were held, stopped or not completed: the outcomes are the
+			// result, not a tool failure.
+			return TextOutput{Text: result, State: "incomplete", Outcome: exit3Outcome(args)}, nil
+		}
 		return TextOutput{}, fmt.Errorf("CE-SE command failed: %w\n%s", err, result)
 	}
 	return TextOutput{Text: result}, nil
+}
+
+// gracefulStop lists the batch writers whose child Engine finishes the item in flight and stops
+// before the next one when its stdin is closed. Other commands are killed on cancel as before.
+var gracefulStop = map[string]bool{"post": true, "push-quiz": true}
+
+// stopGrace is how long a stopping child may finish its item before it is killed.
+var stopGrace = 2 * time.Minute
+
+// runGraceful runs cmd with a stdin pipe the child watches. When ctx ends (the client cancelled
+// or the time limit passed) the pipe is closed so the child stops between items; a child that
+// does not exit within stopGrace is killed, and the receipts reconcile on the next run.
+func runGraceful(ctx context.Context, cmd *exec.Cmd) error {
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	if cmd.Env == nil {
+		cmd.Env = os.Environ()
+	}
+	cmd.Env = append(cmd.Env, "CSE_STOP_ON_STDIN_CLOSE=1")
+	if err = cmd.Start(); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err = <-done:
+		return err
+	case <-ctx.Done():
+	}
+	_ = stdin.Close()
+	select {
+	case err = <-done:
+		return err
+	case <-time.After(stopGrace):
+		_ = cmd.Process.Kill()
+		return <-done
+	}
+}
+
+// exit3Outcome names exit code 3: batch commands report partial progress, single-target
+// commands report that they held.
+func exit3Outcome(args []string) string {
+	if len(args) > 0 {
+		switch args[0] {
+		case "post", "push", "push-quiz", "set-tags", "assign-to", "assign-modules", "quiz-accommodations", "upload-file", "prepare-audience", "inbox-set-state":
+			return "partial"
+		}
+	}
+	return "held"
 }
 
 type ListCoursesInput struct {
@@ -513,6 +618,9 @@ type configuredCourses struct {
 	Instance    string          `json:"instance"`
 	Courses     []domain.Course `json:"courses"`
 	Team        []teamStatus    `json:"team"`
+	// FoundSync lists shared folders this PC could use but doesn't yet.
+	FoundSync []string `json:"found_sync,omitempty"`
+	SyncNote  string   `json:"sync_note,omitempty"`
 }
 
 // teamStatus tells the agent who the teammates are and whether their keys are
@@ -569,7 +677,8 @@ func (s *Server) listCourses(ctx context.Context, in ListCoursesInput) (TextOutp
 			return TextOutput{}, err
 		}
 		location, _ := workspace.GetRulesLocation(s.root)
-		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, InstallRoot: location.InstallRoot, RulesRoot: location.RulesRoot, Mode: location.Mode, Instance: config.Instance, Courses: config.Courses, Team: team})
+		found := workspace.DiscoverUserSync(s.root)
+		b, err := json.Marshal(configuredCourses{Source: "configured", Root: s.root, InstallRoot: location.InstallRoot, RulesRoot: location.RulesRoot, Mode: location.Mode, Instance: config.Instance, Courses: config.Courses, Team: team, FoundSync: found, SyncNote: workspace.UnconnectedSyncNote(found)})
 		return TextOutput{Text: string(b)}, err
 	default:
 		return TextOutput{}, errors.New("source must be configured or canvas")

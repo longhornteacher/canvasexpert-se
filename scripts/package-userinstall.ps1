@@ -82,6 +82,28 @@ $buildRoot = Join-Path $stageRoot 'build'
 $treeRoot = Join-Path $stageRoot 'tree'
 $zipRoot = Join-Path $stageRoot 'zip'
 
+# A published release is immutable: get-engine.cmd checks downloads against the hashes in
+# engine/manifest.txt on the userinstall branch, and a rebuild changes those bytes. Under
+# -Release, refuse before compiling when this version already has an asset set here or a
+# manifest on the branch (local, or origin's if it is present).
+$releaseAssetRoot = Join-Path $OutputDirectory "release/$productVersion"
+if ($Release) {
+    if ((Test-Path -LiteralPath $releaseAssetRoot) -and @(Get-ChildItem -LiteralPath $releaseAssetRoot -Force).Count -gt 0) {
+        throw "Version $productVersion already has a release asset set in $releaseAssetRoot. A published release is immutable; bump VERSION for the next change."
+    }
+    $releaseGitDir = (& git -C $TargetRepository rev-parse --absolute-git-dir 2>$null | Out-String).Trim()
+    if ($LASTEXITCODE -eq 0 -and $releaseGitDir) {
+        foreach ($releaseRef in "refs/heads/$BranchName", "refs/remotes/origin/$BranchName") {
+            & git --git-dir=$releaseGitDir rev-parse --verify --quiet "$releaseRef^{commit}" 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) { continue }
+            $branchManifest = & git --git-dir=$releaseGitDir show "${releaseRef}:engine/manifest.txt" 2>$null
+            if ($LASTEXITCODE -eq 0 -and ($branchManifest -split "`r?`n") -contains "version=$productVersion") {
+                throw "Branch $releaseRef already carries a manifest for version $productVersion. A published release is immutable; bump VERSION for the next change."
+            }
+        }
+    }
+}
+
 try {
     New-Item -ItemType Directory -Path $buildRoot, $treeRoot | Out-Null
 
@@ -171,11 +193,13 @@ try {
     }
 
     # --- Assets and ZIP --------------------------------------------------------------------
-    $assetRoot = Join-Path $OutputDirectory 'assets'
+    # A release writes only into its own versioned folder; ordinary builds keep assets/.
+    $assetRoot = if ($Release) { $releaseAssetRoot } else { Join-Path $OutputDirectory 'assets' }
     New-Item -ItemType Directory -Path $assetRoot -Force | Out-Null
     $assetSums = @()
     foreach ($name in $assets.Keys) {
-        Copy-Item -LiteralPath $assets[$name] -Destination (Join-Path $assetRoot $name) -Force
+        if ($Release) { Copy-Item -LiteralPath $assets[$name] -Destination (Join-Path $assetRoot $name) }
+        else { Copy-Item -LiteralPath $assets[$name] -Destination (Join-Path $assetRoot $name) -Force }
         $assetSums += (Get-FileHash -LiteralPath $assets[$name] -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $name
     }
     [IO.File]::WriteAllText((Join-Path $assetRoot 'SHA256SUMS.txt'), (($assetSums -join "`n") + "`n"), $utf8)
@@ -185,8 +209,8 @@ try {
     Copy-Item -LiteralPath (Join-Path $treeRoot '.claude') -Destination $zipRoot -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $treeRoot '.gitignore'), (Join-Path $treeRoot '.gitattributes') -Destination $zipRoot
     foreach ($name in $assets.Keys) { Copy-Item -LiteralPath $assets[$name] -Destination (Join-Path $zipRoot "engine/$name") }
-    $zipPath = Join-Path $OutputDirectory "CanvasExpert-SE-$artifactIdentity-userinstall.zip"
-    if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+    $zipPath = if ($Release) { Join-Path $assetRoot "CanvasExpert-SE-$artifactIdentity-userinstall.zip" } else { Join-Path $OutputDirectory "CanvasExpert-SE-$artifactIdentity-userinstall.zip" }
+    if (-not $Release -and (Test-Path -LiteralPath $zipPath)) { Remove-Item -LiteralPath $zipPath -Force }
     New-PortableZip -SourceDirectory $zipRoot -DestinationPath $zipPath
 
     # --- Optional local commit on the branch ----------------------------------------------

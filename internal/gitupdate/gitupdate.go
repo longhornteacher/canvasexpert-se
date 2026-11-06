@@ -120,11 +120,20 @@ func (u Updater) Stage(ifDue bool) (Report, error) {
 	return r, nil
 }
 
-// Apply installs a fetched update: it holds while a private page is open or a
-// shipped file has local edits (unless archiveEdits, after the agent has moved
-// those edits into Teacher_Override.md), fast-forwards to the fetched branch,
-// installs the Engine (from the staged copy when it verifies) and checks the
-// installed Engine against the new manifest.
+// Apply installs a fetched update in a fixed order so a failure never leaves
+// the folder half changed in the worse direction:
+//  1. preflight, changing nothing: hold while a private page is open, while a
+//     shipped file has local edits (unless archiveEdits, after the agent has
+//     moved those edits into Teacher_Override.md), or when the fetched branch
+//     is not a fast-forward;
+//  2. install the new Engine from the staged copy (get-engine.cmd restores the
+//     old Engine if it cannot finish, so a failure here changes nothing);
+//  3. archive the edits and fast-forward the playbooks;
+//  4. check every installed Engine file against the new manifest.
+//
+// A new Engine with old playbooks (a failure in step 3) is the safer mismatch:
+// the Engine keeps old commands, and the next Apply still sees the pending
+// commits and finishes the update.
 func (u Updater) Apply(archiveEdits bool) (Report, error) {
 	if workspace.InstallKind(u.Root) != "git" {
 		return Report{}, errNotGit
@@ -156,12 +165,26 @@ func (u Updater) Apply(archiveEdits bool) (Report, error) {
 	if err != nil {
 		return r, err
 	}
+	if len(edited) > 0 && !archiveEdits {
+		r.State, r.Edited = "held", edited
+		r.Held = "shipped files have local edits; move the teacher's choices into Teacher_Override.md, then apply with archive-edits"
+		return r, nil
+	}
+	// Fast-forward preflight with no changes: nothing is installed or reverted when the
+	// folder has diverged from the fetched branch.
+	if _, err = u.Git(u.Root, "merge-base", "--is-ancestor", "HEAD", remoteBranch); err != nil {
+		r.State, r.Held = "held", "the update could not be applied as a fast-forward; nothing was forced. Ask for help before changing this folder."
+		return r, nil
+	}
+	// Install the Engine first, from the staged copy named by the fetched manifest. The live
+	// manifest is still the old one, so the fetched one is handed to get-engine explicitly.
+	if err = u.writeStagedManifest(); err != nil {
+		return r, err
+	}
+	if err = u.GetEngine(u.Root, "--manifest", filepath.Join("engine", "staged", "manifest.txt")); err != nil {
+		return r, fmt.Errorf("the new Engine could not be installed, so nothing was changed and the current Engine still works; close the apps using CanvasExpert and run .\\get-engine.cmd: %w", err)
+	}
 	if len(edited) > 0 {
-		if !archiveEdits {
-			r.State, r.Edited = "held", edited
-			r.Held = "shipped files have local edits; move the teacher's choices into Teacher_Override.md, then apply with archive-edits"
-			return r, nil
-		}
 		if r.Archived, err = u.archive(edited); err != nil {
 			return r, err
 		}
@@ -170,11 +193,8 @@ func (u Updater) Apply(archiveEdits bool) (Report, error) {
 		}
 	}
 	if _, err = u.Git(u.Root, "merge", "--ff-only", "--quiet", remoteBranch); err != nil {
-		r.State, r.Held = "held", "the update could not be applied as a fast-forward; nothing was forced. Ask for help before changing this folder."
+		r.State, r.Held = "held", "the new Engine is installed but the playbooks could not be updated as a fast-forward; nothing was forced. Apply again, or ask for help before changing this folder."
 		return r, nil
-	}
-	if err = u.GetEngine(u.Root); err != nil {
-		return r, fmt.Errorf("playbooks were updated but the Engine could not be installed; run .\\get-engine.cmd: %w", err)
 	}
 	if !u.engineMatches() {
 		return r, errors.New("the installed Engine does not match the new manifest; run .\\get-engine.cmd")
@@ -223,12 +243,33 @@ func (u Updater) available() (string, bool) {
 	return identity, true
 }
 
+// writeStagedManifest records the fetched release's manifest beside the staged files, so
+// get-engine.cmd installs that release's Engine while the live manifest is still the old one.
+func (u Updater) writeStagedManifest() error {
+	text, err := u.Git(u.Root, "show", remoteBranch+":engine/manifest.txt")
+	if err != nil {
+		return err
+	}
+	staged := filepath.Join(u.Root, "engine", "staged")
+	if err = os.MkdirAll(staged, 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(staged, "manifest.txt"), []byte(text), 0644)
+}
+
+// engineMatches is true when every Engine file the manifest names (cse.exe and the
+// extension) is installed with the recorded checksum.
 func (u Updater) engineMatches() bool {
 	m, ok, err := workspace.ReadEngineManifest(u.Root)
 	if err != nil || !ok || m.SHA256["cse.exe"] == "" {
 		return false
 	}
-	return fileSHA256(filepath.Join(u.Root, "engine", "cse.exe")) == m.SHA256["cse.exe"]
+	for name, want := range m.SHA256 {
+		if fileSHA256(filepath.Join(u.Root, "engine", name)) != strings.ToLower(want) {
+			return false
+		}
+	}
+	return true
 }
 
 func (u Updater) edited() ([]string, error) {

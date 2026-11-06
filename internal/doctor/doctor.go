@@ -130,6 +130,9 @@ func runMode(root, exe, build string, offline bool, loadCredential func() (platf
 		} else {
 			r.add("active_rules", "pass", "Active AGENTS.md and playbooks/setup.md are readable from "+loc.RulesRoot+" ("+loc.Mode+" mode).", "")
 		}
+		if found := workspace.DiscoverUserSync(root); len(found) > 0 {
+			r.add("shared_folder", "not_configured", workspace.UnconnectedSyncNote(found), "Connect this PC in Settings, Connections, or with cse rules-location --sync PATH.")
+		}
 	}
 
 	var config domain.CourseConfig

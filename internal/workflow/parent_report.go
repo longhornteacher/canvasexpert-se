@@ -68,8 +68,19 @@ type ParentReportCourse struct {
 	DueSoon           []ParentReportItem  `json:"due_soon,omitempty"`
 	History           []ParentHistoryItem `json:"history,omitempty"`
 	WorkDue           []ParentWorkDueItem `json:"work_due"`
+	// Upcoming lists all work due after as_of through the period end, for
+	// the printed grade sheet.
+	Upcoming []ParentUpcomingItem `json:"upcoming,omitempty"`
 	// correctionDays is the configured window; zero means the default.
 	correctionDays int
+	// upcomingEnd, when set, is the exclusive end of the Upcoming list.
+	upcomingEnd time.Time
+}
+
+// ParentUpcomingItem is published, visible work not yet due for this student.
+type ParentUpcomingItem struct {
+	ParentReportItem
+	TurnedIn bool `json:"turned_in,omitempty"`
 }
 
 // ParentWorkDueItem is one required assignment whose effective due date is in
@@ -163,6 +174,15 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		}
 		scope.RecentStartAt = recentStart.Format(time.RFC3339)
 	}
+	// Every pull lists upcoming work to the period end for the printed grade
+	// sheet, and resolves visibility that far ahead.
+	upcomingLoc, _ := time.LoadLocation(calendar.Timezone)
+	periodEnd, e := time.ParseInLocation("2006-01-02", period.EndDate, upcomingLoc)
+	if e != nil {
+		return "", ParentReportPacket{}, e
+	}
+	upcomingEnd := periodEnd.AddDate(0, 0, 1)
+	resolveEnd := upcomingEnd
 	want := map[string]bool{}
 	for _, r := range refs {
 		want[r] = true
@@ -241,6 +261,16 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		for _, a := range assignments {
 			byAssignment[a.ID] = a
 		}
+		// The two whole-course feeds are independent; read them together.
+		type feedResult struct {
+			rows []Submission
+			err  error
+		}
+		feedDone := make(chan feedResult, 1)
+		go func() {
+			rows, err := gradeVersions(ctx, s.Client, course.ID)
+			feedDone <- feedResult{rows, err}
+		}()
 		subs, e := courseSubmissions(ctx, s.Client, course.ID)
 		if e != nil {
 			return "", ParentReportPacket{}, e
@@ -253,7 +283,8 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		// the same attempt hides the first score. The gradebook history feed
 		// keeps every grading version.
 		versions := map[int64]map[int64][]Submission{}
-		feed, e := gradeVersions(ctx, s.Client, course.ID)
+		fr := <-feedDone
+		feed, e := fr.rows, fr.err
 		if e != nil {
 			packet.Notes = append(packet.Notes, course.Nickname+": gradebook history unavailable; first scores come from submission history and may miss same-attempt regrades")
 		}
@@ -272,7 +303,7 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 			if en.score == nil {
 				rc.Flags = append(rc.Flags, "course score unavailable from Canvas")
 			}
-			studentSubs, incomplete := completeStudentSubmissionsWithResolver(ctx, resolver, id, assignments, perStudent[id], recentStart, now, dueSoonEnd)
+			studentSubs, incomplete := completeStudentSubmissionsWithResolver(ctx, resolver, id, assignments, perStudent[id], recentStart, now, resolveEnd)
 			for _, note := range incomplete {
 				rc.Flags = append(rc.Flags, note)
 			}
@@ -284,6 +315,7 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 				}
 			}
 			rc.correctionDays = config.CorrectionDays
+			rc.upcomingEnd = upcomingEnd
 			buildStudentReportScoped(&rc, studentSubs, versions[id], byAssignment, now, loc, recentStart, dueSoonEnd)
 			courseWorkCount += len(rc.WorkDue)
 			rs := byRef[en.st.Ref]
@@ -491,29 +523,40 @@ func completeStudentSubmissionsWithResolver(ctx context.Context, resolver *paren
 			continue
 		}
 		// Canvas's course-wide feed can report false visibility for every
-		// student even when the assignment-scoped feed reports true. Resolve
-		// these in one assignment read, retaining genuine invisible rows.
-		if ok && sub.AssignmentVisible != nil && !*sub.AssignmentVisible {
-			batch, loaded := resolver.batches[a.ID]
-			if !loaded {
+		// student even when the assignment-scoped feed reports true, and it
+		// omits rows. Resolve both from one assignment-scoped read shared by
+		// every student, instead of one read per student; a student absent
+		// from that complete list is not assigned the work. Only a failed
+		// list read falls back to the per-student read below.
+		batch, loaded := resolver.batches[a.ID]
+		if !loaded {
+			var rows []Submission
+			path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?include[]=submission_history&include[]=submission_comments&include[]=visibility&per_page=100", courseID, a.ID)
+			if err := c.List(ctx, path, &rows); err == nil {
 				batch = map[int64]Submission{}
-				var rows []Submission
-				path := fmt.Sprintf("/api/v1/courses/%d/assignments/%d/submissions?include[]=submission_history&include[]=submission_comments&include[]=visibility&per_page=100", courseID, a.ID)
-				if err := c.List(ctx, path, &rows); err == nil {
-					for _, row := range rows {
-						if row.UserID > 0 && (row.AssignmentID == 0 || row.AssignmentID == a.ID) {
-							if row.AssignmentID == 0 {
-								row.AssignmentID = a.ID
-							}
-							batch[row.UserID] = row
+				for _, row := range rows {
+					if row.UserID > 0 && (row.AssignmentID == 0 || row.AssignmentID == a.ID) {
+						if row.AssignmentID == 0 {
+							row.AssignmentID = a.ID
 						}
+						batch[row.UserID] = row
 					}
 				}
-				resolver.batches[a.ID] = batch
 			}
-			if resolved, found := batch[studentID]; found && resolved.AssignmentVisible != nil {
+			resolver.batches[a.ID] = batch // nil records a failed read
+		}
+		if batch != nil {
+			resolved, found := batch[studentID]
+			switch {
+			case !found:
+				delete(byAssignment, a.ID)
+				continue
+			case resolved.AssignmentVisible != nil && ok:
 				sub.AssignmentVisible = resolved.AssignmentVisible
 				byAssignment[a.ID] = sub
+				continue
+			case resolved.AssignmentVisible != nil:
+				byAssignment[a.ID] = resolved
 				continue
 			}
 		}
@@ -672,6 +715,9 @@ func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, version
 		} else if a.GradingType != "not_graded" && !gradeNotReleased && !positiveGrade && !submitted && due.After(now) && due.Before(dueSoonEnd) {
 			rs.DueSoon = append(rs.DueSoon, item)
 		}
+		if !rs.upcomingEnd.IsZero() && due.After(now) && due.Before(rs.upcomingEnd) {
+			rs.Upcoming = append(rs.Upcoming, ParentUpcomingItem{ParentReportItem: item, TurnedIn: submitted})
+		}
 
 		vs := versions[sub.AssignmentID]
 		var hist ParentHistoryItem
@@ -741,6 +787,7 @@ func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, version
 		return rs.Corrections[i].CorrectionDeadline < rs.Corrections[j].CorrectionDeadline
 	})
 	sort.Slice(rs.DueSoon, func(i, j int) bool { return rs.DueSoon[i].DueAt < rs.DueSoon[j].DueAt })
+	sort.Slice(rs.Upcoming, func(i, j int) bool { return rs.Upcoming[i].DueAt < rs.Upcoming[j].DueAt })
 }
 
 // Gradebook history can contain a resave of the same score. Keep the report's

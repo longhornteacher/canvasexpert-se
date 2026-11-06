@@ -122,6 +122,7 @@ func TestTeamLogRedactsAndReadsNewestFirst(t *testing.T) {
 		"/api/v1/users/9/profile":                             "/api/v1/users/:student/profile",
 		"/api/v1/courses/7/students/4":                        "/api/v1/courses/7/students/:student",
 		"/api/v1/users/self":                                  "/api/v1/users/self",
+		"/api/quiz_sessions/7000001/results":                  "/api/quiz_sessions/:session/results",
 		"/api/v1/courses/7/submissions/update_grades":         "/api/v1/courses/7/submissions/update_grades",
 	} {
 		if got := RedactTeamLogPath(in); got != want {

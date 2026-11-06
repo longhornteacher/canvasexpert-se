@@ -3,6 +3,8 @@ package canvas
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -35,6 +37,11 @@ func decodeAny(t *testing.T, b []byte) any {
 // TLS server. The launch answers with JSON naming a one-time URL, as Canvas
 // did on 2026-10-28.
 func gradingServer(t *testing.T, authoritative string, posted *[]byte) (*Client, func()) {
+	return gradingServerWith(t, authoritative, posted, nil)
+}
+
+// gradingServerWith lets a test choose the answer to the results POST.
+func gradingServerWith(t *testing.T, authoritative string, posted *[]byte, respond func(http.ResponseWriter)) (*Client, func()) {
 	t.Helper()
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -65,6 +72,10 @@ func gradingServer(t *testing.T, authoritative string, posted *[]byte) (*Client,
 				t.Errorf("result write sent the wrong token or host")
 			}
 			*posted, _ = io.ReadAll(r.Body)
+			if respond != nil {
+				respond(w)
+				return
+			}
 			w.WriteHeader(http.StatusCreated)
 			w.Write(fixture(t, "post_results_response.json"))
 		default:
@@ -127,5 +138,77 @@ func TestCamelKeyLeavesIDsAlone(t *testing.T) {
 		if got := camelKey(in); got != want {
 			t.Errorf("camelKey(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestNewQuizGradingClassifiesWriteOutcomesLikeOrdinaryWrites(t *testing.T) {
+	cases := []struct {
+		name      string
+		respond   func(http.ResponseWriter)
+		uncertain bool
+		kind      string
+	}{
+		{"408", func(w http.ResponseWriter) { w.WriteHeader(408) }, true, ""},
+		{"302 without Location", func(w http.ResponseWriter) { w.WriteHeader(302) }, true, ""},
+		{"500", func(w http.ResponseWriter) { w.WriteHeader(500) }, true, ""},
+		{"2xx invalid JSON", func(w http.ResponseWriter) { w.WriteHeader(201); io.WriteString(w, "not json") }, true, ""},
+		{"2xx unreadable body", func(w http.ResponseWriter) {
+			w.Header().Set("Content-Length", "100")
+			w.WriteHeader(201)
+			io.WriteString(w, "{")
+		}, true, ""},
+		{"400", func(w http.ResponseWriter) { w.WriteHeader(400) }, false, ""},
+		{"403", func(w http.ResponseWriter) { w.WriteHeader(403) }, false, ""},
+		{"401", func(w http.ResponseWriter) { w.WriteHeader(401) }, false, "authentication"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var posted []byte
+			c, done := gradingServerWith(t, `{"id":9000001,"fudge_points":0.5}`, &posted, tc.respond)
+			defer done()
+			c.MapError = func(err error) error { return fmt.Errorf("mapped: %w", err) }
+			var logged []string
+			c.OnWrite = func(method, path string, status int, uncertain bool) {
+				logged = append(logged, fmt.Sprint(method, " ", path, " ", uncertain))
+			}
+			g, err := c.NewQuizGrading(context.Background(), 1, 2, "ps1", "7000001")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = g.PostScores(context.Background(), map[string]string{"1002": "5"}, nil)
+			var ce *Error
+			if !errors.As(err, &ce) {
+				t.Fatalf("want a canvas error, got %v", err)
+			}
+			if !strings.HasPrefix(err.Error(), "mapped:") {
+				t.Fatalf("error not mapped: %v", err)
+			}
+			if ce.Uncertain != tc.uncertain || (tc.kind != "" && ce.Kind != tc.kind) {
+				t.Fatalf("uncertain=%v kind=%s, want uncertain=%v kind=%s", ce.Uncertain, ce.Kind, tc.uncertain, tc.kind)
+			}
+			if len(logged) != 1 || !strings.HasPrefix(logged[0], "POST /api/quiz_sessions/7000001/results ") {
+				t.Fatalf("audit hook calls: %v", logged)
+			}
+		})
+	}
+}
+
+func TestNewQuizGradingAuditsASuccessfulWrite(t *testing.T) {
+	var posted []byte
+	c, done := gradingServer(t, `{"id":9000001,"fudge_points":0.5}`, &posted)
+	defer done()
+	var calls int
+	c.OnWrite = func(method, path string, status int, uncertain bool) {
+		calls++
+		if method != "POST" || status != 200 || uncertain {
+			t.Errorf("audit: %s %s %d %v", method, path, status, uncertain)
+		}
+	}
+	g, err := c.NewQuizGrading(context.Background(), 1, 2, "ps1", "7000001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = g.PostScores(context.Background(), map[string]string{"1002": "5"}, nil); err != nil || calls != 1 {
+		t.Fatalf("err=%v audit calls=%d", err, calls)
 	}
 }

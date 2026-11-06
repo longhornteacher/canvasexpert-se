@@ -139,11 +139,11 @@ func TestCompleteStudentSubmissionsResolvesMissingVisibilityRow(t *testing.T) {
 		for _, include := range includes {
 			hasVisibility = hasVisibility || include == "visibility"
 		}
-		if r.URL.Path != "/api/v1/courses/1/assignments/7/submissions/9" || !hasVisibility {
-			t.Errorf("targeted read = %s?%s", r.URL.Path, r.URL.RawQuery)
+		if r.URL.Path != "/api/v1/courses/1/assignments/7/submissions" || !hasVisibility {
+			t.Errorf("assignment-scoped read = %s?%s", r.URL.Path, r.URL.RawQuery)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"user_id":9,"assignment_id":7,"assignment_visible":true,"cached_due_date":"2026-10-17T12:00:00-05:00"}`))
+		w.Write([]byte(`[{"user_id":9,"assignment_id":7,"assignment_visible":true,"cached_due_date":"2026-10-17T12:00:00-05:00"}]`))
 	})
 	client := svc.Client
 	assignments := []Assignment{{ID: 7, Name: "Catalog work", Published: true, DueAt: str("2026-10-17T12:00:00-05:00"), Points: "5"}}
@@ -157,6 +157,54 @@ func TestCompleteStudentSubmissionsResolvesMissingVisibilityRow(t *testing.T) {
 	buildStudentReportScoped(&course, rows, nil, map[int64]Assignment{7: assignments[0]}, now, loc, now.AddDate(0, 0, -14), now.AddDate(0, 0, 7))
 	if len(course.WorkDue) != 1 || course.WorkDue[0].Status != "no_grade" {
 		t.Fatalf("catalog assignment must remain visible without a grade: %+v", course.WorkDue)
+	}
+}
+
+// One assignment-scoped read serves every student: a student missing from
+// it is not assigned the work (no flag), and only a failed read falls back to
+// the per-student read.
+func TestCompleteStudentSubmissionsSharesAssignmentRead(t *testing.T) {
+	listReads, targeted := 0, 0
+	failList := false
+	svc, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/courses/1/assignments/7/submissions":
+			listReads++
+			if failList {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.Write([]byte(`[{"user_id":9,"assignment_id":7,"assignment_visible":true}]`))
+		case "/api/v1/courses/1/assignments/7/submissions/9":
+			targeted++
+			w.Write([]byte(`{"user_id":9,"assignment_id":7,"assignment_visible":true}`))
+		default:
+			t.Errorf("unexpected read %s", r.URL.Path)
+		}
+	})
+	assignments := []Assignment{{ID: 7, Name: "Club work", Published: true, DueAt: str("2026-10-17T12:00:00-05:00"), Points: "5"}}
+	loc, _ := time.LoadLocation("America/Chicago")
+	now := time.Date(2026, 10, 18, 12, 0, 0, 0, loc)
+	resolver := &parentSubmissionResolver{client: svc.Client, courseID: 1, batches: map[int64]map[int64]Submission{}}
+	for _, student := range []int64{9, 10} {
+		rows, flags := completeStudentSubmissionsWithResolver(t.Context(), resolver, student, assignments, nil, now.AddDate(0, 0, -14), now, now.AddDate(0, 0, 7))
+		want := 0
+		if student == 9 {
+			want = 1
+		}
+		if len(rows) != want || len(flags) != 0 {
+			t.Fatalf("student %d rows=%+v flags=%v", student, rows, flags)
+		}
+	}
+	if listReads != 1 || targeted != 0 {
+		t.Fatalf("reads: list=%d targeted=%d", listReads, targeted)
+	}
+	failList = true
+	resolver.batches = map[int64]map[int64]Submission{}
+	rows, flags := completeStudentSubmissionsWithResolver(t.Context(), resolver, 9, assignments, nil, now.AddDate(0, 0, -14), now, now.AddDate(0, 0, 7))
+	if len(rows) != 1 || len(flags) != 0 || targeted != 1 {
+		t.Fatalf("fallback rows=%+v flags=%v targeted=%d", rows, flags, targeted)
 	}
 }
 
@@ -177,11 +225,11 @@ func TestParentCompletionAndClassificationPreserveStudentDueDatePresence(t *test
 		t.Run(tc.name, func(t *testing.T) {
 			body := `{"user_id":9,"assignment_id":7,"assignment_visible":true,"missing":true` + tc.dateJSON + `}`
 			svc, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
-				if tc.bulk || r.URL.Path != "/api/v1/courses/1/assignments/7/submissions/9" {
-					t.Errorf("unexpected targeted read: %s", r.URL.Path)
+				if tc.bulk || r.URL.Path != "/api/v1/courses/1/assignments/7/submissions" {
+					t.Errorf("unexpected read: %s", r.URL.Path)
 				}
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(body))
+				_, _ = w.Write([]byte("[" + body + "]"))
 			})
 			var bulk []Submission
 			if tc.bulk {

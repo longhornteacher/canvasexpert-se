@@ -2,8 +2,9 @@ package workflow
 
 // QuizForge v3.0-json -> Canvas New Quizzes items. The item shapes, scoring
 // algorithms and gotchas below were verified live in the original CanvasExpert
-// (api/transform.py there). Stimulus items cannot be created through the API, so
-// their HTML is copied into the items that name them by stimulus_id.
+// (api/transform.py there). The public API cannot create stimuli; push-quiz
+// creates them through the quiz editor's session (canvas.NewQuizBuild) and
+// copies their HTML into the linked items only as a fallback.
 
 import (
 	"crypto/rand"
@@ -45,6 +46,8 @@ type qfItem struct {
 	Prompt        string                     `json:"prompt"`
 	Points        *float64                   `json:"points"`
 	StimulusID    string                     `json:"stimulus_id"`
+	Title         string                     `json:"title"`  // STIMULUS: student-facing heading
+	Layout        string                     `json:"layout"` // STIMULUS: "beside" (default) or "below"
 	Choices       []qfChoice                 `json:"choices"`
 	Answer        json.RawMessage            `json:"answer"`
 	Evaluation    qfEvaluation               `json:"evaluation"`
@@ -108,7 +111,7 @@ func (it *qfItem) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 	var err error
-	it.unknown, err = unknownQuizKeys(raw, "id type prompt points stimulus_id choices answer evaluation pairs distractors items header categories accept answer_mode options case_sensitive fuzzy_match metadata word_limit_min word_limit_max accepted_formats rubric_hint length_guidance notes image region")
+	it.unknown, err = unknownQuizKeys(raw, "id type title layout prompt points stimulus_id choices answer evaluation pairs distractors items header categories accept answer_mode options case_sensitive fuzzy_match metadata word_limit_min word_limit_max accepted_formats rubric_hint length_guidance notes image region")
 	return err
 }
 
@@ -233,6 +236,9 @@ func (q *QuizForge) validate() error {
 		if it.Type == "STIMULUS" {
 			if it.ID == "" {
 				return fmt.Errorf("a STIMULUS item needs an id")
+			}
+			if it.Layout != "" && it.Layout != "beside" && it.Layout != "below" {
+				return fmt.Errorf("STIMULUS %s layout must be \"beside\" or \"below\"", it.ID)
 			}
 			stimuli[it.ID] = true
 		}
@@ -521,7 +527,11 @@ func (it qfItem) isWriting() bool { return it.Type == "ESSAY" || it.Type == "FIL
 // preparedItems returns every item students answer, in order, with its
 // stimulus passage inlined and its prompt presented (code blocks, TEKS label).
 // Written-response items are included.
-func (q *QuizForge) preparedItems() []qfItem {
+func (q *QuizForge) preparedItems() []qfItem { return q.prepareItems(true) }
+
+// prepareItems is preparedItems; inline false leaves each passage to its real
+// Canvas stimulus.
+func (q *QuizForge) prepareItems(inline bool) []qfItem {
 	stim := map[string]string{}
 	for _, it := range q.Items {
 		if it.Type == "STIMULUS" {
@@ -533,7 +543,7 @@ func (q *QuizForge) preparedItems() []qfItem {
 		if !qfScoredTypes[it.Type] && !it.isWriting() {
 			continue
 		}
-		if it.StimulusID != "" {
+		if inline && it.StimulusID != "" {
 			it.Prompt = stim[it.StimulusID] + it.Prompt
 		}
 		if it.Prompt != "" {
@@ -544,10 +554,13 @@ func (q *QuizForge) preparedItems() []qfItem {
 	return out
 }
 
-// itemPayloads prepares and transforms every scored item in order.
-func (q *QuizForge) itemPayloads() []map[string]any {
+// itemPayloads prepares and transforms every scored item in order, with each
+// stimulus passage inlined.
+func (q *QuizForge) itemPayloads() []map[string]any { return q.buildPayloads(true) }
+
+func (q *QuizForge) buildPayloads(inline bool) []map[string]any {
 	var out []map[string]any
-	for _, it := range q.preparedItems() {
+	for _, it := range q.prepareItems(inline) {
 		pos := len(out) + 1
 		p := normalizeStudentText(it.build()).(map[string]any)
 		p["item"].(map[string]any)["points_possible"] = *it.Points
@@ -615,12 +628,12 @@ const (
 )
 
 var (
-	feedbackStyleAttr  = regexp.MustCompile(`(?i)\s+style\s*=\s*("[^"]*"|'[^']*')`)
-	feedbackColorTags  = regexp.MustCompile(`(?i)</?(span|font)\b[^>]*>`)
-	feedbackParaBreak  = regexp.MustCompile(`(?i)</p>\s*<p\b[^>]*>`)
-	feedbackParaOpen   = regexp.MustCompile(`(?i)^<p\b[^>]*>`)
-	feedbackParaClose  = regexp.MustCompile(`(?i)</p>$`)
-	feedbackOldLabel   = regexp.MustCompile(`(?i)^(<(strong|b)>\s*)?why this[^:<]{0,40}:\s*(</(strong|b)>)?\s*`)
+	feedbackStyleAttr = regexp.MustCompile(`(?i)\s+style\s*=\s*("[^"]*"|'[^']*')`)
+	feedbackColorTags = regexp.MustCompile(`(?i)</?(span|font)\b[^>]*>`)
+	feedbackParaBreak = regexp.MustCompile(`(?i)</p>\s*<p\b[^>]*>`)
+	feedbackParaOpen  = regexp.MustCompile(`(?i)^<p\b[^>]*>`)
+	feedbackParaClose = regexp.MustCompile(`(?i)</p>$`)
+	feedbackOldLabel  = regexp.MustCompile(`(?i)^(<(strong|b)>\s*)?why this[^:<]{0,40}:\s*(</(strong|b)>)?\s*`)
 )
 
 // rationaleInner reduces an authored rationale to its explanation: wrappers,
@@ -965,4 +978,55 @@ func newUUID() string {
 	b[6] = b[6]&0x0f | 0x40
 	b[8] = b[8]&0x3f | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// quizStep is one quiz entry in Canvas order: a stimulus, or the scored item
+// at index item of the prepared items.
+type quizStep struct {
+	stimulus *qfItem
+	item     int
+}
+
+// quizSteps lists the quiz entries in order with real stimuli: each STIMULUS
+// takes its own position ahead of the questions that follow it.
+func (q *QuizForge) quizSteps() []quizStep {
+	var out []quizStep
+	n := 0
+	for i := range q.Items {
+		it := &q.Items[i]
+		switch {
+		case it.Type == "STIMULUS":
+			out = append(out, quizStep{stimulus: it, item: -1})
+		case qfScoredTypes[it.Type] || it.isWriting():
+			out = append(out, quizStep{item: n})
+			n++
+		}
+	}
+	return out
+}
+
+func (q *QuizForge) hasStimuli() bool {
+	for _, it := range q.Items {
+		if it.Type == "STIMULUS" {
+			return true
+		}
+	}
+	return false
+}
+
+// stimulusTitle is the student-facing heading Canvas requires on a stimulus.
+func (it qfItem) stimulusTitle() string {
+	if t := strings.TrimSpace(it.Title); t != "" {
+		return t
+	}
+	return "Passage"
+}
+
+// stimulusOrientation is Canvas's name for the layout: questions to the right
+// ("left") or below ("top").
+func (it qfItem) stimulusOrientation() string {
+	if it.Layout == "below" {
+		return "top"
+	}
+	return "left"
 }

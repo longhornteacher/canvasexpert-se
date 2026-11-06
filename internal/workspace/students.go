@@ -32,7 +32,10 @@ type Student struct {
 }
 type StudentStore struct {
 	Rows []Student
-	path string
+	// Version identifies the saved table this store was read from or last
+	// wrote, so a long-open editor can tell the table changed under it.
+	Version string
+	path    string
 }
 
 const (
@@ -63,6 +66,7 @@ func OpenStudents(root string) (*StudentStore, error) {
 	if e != nil {
 		return nil, e
 	}
+	s.Version = studentsVersion(b)
 	rows, e := csv.NewReader(bytes.NewReader(b)).ReadAll()
 	if e != nil {
 		return nil, fmt.Errorf("private student table: invalid CSV")
@@ -227,7 +231,16 @@ func (s *StudentStore) Save() error {
 	if e := w.Error(); e != nil {
 		return e
 	}
-	return WriteFile(s.path, b.Bytes(), 0600)
+	if e := WriteFile(s.path, b.Bytes(), 0600); e != nil {
+		return e
+	}
+	s.Version = studentsVersion(b.Bytes())
+	return nil
+}
+
+func studentsVersion(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }
 func (s *StudentStore) Upsert(instance string, userID int64, name, shortName, sisID, login string) (Student, error) {
 	if instance == "" || userID <= 0 {

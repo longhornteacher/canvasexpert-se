@@ -60,10 +60,10 @@ func TestHubSetupRecordsOriginInFreshStarterAndKeepsTeacherContent(t *testing.T)
 		t.Fatal(err)
 	}
 	h, saved := setupHub(t, root, nil)
-	page := submitSetup(h, "https://Pearland.Instructure.com/")
+	page := submitSetup(h, "https://School.Instructure.com/")
 	var got domain.CourseConfig
 	body, err := workspace.ReadDocument(path, &got)
-	if err != nil || got.Instance != "https://pearland.instructure.com" || body != bodyBefore || got.Schema != before.Schema || len(*saved) != 1 {
+	if err != nil || got.Instance != "https://school.instructure.com" || body != bodyBefore || got.Schema != before.Schema || len(*saved) != 1 {
 		t.Fatalf("origin not persisted cleanly: %#v saved=%d err=%v", got, len(*saved), err)
 	}
 	if !strings.Contains(page, "CE-SE settings now use this Canvas address") || strings.Contains(page, "PRIVATE-PAT") {

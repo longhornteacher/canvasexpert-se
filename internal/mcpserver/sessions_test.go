@@ -303,3 +303,45 @@ func TestTransportShutdownSynchronouslyStopsPrivateUI(t *testing.T) {
 		t.Fatalf("private status: %s %v", status.Text, err)
 	}
 }
+
+func TestReconnectedFolderReviewKeepsRevisionNotes(t *testing.T) {
+	for _, source := range []string{"contact.json", "drafts.json"} {
+		t.Run(source, func(t *testing.T) {
+			s, _, _ := sessionFixture(t)
+			dir := filepath.Join(s.root, "courses", "c1", "family-contact", "run1")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, source), []byte("{}"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			reviewed := workflow.ParentReviewSource(dir)
+			if filepath.Base(reviewed) != source {
+				t.Fatalf("fixture reviews %s, want %s", reviewed, source)
+			}
+			listener, err := net.Listen("tcp4", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer listener.Close()
+			release := hubcoord.MarkPage(s.root, "review", "http://"+listener.Addr().String(), reviewed)
+			defer release()
+			if err = workflow.SaveReviewState(reviewed, workflow.ReviewState{Items: map[string]workflow.ReviewItem{"card-3": {Status: "revise", Note: "shorter"}}}); err != nil {
+				t.Fatal(err)
+			}
+			s.newSessionCommand = func([]string) *exec.Cmd { t.Fatal("started a second review page"); return nil }
+			out, err := s.startReviewSession(context.Background(), dir, []string{"parent-review", dir})
+			if err != nil || !strings.Contains(out.Text, "Reconnected") {
+				t.Fatalf("%+v %v", out, err)
+			}
+			_ = listener.Close()
+			status, _ := s.reviewStatus(out.ReviewID)
+			if status.State != "finished" || len(status.RevisionNotes) != 1 || status.RevisionNotes[0].Note != "shorter" {
+				t.Fatalf("closed page status: %+v", status)
+			}
+			if filepath.Base(status.ResultPath) != "outcomes.json" || !strings.EqualFold(filepath.Dir(status.ResultPath), dir) {
+				t.Fatalf("result path %s", status.ResultPath)
+			}
+		})
+	}
+}

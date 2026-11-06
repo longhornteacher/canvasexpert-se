@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -191,6 +192,17 @@ type nqNative struct {
 	backend  string
 	token    string
 	resource string
+	// client is the Canvas client that opened this session; its OnWrite and
+	// MapError hooks apply to native calls too.
+	client *Client
+}
+
+// mapped applies the client's error mapping (teammate-named key errors).
+func (n *nqNative) mapped(err error) error {
+	if err != nil && n.client != nil && n.client.MapError != nil {
+		return n.client.MapError(err)
+	}
+	return err
 }
 
 // newQuizNative follows Canvas's sessionless launch to a native New Quizzes
@@ -215,6 +227,9 @@ func (c *Client) newQuizNative(ctx context.Context, courseID, assignmentID int64
 	}
 	page, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20+1))
 	resp.Body.Close()
+	if err == nil && resp.StatusCode == http.StatusUnauthorized {
+		return nil, &Error{Kind: "authentication", Status: resp.StatusCode}
+	}
 	if err != nil || len(page) > 8<<20 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, &Error{Kind: "validation"}
 	}
@@ -269,6 +284,10 @@ func (c *Client) newQuizNative(ctx context.Context, courseID, assignmentID int64
 	}
 	jwtPath := "/api/v1/jwts?canvas_audience=false&workflows[]=new_quizzes_native_launch&context_id=" + url.QueryEscape(config.AccountID.String()) + "&context_type=account"
 	if err = secureJSON(ctx, httpc, http.MethodPost, c.Origin()+jwtPath, "Bearer "+c.token, "", map[string]any{}, &jwt); err != nil || jwt.Token == "" {
+		var ce *Error
+		if errors.As(err, &ce) && ce.Kind == "authentication" {
+			return nil, ce
+		}
 		return nil, fmt.Errorf("Canvas workflow token step failed: %w", &Error{Kind: "validation"})
 	}
 	var native struct {
@@ -292,7 +311,7 @@ func (c *Client) newQuizNative(ctx context.Context, courseID, assignmentID int64
 	if nativeToken == "" || native.Entry.ResourceID == "" {
 		return nil, fmt.Errorf("native launch step failed: %w", &Error{Kind: "validation"})
 	}
-	return &nqNative{httpc: httpc, backend: backend, token: nativeToken, resource: string(native.Entry.ResourceID)}, nil
+	return &nqNative{httpc: httpc, backend: backend, token: nativeToken, resource: string(native.Entry.ResourceID), client: c}, nil
 }
 
 func trustedInstructureOrigin(raw string) (string, error) {
@@ -340,14 +359,19 @@ func secureJSON(ctx context.Context, hc *http.Client, method, rawURL, authorizat
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		if resp.StatusCode == http.StatusUnauthorized {
+			return &Error{Kind: "authentication", Status: resp.StatusCode}
+		}
 		return &Error{Kind: "validation", Status: resp.StatusCode}
 	}
+	// A 2xx whose body cannot be used keeps its status so a write caller can
+	// tell it from a request that never reached the server.
 	data, err = io.ReadAll(io.LimitReader(resp.Body, maxJSON+1))
 	if err != nil || len(data) > maxJSON {
-		return &Error{Kind: "validation"}
+		return &Error{Kind: "validation", Status: resp.StatusCode}
 	}
 	if json.Unmarshal(data, out) != nil {
-		return &Error{Kind: "validation"}
+		return &Error{Kind: "validation", Status: resp.StatusCode}
 	}
 	return nil
 }

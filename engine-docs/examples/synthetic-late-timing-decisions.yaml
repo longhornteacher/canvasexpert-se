@@ -7,6 +7,6 @@ students:
     first_genuine:
       attempt: 1
       submitted_at: "2026-10-16T09:00:00-05:00"
-    accommodated_deadline: "2026-10-15T18:00:00-05:00"
+    allowance_school_days: 1
     accommodation_basis: "One extra school day in the teacher's documented plan; Canvas did not include this extension."
 ---

@@ -4,6 +4,29 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 1.9.0 (2026-11-05)
+
+Real New Quiz stimulus blocks, faster parent reports, a second PC that finds its UserSync folder, safer updates and cancels, and reteach tracking.
+
+- New Quiz stimulus blocks: a QuizForge `STIMULUS` now becomes a real Canvas stimulus with its questions attached, instead of the passage being copied into every question. It takes an optional student-facing `title` and `layout` (`"beside"`, the default, or `"below"`). Canvas's public API cannot create stimuli, so the Engine uses the New Quizzes editor's own calls; a rerun finishes an attachment a stopped push left undone, and if that editor session will not open, the push copies passages into their questions as before and says so. Canvas Live CS8, 2026-11-05: an unpublished quiz read back with its stimulus and attached questions. How the stimulus looks in Preview and to students is not yet checked; editing an existing stimulus stays in Canvas.
+- An open Students page no longer overwrites newer student settings. If a roster refresh or an assistant update changed the table after the page opened, Save stops, shows the newest settings and fills the teacher's typed changes back in to check and save again.
+- Parent reports pull about twice as fast or more: assignments the bulk Canvas feed leaves out are now read once per assignment for the whole class instead of once per student, and the two whole-course feeds are read at the same time. A full-term ELA7 pull went from 2–4 minutes to under a minute.
+- Agents now ask which class you mean when a short name such as "ELA7" could be more than one course, and go straight to the grade-sheet steps for a progress report.
+- Printed grade sheets are now a plain grade check: each student's page lists every assignment by due date with its current grade, and a check box for work not yet due. Printing needs only the pulled report, so missing or imperfect drafts no longer stop it.
+- Parent update emails no longer stop over bookkeeping slips in the drafts (a skip without a reason, a student left out, an assignment not in the report, a note with numbers). Checks that protect families stay.
+- Full-period parent reports pulled more than two weeks into a grading period can be printed and sent again. Print and send had rejected them with "recent_start_at does not match the saved period and as_of", because they recalculated the default two-week window instead of checking the saved window against the period.
+- Two connected apps on one PC can no longer both replace the same version of a draft, asset or teacher-context file; the second is told the file changed.
+- Parent notices at the end of emails and printed grade sheets no longer mention the student's Pokémon alias.
+- Parent email wording comes from `context/parent-updates.md` (class name, failing cutoff, grade-portal and tutoring links) with general defaults; older school-specific keys still work.
+- Late-work decisions can carry an approved "+N school days" allowance, counted by the Engine on the school calendar.
+- A second PC finds an unconnected UserSync folder in its OneDrive or Google Drive and offers one-click connect on Home, instead of running on empty local setup. Connecting to a UserSync folder that already has files copies every missing shared file once, never overwriting UserSync.
+- Cancelling a post or quiz push, or hitting the time limit, finishes the item in flight and stops before the next; the rerun continues where it stopped. A quiz push stopped between create and saving its ID adopts the quiz on rerun instead of holding on "already exists".
+- Updates check every hold before installing the new Engine and restore the old one if they cannot finish. Git installs refuse agent writes to git-owned playbooks and guides and point to `Teacher_Override.md` or `context/`; `install.md` gains steps for moving a ZIP install to git.
+- The WebUI uses the right Canvas key for each course or stops, never silently using the operator key. Engine-written New Quiz item scores treat timeouts, redirects and server errors as uncertain, like other writes. A family review reopened after a reconnect keeps the reviewed file as its subject.
+- Release builds refuse to replace an already released set of files.
+- Scoring check-ins name trends: a gap shared with another class or one already open for this class.
+- Reteach needs by class in `context/reteach.md` (UserSync when configured). After scoring, the agent records skills a class needs retaught, with counts, assignment evidence, a spiral idea and status, and tells the teacher. Planning, unit-quiz spiral items and later scoring read the class's open entries. No student names, aliases or individual scores are stored there.
+
 ## 1.8.1 (2026-10-29)
 
 Reusable teacher preferences, course notes and assignment expectations in UserSync.

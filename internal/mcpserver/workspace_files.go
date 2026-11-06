@@ -47,6 +47,9 @@ func (s *Server) registerWorkspaceTools(server *mcp.Server) {
 		if strings.EqualFold(firstComponent(in.Path), "courses") {
 			return TextOutput{}, errors.New("use write_draft or write_asset for courses files")
 		}
+		if workspace.IsGitOwnedPath(s.root, in.Path) {
+			return TextOutput{}, errors.New("this file is part of CanvasExpert and is replaced by updates; put the teacher's choice in Teacher_Override.md (or context/) instead")
+		}
 		if strings.EqualFold(firstComponent(in.Path), "shipped") {
 			return TextOutput{}, errors.New("shipped/ holds read-only reference copies of the shipped playbooks")
 		}
@@ -236,8 +239,9 @@ func (s *Server) writeDraft(in WriteFileInput) (TextOutput, error) {
 	return s.writeWorkspaceBytes(p, []byte(in.Content), in.ExpectedSHA256)
 }
 func (s *Server) writeWorkspaceBytes(path string, b []byte, expected string) (TextOutput, error) {
-	// One adapter serializes compare-and-replace so concurrent calls cannot
-	// both overwrite the same version of unsent work.
+	// Compare-and-replace is exclusive within this adapter (s.mu) and across
+	// other local Engine processes (the file guard), so two connected apps
+	// cannot both overwrite the same version of unsent work.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	routed, err := s.safePath(s.relativePath(path))
@@ -247,6 +251,11 @@ func (s *Server) writeWorkspaceBytes(path string, b []byte, expected string) (Te
 	if filepath.Clean(routed) != filepath.Clean(path) {
 		return TextOutput{}, errors.New("teacher-rules location changed during this write; reread the file and retry")
 	}
+	unlock, err := workspace.LockLocalFile(s.root, path)
+	if err != nil {
+		return TextOutput{}, err
+	}
+	defer unlock()
 	if existing, err := os.ReadFile(path); err == nil {
 		if expected == "" {
 			return TextOutput{}, errors.New("file already exists; read it and provide its sha256 to replace it")

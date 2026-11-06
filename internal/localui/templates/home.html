@@ -16,6 +16,7 @@
 </div>
 <div class="status-links"><a href="/settings?section=connections">Canvas and other PCs</a><a href="/connect">Connect Claude or ChatGPT</a></div>
 </section>
+{{if .FoundSyncNote}}<div class="error" role="alert" id="home-found-sync"><p>{{.FoundSyncNote}}</p>{{range .FoundSync}}<form method="post" action="/rules-location?section=connections"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="sync_root" value="{{.}}"><button type="submit" name="action" value="save">Connect this PC to {{.}}</button></form>{{end}}</div>{{end}}
 {{range .TeamWarnings}}<p class="error">{{.}} <a href="/team">Team</a></p>{{end}}
 {{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
 <div class="home-layout">

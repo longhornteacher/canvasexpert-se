@@ -124,7 +124,7 @@ func (s *Service) buildFamilyReview(dir string) (ReviewModel, error) {
 				card.Facts = append(card.Facts, ReviewFact{Label: "Cc", Value: strings.Join(cc, ", ")})
 			}
 			if parents == 0 {
-				card.Hold = "No enabled parent email address on file. Add one on the Students page, then review again."
+				card.Hold = noParentEmailHold(s.Root, "review again")
 			}
 		}
 		if len(audience.Blocking) > 0 {

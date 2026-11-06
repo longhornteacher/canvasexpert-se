@@ -6,6 +6,11 @@ A handoff is bounded execution work for an agent session. It should say whether 
 
 Execution-readiness review: **2026-10-28**, against the current Dev working tree. The remaining handoffs are written for **6.1 Terra or 6.1 Sol** to execute one bounded slice at a time. Readiness here means the scope, integration points, contracts, checks and unresolved evidence are explicit; it does not mean the features are built or the undocumented Canvas behavior is known.
 
+**Architecture slices (2026-11-04).** Written from the [unified review](Unified%20Architecture%20Review.md) and the developer's decisions, with facts mapped at `2818e36`. Each is self-contained; the source reviews are not needed. All architecture slices A-I are done and retired (2026-11-04); D2 and F were built from specs the developer approved the same day, and H's past-family-message question was answered (a: contact details only, nothing to build).
+
+| Handoff | Kind | Scope |
+|---|---|---|
+
 | Handoff | Execution status | What the review clarified |
 |---|---|---|
 | [Quiz accommodation writes and New Quiz item scores](active/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md) | Consolidated 2026-10-28 from the open remainder of the two retired handoffs below. Part A writes are implemented and the student-side timer/attempt effect was teacher-confirmed on 2026-10-29; only the course/quiz combination is open. Part B (Engine-written New Quiz item scores) is **complete** (2026-10-29): captured, built, L1–L8 passed live, and the playbooks use it. | Which test identity is available, what each observation enables, and the item-score Engine design to build only after the save is observed. |
@@ -37,7 +42,13 @@ This 2026-10-28 readiness review changed handoff documentation only, checked off
 
 A second pass the same day checked the named files, symbols and call sites against the Dev tree (they hold; `hideGrades`/`gradeVisibleHold` live in `team_consent.go`) and removed recovery machinery that idempotent writes do not need, per root `AGENTS.md`: content-edit resume is a three-way live/observed/desired compare, not a pending-intent store. Quiz accommodations rerun the whole absolute-value array unless §3.1 shows otherwise, and course-level sync (Canvas 2026 §4.5) is frozen until the teacher asks, so Part C does not wait on it. Tag management resumes by re-resolving names and memberships, with one removal flag rather than two. Invalid saved quiz settings fail loading like the existing flags. Non-idempotent writes (New Quiz result versions) keep their pending/accepted records.
 
+## Architecture review: direction agreed
+
+The [unified architecture review](Unified%20Architecture%20Review.md) (2026-11-04) combines the Opus55 and Sol 61 reviews (in git history at `a1b4817`) of Dev at `f58ecaf` into candidate slices A–I. The developer answered its twelve questions the same day; its Developer decisions table governs the slices and their order. It is a planning document, not an execution handoff: each slice still gets bounded execution before code changes.
+
 ## Completed work and evidence
+
+The 2026-11-04 architecture slices B-I are retired in `retired/` with banners naming their commits.
 
 The [Canvas 2026 additions handoff](retired/HANDOFF_Canvas_2026_Additions_2026-10-28.md) is retired (2026-10-28): authenticated direction-image downloads, bulk differentiation tags and shared rubrics (with CS8 Canvas Live library-reuse, New Quiz attachment and Test Student assessment evidence) are complete; the explicit accommodation tool, saved quiz settings, `from_saved` planning and the publication hold are in Dev with local evidence. The [review-page retirement handoff](retired/HANDOFF_Retire_Review_Page_and_New_Quiz_Item_Scores_2026-10-28.md) is retired with Part 1 complete: the scoring/authoring review page and `start_review` are gone, the check-in is in the conversation with an Engine-rendered sample, and family review is unchanged. Accommodation writes and New Quiz item scores moved to the active handoff above. Full uncached tests, vet, the 57-tool compiled MCP smoke and `git diff --check` were rerun and passed at retirement.
 
@@ -55,7 +66,7 @@ The retired [targeted scoring session brief](retired/TARGETED-SCORING-SESSION.md
 
 The [Family Contact handoff](retired/FAMILY-ANNOUNCEMENTS.md) is complete in Dev. General family messages reuse the parent-update review, private recipient routing and Outlook delivery, with course/group/student audiences, per-message previews, inline images and file attachments. Full Go tests, vet and the compiled 40-tool MCP smoke passed; actual classic Outlook inspection confirmed a visible inline cover and an ordinary file attachment. No family email was sent. The [current contract](../docs/family-contact-flow.md) carries the supported flow and remaining evidence limits.
 
-The retired [book-group audience brief](retired/BOOK-GROUP-AUDIENCES.md) records all five slices implemented, validated and committed in Dev: individual assignment audiences and refresh, course Page audiences, New Quiz audiences, and the integrated shared-module unit. Its original pause checkpoint is retained as history and superseded by the dated execution records. The preserved [source handoff](CSSE_Book_Group_Audiences_Codex_Brief.md) remains unchanged. Canvas Live access, student views and UserInstall/UserSync adoption remain separate observations; no release or adoption is claimed by this Dev work.
+The retired [book-group audience brief](retired/BOOK-GROUP-AUDIENCES.md) records all five slices implemented, validated and committed in Dev: individual assignment audiences and refresh, course Page audiences, New Quiz audiences, and the integrated shared-module unit. Its original pause checkpoint is retained as history and superseded by the dated execution records. Its original source handoff was removed on 2026-11-04 as a duplicate; it remains in git history. Canvas Live access, student views and UserInstall/UserSync adoption remain separate observations; no release or adoption is claimed by this Dev work.
 
 The [group, timing and parent-report fixes](retired/REVIEW-REGRESSION-FIXES.md) are complete and reviewed in Dev: all nine Engine findings have fixes and normal-suite regressions, and group-work guidance/evidence records are reconciled. Full tests, vet, diff checks and the compiled 38-tool MCP smoke passed before the audience integration. Distribution and UserInstall/UserSync adoption were not part of this work.
 

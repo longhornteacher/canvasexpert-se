@@ -46,6 +46,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   link                          Record this program's location for workspace cse.cmd
   rules-location                Show teacher-rules authority; use --sync PATH or --local to set it
   playbooks status              Compare active teacher rules with this Engine's seed
+  playbooks update              Adopt this Engine's seed without overriding teacher edits (ZIP install; a git install changes nothing)
   update status|stage [--if-due]|apply [--archive-edits]
                                 Git install: check, stage (no live change) or apply an update
   playbooks replace PATH --expected-sha256 HASH
@@ -91,9 +92,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   audience-report COURSE [--module TITLE|ID] Show who can see each module and item; flags items in several modules
   set-file-access COURSE FILE_ID --access course|hidden|locked Change an existing course file's access
   pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
-  prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
-  prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only actions
-  prepare-late-timing FILE  Check first-genuine choices against pulled work and propose timing changes; never writes to Canvas
+  prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only timing changes; never writes to Canvas
   parent-report COURSE [REF ...] Read parent-update facts (missing, corrections, due soon, history) into courses/COURSE/parent-updates/
   copy-assignment SOURCE QUERY TARGET [--module-id ID] [--assignment-group-id ID] [--published] Copy with destination files; unpublished by default
   copy-module SOURCE "MODULE" COURSE [COURSE ...] Copy one module by exact title, once, into each course (each teacher's own key); never re-copies
@@ -163,6 +162,15 @@ func inputError(e error) error    { return &cliError{2, e} }
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	// The MCP adapter closes this process's stdin to ask a batch write to stop gracefully: finish
+	// the item in flight, then stop before the next one (a console-less Windows child cannot
+	// receive an interrupt). Only the adapter sets this variable.
+	if os.Getenv("CSE_STOP_ON_STDIN_CLOSE") == "1" {
+		go func() {
+			_, _ = io.Copy(io.Discard, os.Stdin)
+			workflow.RequestStop()
+		}()
+	}
 	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }
 func run(ctx context.Context, args []string, out, progress io.Writer) int {
@@ -299,6 +307,9 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		fmt.Fprintf(out, "mode: %s\ninstall_root: %s\nrules_root: %s\n", location.Mode, location.InstallRoot, location.RulesRoot)
 		if e != nil {
 			fmt.Fprintf(progress, "Teacher rules location unavailable: %v\n", e)
+		}
+		for _, p := range workspace.DiscoverUserSync(root) {
+			fmt.Fprintf(out, "found_sync: %s\n", p)
 		}
 		return 0
 	}

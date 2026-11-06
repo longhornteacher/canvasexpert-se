@@ -163,3 +163,39 @@ func calendarFixture(name, start, end string) SchoolCalendar {
 		GradingPeriods: []GradingPeriod{{Name: name, StartDate: start, EndDate: end}},
 	}
 }
+
+func TestAddSchoolDays(t *testing.T) {
+	c := SchoolCalendar{
+		Schema: 1, Timezone: "America/Chicago", StartDate: "2026-03-01", EndDate: "2026-12-31",
+		NonSchoolDates:  []string{"2026-10-19"},
+		NonSchoolRanges: []DateRange{{StartDate: "2026-11-23", EndDate: "2026-11-27"}},
+	}
+	chicago, _ := time.LoadLocation("America/Chicago")
+	at := func(m time.Month, d, h, min int) time.Time { return time.Date(2026, m, d, h, min, 0, 0, chicago) }
+	for _, tc := range []struct {
+		name string
+		base time.Time
+		n    int
+		want time.Time
+	}{
+		{"+1 across a weekend", at(10, 9, 16, 0), 1, at(10, 12, 16, 0)},
+		{"+2 across a closed date (Mon 10/19)", at(10, 16, 16, 0), 2, at(10, 21, 16, 0)},
+		{"+3 across a closed range (11/23-11/27)", at(11, 20, 9, 30), 3, at(12, 2, 9, 30)},
+		{"base on a non-school day counts from the next day", at(10, 17, 23, 59), 1, at(10, 20, 23, 59)},
+		{"wall clock holds across a DST change (3/8)", at(3, 6, 16, 0), 2, at(3, 10, 16, 0)},
+	} {
+		got, err := c.AddSchoolDays(tc.base, tc.n)
+		if err != nil || !got.Equal(tc.want) || got.Hour() != tc.base.In(chicago).Hour() {
+			t.Errorf("%s: got %v err %v, want %v", tc.name, got, err, tc.want)
+		}
+	}
+	if _, err := c.AddSchoolDays(at(12, 30, 16, 0), 2); err == nil {
+		t.Error("a result past end_date must error")
+	}
+	if _, err := c.AddSchoolDays(at(10, 14, 16, 0), 0); err == nil {
+		t.Error("n < 1 must error")
+	}
+	if _, err := c.AddSchoolDays(time.Date(2026, 2, 1, 12, 0, 0, 0, chicago), 1); err == nil {
+		t.Error("a base before the calendar must error")
+	}
+}

@@ -416,3 +416,10 @@ func reviewObservedDate(d *string) string {
 	}
 	return *d
 }
+
+func optionalAssignmentGroup(id *int64) string {
+	if id == nil {
+		return "Canvas default / not observed"
+	}
+	return fmt.Sprint(*id)
+}

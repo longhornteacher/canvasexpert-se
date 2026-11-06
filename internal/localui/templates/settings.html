@@ -37,6 +37,7 @@
 <p>Work you're in the middle of scoring or planning stays on the PC where you started it.</p>
 <p><span class="pill {{if eq .SyncHealth "Available"}}on{{else if eq .SyncHealth "Unavailable"}}off{{end}}">{{.SyncHealth}}</span> {{.SyncHealthNote}}</p>
 {{if .RulesError}}<p class="error" role="alert">{{.RulesError}}</p>{{end}}
+{{if .FoundSyncNote}}<p class="error" role="alert">{{.FoundSyncNote}} The folder is filled in below; choose <b>Use this folder</b>.</p>{{end}}
 <details><summary>What happens when I choose a folder?</summary>
 <p>If the folder is empty, CanvasExpert copies your settings from this PC into it. If it already has CanvasExpert settings from your other PC, those are used, and this PC's copies are kept as a backup.</p>
 <p><b>Keep on this PC</b> copies the settings back to this PC and stops using the shared folder.</p>

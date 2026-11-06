@@ -17,6 +17,8 @@ This handoff carries the open remainder of two retired handoffs: [Canvas 2026 ad
 - Unpublished quizzes: `assignment_visibility` can omit unpublished recipients, so planning holds rather than inventing an audience/count.
 - New Quiz written work: comment-only posting; the teacher enters item points in SpeedGrader. `entry_path.resourceId` now decodes as number or string.
 
+**Superseded (noted 2026-11-04):** three §0 bullets above are stale. The accommodation write no longer requires all three values (Canvas merges and values are absolute; omitted fields keep their value), the push/`from_saved` stage now sends the accommodation POST and holds publication only when Canvas does not confirm it, and written-item points are written by the Engine with `item_scores` (Part B complete 2026-10-29), with SpeedGrader entry only for unnamed parts or held students. The records below stay as the 2026-10-28 evidence trail; open work is still Q7, the §2.3 live push of an Engine-built timed quiz, deleting the disposable quizzes and optional L9-L11.
+
 Read-only CS8 evidence so far: accommodation GET routes returned 404 at both `/api/quiz/v1` and `/api/v1` (no current-value read exists); New Quiz detail returns a string ID and omits `course_id`. No accommodation POST, attempt or timer check has been made. The teacher has confirmed there is **no teacher-controlled student account** — only the teacher account and real students.
 
 ## 1. Unblock: obtain a test identity

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -60,7 +61,7 @@ func (s *Server) startReviewSession(ctx context.Context, subject string, args []
 		if _, err := rand.Read(nonce[:]); err != nil {
 			return TextOutput{}, err
 		}
-		task := &reviewTask{id: hex.EncodeToString(nonce[:]), kind: "review", url: pageURL, subject: subject, done: make(chan struct{}), external: true}
+		task := &reviewTask{id: hex.EncodeToString(nonce[:]), kind: "review", url: pageURL, subject: rec.Subject, done: make(chan struct{}), external: true}
 		s.mu.Lock()
 		if s.reviews == nil {
 			s.reviews = make(map[string]*reviewTask)
@@ -103,6 +104,9 @@ func (s *Server) trackReusedHub(pageURL string) (TextOutput, error) {
 }
 
 func (s *Server) startSession(ctx context.Context, kind string, args []string) (TextOutput, error) {
+	if err := s.staleAdapter(args); err != nil {
+		return TextOutput{}, err
+	}
 	full := append([]string{"--workspace", s.root}, args...)
 	var cmd *exec.Cmd
 	if s.newSessionCommand != nil {
@@ -467,8 +471,8 @@ func (s *Server) stopSessions() {
 
 // externalReviewStatus follows a review page started by an earlier adapter.
 // Its outcome is not on this adapter's pipes; the page saves outcomes in the
-// results file (or outcomes.json for family email) and revision notes in
-// <results>.review.json.
+// outcomes.json beside the reviewed file and revision notes in
+// <reviewed file>.review.json.
 func (s *Server) externalReviewStatus(task *reviewTask) (TextOutput, error) {
 	result := TextOutput{State: "pending", ReviewID: task.id, URL: task.url}
 	if hubcoord.PageOpen(s.root, task.url) {
@@ -476,7 +480,9 @@ func (s *Server) externalReviewStatus(task *reviewTask) (TextOutput, error) {
 		return result, nil
 	}
 	result.State, result.URL = "finished", ""
-	result.ResultPath = task.subject
+	// task.subject is the reviewed file (contact.json or drafts.json); outcomes
+	// are saved beside it, as on a fresh start.
+	result.ResultPath = filepath.Join(filepath.Dir(task.subject), "outcomes.json")
 	if st, err := workflow.LoadReviewState(task.subject); err == nil {
 		for ref, item := range st.Items {
 			if item.Status == "revise" {
@@ -484,6 +490,6 @@ func (s *Server) externalReviewStatus(task *reviewTask) (TextOutput, error) {
 			}
 		}
 	}
-	result.Text = "The review page that outlived the previous connection has closed. review_id: " + task.id + ". Read the outcomes saved in " + task.subject + " (outcomes.json for family email) for what was approved and posted; revision notes, if any, are listed here."
+	result.Text = "The review page that outlived the previous connection has closed. review_id: " + task.id + ". Read the outcomes saved in " + result.ResultPath + " for what was approved and posted; revision notes, if any, are listed here."
 	return result, nil
 }

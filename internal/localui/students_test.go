@@ -45,6 +45,7 @@ func TestStudentQuizSettingsSaveAndValidation(t *testing.T) {
 	h := &studentHandler{origin: "http://127.0.0.1:1234", secret: "nonce", store: store, hub: true, persistent: true, members: map[string][]string{a.Ref: {}}, data: studentsData{CourseID: 11}}
 	form := url.Values{"request_secret": {"nonce"}, "alias_" + a.Ref: {a.Alias}, "extra_time_" + a.Ref: {"on"}, "reduced_choices_" + a.Ref: {"on"}}
 	post := func() *httptest.ResponseRecorder {
+		form.Set("students_version", h.store.Version)
 		r := httptest.NewRequest(http.MethodPost, h.origin+"/students", strings.NewReader(form.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.Header.Set("Origin", h.origin)
@@ -119,5 +120,63 @@ func TestStudentEditorOriginAndDuplicateAlias(t *testing.T) {
 	form.Set("monitored_"+a.Ref, "on")
 	if w := request(h.origin); w.Code != 200 || !s.Rows[0].Monitored || s.Rows[0].Ref != a.Ref {
 		t.Fatal("edit retargeted identity")
+	}
+}
+
+// An editor left open while a pull or roster refresh changes the table must not
+// drop the new student, reset a newer quiz setting or disconnect a reference.
+func TestStaleStudentSaveKeepsNewerRowsAndSettings(t *testing.T) {
+	root := t.TempDir()
+	store, err := workspace.OpenStudents(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := store.Upsert("https://school.example", 900001, "Ana", "Ana", "", "")
+	if err = store.Save(); err != nil {
+		t.Fatal(err)
+	}
+	h := &studentHandler{origin: "http://127.0.0.1:1234", secret: "nonce", store: store, notesRoot: root, done: make(chan struct{})}
+	opened := store.Version
+
+	// Elsewhere on this PC: a pull adds Bo and the teacher's assistant gives Ana time and a half.
+	other, err := workspace.OpenStudents(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := other.Upsert(a.Instance, 900002, "Bo", "Bo", "", "")
+	other.Rows[0].QuizTime = "50%"
+	if err = other.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	post := func(version string, shown ...workspace.Student) *httptest.ResponseRecorder {
+		form := url.Values{"request_secret": {"nonce"}, "students_version": {version}, "alias_" + a.Ref: {"Teacher Pick"}, "quiz_time_" + a.Ref: {""}}
+		for _, s := range shown {
+			form.Set("alias_"+s.Ref, s.Alias)
+		}
+		r := httptest.NewRequest(http.MethodPost, h.origin+"/students", strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("Origin", h.origin)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	w := post(opened)
+	if w.Code != 409 || !strings.Contains(w.Body.String(), "Nothing was saved") || !strings.Contains(w.Body.String(), "alias_"+b.Ref) || !strings.Contains(w.Body.String(), `data-draft-key="students:nonce"`) {
+		t.Fatalf("stale save not turned away with the newest table and drafts: %d %s", w.Code, w.Body.String())
+	}
+	loaded, err := workspace.OpenStudents(root)
+	if err != nil || len(loaded.Rows) != 2 || loaded.Rows[0].QuizTime != "50%" || loaded.Rows[0].Alias == "Teacher Pick" || loaded.Rows[1].Ref != b.Ref {
+		t.Fatalf("stale save changed the table: %+v %v", loaded, err)
+	}
+
+	// Saved again from the refreshed page, the teacher's choices apply and Bo stays.
+	w = post(loaded.Version, b)
+	if w.Code != 200 {
+		t.Fatalf("fresh save: %d %s", w.Code, w.Body.String())
+	}
+	loaded, err = workspace.OpenStudents(root)
+	if err != nil || len(loaded.Rows) != 2 || loaded.Rows[0].Alias != "Teacher Pick" || loaded.Rows[0].QuizTime != "" || loaded.Rows[1].Ref != b.Ref {
+		t.Fatalf("fresh save: %+v %v", loaded, err)
 	}
 }

@@ -35,7 +35,7 @@ Opus made these on 2026-10-22 from the developer's answers; they are final for 1
 | 11a | **After-copy check (Engine).** Once a copy succeeds, the Engine reads the copied items and reports, without changing anything, which are published, which are assigned to no one and which still link to Collab. The team playbook turns that report into per-teacher follow-up. |
 | 12 | **Fixing a copy.** Later fixes edit each course's copy through the ordinary edit paths, which already protect live edits. |
 | 13 | **Family emails** for a teammate's student are sent from the team PC's Outlook. Reply-To is set to that teammate. A fixed note asks families to reply to their child's teacher. Messages for students in your own courses are unchanged. |
-| 14 | **Action log.** Every Canvas write made with a teammate's key is logged to `.cse/team-log.jsonl` in UserInstall: time, teammate, course, method and redacted path. The log holds no student names or IDs. The Team page shows it. |
+| 14 | **Action log.** Every change written to Canvas or New Quizzes with a teammate's key (including New Quiz item scores) is logged to `.cse/team-log.jsonl` in UserInstall: time, teammate, course, method and redacted path (attempt IDs in New Quizzes paths become `:session`). Token requests are not changes and are not logged. The log holds no student names or IDs. The Team page shows it. |
 | 15 | **Expiry.** The Add-a-teammate page asks for the expiry date the teammate chose, defaulting to the last day of school. CE-SE warns from 14 days before that date. A key that stops working fails cleanly with a plain message. |
 | 16 | **Scoring sessions.** "All current courses" means your own; a teammate's courses are pulled only when named. |
 | 17 | **Version.** This work is 1.2.0-beta.1. |

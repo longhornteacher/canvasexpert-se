@@ -85,16 +85,29 @@ if "%STAGE_ONLY%"=="1" (
   exit /b 0
 )
 
-rem Replace the live files. A running cse.exe can be renamed but not overwritten, so move it
-rem aside first; the previous copy is kept as cse.exe.previous.
-if exist "%ENGINE%\cse.exe" (
-  if exist "%ENGINE%\cse.exe.previous" del /f /q "%ENGINE%\cse.exe.previous" >nul 2>&1
-  ren "%ENGINE%\cse.exe" cse.exe.previous >nul 2>&1
-  if exist "%ENGINE%\cse.exe" (
-    echo The current Engine could not be replaced. Close CanvasExpert and any app using it, then run this again. 1>&2
-    exit /b 6
-  )
+rem Replace the live files. A running cse.exe can be renamed but not overwritten, so every
+rem current file is moved aside first as <name>.previous. If any step fails, the .previous
+rem files are put back, so a failed update never leaves the folder without an Engine.
+set "ASIDE="
+set "REST=!FILES!"
+:nextaside
+set "CUR="
+for /f "tokens=1,*" %%A in ("!REST!") do (
+  set "CUR=%%A"
+  set "REST=%%B"
 )
+if not defined CUR goto asidedone
+if exist "%ENGINE%\!CUR!" (
+  if exist "%ENGINE%\!CUR!.previous" del /f /q "%ENGINE%\!CUR!.previous" >nul 2>&1
+  ren "%ENGINE%\!CUR!" "!CUR!.previous" >nul 2>&1
+  if exist "%ENGINE%\!CUR!" (
+    echo The current Engine could not be replaced. Close CanvasExpert and any app using it, then run this again. 1>&2
+    goto failed6
+  )
+  set "ASIDE=!ASIDE! !CUR!"
+)
+goto nextaside
+:asidedone
 set "REST=!FILES!"
 :nextmove
 set "CUR="
@@ -106,7 +119,7 @@ if not defined CUR goto movesdone
 move /y "%STAGED%\!CUR!" "%ENGINE%\!CUR!" >nul
 if errorlevel 1 (
   echo Could not place !CUR! in engine\. 1>&2
-  exit /b 6
+  goto failed6
 )
 goto nextmove
 :movesdone
@@ -114,6 +127,27 @@ del /f /q "%STAGED%\manifest.txt" >nul 2>&1
 rmdir "%STAGED%" >nul 2>&1
 echo CanvasExpert-SE Engine %VERSION% is installed in engine\.
 exit /b 0
+
+:failed6
+call :rollback
+exit /b 6
+
+:rollback
+rem Put back only the files this run moved aside (an older .previous is never restored); a
+rem half-placed new copy is removed first.
+set "RB=!ASIDE!"
+:nextrollback
+set "RBCUR="
+for /f "tokens=1,*" %%A in ("!RB!") do (
+  set "RBCUR=%%A"
+  set "RB=%%B"
+)
+if not defined RBCUR exit /b 0
+if exist "%ENGINE%\!RBCUR!.previous" (
+  if exist "%ENGINE%\!RBCUR!" del /f /q "%ENGINE%\!RBCUR!" >nul 2>&1
+  ren "%ENGINE%\!RBCUR!.previous" "!RBCUR!" >nul 2>&1
+)
+goto nextrollback
 
 :fetch
 set "NAME=%~1"

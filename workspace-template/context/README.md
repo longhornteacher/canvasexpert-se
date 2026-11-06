@@ -7,6 +7,7 @@ Your agent builds these notes during ordinary work. There is no form to complete
 - `courses.md`: the Engine's course selections and Canvas origin.
 - `courses/<course-id>/notes.md`: habits, taught skills and expectations for one course.
 - `courses/<course-id>/assignments/<assignment-id>.md`: reusable expectations and authored exemplars for one Canvas assignment or New Quiz's associated assignment.
+- `reteach.md`: skills each class needs retaught, found while scoring, for spiral review and reteaching plans. Created when the first one is found.
 
 See `courses/README.md` for the course and assignment outlines. Create actual notes only when there is useful information, using exact Canvas IDs and recording the Canvas origin. Unknown details stay unspecified.
 

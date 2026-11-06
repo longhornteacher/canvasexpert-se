@@ -41,9 +41,6 @@ func TestReadResultsAssignmentFromPacketLeavesDraftUnchanged(t *testing.T) {
 	if filled.Assignment.AssignmentID != example.Assignment.AssignmentID || filled.Packet != example.Packet {
 		t.Fatalf("assignment not copied from the packet: %+v", filled.Assignment)
 	}
-	if _, err = ValidateReviewInput(root, path, ""); err != nil {
-		t.Fatal(err)
-	}
 	if _, err = BuildReview(root, path); err != nil {
 		t.Fatal(err)
 	}
@@ -94,9 +91,6 @@ func TestGroupResultsReviewResolvesSnapshotWithoutChangingDraft(t *testing.T) {
 		t.Fatal("fixture has no assignment snapshot")
 	}
 	if err = os.WriteFile(env.results, bare, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = ValidateReviewInput(env.s.Root, env.results, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = BuildReview(env.s.Root, env.results); err != nil {

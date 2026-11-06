@@ -172,12 +172,13 @@ Run `.\cse.cmd version --json` first. When `install_kind` is `git`, playbooks, `
 - **Otherwise at the start of the next session**, apply it before any work and say so in one line: "I installed the latest CanvasExpert update."
 
 Run `engine_info` operation `update-apply` (CLI: `.\cse.cmd update apply`). Read its `state`:
-- `applied`: report in plain words, with no merge questions: "You're on the newest CanvasExpert; your settings and choices are unchanged." Mention a new teaching option only when it is worth their attention, in a sentence. Apps that were running keep the old Engine until they restart: when it is a good time, say "Close and reopen Claude (or ChatGPT) when you're between tasks so it picks up the update." Never ask during an active review.
+- `applied`: report in plain words, with no merge questions: "You're on the newest CanvasExpert; your settings and choices are unchanged." Mention a new teaching option only when it is worth their attention, in a sentence. An app that was already running keeps its old connection until it restarts; its tools then answer "CanvasExpert was updated. Close and reopen this app" instead of running (status and update tools still work). When it is a good time, say "Close and reopen Claude (or ChatGPT) when you're between tasks so it picks up the update." Never ask during an active review.
 - `held` because a review, setup or students page is open: leave it; try again when the teacher is done or at the next session.
 - `held` with `edited` files: these are leftover edits to shipped files. For each, understand what the teacher wanted and add it as a clearly worded line in `Teacher_Override.md`, then run `update-apply` with `archive_edits: true` (CLI: `update apply --archive-edits`). The Engine copies the old files to `playbook-old/` and applies. Do this quietly; tell the teacher only what changed for them.
 - `held` because it could not fast-forward: change nothing else and tell the teacher you need help with this update. Never force it.
+- `held` with a message that the new Engine is installed but the playbooks were not updated: the Engine is new and the playbooks are old, which is safe; run `update-apply` again, and if it holds again ask for help. Never force it.
 - `repaired`: the Engine had drifted from this release and was reinstalled; nothing to tell the teacher.
-- An error naming `get-engine.cmd`: the playbooks may already be updated; ask the teacher to close the apps using CanvasExpert, then run `.\get-engine.cmd` and check `engine_matches_manifest: true` in `.\cse.cmd version --json`.
+- An error naming `get-engine.cmd` before anything changed (the Engine could not be replaced): the old Engine was restored and still works and the playbooks were not touched; ask the teacher to close the apps using CanvasExpert, then run `.\get-engine.cmd` and apply again. For any other error naming `get-engine.cmd`: the playbooks may already be updated; ask the teacher to close the apps using CanvasExpert, then run `.\get-engine.cmd` and check `engine_matches_manifest: true` in `.\cse.cmd version --json`.
 
 Unsent drafts and results under `courses/` are never touched by an update.
 
@@ -197,6 +198,18 @@ To get a newer version, download the Windows ZIP from the latest [GitHub release
 Before copying, save the files being replaced into `engine/pre-update-<date>/`; afterwards compare the root guides with that backup and carry the teacher's own additions into the new files. If `engine/cse.exe` is in use, rename it to `cse.exe.previous` first, as `get-engine.cmd` does: Windows allows renaming a running program, and apps keep using it until they restart. Never update during an active review. Then run the playbook update above; it brings in the new playbooks and `TEACHER.md`. Confirm with `.\cse.cmd version --json` that the version is new and `engine_matches_manifest` is true, and tell the teacher to close and reopen Claude (or ChatGPT) when they are between tasks.
 
 If the teacher downloaded the ZIP in a browser, Windows marks its files as coming from the internet, and double-clicking `webui.cmd` or the desktop shortcut then shows a security warning every time. With the teacher's OK, clear that mark once before first use, as the file's Properties → Unblock does: `Get-ChildItem -LiteralPath "<folder>" -Recurse -File | Unblock-File`. Files fetched with curl and tar never carry it.
+
+### Moving a ZIP install to git
+
+Only when the teacher asks, or agrees to your offer, to switch an extracted-ZIP folder to git updates (git must be installed). The git version of every product file wins; the teacher's own choices belong in `Teacher_Override.md` and `context/`, which git never touches.
+
+1. Close the apps using CanvasExpert. Copy the root guides (`AGENTS.md`, `CLAUDE.md`, `TEACHER.md`, `TEACHING-ASSISTANT.md`, `README.md`) and the `playbooks\` folder into `engine\pre-git-migration-<date>\`. Leave that backup in place.
+2. In the folder, run `git init -b userinstall`, `git remote add origin https://github.com/longhornteacher/canvasexpert-se.git`, `git fetch origin userinstall`, then `git checkout -f -B userinstall origin/userinstall`. This replaces the shipped files with git's versions and leaves `context/`, `courses/`, `Teacher_Override.md` and `.cse/` alone.
+3. Run `.\get-engine.cmd`, then `.\cse.cmd version --json` and confirm `install_kind` is `git` and `engine_matches_manifest` is `true`.
+4. Compare each backed-up playbook and guide with the new one. For every difference that is the teacher's choice (not just an older shipped wording), say what you found in plain words and, with the teacher's yes, add it as a clearly worded line in `Teacher_Override.md` or in `context/`. Never put it back into a shipped file.
+5. If the install used UserSync, the playbooks there are no longer read; they are only a source for step 4. Do not delete them.
+
+From then on follow "Updates" above. The backup is the only copy of the old files; keep it until the teacher says it can go.
 
 ### Select the correct UserInstall
 

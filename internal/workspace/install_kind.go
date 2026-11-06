@@ -3,6 +3,7 @@ package workspace
 import (
 	"bufio"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -81,11 +82,19 @@ func IsSharedRulePathIn(root, relative string) bool {
 	if !IsSharedRulePath(relative) {
 		return false
 	}
+	return !IsGitOwnedPath(root, relative)
+}
+
+// IsGitOwnedPath reports whether relative is a product file that git replaces on every
+// update: playbooks/ and the shipped root guides, in a git install only. A preference
+// belongs in Teacher_Override.md or context/ instead; editing one of these makes every
+// later update hold.
+func IsGitOwnedPath(root, relative string) bool {
 	if !IsGitInstall(root) {
-		return true
+		return false
 	}
-	p := strings.ToLower(strings.Trim(strings.ReplaceAll(relative, "\\", "/"), "/"))
-	return !strings.HasPrefix(p, "playbooks/") && !gitOwnedRootFiles[p]
+	p := strings.ToLower(path.Clean(strings.Trim(strings.ReplaceAll(relative, "\\", "/"), "/")))
+	return strings.HasPrefix(p, "playbooks/") || gitOwnedRootFiles[p]
 }
 
 // ArtifactIdentity is the manifest `identity` for a build: the version for a

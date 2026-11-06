@@ -12,6 +12,7 @@ Use logical paths with CE-SE file tools. `Teacher_Override.md` and `context/` re
 | Teacher | `context/teaching-profile.md`, `context/grading.md` | General teaching facts, style and feedback guidance |
 | Course | `context/courses/<course-id>/notes.md` | Grade, subject, taught skills, recurring routines and course-specific choices |
 | Assignment | `context/courses/<course-id>/assignments/<assignment-id>.md` | Prompt expectations, teacher decisions, scoring guidance and authored written-response exemplars |
+| Class | `context/reteach.md` | Skills each class needs retaught, with the evidence, for spiral review and reteaching plans |
 
 `context/courses.md` remains the Engine's structured course list; do not add ancillary fields to it. Course and assignment filenames use numeric Canvas IDs, not nicknames or titles. Each course/assignment note also records the Canvas origin; check origin and IDs before reuse. A copied assignment gets its own destination record, adapted to that course's learners and exact prompts/item IDs. Similar titles alone do not establish equivalence. If an existing note belongs to another origin, leave it intact and resolve the mismatch before using or replacing it.
 
@@ -30,6 +31,23 @@ Read before editing. Merge small changes, preserving unrelated notes and teacher
 ## Course notes
 
 Create a course note when something useful is known, using the outline in `context/courses/README.md`. Record grade/subject, what students have actually been taught, useful routines and expectations, and any course-specific preference with its source. Leave unknowns unknown. Cohort information describes instruction and supports; it is not a cap on what a student may demonstrate or an individual accommodation. No setup interview or empty record for every course is required.
+
+## Reteach needs
+
+`context/reteach.md` lists, class by class, the skills and ideas students have not yet learned well enough to build on. Planning helpers read it when designing spiral review, warm-ups and reteaching, so keep it current and short.
+
+Record a need after scoring when the work shows it: a gap or misconception shared by a meaningful part of the class (roughly a third or more), or a smaller one that later units depend on. One student's trouble belongs in that student's notes, not here. Tell the teacher in the scoring report what you added; drop or reword an entry the teacher disagrees with. When the teacher says a skill was retaught, or later work shows the class has it, mark the entry with that date and evidence. Remove entries once the class has shown the skill again, so the open list stays useful.
+
+Group entries under a heading per class, `## <nickname> (course <course-id>)`. Each entry is one bullet:
+
+```markdown
+- **Skill or idea** (standard code when known) — open since 2026-11-01.
+  Evidence: <assignment title> (assignment <id>), 2026-11-01: 11 of 26 students <what they did>; typical misconception: <one line>.
+  Spiral idea: <a quick warm-up, item type or reteach move that would show whether they have it now>.
+  Status: open | retaught 2026-11-08 (how) | shown again 2026-11-20 (<assignment>, 21 of 25)
+```
+
+Add new evidence to an existing entry rather than repeating it, and note when the same gap appears in another class ("also in 3rd period"). Counts, misconceptions and assignment names only: no student names, aliases, quotations from student work or individual scores.
 
 ## Assignment expectations and exemplars
 
