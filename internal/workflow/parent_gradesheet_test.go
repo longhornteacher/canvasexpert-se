@@ -34,7 +34,7 @@ func TestReportListsUpcomingWork(t *testing.T) {
 		{UserID: 9, AssignmentID: 6, AssignmentVisible: yes},
 	}
 	course := ParentReportCourse{WorkDue: []ParentWorkDueItem{}, upcomingEnd: periodEnd}
-	buildStudentReportScoped(&course, subs, nil, as, now, loc, start, now.AddDate(0, 0, 7))
+	buildStudentReport(&course, subs, as, now, loc, start)
 	if len(course.WorkDue) != 1 || course.WorkDue[0].AssignmentID != 1 {
 		t.Fatalf("work_due = %+v", course.WorkDue)
 	}
@@ -52,7 +52,7 @@ func TestGradeSheetRendering(t *testing.T) {
 	course := ParentReportCourse{Course: "ELA7", Timezone: "America/Chicago",
 		WorkDue: []ParentWorkDueItem{
 			work(2, "Essay", "2026-10-28T16:00:00-05:00", "graded", str("85")),
-			work(1, "Vocab", "2026-10-20T16:00:00-05:00", "missing", nil),
+			{ParentReportItem: ParentReportItem{AssignmentID: 1, Title: "Vocab", DueAt: "2026-10-20T16:00:00-05:00"}, Status: "no_grade", Possible: "100", Submission: "not_turned_in"},
 			work(3, "Hidden", "2026-10-30T16:00:00-05:00", "grade_not_released", nil),
 		},
 		Upcoming: []ParentUpcomingItem{{ParentReportItem: ParentReportItem{AssignmentID: 4, Title: "Compare ECR", DueAt: "2026-11-06T16:00:00-06:00"}, TurnedIn: true}},
@@ -60,7 +60,7 @@ func TestGradeSheetRendering(t *testing.T) {
 	student := ParentReportStudent{Ref: "s-1", Alias: "Wren", Courses: []ParentReportCourse{course}}
 	run := &ParentRun{Report: ParentReportPacket{AsOf: now.Format(time.RFC3339), Students: []ParentReportStudent{student}}, students: map[string]ParentReportStudent{"s-1": student}}
 	html := run.RenderStudent(ParentStudentDraft{Ref: "s-1", StudentIntro: "Hi {{student_name}}, here is your Term 2 grade sheet."}, workspace.Student{Name: "Ada Lovelace", FirstName: "Ada"}).HTML
-	order := []string{"Vocab", "Missing", "Essay", "85 / 100", "Hidden", "Grade not released", "Compare ECR", "(check this off once completed)", "Canvas shows this turned in"}
+	order := []string{"Vocab", "Not turned in", "Essay", "85 / 100", "Hidden", "Grade not released", "Compare ECR", "(check this off once completed)", "Canvas shows this turned in"}
 	at := 0
 	for _, s := range order {
 		i := strings.Index(html[at:], s)

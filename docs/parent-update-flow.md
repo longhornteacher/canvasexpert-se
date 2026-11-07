@@ -1,96 +1,47 @@
 # Parent Update Flow
 
-Updated 2026-10-26 · Default and weekly update layouts; Canvas Live and Outlook evidence remains separately identified; Band is dropped
+Updated 2026-11-07 · The Engine supplies facts; the playbook writes the email. Implemented in Dev with local tests only; no Canvas Live report, Outlook draft or family send has used this format yet.
 
-Purpose: preserve the current parent-report contract and the evidence behind it. Read alongside [ARCHITECTURE.md](ARCHITECTURE.md) and [SCORING-RULES.md](SCORING-RULES.md). Sections explicitly marked historical record earlier design choices; the current playbook and rules below govern fresh reports.
+Purpose: the current parent-report contract and the evidence behind it. Read alongside [ARCHITECTURE.md](ARCHITECTURE.md) and [SCORING-RULES.md](SCORING-RULES.md). The authoring workflow is the seed `playbooks/parent-updates.md`; the file contract is `engine-docs/formats.md` ("Parent update reports and drafts"). [Family Contact](family-contact-flow.md) shares the private review, recipient routing, Markdown renderer and Outlook delivery for free-form class messages.
 
-Reviewed 2026-10-20: [Family Contact](family-contact-flow.md) extends the same private review, recipient routing and Outlook delivery for free-form class messages. This document and `playbooks/parent-updates.md` govern grade-update runs, including the separately requested weekly layout. Free-form `contact.json` runs contain no grade report and do not weaken complete-inventory, calendar, grade-privacy or skip guarantees here.
+## Who decides what
 
-## Settled direction
+Rule (developer, 2026-11-07): "Engine keeps factual/deterministic things. Playbook is the dressing."
 
-**Communicate more with fewer words. Lead with actionable items.**
+| Engine (facts and safety) | Playbook and context (dressing and policy) |
+|---|---|
+| Canvas reads, student/course identity, student-effective due dates, visibility, excused work | Subject, greeting, introduction, sign-off placement |
+| Unreleased grades stay private; released score, exact percent, canonical link | Which rows appear (`below_percent`), which columns, column labels |
+| Submission evidence independent of the grade | Words for each submission status and for an empty list |
+| Drawing the assignment table so a draft cannot misstate a score, date or link | Grade-portal and tutoring links, course headings |
+| Holding a student whose evidence is incomplete; refusing wording with aliases, refs or addresses | When to send (`send_when`, per-student overrides), recipients (`parents_only`) |
+| Real-name substitution, recipient routing, teammate reply-to note, Outlook delivery, outcomes and no-resend | Anything else a family reads |
 
-- Full update by email from the teacher's own district mailbox through classic Outlook automation, reviewed and sent by the teacher on a private page. No texting service; Band was dropped. See [Delivery](#delivery).
-- Missing/0 appears first, with direct Canvas assignment links. The Engine builds the complete required-work inventory by student-effective due date for the last 14 calendar days of the current grading period, clipped to the period. A current positive teacher-entered grade overrides stale Canvas missing/no-submission indicators, and a current recorded zero qualifies even when graded or submitted.
-- Missing/0 items never repeat under Corrections; retain their grade-history entries.
-- Corrections are available as soon as work is finished and close 14 calendar days after the student's applicable due date, including weekends, unless the teacher has set another correction system. Feedback need not exist first; use it for guidance when available.
-- **Work due in this period** shows every assignment in the saved due-date inventory, including complete/perfect, awaiting-grading and ungraded work. First/current score provenance appears when available; unknown values remain clearly unavailable.
-- Direct parents to the teacher's configured grade portal for the official course grade. Portal and tutoring links are teacher-owned setup; the seed leaves them blank.
-- Include **Due Soon**.
-- Include the teacher's own tutoring or clubs link, if any; it is not a product default.
-- Skip after Missing/0 classification when every included course meets `skip_score` (90 by default) and no Missing/0 items remain. An empty retrospective inventory is also eligible for a no-required-work skip. Incomplete-data flags take precedence. The report exposes advisory student-level `skip_eligible`.
-- **No parent-response requests. Agents must not invent work for adults or students.** Actions and instructions must come from actual coursework, published deadlines, existing feedback, or teacher-provided opportunities.
+Before 2026-11-07 the Engine also wrote the subject, section headings, an AI disclaimer, the weekly email's sentences, and the correction, Due Soon and skip policies. Those are gone from the Engine; the [handoff](../handoffs/active/HANDOFF_Parent_Email_Content_to_Playbook_2026-11-07.md) records the audit.
 
-## Email shape
+## Current requirements (teacher, 2026-11-07)
 
-The following describes the default layout; the weekly update layout below is an explicit alternative.
+One list per student of every current released assignment score below 70% this term, with a direct assignment-title link, score, student-effective due date and independent submission status. Exactly 70% is excluded. An overall course average at or above 90 does not suppress the list. Skip an empty list; hold incomplete evidence rather than send an all-clear. No AI disclaimer, alias or privacy explanation, Corrections section, correction deadlines, Due Soon, history or passing-work inventory. Keep the configured grade-portal and tutoring links and the teacher's sign-off. Do not present the overall Canvas course score as a term grade.
 
-Keep student/course identity and an “As of” timestamp compact. Put actions before history; explain score labels once. Assignment titles are the links.
+## Report (`report.json`, schema 2)
 
-| Order | Content | Compact row shape |
-|---|---|---|
-| 1 | Missing/0 | Linked assignment · Current zero or resolved missing status · Due date · Existing instructions, if needed |
-| 2 | Corrections available | Linked assignment · Correction deadline · Where to find the rationale/exemplar |
-| 3 | Due Soon | Linked assignment · Due date · Existing preparation instructions, if any |
-| 4 | Work due in this period | Linked assignment · Due · Status · First Score · Current Score |
-| Footer | Official grade and tutoring | Teacher-configured portal and optional tutoring links |
+The report covers the current grading period from its start through `as_of`; `full_period` is accepted for compatibility and changes nothing. Per student and course: `course_score`, `flags` and `work_due`. Each `work_due` row is a published, visible, non-excused assignment due in the window, ordered by due date then title, with:
 
-Sort corrections by closing deadline and Due Soon by due date; omit empty sections. All retrospective sections come from assignments due in `[max(period start, as_of minus 14 calendar days), as_of]`; recent grading activity never admits an older due date. Due Soon remains a separate seven-calendar-day upcoming window and stops at the period end. A current zero remains in Missing/0 without implying it was unsubmitted. Every `work_due` row is rendered automatically, so an agent draft cannot omit completed or awaiting-grading work. Both email and printable output show the saved period label and dates. An empty inventory is described as “No Missing/0 work in this report window” only when evidence is complete; incomplete flags prevent an all-clear statement.
+- `status`: `graded`, `awaiting_grading`, `grade_not_released` (no score shown) or `no_grade` (including `not_graded` assignments);
+- `canvas_score`, `points_possible`, `percent` (two places; selection compares the exact ratio), `points_deducted`;
+- `submission`: `turned_in` (a submission or attempt exists), `not_turned_in` (online work past due with no submission, or marked missing, with no positive grade), `no_online_submission` (paper/offline work) or `unknown` (for example a positive grade on online work with no upload).
 
-Grade history exists so families can see where a score was raised, by a curve or by points for corrections. Decided 2026-10-16: no explanatory sentence; the Skyward footer link covers the official grade.
+A positive teacher-entered grade resolves a stale missing flag. A recorded zero is a graded score and does not establish that nothing was turned in. Absent or unreleased grades are never zeros. `upcoming` lists later work through the period end for the printed sheet. The report holds no sections, skip advice, comments or grade history; the gradebook-history read was removed.
 
-Historical design: a brief class-wide Band post with no student names was considered. Band was dropped on 2026-10-16 and has no current draft or delivery action.
+## Draft (`drafts.json`, schema 3) and rendering
 
-## Weekly update layout
+The draft carries the subject and Markdown body with `{{student_name}}` and one standalone `{{assignment_table}}`, plus the table settings and decisions. The Engine renders the body with the Family Contact renderer (sanitizing, private name substitution, teammate reply note, saved sign-off), then replaces the placeholder paragraph with its own table. Older schema 1/2 drafts are refused with a re-draft message; their reports and outcomes are preserved.
 
-A schema 2 `weekly_update` draft provides one teacher-authored Markdown announcement per exact course nickname and a decision for each student. The Engine derives the subject and the Missing and Failing lists from the saved report, omits the default inventory, Corrections and Due Soon sections from the email, and addresses enabled parents only. It does not include student names in the subject or body. It requires one course per student and permits an empty-state email even when the default skip rule applies. Unresolved report evidence remains a hold, not an all-clear. The normal printable report retains its inventory.
-
-A posted current zero is Missing; an unscored, overdue assignment marked missing by Canvas is also Missing. Positive posted scores below 70 percent appear under Failing, with the late-deduction marker only when Canvas reports a deduction. Excused work and unreleased scores are not displayed as failing. Pull the full current school-calendar period with `full_period: true` (CLI: `parent-report --full-period`) for a term-wide weekly update; the saved scope starts at period start in the school timezone. The default pull remains clipped by correction-days. Both use student-effective due dates. Course announcements must contain no student information, grades or email addresses; validation checks known aliases, references and addresses but does not replace the agent's review.
-
-This layout is local implementation evidence, not proof of a new Canvas Live read, Outlook draft, client adoption or family delivery.
+Decisions: `send_when: "rows"` sends to students with at least one row and skips the rest; `"all"` sends to everyone; `students` entries override. Any send for a student whose course has `flags`, or a row with an invalid date, link or score, becomes a `flag` hold with the reason.
 
 ## Printed grade sheets
 
-The printed sheet is a grade check, not the email: one table per course in due-date order with assignment, due date and current grade. `work_due` rows show the current Canvas score or the existing status text (unreleased grades stay private); `upcoming` rows show a check box. Every pull builds `upcoming` in the same per-student pass as the rest of the report, with the same published, visibility and student-effective due-date rules, and resolves visibility through the period end. Printing reads only `report.json`; drafts and parent-update settings are optional, and no scope or draft check can block it. Email validation keeps only the run match, known students, send/skip/flag decisions and, for the weekly layout, the full-period requirement and announcement privacy checks. Local tests only (2026-11-04).
-
-## Correction eligibility and evidence
-
-The Engine supplies finished-work candidates inside the correction window, excluding Missing/0. The agent includes work where the student lost points and can still improve it, following the teacher's own correction system when provided. Student-visible, teacher-provided rationales or exemplars can guide corrections, either per item or for the whole assignment; they are not a prerequisite for availability. Identify the actual content; a generic feedback comment or an isolated keyword does not establish guidance. Hidden answer keys are not parent-facing correction guidance.
-
-Correction eligibility remains governed by the applicable correction deadline and teacher override policy. The report's retrospective inclusion window is separate from that deadline: work due earlier than the saved reporting window is excluded, even if its correction deadline is still open. Resolve the student's applicable due date and course timezone; do not infer a changed deadline from a saved extra-time flag alone. Use the report's exact `correction_deadline` rather than inventing a cutoff.
-
-Retain available comment/item references so the draft can accurately direct the family. Unreadable or unsupported per-item feedback is unavailable guidance, not proof that the assignment is ineligible. New Quiz per-item feedback remains a pending evidence limit.
-
-Eligibility and sending are separate decisions: the Corrections section never independently defeats the skip rule. Already-perfect work is not a lost-points correction candidate.
-
-## Score and status accuracy
-
-| Field | Meaning |
-|---|---|
-| First Score | First score Canvas recorded for the assignment (gradebook history), when available |
-| Current Score | The assignment's current Canvas score, when available |
-
-Preserve score denominators and the associated assignment/attempt. Show unavailable history honestly; the earliest surviving comment is not automatically proof of the original assessment. With one assessment confirmed as both first and latest, both columns show it without implying corrections occurred.
-
-Do not substitute Canvas's entered score for the original earned assessment or infer the cause of a score difference. Explain adjustments only when supported by evidence. New Quiz written-work comments may contain criterion scores without an aggregate quiz assessment; preserve that distinction.
-
-A current recorded zero qualifies for Missing/0; it does not establish that work was never submitted. A current zero still qualifies if penalties reduced a positive entered grade to zero; it must not be called unsubmitted on that basis. A positive current teacher-entered grade overrides stale Canvas missing status or absence of an online submission. Excused work remains excluded. The Engine makes classifications before drafting, keeps Missing/0 out of Corrections and preserves scored history for inventory rows. Required ungraded coursework remains in the inventory with no invented score. The agent uses the resolved lists rather than inferring missing status from raw flags. Include only released, parent-appropriate information; private teacher notes and credentials stay out.
-
-## Conditional sending: approved rules
-
-Apply the configured cutoff only after the Engine resolves Missing/0 for every included course. One email combines the student's included courses. The Engine exposes `skip_eligible` for the agent's decision; it is true when every included course score meets `skip_score` (90 by default) with no Missing/0, or when the complete `work_due` inventory is empty. Other unresolved data flags still require teacher review and make automatic skip ineligible.
-
-| Condition | Result |
-|---|---|
-| Any included course score below the configured cutoff | Send, unless another unresolved problem requires a flag |
-| Any resolved Missing/0 item, including a current recorded zero | Send, unless another unresolved problem requires a flag |
-| Every included course score meets the cutoff and no Missing/0 items remain | Skip when `skip_eligible` is true |
-| No required work was due in the report window | Skip with `No required work was due in this report window.`; Due Soon alone does not create an email |
-| Course score unavailable or report data incomplete | Flag for teacher review; do not assume the skip criteria are met |
-
-Corrections, Due Soon and configured links enrich an otherwise warranted email; they do not independently trigger one. A positive teacher-entered grade resolves stale missing/no-submission indicators, so those indicators alone neither create a Missing/0 item nor justify a hold. A current Canvas score of zero still qualifies as a recorded zero, without implying unsubmitted work. Other incomplete-data and contact holds remain real and are explained specifically.
-
-The cutoff uses current Canvas `course_score` values. The configured school grade portal remains the official course-grade source; its link supplies no grade data and establishes no integration. The playbook and `context/parent-updates.md` seed retain these standing preferences. Actual teacher overrides and existing customized context remain teacher-owned; product updates preserve them for reconciliation.
+The printed sheet is a grade check, not the email: one table per course in due-date order with assignment, due date and current grade (or "Awaiting grading", "Grade not released", "Not turned in" or "No grade recorded"), and a check box for upcoming work. Printing reads only `report.json`; `drafts.json` may add a `student_intro`. The AI notice was removed 2026-11-07. The sheet's own wording remains Engine-rendered.
 
 ## Delivery
 
@@ -144,7 +95,7 @@ Dependencies and limits:
 - Sending needs the PC on, the teacher signed in, and classic Outlook configured. A hosted tunnel route still sends from that PC. Scheduled or unattended sending inherits the same limits.
 - Not yet verified: Go COM send, the district PC, and any MCP client calling this flow.
 
-## Implementation notes (updated 2026-10-18)
+## Implementation notes (updated 2026-11-07; earlier bullets are history)
 
 - `internal/outlook` (go-ole, one locked COM thread); `cse-probe outlook-self-test` sent a message to the profile's own address from Go on NEWSPEEDY. District PC, inbox arrival and MCP clients are not yet verified.
 - For 1.1.0-beta.1, the Engine resolves positive-grade overrides and current recorded zeros before drafting, removes Missing/0 duplicates from Corrections, retains score history, and computes `skip_eligible` after scoped classification. Loading a run recomputes advisory eligibility from its saved inventory and flags; it does not reclassify from live Canvas data. Focused local regressions cover these rules; no new Canvas Live or delivery run establishes them.
@@ -152,44 +103,8 @@ Dependencies and limits:
 - Not built from the handoff: a local CE-SE posting record for correction candidates (teacher comments are returned instead).
 - **Band dropped (2026-10-16):** the teacher does not want Band in this flow. No Band post, card or `band_post` field exists; earlier Band notes above are historical.
 
-## Saved report scope and inventory
+- 2026-11-07 (local tests only): reports carry facts only (percent, independent submission evidence, whole-term window); drafts are schema 3 wording plus an Engine-drawn table; the default and weekly layouts, AI notice, corrections, Due Soon, history and skip_eligible were removed.
 
-New `schema: 1` reports add a non-null top-level `scope` object with the calendar timezone, grading-period name and inclusive dates, `recent_start_at`, `recent_end_at` (the report's `as_of`) and exclusive `due_soon_end_at`. Timestamps use RFC3339. The Engine reads grading periods from the active `context/school-calendar.md` through teacher-document routing, selects the one period containing `as_of` in that calendar timezone, and fails with a calendar correction message if the list is missing, malformed, overlapping or leaves `as_of` in a gap. The seed contains all four verified 2026–27 periods; school dates remain editable teacher context.
+## Remaining checks
 
-Each course section has an explicit `work_due` array. By default it includes published, visible, non-excused assignments due in `[max(period start, as_of minus correction_days), as_of]`; an explicit full-period pull starts at period start. Both use the student-effective date, with the assignment date as fallback only when no student override makes the work undated. A missing bulk submission row is resolved through the existing targeted student/assignment read before classifying visibility. Unavailable or malformed relevant evidence is reported as a course flag; known undated work is outside this due-date report. Required ungraded work remains present with an honest no-grade status. Missing/0, Corrections, and scored history are derived from that inventory. Due Soon is separate and ends at the earlier of seven calendar days after `as_of` or midnight after the grading period.
-
-Default email and printable output include the complete Work due in this period table directly from `work_due`, regardless of which optional section references the agent selected. Saved scope is used on reopen. An empty complete inventory calls for a no-required-work skip; Due Soon alone does not justify an email. Scope validation rejects missing legacy scope with a fresh-pull instruction and rejects malformed saved bounds before sending or printing, preserving the old drafts and outcomes. Local regression tests do not establish Canvas Live audience completeness or new Outlook delivery evidence.
-
-## Architecture and current evidence
-
-Develop this feature in **Dev**. Future teacher use and report drafts belong in **UserInstall**. Reusable preferences and private contacts follow configured **UserSync** authority; session drafts and delivery outcomes remain local to UserInstall.
-
-- **Playbook/context:** teacher's sending policy, correction judgments, wording, priorities, report ranges, teacher instructions and configured links.
-- **Engine:** Canvas reads, exact student/course/attempt identity, dates and score arithmetic, deterministic Missing/0 classification and skip eligibility from the configured policy, evidence references, rendering, private recipient resolution and delivery outcomes.
-- Reuse existing packages and plain files. A preliminary report needs no permanent gradebook, hosted parent portal, or general messaging framework.
-
-Historical implementation starting points (the reporting path is now implemented):
-
-- [Canvas read types](../internal/workflow/canvas_reads.go) include assignments, submission statuses, comments, attempts, and score fields. Complete per-item feedback access and release checks still need investigation for this flow.
-- [The scoring pull](../internal/workflow/pull_work.go) deliberately skips work without an actual submission. Its packets alone cannot provide the missing-work report; add a reporting read using the existing Canvas transport.
-- [Feedback rendering](../internal/render/render.go) supports an ordinary-assignment assessment header, but teacher-customized feedback and missing history require honest unavailable values.
-- [Private contact storage](../internal/workspace/contacts.go) already holds parent destinations and independent email/text preferences. Keep addresses and phone numbers out of ordinary agent context; resolve recipients privately against the correct student and Canvas instance.
-- [Current capabilities](engine-capabilities.md) distinguish implemented parent reports/review/delivery from the limited recorded Canvas Live and Outlook evidence. This document establishes no new live evidence.
-
-Official API references: [submissions](https://developerdocs.instructure.com/services/canvas/resources/submissions) and [assignments](https://developerdocs.instructure.com/services/canvas/resources/assignments). Documentation supports investigation; it is not live verification of this feature.
-
-## Historical handoff outline and remaining checks
-
-The outline below predates implementation. Sending rules, Canvas cutoff scores, combined-course emails and teacher review/send interaction are now settled above. No sending cadence has been selected; configured portal/tutoring links belong to each teacher. District-PC behavior, review-page delivery/inbox arrival, MCP-client use, New Quiz per-item feedback and paper printing remain the capability checks recorded in [capability evidence](engine-capabilities.md).
-
-Historical proposed choices for the first implementation slice:
-
-1. Sending/suppression rules, grade source, and any correction or deadline overrides.
-2. One course per email versus combined courses; history range and Due Soon horizon. Seven days for Due Soon was suggested, not approved.
-3. Exact correction cutoff time; treatment of completed corrections and already-perfect work.
-4. District Skyward URL and manual versus scheduled initiation. No sending cadence has been chosen.
-5. Teacher preview/send interaction (batch-approved send versus Drafts only) and handling of contacts with text enabled but no enabled email destination.
-
-Proposed flow: **select scope → read current Canvas data → decide send/skip → draft → teacher review → send → record outcomes**. This flow is implemented: private review page, classic Outlook delivery and per-recipient outcomes (see [current capabilities](engine-capabilities.md) for the evidence and its limits). Preserve unsent drafts, respect each contact's enabled email destinations, and distinguish accepted, failed, and uncertain delivery before retrying. Outlook's Sent Items is the teacher-visible record.
-
-Use focused checks for date boundaries, missing versus ungraded/excused work, score provenance, private recipient routing, and the agreed sending rules. Validate actual per-item access and delivery when those capabilities are implemented. Update [capability evidence](engine-capabilities.md) and [WebUI capability data](../internal/localui/capabilities.go) together when implementation or verification status changes.
+A Canvas Live report under the new contract, an authorized email from the review page with inbox arrival, the district PC, printing on paper and MCP-client adoption remain pending; see [capability evidence](engine-capabilities.md). Update it and [WebUI capability data](../internal/localui/capabilities.go) together when that status changes.

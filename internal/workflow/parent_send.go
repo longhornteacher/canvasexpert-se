@@ -154,11 +154,16 @@ func (s *Service) BuildParentReview(dir string) (ReviewModel, error) {
 			m.Cards = append(m.Cards, withDigest(card))
 			continue
 		}
-		to, cc, parents, e := familyRecipients(s.Root, st, run.Drafts.Layout == "weekly_update")
+		to, cc, parents, e := familyRecipients(s.Root, st, run.Drafts.Recipients == "parents_only")
 		if e != nil {
 			return ReviewModel{}, e
 		}
-		r := run.Render(sd, st)
+		r, e := run.Render(sd, st)
+		if e != nil {
+			card.Hold = e.Error()
+			m.Cards = append(m.Cards, withDigest(card))
+			continue
+		}
 		card.Frames = []ReviewFrame{{Label: "Email · " + r.Subject, HTML: r.HTML}}
 		if parents > 0 {
 			card.Facts = append(card.Facts, ReviewFact{Label: "To", Value: strings.Join(to, ", ")})
@@ -205,11 +210,14 @@ func (s *Service) SendParentUpdates(ctx context.Context, dir string, skip map[st
 	for _, sd := range run.Drafts.Students {
 		courses := parentCourseNicknames(run.students[sd.Ref])
 		tasks = append(tasks, familyMailTask{Ref: sd.Ref, Send: sd.Decision == "send", Courses: func(workspace.Student) []string { return courses }, Render: func(st workspace.Student) (outlook.Message, error) {
-			r := run.Render(sd, st)
+			r, e := run.Render(sd, st)
+			if e != nil {
+				return outlook.Message{}, e
+			}
 			return outlook.Message{Subject: r.Subject, HTMLBody: r.HTML}, nil
 		}})
 	}
-	return s.deliverFamilyMail(ctx, dir, tasks, run.Drafts.Layout == "weekly_update", skip, draftsOnly, sender)
+	return s.deliverFamilyMail(ctx, dir, tasks, run.Drafts.Recipients == "parents_only", skip, draftsOnly, sender)
 }
 
 // familyMailTask supplies content to the shared private recipient/send loop.
@@ -397,7 +405,10 @@ func (s *Service) SendParentTest(dir string, sender MailSender) (string, error) 
 			held = route.Hold
 			continue
 		}
-		r := run.Render(sd, st)
+		r, e := run.Render(sd, st)
+		if e != nil {
+			return "", e
+		}
 		if _, e = sender.Send(outlook.Message{To: []string{self}, ReplyTo: route.ReplyTo, Subject: "[TEST] " + r.Subject, HTMLBody: r.HTML}); e != nil {
 			return "", e
 		}

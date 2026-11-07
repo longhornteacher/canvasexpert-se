@@ -1,34 +1,29 @@
 ---
 schema: 1
-# Your school's family grade portal. Parent emails link to it for the official course grade. Leave the address blank and the email leaves the portal line out; the printable report still shows the name. (Older key names skyward_url and bobcat_hour_* still work.)
+# Your school's family grade portal. The agent links to it in parent emails for the official course grade; the printed grade sheet names it. (Older key name skyward_url still works.)
 grade_portal_url: ""
 grade_portal_name: ""
-# Optional tutoring or clubs sign-up shown in the email footer and the weekly update's Extra help line. Leave the address blank to leave it out.
+# Optional tutoring or clubs sign-up the agent links at the end of parent emails. Leave the address blank to leave it out. (Older bobcat_hour_* key names still work.)
 tutoring_url: ""
 tutoring_label: ""
 tutoring_text: ""
-# The class named in the weekly update's subject and greeting, for example "Science 6". Blank gives "Class update".
+# The class name families know, for example "Science 6", used in the email's wording.
 class_name: ""
-# Work scoring under this percent is listed as Failing in the weekly update (1 to 100).
+# Assignments below this percent are listed in grade updates (the agent passes it as below_percent).
 failing_below: 70
-# How the email closes, for example "Your teacher".
+# How the email closes, for example "Your teacher". The Engine adds it to every family email.
 sign_off: ""
-# Every included Canvas course score at or above this, with no resolved Missing/0 items, means no email is needed.
+# Older settings, no longer used by grade updates.
 skip_score: 90
-# Report window and correction deadline, in calendar days after the due date (1 to 60).
 correction_days: 14
 ---
 
-Parent update preferences. The Engine reads the settings above when it prepares a report and renders an email; the notes below are for the agent.
+Parent-update rules (teacher instruction, 2026-11-07; all courses):
 
-Tone notes for this teacher (edit freely): short, warm, plain. Lead with what the family can act on. Never scold, and never ask parents to reply.
-
-Standing parent-update rules:
-
-- A current teacher-entered grade above zero overrides stale Canvas missing status or no online submission. Do not call that work missing or hold its email for that conflict.
-- A current recorded zero belongs first under Missing/0, including graded or submitted work. Only work due inside the report window is listed. A zero does not prove work was never submitted; an earlier zero raised to a positive grade is history only.
-- Do not repeat Missing/0 items under Corrections. Keep their grade-history entries.
-- Use the Engine's resolved `missing` list and `skip_eligible`. Apply the skip rule after classification: skip only when every included course meets `skip_score` (90 by default) and no Missing/0 items remain. Other incomplete-data or contact problems still need their own resolution.
-- Reports include required work whose student-effective due date falls from the later of the current grading period's start or `correction_days` (14 by default) calendar days before `as_of`, through `as_of`. The Engine selects the period from `context/school-calendar.md`; retain all grading periods when updating that calendar.
-- If `work_due` is empty, do not use a low current course score or Due Soon alone to create an email. Skip with the reason “No required work was due in this report window.” unless incomplete evidence requires a flag.
-- The Engine renders every saved `work_due` row in email and printable reports. Keep that complete inventory even when selecting Missing/0, correction or history references for agent notes.
+- Use the full requested term through the report date. The below-70 assignment list is not limited to the correction window.
+- List every published, assigned, required assignment whose current released score is below 70%. Exactly 70% is excluded. Use the Engine's percentage calculation and latest released grade; never manufacture a zero.
+- Each row has the assignment title as a direct Canvas link, its score, the student-effective due date, and an independent submission status: Turned in, Not turned in, No online submission required, or Status unavailable. A zero or absence of an upload alone does not prove that work was not turned in.
+- Keep the message focused on this list. Omit AI disclaimers, Pokémon/alias names and alias/privacy explanations from family-facing output. Internal alias protection remains in place.
+- Omit the Corrections available section and all correction/retake eligibility announcements or deadlines. Listing a low grade makes no promise of a revision or points back.
+- Keep the configured grade-portal and tutoring links and the teacher's sign-off.
+- A course average of 90 or more does not suppress a below-70 assignment. Send when the term list is nonempty; skip an empty list. Students with incomplete evidence are held for the teacher. Do not label an overall Canvas course score as a term grade.

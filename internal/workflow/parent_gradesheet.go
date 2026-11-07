@@ -19,24 +19,18 @@ import (
 // teacher's parent-update settings (for the footer) are used when readable
 // and never block printing.
 
-func workDueStatusText(status string) string {
+// workDueStatusText is the sheet's grade cell when no released score shows.
+func workDueStatusText(status, submission string) string {
 	switch status {
 	case "awaiting_grading":
 		return "Awaiting grading"
 	case "grade_not_released":
 		return "Grade not released"
-	case "no_grade":
-		return "No grade recorded"
-	case "recorded_zero":
-		return "Recorded zero"
-	case "not_submitted":
-		return "Not submitted"
-	case "missing":
-		return "Missing"
-	case "graded":
-		return "Graded"
 	}
-	return status
+	if submission == "not_turned_in" {
+		return "Not turned in"
+	}
+	return "No grade recorded"
 }
 
 // loadParentRunForPrint reads only what a printed grade sheet needs.
@@ -100,7 +94,7 @@ func (r *ParentRun) RenderStudent(sd ParentStudentDraft, student workspace.Stude
 	for _, c := range rs.Courses {
 		var rows []row
 		for _, it := range c.WorkDue {
-			grade := workDueStatusText(it.Status)
+			grade := workDueStatusText(it.Status, it.Submission)
 			if it.Current != nil && it.Status != "grade_not_released" {
 				grade = trimPoint(*it.Current)
 				if it.Possible != "" {
@@ -129,12 +123,9 @@ func (r *ParentRun) RenderStudent(sd ParentStudentDraft, student workspace.Stude
 		}
 		b.WriteString(`</table>`)
 	}
-	portal := "the grade portal"
 	if r.Config.GradePortalName != "" {
-		portal = r.Config.GradePortalName
-		fmt.Fprintf(&b, `<p style="margin:18px 0 4px">Official grades: %s.</p>`, esc(portal))
+		fmt.Fprintf(&b, `<p style="margin:18px 0 4px">Official grades: %s.</p>`, esc(r.Config.GradePortalName))
 	}
-	b.WriteString(aiNotice("This sheet was prepared with AI tools, so there may be mistakes. Scores and dates come straight from Canvas; check " + portal + " for official grades. For privacy, the AI never saw your real name."))
 	b.WriteString(`</div>`)
 	return Rendered{Subject: student.Name, HTML: b.String()}
 }

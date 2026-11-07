@@ -13,6 +13,7 @@ Execution-readiness review: **2026-10-28**, against the current Dev working tree
 
 | Handoff | Execution status | What the review clarified |
 |---|---|---|
+| [Parent email content to playbook](active/HANDOFF_Parent_Email_Content_to_Playbook_2026-11-07.md) | Implemented in Dev 2026-11-07 (not yet committed); full tests, vet, the 58-tool compiled MCP smoke and `git diff --check` passed. Local tests only. Retire with the commit hash once committed. | The Engine hard-codes the parent email's wording, sections, AI notice and send policy; this moves them to the playbook and keeps the Engine on facts, an Engine-drawn table and safe delivery. |
 | [Quiz accommodation writes and New Quiz item scores](active/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md) | Consolidated 2026-10-28 from the open remainder of the two retired handoffs below. Part A writes are implemented and the student-side timer/attempt effect was teacher-confirmed on 2026-10-29; only the course/quiz combination is open. Part B (Engine-written New Quiz item scores) is **complete** (2026-10-29): captured, built, L1–L8 passed live, and the playbooks use it. | Which test identity is available, what each observation enables, and the item-score Engine design to build only after the save is observed. |
 
 <a id="execution-notes-for-the-three-active-handoffs"></a>

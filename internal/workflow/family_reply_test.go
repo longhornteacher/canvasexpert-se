@@ -90,21 +90,28 @@ func TestParentRenderNoteInEmailOnlyAndOwnUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	student, sd := workspace.Student{Name: "Ada Lovelace", FirstName: "Ada"}, run.Drafts.Students[0]
-	before := run.Render(sd, student)
+	render := func() string {
+		r, err := run.Render(sd, student)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.HTML
+	}
+	before := render()
 
 	svc.Config.Courses = []domain.Course{{Nickname: "cs8", ID: 1}}
 	svc.Team = workspace.TeamConfig{Schema: 1}
 	svc.applyReplyNotes(run)
-	if run.Render(sd, student).HTML != before.HTML {
+	if render() != before {
 		t.Fatal("an own-course email changed")
 	}
 
 	svc.Config.Courses = []domain.Course{{Nickname: "cs8", ID: 1, Owner: "turner"}}
 	svc.Team = workspace.TeamConfig{Schema: 1, Teammates: []workspace.Teammate{{Label: "turner", Name: "Ms. Turner", Email: "turner@school.org"}}}
 	svc.applyReplyNotes(run)
-	email, sheet := run.Render(sd, student).HTML, run.RenderStudent(sd, student).HTML
+	email, sheet := render(), run.RenderStudent(sd, student).HTML
 	i := strings.Index(email, "Please reply to Ms. Turner")
-	if i < 0 || strings.Index(email, "prepared with AI tools") < i {
+	if i < 0 || strings.Index(email, "Lab &lt;1&gt;") > i {
 		t.Fatalf("email note misplaced: %s", email)
 	}
 	if strings.Contains(sheet, "reply to") {
@@ -118,7 +125,7 @@ func TestParentRenderNoteInEmailOnlyAndOwnUnchanged(t *testing.T) {
 	run.students[a.Ref] = rs
 	svc.Config.Courses = append(svc.Config.Courses, domain.Course{Nickname: "mine", ID: 9})
 	svc.applyReplyNotes(run)
-	mixed := run.Render(sd, student).HTML
+	mixed := render()
 	if !strings.Contains(mixed, "For cs8, please reply to Ms. Turner at turner@school.org.") || strings.Contains(mixed, "For mine") {
 		t.Fatalf("mixed note: %s", mixed)
 	}

@@ -104,7 +104,7 @@ type CopyModuleInput struct {
 type ParentReportInput struct {
 	Courses    []string `json:"courses" jsonschema:"Configured course nicknames; one email can cover several courses"`
 	Students   []string `json:"students,omitempty" jsonschema:"Optional student refs; omit for every active student"`
-	FullPeriod bool     `json:"full_period,omitempty" jsonschema:"Include the full current school-calendar grading period rather than the default correction window"`
+	FullPeriod bool     `json:"full_period,omitempty" jsonschema:"Accepted for compatibility; every report now covers the whole current grading period"`
 }
 
 type ParentReviewInput struct {
@@ -267,7 +267,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return TextOutput{Text: string(encoded)}, nil
 	})
-	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates (course score, missing work, correction candidates, due soon, grade history) into courses/<course>/parent-updates/<run>/report.json. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
+	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates into courses/<course>/parent-updates/<run>/report.json: for each student and course, every assignment due this grading period so far with its released score, percent, student due date, direct link and turned-in evidence, plus upcoming work for printed sheets. Facts only; the playbook writes the email. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
 		args := append(append([]string{"parent-report"}, in.Courses...), in.Students...)
 		if in.FullPeriod {
 			args = append(args, "--full-period")

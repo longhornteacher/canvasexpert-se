@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,32 +15,25 @@ import (
 	"canvasexpertse/internal/workspace"
 )
 
-// Parent report policy values. The agent decides what to do with the facts;
-// these only fix the date windows the report is computed over.
-const (
-	correctionWindowDays = 14
-	dueSoonDays          = 7
-	maxCommentChars      = 1500
-)
-
 // ParentReportPacket is the pseudonymized report the agent reads. It carries no
 // contacts, real names or Goes By names. A student appears once, with one
-// section per selected course, so one email can cover several courses.
+// section per selected course, so one email can cover several courses. The
+// report holds Canvas facts only; what a family email says about them is the
+// playbook's choice.
 type ParentReportPacket struct {
-	Schema         int                   `json:"schema"`
-	Kind           string                `json:"kind"`
-	RunID          string                `json:"run_id"`
-	Courses        []string              `json:"courses"`
-	AsOf           string                `json:"as_of"`
-	Scope          *ParentReportScope    `json:"scope"`
-	CorrectionDays int                   `json:"correction_window_days"`
-	DueSoonDays    int                   `json:"due_soon_days"`
-	Students       []ParentReportStudent `json:"students"`
-	Notes          []string              `json:"notes,omitempty"`
+	Schema   int                   `json:"schema"`
+	Kind     string                `json:"kind"`
+	RunID    string                `json:"run_id"`
+	Courses  []string              `json:"courses"`
+	AsOf     string                `json:"as_of"`
+	Scope    *ParentReportScope    `json:"scope"`
+	Students []ParentReportStudent `json:"students"`
+	Notes    []string              `json:"notes,omitempty"`
 }
 
-// ParentReportScope records the calendar and due-date window used to build a
-// report. It is provenance for this saved run, not a live policy switch.
+// ParentReportScope records the grading period and due-date window used to
+// build a report: period start through as_of. It is provenance for this saved
+// run, not a live policy switch.
 type ParentReportScope struct {
 	Timezone        string `json:"timezone"`
 	PeriodName      string `json:"period_name"`
@@ -47,14 +41,12 @@ type ParentReportScope struct {
 	PeriodEndDate   string `json:"period_end_date"`
 	RecentStartAt   string `json:"recent_start_at"`
 	RecentEndAt     string `json:"recent_end_at"`
-	DueSoonEndAt    string `json:"due_soon_end_at"`
 }
 
 type ParentReportStudent struct {
-	Ref          string               `json:"student_ref"`
-	Alias        string               `json:"alias"`
-	Courses      []ParentReportCourse `json:"courses"`
-	SkipEligible bool                 `json:"skip_eligible"`
+	Ref     string               `json:"student_ref"`
+	Alias   string               `json:"alias"`
+	Courses []ParentReportCourse `json:"courses"`
 }
 
 type ParentReportCourse struct {
@@ -63,16 +55,10 @@ type ParentReportCourse struct {
 	CourseScore       *string             `json:"course_score"`
 	CourseScoreSource string              `json:"course_score_source"`
 	Flags             []string            `json:"flags,omitempty"`
-	Missing           []ParentReportItem  `json:"missing,omitempty"`
-	Corrections       []ParentCorrection  `json:"corrections,omitempty"`
-	DueSoon           []ParentReportItem  `json:"due_soon,omitempty"`
-	History           []ParentHistoryItem `json:"history,omitempty"`
 	WorkDue           []ParentWorkDueItem `json:"work_due"`
 	// Upcoming lists all work due after as_of through the period end, for
 	// the printed grade sheet.
 	Upcoming []ParentUpcomingItem `json:"upcoming,omitempty"`
-	// correctionDays is the configured window; zero means the default.
-	correctionDays int
 	// upcomingEnd, when set, is the exclusive end of the Upcoming list.
 	upcomingEnd time.Time
 }
@@ -84,16 +70,20 @@ type ParentUpcomingItem struct {
 }
 
 // ParentWorkDueItem is one required assignment whose effective due date is in
-// the saved retrospective window. The status describes available Canvas
-// evidence without inferring submission or a grade when neither is known.
+// the saved window. Status is the grade state; Submission is independent
+// evidence of whether work was turned in. Neither is inferred from the other.
 type ParentWorkDueItem struct {
 	ParentReportItem
-	Status         string  `json:"status"`
-	Possible       string  `json:"points_possible,omitempty"`
-	First          *string `json:"first_earned,omitempty"`
-	Current        *string `json:"canvas_score,omitempty"`
+	// Status: graded, awaiting_grading, grade_not_released or no_grade.
+	Status   string  `json:"status"`
+	Possible string  `json:"points_possible,omitempty"`
+	Current  *string `json:"canvas_score,omitempty"`
+	// Percent is canvas_score / points_possible × 100, rounded to two places
+	// for reading; selection compares the exact ratio.
+	Percent        *string `json:"percent,omitempty"`
 	PointsDeducted *string `json:"points_deducted,omitempty"`
-	Note           string  `json:"note,omitempty"`
+	// Submission: turned_in, not_turned_in, no_online_submission or unknown.
+	Submission string `json:"submission"`
 }
 
 type ParentReportItem struct {
@@ -101,55 +91,20 @@ type ParentReportItem struct {
 	Title        string `json:"title"`
 	URL          string `json:"url"`
 	DueAt        string `json:"due_at,omitempty"`
-	// Basis explains why the work is listed: recorded_zero, canvas_missing,
-	// or not_submitted_canvas_not_marked_missing for online work past due.
-	// A recorded zero does not establish whether work was submitted.
-	Basis string `json:"basis,omitempty"`
-}
-
-type ParentCorrection struct {
-	ParentReportItem
-	CorrectionDeadline string                 `json:"correction_deadline"`
-	Comments           []ParentCorrectionNote `json:"teacher_comments,omitempty"`
-	// PerItemFeedback is "unverified" for New Quizzes: the Engine cannot read
-	// per-item feedback, so eligibility must not be ruled out from comments.
-	PerItemFeedback string `json:"per_item_feedback,omitempty"`
-}
-
-type ParentCorrectionNote struct {
-	ID        int64  `json:"id"`
-	Attempt   *int   `json:"attempt,omitempty"`
-	CreatedAt string `json:"created_at"`
-	Text      string `json:"text"`
-}
-
-type ParentHistoryItem struct {
-	ParentReportItem
-	Possible string  `json:"points_possible"`
-	First    *string `json:"first_earned"`
-	Latest   *string `json:"latest_earned"`
-	Current  *string `json:"canvas_score"`
-	// FirstUnavailable is set when submission history cannot establish the
-	// first assessment; entered_score is never substituted.
-	FirstUnavailable bool   `json:"first_unavailable,omitempty"`
-	Note             string `json:"note,omitempty"`
 }
 
 // ParentReport reads current Canvas data for the configured courses and writes
 // a pseudonymized report under courses/<first nickname>/parent-updates/<run-id>/.
 // refs, when given, limits the report to those student refs.
 func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []string, now time.Time) (string, ParentReportPacket, error) {
-	return s.ParentReportWithScope(ctx, nicknames, refs, now, false)
+	return s.ParentReportWithScope(ctx, nicknames, refs, now, true)
 }
 
-// ParentReportWithScope optionally includes the entire current calendar period.
-func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string, refs []string, now time.Time, fullPeriod bool) (string, ParentReportPacket, error) {
+// ParentReportWithScope is kept for callers that pass the former full-period
+// switch. Every report now covers the whole current grading period through now.
+func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string, refs []string, now time.Time, _ bool) (string, ParentReportPacket, error) {
 	if len(nicknames) == 0 {
 		return "", ParentReportPacket{}, fmt.Errorf("at least one course is required")
-	}
-	config, e := loadParentConfig(s.Root)
-	if e != nil {
-		return "", ParentReportPacket{}, e
 	}
 	calendar, e := workspace.ReadSchoolCalendar(s.Root)
 	if e != nil {
@@ -162,27 +117,10 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 	if e != nil {
 		return "", ParentReportPacket{}, fmt.Errorf("school calendar: %w; correct context/school-calendar.md before creating a parent report", e)
 	}
-	scope, recentStart, dueSoonEnd, e := makeParentReportScopeDays(calendar, period, now, config.CorrectionDays)
+	scope, periodStart, upcomingEnd, e := makeParentReportScope(calendar, period, now)
 	if e != nil {
 		return "", ParentReportPacket{}, e
 	}
-	if fullPeriod {
-		loc, _ := time.LoadLocation(calendar.Timezone)
-		recentStart, e = time.ParseInLocation("2006-01-02", period.StartDate, loc)
-		if e != nil {
-			return "", ParentReportPacket{}, e
-		}
-		scope.RecentStartAt = recentStart.Format(time.RFC3339)
-	}
-	// Every pull lists upcoming work to the period end for the printed grade
-	// sheet, and resolves visibility that far ahead.
-	upcomingLoc, _ := time.LoadLocation(calendar.Timezone)
-	periodEnd, e := time.ParseInLocation("2006-01-02", period.EndDate, upcomingLoc)
-	if e != nil {
-		return "", ParentReportPacket{}, e
-	}
-	upcomingEnd := periodEnd.AddDate(0, 0, 1)
-	resolveEnd := upcomingEnd
 	want := map[string]bool{}
 	for _, r := range refs {
 		want[r] = true
@@ -192,7 +130,7 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		return "", ParentReportPacket{}, e
 	}
 	runID := now.UTC().Format("20060102T150405Z")
-	packet := ParentReportPacket{Schema: 1, Kind: "parent-report", RunID: runID, CorrectionDays: config.CorrectionDays, DueSoonDays: dueSoonDays, Scope: scope}
+	packet := ParentReportPacket{Schema: 2, Kind: "parent-report", RunID: runID, Scope: scope}
 	byRef := map[string]*ParentReportStudent{}
 	matched := map[string]bool{}
 	for _, nickname := range nicknames {
@@ -261,16 +199,6 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		for _, a := range assignments {
 			byAssignment[a.ID] = a
 		}
-		// The two whole-course feeds are independent; read them together.
-		type feedResult struct {
-			rows []Submission
-			err  error
-		}
-		feedDone := make(chan feedResult, 1)
-		go func() {
-			rows, err := gradeVersions(ctx, s.Client, course.ID)
-			feedDone <- feedResult{rows, err}
-		}()
 		subs, e := courseSubmissions(ctx, s.Client, course.ID)
 		if e != nil {
 			return "", ParentReportPacket{}, e
@@ -279,44 +207,23 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		for _, sub := range subs {
 			perStudent[sub.UserID] = append(perStudent[sub.UserID], sub)
 		}
-		// submission_history keeps one version per attempt, so a regrade of
-		// the same attempt hides the first score. The gradebook history feed
-		// keeps every grading version.
-		versions := map[int64]map[int64][]Submission{}
-		fr := <-feedDone
-		feed, e := fr.rows, fr.err
-		if e != nil {
-			packet.Notes = append(packet.Notes, course.Nickname+": gradebook history unavailable; first scores come from submission history and may miss same-attempt regrades")
-		}
-		for _, v := range feed {
-			if versions[v.UserID] == nil {
-				versions[v.UserID] = map[int64][]Submission{}
-			}
-			versions[v.UserID][v.AssignmentID] = append(versions[v.UserID][v.AssignmentID], v)
-		}
 		resolver := &parentSubmissionResolver{client: s.Client, courseID: course.ID, batches: map[int64]map[int64]Submission{}}
 		courseWorkCount := 0
 		verifiedInWindow := false
 		for _, id := range order {
 			en := byUser[id]
 			rc := ParentReportCourse{Course: course.Nickname, Timezone: zone, CourseScore: en.score, CourseScoreSource: "canvas_enrollment_current_score", WorkDue: []ParentWorkDueItem{}}
-			if en.score == nil {
-				rc.Flags = append(rc.Flags, "course score unavailable from Canvas")
-			}
-			studentSubs, incomplete := completeStudentSubmissionsWithResolver(ctx, resolver, id, assignments, perStudent[id], recentStart, now, resolveEnd)
-			for _, note := range incomplete {
-				rc.Flags = append(rc.Flags, note)
-			}
+			studentSubs, incomplete := completeStudentSubmissionsWithResolver(ctx, resolver, id, assignments, perStudent[id], periodStart, now, upcomingEnd)
+			rc.Flags = append(rc.Flags, incomplete...)
 			for _, sub := range studentSubs {
 				a, ok := byAssignment[sub.AssignmentID]
 				due := effectiveDueForStudent(sub, a, id)
-				if ok && a.Published && a.GradingType != "not_graded" && !sub.Excused && sub.AssignmentVisible != nil && *sub.AssignmentVisible && due != nil && !due.Before(recentStart) && !due.After(now) {
+				if ok && a.Published && a.GradingType != "not_graded" && !sub.Excused && sub.AssignmentVisible != nil && *sub.AssignmentVisible && due != nil && !due.Before(periodStart) && !due.After(now) {
 					verifiedInWindow = true
 				}
 			}
-			rc.correctionDays = config.CorrectionDays
 			rc.upcomingEnd = upcomingEnd
-			buildStudentReportScoped(&rc, studentSubs, versions[id], byAssignment, now, loc, recentStart, dueSoonEnd)
+			buildStudentReport(&rc, studentSubs, byAssignment, now, loc, periodStart)
 			courseWorkCount += len(rc.WorkDue)
 			rs := byRef[en.st.Ref]
 			if rs == nil {
@@ -338,7 +245,6 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		}
 	}
 	for _, rs := range byRef {
-		rs.SkipEligible = parentSkipEligible(*rs, config.SkipScore)
 		packet.Students = append(packet.Students, *rs)
 	}
 	sort.Slice(packet.Students, func(i, j int) bool { return packet.Students[i].Alias < packet.Students[j].Alias })
@@ -362,18 +268,9 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 	return path, packet, nil
 }
 
+// makeParentReportScope returns the saved scope, the period start (the window
+// start) and the exclusive period end (the end of the upcoming list).
 func makeParentReportScope(calendar workspace.SchoolCalendar, period workspace.GradingPeriod, asOf time.Time) (*ParentReportScope, time.Time, time.Time, error) {
-	return makeParentReportScopeDays(calendar, period, asOf, correctionWindowDays)
-}
-
-func daysOrDefault(days int) int {
-	if days <= 0 {
-		return correctionWindowDays
-	}
-	return days
-}
-
-func makeParentReportScopeDays(calendar workspace.SchoolCalendar, period workspace.GradingPeriod, asOf time.Time, days int) (*ParentReportScope, time.Time, time.Time, error) {
 	loc, err := time.LoadLocation(calendar.Timezone)
 	if err != nil {
 		return nil, time.Time{}, time.Time{}, fmt.Errorf("school calendar timezone %q is invalid; correct context/school-calendar.md", calendar.Timezone)
@@ -386,18 +283,9 @@ func makeParentReportScopeDays(calendar workspace.SchoolCalendar, period workspa
 	if err != nil {
 		return nil, time.Time{}, time.Time{}, fmt.Errorf("school calendar period end date is invalid; correct context/school-calendar.md")
 	}
-	recentStart := asOf.In(loc).AddDate(0, 0, -daysOrDefault(days))
-	if periodStart.After(recentStart) {
-		recentStart = periodStart
-	}
-	periodExclusiveEnd := periodEnd.AddDate(0, 0, 1)
-	dueSoonEnd := asOf.In(loc).AddDate(0, 0, dueSoonDays)
-	if periodExclusiveEnd.Before(dueSoonEnd) {
-		dueSoonEnd = periodExclusiveEnd
-	}
 	scope := &ParentReportScope{Timezone: calendar.Timezone, PeriodName: period.Name, PeriodStartDate: period.StartDate, PeriodEndDate: period.EndDate,
-		RecentStartAt: recentStart.Format(time.RFC3339), RecentEndAt: asOf.Format(time.RFC3339), DueSoonEndAt: dueSoonEnd.Format(time.RFC3339)}
-	return scope, recentStart, dueSoonEnd, nil
+		RecentStartAt: periodStart.Format(time.RFC3339), RecentEndAt: asOf.Format(time.RFC3339)}
+	return scope, periodStart, periodEnd.AddDate(0, 0, 1), nil
 }
 
 // parentAssignments loads the catalog with the existing Canvas effective-date
@@ -415,57 +303,6 @@ func courseSubmissions(ctx context.Context, c *canvas.Client, courseID int64) ([
 	var result []Submission
 	err := c.List(ctx, fmt.Sprintf("/api/v1/courses/%d/students/submissions?student_ids[]=all&include[]=submission_history&include[]=submission_comments&include[]=visibility&per_page=100", courseID), &result)
 	return result, err
-}
-
-// gradeVersions reads every grading version in the course from the gradebook
-// history feed, oldest first per student and assignment.
-func gradeVersions(ctx context.Context, c *canvas.Client, courseID int64) ([]Submission, error) {
-	var result []Submission
-	if err := c.List(ctx, fmt.Sprintf("/api/v1/courses/%d/gradebook_history/feed?per_page=100", courseID), &result); err != nil {
-		return nil, err
-	}
-	sort.SliceStable(result, func(i, j int) bool { return gradedAt(result[i]) < gradedAt(result[j]) })
-	return result, nil
-}
-
-func gradedAt(s Submission) string {
-	if s.GradedAt == nil {
-		return ""
-	}
-	return *s.GradedAt
-}
-
-// scoreChangedSince reports whether a grading version at or after since set a
-// score different from the version before it (a first score counts).
-func scoreChangedSince(versions []Submission, since, now time.Time) bool {
-	var prev *json.Number
-	for _, v := range versions {
-		if v.Score == nil {
-			continue
-		}
-		if v.GradedAt != nil {
-			t, err := time.Parse(time.RFC3339, *v.GradedAt)
-			if err == nil && t.After(since) && !t.After(now) && (prev == nil || prev.String() != v.Score.String()) {
-				return true
-			}
-		}
-		prev = v.Score
-	}
-	return false
-}
-
-// effectiveDue is the student's own due date (overrides and extensions
-// included) when Canvas reports one, else the assignment's.
-func effectiveDue(sub Submission, a Assignment) *time.Time {
-	for _, v := range []*string{sub.CachedDueDate, a.DueAt} {
-		if v == nil || *v == "" {
-			continue
-		}
-		if t, err := time.Parse(time.RFC3339, *v); err == nil {
-			return &t
-		}
-	}
-	return nil
 }
 
 // completeStudentSubmissions joins the catalog to the bulk submission feed.
@@ -640,174 +477,9 @@ func containsStudent(ids []int64, id int64) bool {
 	return false
 }
 
-// correctionDeadline is 11:59:59 pm, course time, on the 14th (configurable)
-// calendar day after the due date's local calendar day.
-func correctionDeadline(due time.Time, loc *time.Location) time.Time {
-	return correctionDeadlineDays(due, loc, correctionWindowDays)
-}
-
-func correctionDeadlineDays(due time.Time, loc *time.Location, days int) time.Time {
-	d := due.In(loc)
-	return time.Date(d.Year(), d.Month(), d.Day()+daysOrDefault(days), 23, 59, 59, 0, loc)
-}
-
 func isOnline(a Assignment) bool {
 	for _, t := range a.SubmissionTypes {
 		if strings.HasPrefix(t, "online_") || t == "media_recording" || t == "student_annotation" || t == "discussion_topic" {
-			return true
-		}
-	}
-	return false
-}
-
-func buildStudentReport(rs *ParentReportCourse, subs []Submission, versions map[int64][]Submission, assignments map[int64]Assignment, now time.Time, loc *time.Location) {
-	buildStudentReportScoped(rs, subs, versions, assignments, now, loc, now.In(loc).AddDate(0, 0, -correctionWindowDays), now.In(loc).AddDate(0, 0, dueSoonDays))
-}
-
-func buildStudentReportScoped(rs *ParentReportCourse, subs []Submission, versions map[int64][]Submission, assignments map[int64]Assignment, now time.Time, loc *time.Location, recentStart, dueSoonEnd time.Time) {
-	sort.Slice(subs, func(i, j int) bool { return subs[i].AssignmentID < subs[j].AssignmentID })
-	seen := map[int64]bool{}
-	for _, sub := range subs {
-		a, ok := assignments[sub.AssignmentID]
-		if !ok || !a.Published || sub.Excused || (sub.AssignmentVisible != nil && !*sub.AssignmentVisible) || seen[a.ID] {
-			continue
-		}
-		seen[a.ID] = true
-		due := effectiveDueForStudent(sub, a, sub.UserID)
-		if due == nil {
-			continue
-		}
-		item := ParentReportItem{AssignmentID: a.ID, Title: a.Name, URL: a.HTMLURL}
-		item.DueAt = due.In(loc).Format(time.RFC3339)
-		submitted := sub.SubmittedAt != nil && sub.Attempt >= 1
-		pastDue := due != nil && !due.After(now)
-		entered := sub.EnteredScore
-		if entered == nil {
-			entered = sub.Score
-		}
-		enteredGrade := decimalPointer(entered)
-		positiveGrade := false
-		// The teacher-entered grade resolves missing status, while Canvas's
-		// current score (after any penalties) determines a recorded zero.
-		current := sub.Score
-		if current == nil {
-			current = sub.EnteredScore
-		}
-		currentGrade := decimalPointer(current)
-		positiveGrade = currentGrade != nil && currentGrade.Sign() > 0
-		recordedZero := currentGrade != nil && currentGrade.Sign() == 0
-		feedbackWithheld := sub.PostedAtPresent && sub.PostedAt == nil
-		gradeNotReleased := feedbackWithheld && (sub.Score != nil || sub.EnteredScore != nil || sub.GradedAt != nil)
-		inWindow := !due.Before(recentStart) && !due.After(now)
-
-		if inWindow && a.GradingType != "not_graded" && !gradeNotReleased {
-			switch {
-			case recordedZero:
-				item.Basis = "recorded_zero"
-				rs.Missing = append(rs.Missing, item)
-			case !positiveGrade && sub.Missing:
-				item.Basis = "canvas_missing"
-				rs.Missing = append(rs.Missing, item)
-			case !positiveGrade && !submitted && pastDue && isOnline(a):
-				item.Basis = "not_submitted_canvas_not_marked_missing"
-				rs.Missing = append(rs.Missing, item)
-			}
-		} else if a.GradingType != "not_graded" && !gradeNotReleased && !positiveGrade && !submitted && due.After(now) && due.Before(dueSoonEnd) {
-			rs.DueSoon = append(rs.DueSoon, item)
-		}
-		if !rs.upcomingEnd.IsZero() && due.After(now) && due.Before(rs.upcomingEnd) {
-			rs.Upcoming = append(rs.Upcoming, ParentUpcomingItem{ParentReportItem: item, TurnedIn: submitted})
-		}
-
-		vs := versions[sub.AssignmentID]
-		var hist ParentHistoryItem
-		if sub.Score != nil || sub.EnteredScore != nil {
-			hist = historyItem(item, sub, vs, a)
-		}
-		if inWindow {
-			status := "no_grade"
-			switch {
-			case a.GradingType == "not_graded":
-				status = "no_grade"
-			case gradeNotReleased:
-				status = "grade_not_released"
-			case recordedZero:
-				status = "recorded_zero"
-			case item.Basis == "canvas_missing":
-				status = "missing"
-			case item.Basis == "not_submitted_canvas_not_marked_missing":
-				status = "not_submitted"
-			case enteredGrade != nil && submitted:
-				status = "graded"
-			case submitted && enteredGrade == nil:
-				status = "awaiting_grading"
-			case enteredGrade != nil:
-				status = "graded"
-			}
-			row := ParentWorkDueItem{ParentReportItem: item, Status: status, Possible: a.Points.String(), First: hist.First, Current: hist.Current}
-			if !gradeNotReleased && sub.PointsDeducted != nil {
-				v := sub.PointsDeducted.String()
-				row.PointsDeducted = &v
-			}
-			if gradeNotReleased {
-				row.Possible, row.First, row.Current, row.Note = "", nil, nil, "Canvas has not released this grade"
-			}
-			if status == "no_grade" {
-				row.Note = "Canvas has no grade recorded"
-			}
-			rs.WorkDue = append(rs.WorkDue, row)
-		}
-		if inWindow && item.Basis == "" && a.GradingType != "not_graded" && !gradeNotReleased {
-			c := ParentCorrection{ParentReportItem: item, CorrectionDeadline: correctionDeadlineDays(*due, loc, rs.correctionDays).Format(time.RFC3339)}
-			for _, cm := range sub.Comments {
-				if feedbackWithheld || cm.AuthorID == sub.UserID || strings.TrimSpace(cm.Comment) == "" {
-					continue
-				}
-				text := cm.Comment
-				if len(text) > maxCommentChars {
-					text = text[:maxCommentChars] + "…"
-				}
-				c.Comments = append(c.Comments, ParentCorrectionNote{ID: cm.ID, Attempt: cm.Attempt, CreatedAt: cm.CreatedAt, Text: text})
-			}
-			if a.NewQuiz {
-				c.PerItemFeedback = "unverified"
-			}
-			// Corrections open when the student finishes, not when feedback
-			// is posted; comments only help the agent point to guidance.
-			if submitted || sub.Score != nil || sub.EnteredScore != nil || len(c.Comments) > 0 || c.PerItemFeedback != "" {
-				rs.Corrections = append(rs.Corrections, c)
-			}
-		}
-		if sub.Score != nil && inWindow && a.GradingType != "not_graded" && !gradeNotReleased && hasGradeHistoryChange(vs) {
-			rs.History = append(rs.History, hist)
-		}
-	}
-	sort.Slice(rs.WorkDue, func(i, j int) bool { return rs.WorkDue[i].DueAt < rs.WorkDue[j].DueAt })
-	sort.Slice(rs.Corrections, func(i, j int) bool {
-		return rs.Corrections[i].CorrectionDeadline < rs.Corrections[j].CorrectionDeadline
-	})
-	sort.Slice(rs.DueSoon, func(i, j int) bool { return rs.DueSoon[i].DueAt < rs.DueSoon[j].DueAt })
-	sort.Slice(rs.Upcoming, func(i, j int) bool { return rs.Upcoming[i].DueAt < rs.Upcoming[j].DueAt })
-}
-
-// Gradebook history can contain a resave of the same score. Keep the report's
-// change list focused on actual changes while retaining the current score in
-// the complete WorkDue inventory.
-func hasGradeHistoryChange(versions []Submission) bool {
-	if len(versions) < 2 {
-		return true
-	}
-	var first *string
-	for _, version := range versions {
-		if version.Score == nil {
-			continue
-		}
-		score := version.Score.String()
-		if first == nil {
-			first = &score
-			continue
-		}
-		if score != *first {
 			return true
 		}
 	}
@@ -830,73 +502,113 @@ func effectiveDueForStudent(sub Submission, a Assignment, studentID int64) *time
 	return effectiveAssignmentDue(a, studentID)
 }
 
-// parentSkipEligible applies the teacher's threshold only after every included
-// course has its Missing/0 classification. It is advisory; the agent retains
-// the teacher's send/skip/flag decision.
-func parentSkipEligible(student ParentReportStudent, skipScore int) bool {
-	if len(student.Courses) == 0 {
-		return false
-	}
-	allEmpty := true
-	for _, course := range student.Courses {
-		if len(course.Flags) > 0 {
-			return false
+// buildStudentReport records Canvas facts for each published, visible,
+// non-excused assignment: work due from windowStart through now goes in
+// WorkDue, later work through the period end in Upcoming.
+func buildStudentReport(rs *ParentReportCourse, subs []Submission, assignments map[int64]Assignment, now time.Time, loc *time.Location, windowStart time.Time) {
+	sort.Slice(subs, func(i, j int) bool { return subs[i].AssignmentID < subs[j].AssignmentID })
+	seen := map[int64]bool{}
+	for _, sub := range subs {
+		a, ok := assignments[sub.AssignmentID]
+		if !ok || !a.Published || sub.Excused || (sub.AssignmentVisible != nil && !*sub.AssignmentVisible) || seen[a.ID] {
+			continue
 		}
-		if course.WorkDue == nil {
-			return false // a missing inventory is incomplete evidence, not an empty window.
+		seen[a.ID] = true
+		due := effectiveDueForStudent(sub, a, sub.UserID)
+		if due == nil {
+			continue
 		}
-		allEmpty = allEmpty && len(course.WorkDue) == 0
-	}
-	if allEmpty {
-		return true
-	}
-	threshold := domain.MustDecimal(fmt.Sprint(skipScore))
-	for _, course := range student.Courses {
-		if course.CourseScore == nil || len(course.Missing) > 0 {
-			return false
+		item := ParentReportItem{AssignmentID: a.ID, Title: a.Name, URL: a.HTMLURL, DueAt: due.In(loc).Format(time.RFC3339)}
+		submitted := sub.SubmittedAt != nil && sub.Attempt >= 1
+		if !rs.upcomingEnd.IsZero() && due.After(now) && due.Before(rs.upcomingEnd) {
+			rs.Upcoming = append(rs.Upcoming, ParentUpcomingItem{ParentReportItem: item, TurnedIn: submitted})
 		}
-		score, err := domain.ParseDecimal(*course.CourseScore)
-		if err != nil || score.Cmp(threshold) < 0 {
-			return false
+		if due.Before(windowStart) || due.After(now) {
+			continue
 		}
+		rs.WorkDue = append(rs.WorkDue, workDueRow(item, sub, a, submitted))
 	}
-	return true
+	sort.SliceStable(rs.WorkDue, func(i, j int) bool {
+		a, _ := time.Parse(time.RFC3339, rs.WorkDue[i].DueAt)
+		b, _ := time.Parse(time.RFC3339, rs.WorkDue[j].DueAt)
+		if !a.Equal(b) {
+			return a.Before(b)
+		}
+		return rs.WorkDue[i].Title < rs.WorkDue[j].Title
+	})
+	sort.SliceStable(rs.Upcoming, func(i, j int) bool { return rs.Upcoming[i].DueAt < rs.Upcoming[j].DueAt })
 }
 
-func recentTime(v string, now time.Time) bool {
-	t, err := time.Parse(time.RFC3339, v)
-	return err == nil && t.After(now.AddDate(0, 0, -correctionWindowDays)) && !t.After(now)
-}
-
-// historyItem takes first and latest earned scores only from scored grading
-// versions (the gradebook history feed when present, else submission_history).
-// entered_score is never used as the original assessment.
-func historyItem(item ParentReportItem, sub Submission, versions []Submission, a Assignment) ParentHistoryItem {
-	h := ParentHistoryItem{ParentReportItem: item, Possible: a.Points.String()}
-	if sub.Score != nil {
-		cur := sub.Score.String()
-		h.Current = &cur
+// workDueRow states the grade and the submission evidence separately. A
+// recorded zero is a graded score, not proof that nothing was turned in, and
+// an unreleased or absent grade is never a zero.
+func workDueRow(item ParentReportItem, sub Submission, a Assignment, submitted bool) ParentWorkDueItem {
+	row := ParentWorkDueItem{ParentReportItem: item, Possible: a.Points.String()}
+	// Canvas's current score (after any penalties) is the grade families see.
+	current := sub.Score
+	if current == nil {
+		current = sub.EnteredScore
 	}
-	var scored []string
-	hist := versions
-	if len(hist) == 0 {
-		hist = append([]Submission(nil), sub.History...)
-		sort.SliceStable(hist, func(i, j int) bool { return hist[i].Attempt < hist[j].Attempt })
-	}
-	for _, e := range hist {
-		if e.Score != nil {
-			scored = append(scored, e.Score.String())
+	grade := decimalPointer(current)
+	released := !(sub.PostedAtPresent && sub.PostedAt == nil)
+	// A positive teacher-entered grade resolves a stale Canvas missing flag,
+	// even when a penalty brought the current score to zero.
+	entered := decimalPointer(sub.EnteredScore)
+	positive := grade != nil && grade.Sign() > 0 || entered != nil && entered.Sign() > 0
+	switch {
+	case a.GradingType == "not_graded":
+		row.Status = "no_grade"
+	case !released && (grade != nil || sub.GradedAt != nil):
+		row.Status, row.Possible = "grade_not_released", ""
+	case grade != nil:
+		row.Status = "graded"
+		v := current.String()
+		row.Current = &v
+		if sub.PointsDeducted != nil {
+			d := sub.PointsDeducted.String()
+			row.PointsDeducted = &d
 		}
+		row.Percent = percentOf(*grade, a.Points.String())
+	case submitted:
+		row.Status = "awaiting_grading"
+	default:
+		row.Status = "no_grade"
 	}
 	switch {
-	case len(scored) == 0:
-		h.FirstUnavailable = true
-		h.Note = "submission history shows no earlier scored entry"
-	case len(scored) == 1:
-		h.First, h.Latest = &scored[0], &scored[0]
-		h.Note = "one scored entry; first and latest are the same"
+	case submitted:
+		row.Submission = "turned_in"
+	case sub.Missing && !positive:
+		row.Submission = "not_turned_in"
+	case !isOnline(a):
+		row.Submission = "no_online_submission"
+	case !positive:
+		// Online work past due with no Canvas submission.
+		row.Submission = "not_turned_in"
 	default:
-		h.First, h.Latest = &scored[0], &scored[len(scored)-1]
+		// A positive grade without an online submission: the teacher may have
+		// accepted it another way.
+		row.Submission = "unknown"
 	}
-	return h
+	return row
+}
+
+// percentOf returns score/possible × 100 to two places, or nil when points
+// possible is absent or zero.
+func percentOf(score domain.Decimal, possible string) *string {
+	p, ok := percentRat(score.String(), possible)
+	if !ok {
+		return nil
+	}
+	v := domain.RoundRat(p, 2).String() // RoundRat already drops trailing zeros
+	return &v
+}
+
+// percentRat is the exact percentage, used for threshold comparisons.
+func percentRat(score, possible string) (*big.Rat, bool) {
+	s, ok1 := new(big.Rat).SetString(strings.TrimSpace(score))
+	p, ok2 := new(big.Rat).SetString(strings.TrimSpace(possible))
+	if !ok1 || !ok2 || p.Sign() <= 0 {
+		return nil, false
+	}
+	return new(big.Rat).Mul(new(big.Rat).Quo(s, p), big.NewRat(100, 1)), true
 }

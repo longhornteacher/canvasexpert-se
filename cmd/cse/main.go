@@ -93,7 +93,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   set-file-access COURSE FILE_ID --access course|hidden|locked Change an existing course file's access
   pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only timing changes; never writes to Canvas
-  parent-report COURSE [REF ...] Read parent-update facts (missing, corrections, due soon, history) into courses/COURSE/parent-updates/
+  parent-report COURSE [REF ...] Read this term's assignment facts (score, percent, due date, turned-in evidence) into courses/COURSE/parent-updates/
   copy-assignment SOURCE QUERY TARGET [--module-id ID] [--assignment-group-id ID] [--published] Copy with destination files; unpublished by default
   copy-module SOURCE "MODULE" COURSE [COURSE ...] Copy one module by exact title, once, into each course (each teacher's own key); never re-copies
   family-contact-prepare RUN_FOLDER Resolve a free-form contact.json audience against Canvas

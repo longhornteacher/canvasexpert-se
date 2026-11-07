@@ -58,37 +58,48 @@ func parentFixtureRun(t *testing.T) (*Service, string, workspace.Student, worksp
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 16, 15, 0, 0, 0, time.UTC)
-	start := time.Date(2026, 10, 13, 0, 0, 0, 0, time.FixedZone("CDT", -5*60*60))
-	soonEnd := now.In(start.Location()).AddDate(0, 0, 7)
-	scope := &ParentReportScope{Timezone: "America/Chicago", PeriodName: "Term 2", PeriodStartDate: "2026-10-13", PeriodEndDate: "2026-12-18", RecentStartAt: start.Format(time.RFC3339), RecentEndAt: now.Format(time.RFC3339), DueSoonEndAt: soonEnd.Format(time.RFC3339)}
 	course := func() ParentReportCourse {
 		s := "80"
 		return ParentReportCourse{Course: "cs8", Timezone: "America/Chicago", CourseScore: &s,
-			Missing: []ParentReportItem{{AssignmentID: 1, Title: "Lab <1>", URL: "https://canvas.example.edu/a/1", DueAt: "2026-10-14T10:00:00-05:00", Basis: "canvas_missing"}},
 			WorkDue: []ParentWorkDueItem{
-				{ParentReportItem: ParentReportItem{AssignmentID: 1, Title: "Lab <1>", URL: "https://canvas.example.edu/a/1", DueAt: "2026-10-14T10:00:00-05:00"}, Status: "missing", Possible: "10"},
-				{ParentReportItem: ParentReportItem{AssignmentID: 2, Title: "Completed project", URL: "https://canvas.example.edu/a/2", DueAt: "2026-10-15T10:00:00-05:00"}, Status: "graded", Possible: "10", Current: str("10")},
+				{ParentReportItem: ParentReportItem{AssignmentID: 1, Title: "Lab <1>", URL: "https://canvas.example.edu/a/1", DueAt: "2026-10-14T10:00:00-05:00"}, Status: "graded", Possible: "10", Current: str("0"), Percent: str("0"), Submission: "not_turned_in"},
+				{ParentReportItem: ParentReportItem{AssignmentID: 2, Title: "Completed project", URL: "https://canvas.example.edu/a/2", DueAt: "2026-10-15T10:00:00-05:00"}, Status: "graded", Possible: "10", Current: str("10"), Percent: str("100"), Submission: "turned_in"},
 			},
 		}
 	}
-	report := ParentReportPacket{Schema: 1, Kind: "parent-report", RunID: "R1", Courses: []string{"cs8"}, AsOf: now.Format(time.RFC3339), Scope: scope,
+	report := ParentReportPacket{Schema: 2, Kind: "parent-report", RunID: "R1", Courses: []string{"cs8"}, AsOf: now.Format(time.RFC3339), Scope: parentTestScope(now),
 		Students: []ParentReportStudent{{Ref: a.Ref, Alias: a.Alias, Courses: []ParentReportCourse{course()}}, {Ref: b.Ref, Alias: b.Alias, Courses: []ParentReportCourse{course()}}}}
 	dir := filepath.Join(root, "courses", "cs8", "parent-updates", "R1")
 	if err = os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write := func(name string, v any) {
-		b, _ := json.Marshal(v)
-		if err := os.WriteFile(filepath.Join(dir, name), b, 0o644); err != nil {
-			t.Fatal(err)
-		}
+	raw, _ := json.Marshal(report)
+	if err = os.WriteFile(filepath.Join(dir, "report.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
 	}
-	write("report.json", report)
-	write("drafts.json", ParentDrafts{Schema: 1, Kind: "parent-drafts", RunID: "R1", Students: []ParentStudentDraft{
-		{Ref: a.Ref, Decision: "send", Reason: "missing lab", Intro: "Hello about {{student_name}}", Missing: []ParentItemRef{{AssignmentID: 1}}},
-		{Ref: b.Ref, Decision: "send", Reason: "missing lab", Missing: []ParentItemRef{{AssignmentID: 1}}},
-	}})
+	writeParentDrafts(t, dir, parentTestDrafts())
 	return svc, dir, a, b
+}
+
+// parentTestDrafts is a schema 3 draft as the seed playbook writes it.
+func parentTestDrafts() ParentDrafts {
+	seventy := 70.0
+	return ParentDrafts{Schema: 3, Kind: "parent-drafts", RunID: "R1",
+		Subject: "{{student_name}}: Term 2 assignments below 70",
+		Body:    "Hello,\n\nHere are {{student_name}}'s Term 2 assignments below 70%.\n\n{{assignment_table}}\n\n[Grade portal](https://portal.example.edu) for official grades.",
+		Table: ParentTable{BelowPercent: &seventy, Columns: []string{"assignment", "score", "due", "submission"},
+			Labels:           map[string]string{"assignment": "Assignment", "score": "Score", "due": "Due date", "submission": "Turned in?"},
+			SubmissionLabels: map[string]string{"turned_in": "Turned in", "not_turned_in": "Not turned in", "no_online_submission": "No online submission required", "unknown": "Status unavailable"},
+			EmptyText:        "No assignments below 70% this term."},
+	}
+}
+
+func writeParentDrafts(t *testing.T, dir string, d ParentDrafts) {
+	t.Helper()
+	raw, _ := json.Marshal(d)
+	if err := os.WriteFile(filepath.Join(dir, "drafts.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestParentReviewShowsRealRecipientsAndHoldsMissingAddress(t *testing.T) {
@@ -109,11 +120,12 @@ func TestParentReviewShowsRealRecipientsAndHoldsMissingAddress(t *testing.T) {
 	if facts["To"] != "ada@student.example" || facts["Cc"] != "p1@example.org, p3@example.org" || ca.Hold != "" {
 		t.Fatalf("facts = %v hold = %q (student in To, enabled parents in Cc, disabled excluded)", facts, ca.Hold)
 	}
-	if !strings.Contains(ca.Frames[0].HTML, "Lab &lt;1&gt;") || !strings.Contains(ca.Frames[0].HTML, "Completed project") || !strings.Contains(ca.Frames[0].HTML, "Hello about Ada") {
-		t.Fatalf("render must escape titles and expand the student name: %s", ca.Frames[0].HTML)
+	html := ca.Frames[0].HTML
+	if !strings.Contains(html, "Lab &lt;1&gt;") || !strings.Contains(html, "Here are Ada") || !strings.Contains(ca.Frames[0].Label, "Ada: Term 2") {
+		t.Fatalf("render must escape titles and expand the student name: %s %s", ca.Frames[0].Label, html)
 	}
-	if !strings.Contains(ca.Frames[0].HTML, "the AI never saw your child’s real name") || strings.Contains(ca.Frames[0].HTML, a.Alias) {
-		t.Fatalf("email must end with the AI notice and carry no alias: %s", ca.Frames[0].HTML)
+	if strings.Contains(html, "Completed project") || strings.Contains(html, "AI") || strings.Contains(html, a.Alias) {
+		t.Fatalf("email must list only below-threshold work and carry no AI notice or alias: %s", html)
 	}
 	if cards[b.Ref].Hold == "" {
 		t.Fatal("student with no enabled email must be held")
@@ -145,6 +157,20 @@ func TestSendParentUpdatesRecordsOutcomesAndNeverResends(t *testing.T) {
 		if c.Ref == a.Ref && !c.Done {
 			t.Fatal("fully sent student must show as already sent")
 		}
+	}
+}
+
+func TestParentsOnlyRecipients(t *testing.T) {
+	svc, dir, _, _ := parentFixtureRun(t)
+	d := parentTestDrafts()
+	d.Recipients = "parents_only"
+	writeParentDrafts(t, dir, d)
+	f := &fakeSender{}
+	if _, _, err := svc.SendParentUpdates(context.Background(), dir, map[string]bool{}, false, f); err != nil || len(f.sent) != 1 {
+		t.Fatalf("sent=%d err=%v", len(f.sent), err)
+	}
+	if m := f.sent[0]; strings.Contains(strings.Join(append(m.To, m.Cc...), ","), "student") {
+		t.Fatalf("parents_only must leave the student off: to=%v cc=%v", m.To, m.Cc)
 	}
 }
 
@@ -182,40 +208,131 @@ func TestSkippedStudentsAndDraftsOnly(t *testing.T) {
 }
 
 func TestDraftValidation(t *testing.T) {
-	svc, dir, _, b := parentFixtureRun(t)
-	load := func(mut func(*ParentDrafts)) error {
-		var d ParentDrafts
-		raw, _ := os.ReadFile(filepath.Join(dir, "drafts.json"))
-		json.Unmarshal(raw, &d)
+	svc, dir, a, b := parentFixtureRun(t)
+	try := func(mut func(*ParentDrafts)) error {
+		d := parentTestDrafts()
 		mut(&d)
-		raw, _ = json.Marshal(d)
-		os.WriteFile(filepath.Join(dir, "drafts.json"), raw, 0o644)
+		writeParentDrafts(t, dir, d)
 		_, err := LoadParentRun(svc.Root, dir)
 		return err
 	}
 	for name, mut := range map[string]func(*ParentDrafts){
-		"other run":       func(d *ParentDrafts) { d.RunID = "R2" },
-		"unknown student": func(d *ParentDrafts) { d.Students[0].Ref = "s-nobody" },
-		"twice":           func(d *ParentDrafts) { d.Students[1] = d.Students[0] },
-		"bad decision":    func(d *ParentDrafts) { d.Students[1] = ParentStudentDraft{Ref: b.Ref, Decision: "maybe"} },
+		"older schema":        func(d *ParentDrafts) { d.Schema = 1 },
+		"other run":           func(d *ParentDrafts) { d.RunID = "R2" },
+		"unknown student":     func(d *ParentDrafts) { d.Students = []ParentStudentDraft{{Ref: "s-nobody", Decision: "skip"}} },
+		"twice":               func(d *ParentDrafts) { d.Students = []ParentStudentDraft{{Ref: a.Ref, Decision: "skip"}, {Ref: a.Ref, Decision: "skip"}} },
+		"bad decision":        func(d *ParentDrafts) { d.Students = []ParentStudentDraft{{Ref: b.Ref, Decision: "maybe"}} },
+		"no table":            func(d *ParentDrafts) { d.Body = "Hello" },
+		"table twice":         func(d *ParentDrafts) { d.Body += "\n\n{{assignment_table}}" },
+		"unknown placeholder": func(d *ParentDrafts) { d.Body += " {{grade}}" },
+		"missing label":       func(d *ParentDrafts) { delete(d.Table.Labels, "due") },
+		"missing status word": func(d *ParentDrafts) { delete(d.Table.SubmissionLabels, "unknown") },
+		"unknown column":      func(d *ParentDrafts) { d.Table.Columns = append(d.Table.Columns, "first_score") },
+		"no empty text":       func(d *ParentDrafts) { d.Table.EmptyText = "" },
+		"alias in wording":    func(d *ParentDrafts) { d.Body = "Hi " + a.Alias + "\n\n{{assignment_table}}" },
+		"address in wording":  func(d *ParentDrafts) { d.Body += "\n\nWrite to me@school.example" },
+		"bad send_when":       func(d *ParentDrafts) { d.SendWhen = "sometimes" },
 	} {
-		if err := load(mut); err == nil {
+		if err := try(mut); err == nil {
 			t.Errorf("%s: expected a validation error", name)
 		}
-		parentFixtureRewrite(t, svc, dir)
 	}
-	// Bookkeeping slips do not block the teacher: an unknown assignment is not
-	// shown, a skip needs no reason, an absent student is simply not sent.
-	for name, mut := range map[string]func(*ParentDrafts){
-		"unknown assignment": func(d *ParentDrafts) { d.Students[0].Missing[0].AssignmentID = 99 },
-		"note with numbers":  func(d *ParentDrafts) { d.Students[0].Missing[0].Note = "Lab 3/4 is on the shelf" },
-		"missing decision":   func(d *ParentDrafts) { d.Students = d.Students[:1] },
-		"skip without why":   func(d *ParentDrafts) { d.Students[1] = ParentStudentDraft{Ref: b.Ref, Decision: "skip"} },
-	} {
-		if err := load(mut); err != nil {
-			t.Errorf("%s: blocked: %v", name, err)
+	if err := try(func(d *ParentDrafts) { d.Students = []ParentStudentDraft{{Ref: b.Ref, Decision: "skip"}} }); err != nil {
+		t.Errorf("a skip needs no reason: %v", err)
+	}
+}
+
+func TestParentTableTokenMustStandAlone(t *testing.T) {
+	svc, dir, a, _ := parentFixtureRun(t)
+	d := parentTestDrafts()
+	d.Body = "Hello, here is the list: {{assignment_table}}"
+	writeParentDrafts(t, dir, d)
+	run, err := LoadParentRun(svc.Root, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = run.Render(run.Drafts.Students[0], a); err == nil || !strings.Contains(err.Error(), "own line") {
+		t.Fatalf("inline table token must be refused: %v", err)
+	}
+}
+
+func TestParentDecisionsFollowSendWhenAndHoldIncompleteEvidence(t *testing.T) {
+	svc, dir, a, b := parentFixtureRun(t)
+	var report ParentReportPacket
+	raw, _ := os.ReadFile(filepath.Join(dir, "report.json"))
+	json.Unmarshal(raw, &report)
+	// Ada's zero is raised to exactly 70%: no row qualifies, so she is skipped.
+	report.Students[0].Courses[0].WorkDue[0].Current = str("7")
+	// Bo's course has an unresolved flag: a send is held, never sent partial.
+	report.Students[1].Courses[0].Flags = []string{"assignment 3 (Essay): visibility or submission evidence unavailable"}
+	raw, _ = json.Marshal(report)
+	os.WriteFile(filepath.Join(dir, "report.json"), raw, 0o644)
+	run, err := LoadParentRun(svc.Root, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]ParentStudentDraft{}
+	for _, sd := range run.Drafts.Students {
+		got[sd.Ref] = sd
+	}
+	if got[a.Ref].Decision != "skip" || got[a.Ref].Reason != "No assignments below 70% this term." {
+		t.Fatalf("exactly 70%% is not below 70: %+v", got[a.Ref])
+	}
+	if got[b.Ref].Decision != "flag" || !strings.Contains(got[b.Ref].Reason, "Essay") {
+		t.Fatalf("incomplete evidence must hold: %+v", got[b.Ref])
+	}
+	d := parentTestDrafts()
+	d.SendWhen = "all"
+	writeParentDrafts(t, dir, d)
+	run, _ = LoadParentRun(svc.Root, dir)
+	r, err := run.Render(run.Drafts.Students[0], workspace.Student{FirstName: "Ada"})
+	if err != nil || run.Drafts.Students[0].Decision != "send" || !strings.Contains(r.HTML, "No assignments below 70% this term.") {
+		t.Fatalf("send_when all sends the empty text: %+v %v %s", run.Drafts.Students[0], err, r.HTML)
+	}
+}
+
+func TestParentTableRowsColumnsAndCourses(t *testing.T) {
+	loc := "America/Chicago"
+	row := func(id int64, title, due, status, score, possible, submission string) ParentWorkDueItem {
+		it := ParentWorkDueItem{ParentReportItem: ParentReportItem{AssignmentID: id, Title: title, URL: "https://canvas.example.edu/a/" + title, DueAt: due}, Status: status, Possible: possible, Submission: submission}
+		if score != "" {
+			it.Current = str(score)
 		}
-		parentFixtureRewrite(t, svc, dir)
+		return it
+	}
+	rs := ParentReportStudent{Ref: "s-1", Courses: []ParentReportCourse{
+		{Course: "ELA7", Timezone: loc, WorkDue: []ParentWorkDueItem{
+			row(1, "Essay", "2026-10-14T23:59:00-05:00", "graded", "34", "50", "turned_in"),
+			row(2, "Quiz", "2026-10-15T23:59:00-05:00", "graded", "35", "50", "turned_in"),
+			row(3, "Hidden", "2026-10-15T23:59:00-05:00", "grade_not_released", "", "", "turned_in"),
+			row(4, "Paper", "2026-10-16T08:00:00-05:00", "graded", "5", "10", "no_online_submission"),
+			row(5, "Waiting", "2026-10-16T08:00:00-05:00", "awaiting_grading", "", "10", "turned_in"),
+		}},
+		{Course: "CS8", Timezone: loc, WorkDue: []ParentWorkDueItem{row(6, "Lab", "2026-10-13T23:59:00-05:00", "graded", "60", "100", "unknown")}},
+	}}
+	d := parentTestDrafts()
+	d.Table.Columns = []string{"assignment", "percent", "due", "submission"}
+	d.Table.Labels["percent"] = "Percent"
+	d.Table.CourseHeadings = map[string]string{"ELA7": "English 7"}
+	run := &ParentRun{Drafts: d, students: map[string]ParentReportStudent{"s-1": rs}}
+	got := run.renderTable(rs)
+	for _, want := range []string{">English 7</h3>", ">CS8</h3>", ">Essay</a>", "68%", "Wed Oct 14", "No online submission required", "Status unavailable", ">Paper</a>", ">Lab</a>", ">Percent</th>"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in %s", want, got)
+		}
+	}
+	for _, unwanted := range []string{">Quiz<", ">Hidden<", ">Waiting<", "Score"} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("unexpected %q in %s", unwanted, got)
+		}
+	}
+	if strings.Index(got, "Essay") > strings.Index(got, "Paper") {
+		t.Fatalf("rows keep due-date order: %s", got)
+	}
+	d.Table.BelowPercent = nil
+	run.Drafts = d
+	if all := run.renderTable(rs); !strings.Contains(all, ">Quiz<") || !strings.Contains(all, ">Waiting<") {
+		t.Fatalf("no threshold lists every row: %s", all)
 	}
 }
 
@@ -250,19 +367,6 @@ func TestPrintNeedsOnlyTheReport(t *testing.T) {
 	}
 }
 
-// parentFixtureRewrite restores a valid drafts.json between validation cases.
-func parentFixtureRewrite(t *testing.T, svc *Service, dir string) {
-	t.Helper()
-	var r ParentReportPacket
-	raw, _ := os.ReadFile(filepath.Join(dir, "report.json"))
-	json.Unmarshal(raw, &r)
-	d := ParentDrafts{Schema: 1, Kind: "parent-drafts", RunID: "R1", Students: []ParentStudentDraft{
-		{Ref: r.Students[0].Ref, Decision: "send", Missing: []ParentItemRef{{AssignmentID: 1}}},
-		{Ref: r.Students[1].Ref, Decision: "send", Missing: []ParentItemRef{{AssignmentID: 1}}}}}
-	raw, _ = json.Marshal(d)
-	os.WriteFile(filepath.Join(dir, "drafts.json"), raw, 0o644)
-}
-
 func TestStudentSheetsCoverEveryStudentWithoutLinksOrAddresses(t *testing.T) {
 	svc, dir, a, b := parentFixtureRun(t)
 	sheets, label, err := svc.BuildStudentSheets(dir)
@@ -279,142 +383,40 @@ func TestStudentSheetsCoverEveryStudentWithoutLinksOrAddresses(t *testing.T) {
 		if strings.Contains(s.HTML, "href") || strings.Contains(s.HTML, "@") {
 			t.Fatalf("paper sheet has links or addresses: %s", s.HTML)
 		}
-		if !strings.Contains(s.HTML, "prepared with AI tools") || !strings.Contains(s.HTML, "the AI never saw your real name.") {
-			t.Fatalf("AI notice missing: %s", s.HTML)
+		if strings.Contains(s.HTML, "AI") {
+			t.Fatalf("sheet carries an AI notice: %s", s.HTML)
 		}
-		if !strings.Contains(s.HTML, ">Current grade</th>") || !strings.Contains(s.HTML, "Lab &lt;1&gt;") || !strings.Contains(s.HTML, "Missing") || !strings.Contains(s.HTML, "10 / 10") {
+		if !strings.Contains(s.HTML, ">Current grade</th>") || !strings.Contains(s.HTML, "Lab &lt;1&gt;") || !strings.Contains(s.HTML, "0 / 10") || !strings.Contains(s.HTML, "10 / 10") {
 			t.Fatalf("sheet = %s", s.HTML)
 		}
-	}
-}
-
-func TestParentRenderMissingZeroFirstAndKeepsHistory(t *testing.T) {
-	now := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
-	as := map[int64]Assignment{
-		1: {ID: 1, Name: "Submitted zero", Published: true, DueAt: str("2026-10-15T12:00:00Z"), Points: "10"},
-		2: {ID: 2, Name: "Positive correction", Published: true, DueAt: str("2026-10-15T12:00:00Z"), Points: "10"},
-	}
-	course := ParentReportCourse{Course: "TEST", Timezone: "America/Chicago"}
-	buildStudentReport(&course, []Submission{
-		{AssignmentID: 1, Attempt: 1, SubmittedAt: str("2026-10-15T12:00:00Z"), Score: num("0"), History: []Submission{{Attempt: 1, Score: num("0")}}},
-		{AssignmentID: 2, Score: num("8")},
-	}, nil, as, now, time.UTC)
-	rs := ParentReportStudent{Ref: "s-1", Alias: "Alias", Courses: []ParentReportCourse{course}}
-	run := &ParentRun{Report: ParentReportPacket{AsOf: now.Format(time.RFC3339), Scope: parentTestScope(now)}, students: map[string]ParentReportStudent{rs.Ref: rs}}
-	sd := ParentStudentDraft{Ref: rs.Ref, Decision: "send", Missing: []ParentItemRef{{AssignmentID: 1}}, Corrections: []ParentItemRef{{AssignmentID: 2}}, History: []ParentItemRef{{AssignmentID: 1}}}
-	student := workspace.Student{Name: "Ada Lovelace", FirstName: "Ada"}
-	for name, rendered := range map[string]Rendered{"email": run.Render(sd, student)} {
-		html := rendered.HTML
-		missing := strings.Index(html, ">Missing/0</h3>")
-		corrections := strings.Index(html, ">Corrections")
-		history := strings.Index(html, ">Work due in this period</h3>")
-		if missing < 0 || corrections <= missing || history <= corrections {
-			t.Fatalf("%s: expected Missing/0, corrections, history order: %s", name, html)
-		}
-		if strings.Contains(html, "turn these in") || strings.Contains(html, "not turned in") || strings.Contains(html, "Nothing is missing") {
-			t.Fatalf("%s: a submitted zero must not be described as unsubmitted: %s", name, html)
-		}
-		if strings.Contains(html[corrections:history], "Submitted zero") || !strings.Contains(html[:corrections], "Submitted zero") || !strings.Contains(html[history:], "Submitted zero") {
-			t.Fatalf("%s: zero must appear in Missing/0 and history, without a correction duplicate: %s", name, html)
-		}
-	}
-	// A Missing/0 item selected as a correction is not blocked; it is simply
-	// not shown, because only the report's own corrections render.
-	run.Report.RunID, run.Report.Students, run.Report.Scope = "R1", []ParentReportStudent{rs}, parentTestScope(now)
-	sd.Corrections = []ParentItemRef{{AssignmentID: 1}}
-	run.Drafts = ParentDrafts{Schema: 1, Kind: "parent-drafts", RunID: "R1", Students: []ParentStudentDraft{sd}}
-	if err := run.validate(); err != nil {
-		t.Fatal(err)
-	}
-	html := run.Render(sd, student).HTML
-	if c, h := strings.Index(html, ">Corrections"), strings.Index(html, ">Work due in this period</h3>"); c >= 0 && strings.Contains(html[c:h], "Submitted zero") {
-		t.Fatalf("Missing/0 rendered as a correction: %s", html)
 	}
 }
 
 func parentTestScope(asOf time.Time) *ParentReportScope {
 	loc, _ := time.LoadLocation("America/Chicago")
 	start := time.Date(2026, 10, 13, 0, 0, 0, 0, loc)
-	end := time.Date(2026, 12, 18, 0, 0, 0, 0, loc)
-	recent := asOf.In(loc).AddDate(0, 0, -correctionWindowDays)
-	if start.After(recent) {
-		recent = start
-	}
-	soon := asOf.In(loc).AddDate(0, 0, dueSoonDays)
-	if end.AddDate(0, 0, 1).Before(soon) {
-		soon = end.AddDate(0, 0, 1)
-	}
-	return &ParentReportScope{Timezone: "America/Chicago", PeriodName: "Term 2", PeriodStartDate: "2026-10-13", PeriodEndDate: "2026-12-18", RecentStartAt: recent.Format(time.RFC3339), RecentEndAt: asOf.Format(time.RFC3339), DueSoonEndAt: soon.Format(time.RFC3339)}
-}
-
-func TestLoadParentRunRecomputesAdvisorySkipEligibility(t *testing.T) {
-	svc, dir, _, _ := parentFixtureRun(t)
-	var report ParentReportPacket
-	raw, err := os.ReadFile(filepath.Join(dir, "report.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = json.Unmarshal(raw, &report); err != nil {
-		t.Fatal(err)
-	}
-	for i := range report.Students {
-		report.Students[i].SkipEligible = true // stale metadata must be ignored
-		report.Students[i].Courses[0].CourseScore = str("89")
-	}
-	report.Students[0].Courses[0].Missing = nil
-	raw, _ = json.Marshal(report)
-	if err = os.WriteFile(filepath.Join(dir, "report.json"), raw, 0644); err != nil {
-		t.Fatal(err)
-	}
-	drafts := ParentDrafts{Schema: 1, Kind: "parent-drafts", RunID: "R1"}
-	for _, student := range report.Students {
-		drafts.Students = append(drafts.Students, ParentStudentDraft{Ref: student.Ref, Decision: "skip", Reason: "Teacher requested no email"})
-	}
-	raw, _ = json.Marshal(drafts)
-	if err = os.WriteFile(filepath.Join(dir, "drafts.json"), raw, 0644); err != nil {
-		t.Fatal(err)
-	}
-	run, err := LoadParentRun(svc.Root, dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if run.Config.SkipScore != 90 || run.Report.Students[0].SkipEligible || run.Report.Students[1].SkipEligible {
-		t.Fatalf("default threshold must replace stale true eligibility: %+v", run.Report.Students)
-	}
-	if err = workspace.WriteTeacherDocument(svc.Root, "context/parent-updates.md", ParentConfig{Schema: 1, SkipScore: 85}, ""); err != nil {
-		t.Fatal(err)
-	}
-	run, err = LoadParentRun(svc.Root, dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !run.Report.Students[0].SkipEligible || run.Report.Students[1].SkipEligible || !run.students[report.Students[0].Ref].SkipEligible {
-		t.Fatalf("custom threshold still requires no Missing/0: %+v", run.Report.Students)
-	}
-	if run.Drafts.Students[0].Decision != "skip" || run.Drafts.Students[1].Decision != "skip" {
-		t.Fatal("eligibility metadata must preserve the teacher's decisions")
-	}
+	return &ParentReportScope{Timezone: "America/Chicago", PeriodName: "Term 2", PeriodStartDate: "2026-10-13", PeriodEndDate: "2026-12-18", RecentStartAt: start.Format(time.RFC3339), RecentEndAt: asOf.Format(time.RFC3339)}
 }
 
 func TestGradeSheetShowsCurrentGradeOnly(t *testing.T) {
 	s := "96"
 	now := time.Date(2026, 10, 16, 15, 0, 0, 0, time.UTC)
-	first, current := "70.0", "90.0"
+	current := "90.0"
 	rs := ParentReportStudent{Ref: "s-1", Courses: []ParentReportCourse{{Course: "cs8", Timezone: "America/Chicago", CourseScore: &s,
-		Corrections: []ParentCorrection{{ParentReportItem: ParentReportItem{AssignmentID: 5, Title: "Quiz needing judgment"}}},
-		WorkDue:     []ParentWorkDueItem{{ParentReportItem: ParentReportItem{AssignmentID: 6, Title: "Lab 6", URL: "u6", DueAt: "2026-10-15T18:00:00-05:00"}, Status: "graded", Possible: "100.0", First: &first, Current: &current}},
+		WorkDue: []ParentWorkDueItem{
+			{ParentReportItem: ParentReportItem{AssignmentID: 6, Title: "Lab 6", URL: "u6", DueAt: "2026-10-15T18:00:00-05:00"}, Status: "graded", Possible: "100.0", Current: &current, Submission: "turned_in"},
+			{ParentReportItem: ParentReportItem{AssignmentID: 7, Title: "Lab 7", URL: "u7", DueAt: "2026-10-15T18:00:00-05:00"}, Status: "no_grade", Possible: "10", Submission: "not_turned_in"},
+		},
 	}}}
 	run := &ParentRun{Report: ParentReportPacket{AsOf: now.Format(time.RFC3339), Scope: parentTestScope(now), Students: []ParentReportStudent{rs}}, students: map[string]ParentReportStudent{"s-1": rs}}
 	got := run.RenderStudent(ParentStudentDraft{Ref: "s-1"}, workspace.Student{Name: "Ada Lovelace"}).HTML
-	for _, want := range []string{"Ada Lovelace", "Lab 6", "Thu Oct 15", "90 / 100"} {
+	for _, want := range []string{"Ada Lovelace", "Lab 6", "Thu Oct 15", "90 / 100", "Not turned in"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in %s", want, got)
 		}
 	}
-	for _, unwanted := range []string{"Quiz needing judgment", "70 / 100", "href"} {
-		if strings.Contains(got, unwanted) {
-			t.Fatalf("unexpected %q in %s", unwanted, got)
-		}
+	if strings.Contains(got, "href") {
+		t.Fatalf("unexpected link in %s", got)
 	}
 }
 

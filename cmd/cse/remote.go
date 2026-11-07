@@ -870,12 +870,10 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return code
 		}
 	case "parent-report":
-		fullPeriod := false
+		fullPeriod := true // --full-period is accepted; every report covers the whole term
 		var filtered []string
 		for _, arg := range args {
-			if arg == "--full-period" {
-				fullPeriod = true
-			} else {
+			if arg != "--full-period" {
 				filtered = append(filtered, arg)
 			}
 		}
