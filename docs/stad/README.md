@@ -1,6 +1,6 @@
 # Team points (STAD) plan
 
-Date: 2026-11-08. Status: **proposal; slices 01-06 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
+Date: 2026-11-08. Status: **built in Dev; slices 01-07 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
 
 ## Result
 
@@ -219,7 +219,7 @@ When a slice lands, update `internal/localui/capabilities.go` and [engine-capabi
 | 04 Standings Page | Built in Dev 2026-11-08 (`cse stad publish`, MCP `stad_publish`) | Fake-Canvas test: create unpublished, identical republish writes nothing, update, hold after a live edit, refusal on a ref, an alias or a missing marker | — |
 | 05 Improvement points | Built in Dev 2026-11-08 (inside `stad standings`, when rules.md has `improvement`) | Unit tests: fewer than N, bands, perfect rule, no baseline, same-day items; fake-Canvas loader test for graded_items, quizzes and missing_counts_as | — |
 | 06 Rubric-row evidence | Built in Dev 2026-11-08 (`evidence: rubric_row`) | Unit tests: two rubrics sharing a row match by description, a renamed row is not merged, an unassessed submission is not scored; no fake-Canvas run of the rubric read | — |
-| 07 Playbook | Proposed | — | — |
+| 07 Playbook | Drafted in Dev 2026-11-08 (`workspace-template/playbooks/stad.md`, routed from the shipped `AGENTS.md`) | Playbook tests that cover shipped files | — |
 
 ## Across subjects
 
