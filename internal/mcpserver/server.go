@@ -107,6 +107,13 @@ type ParentReportInput struct {
 	FullPeriod bool     `json:"full_period,omitempty" jsonschema:"Accepted for compatibility; every report now covers the whole current grading period"`
 }
 
+type WorkHabitsInput struct {
+	Course   string   `json:"course" jsonschema:"Configured course nickname"`
+	From     string   `json:"from,omitempty" jsonschema:"First due date, YYYY-MM-DD in the course timezone; default four weeks ago"`
+	To       string   `json:"to,omitempty" jsonschema:"Last due date, YYYY-MM-DD; default today. Work not yet due is never counted"`
+	Students []string `json:"students,omitempty" jsonschema:"Optional student refs; omit for every active student"`
+}
+
 type ParentReviewInput struct {
 	Folder string `json:"folder" jsonschema:"Workspace-relative run folder under courses/ holding report.json and drafts.json for grade updates, or contact.json and prepared audience.json for family contact"`
 }
@@ -273,6 +280,16 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 			args = append(args, "--full-period")
 		}
 		return s.longCommand(ctx, args...)
+	})
+	addActionTool(server, "work_habits", "Read each active student's turn-in record for a course into courses/<course>/work-habits/<run>/habits.json: per week, counts and item lists of due, on_time, late, missing, excused and no_online_submission work. Work due before a student enrolled is listed apart and never counted. Facts only; read-only; students are pseudonymized. Used for sorting groups or teams, parent-update context and who is behind.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in WorkHabitsInput) (TextOutput, error) {
+		args := []string{"work-habits", in.Course}
+		if in.From != "" {
+			args = append(args, "--from", in.From)
+		}
+		if in.To != "" {
+			args = append(args, "--to", in.To)
+		}
+		return s.longCommand(ctx, append(args, in.Students...)...)
 	})
 	addActionTool(server, "copy_module", "Copies one Collab module, by exact title, once into each listed course, using each course's teacher key. Never re-copies. State the module and the course list to the teacher before calling.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CopyModuleInput) (TextOutput, error) {
 		return s.longCommand(ctx, append([]string{"copy-module", in.SourceCourse, in.Module}, in.Courses...)...)
@@ -459,7 +476,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

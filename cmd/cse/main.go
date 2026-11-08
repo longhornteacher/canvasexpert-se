@@ -94,6 +94,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only timing changes; never writes to Canvas
   parent-report COURSE [REF ...] Read this term's assignment facts (score, percent, due date, turned-in evidence) into courses/COURSE/parent-updates/
+  work-habits COURSE [--from DATE] [--to DATE] [REF ...] Read each student's weekly turn-in record (on time, late, missing, excused) into courses/COURSE/work-habits/; default last four weeks
   copy-assignment SOURCE QUERY TARGET [--module-id ID] [--assignment-group-id ID] [--published] Copy with destination files; unpublished by default
   copy-module SOURCE "MODULE" COURSE [COURSE ...] Copy one module by exact title, once, into each course (each teacher's own key); never re-copies
   family-contact-prepare RUN_FOLDER Resolve a free-form contact.json audience against Canvas
@@ -533,7 +534,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "inbox-list": true, "inbox-read": true, "inbox-reply": true, "inbox-set-state": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-quiz": true, "rubrics": true, "pull-rubric": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "copy-module": true, "copy-assignment": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "quiz-accommodations": true, "set-tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true, "replace-text": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "inbox-list": true, "inbox-read": true, "inbox-reply": true, "inbox-set-state": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-quiz": true, "rubrics": true, "pull-rubric": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "work-habits": true, "copy-module": true, "copy-assignment": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "quiz-accommodations": true, "set-tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true, "replace-text": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}

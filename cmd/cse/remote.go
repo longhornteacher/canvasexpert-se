@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "pull-quiz": {2, 2}, "rubrics": {1, 2}, "pull-rubric": {2, 2}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "push-quiz": {2, 3}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "quiz-accommodations": {3, 4}, "set-tags": {1, 2}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}, "replace-text": {5, 200}}
+	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "pull-quiz": {2, 2}, "rubrics": {1, 2}, "pull-rubric": {2, 2}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "work-habits": {1, 200}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "push-quiz": {2, 3}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "quiz-accommodations": {3, 4}, "set-tags": {1, 2}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}, "replace-text": {5, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -869,6 +869,35 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if code != 0 {
 			return code
 		}
+	case "work-habits":
+		var from, to time.Time
+		var refList []string
+		for i := 1; i < len(args); i++ {
+			switch args[i] {
+			case "--from", "--to":
+				if i+1 >= len(args) {
+					return fail(inputError(fmt.Errorf("%s needs a date like 2026-11-02", args[i])), progress)
+				}
+				d, perr := time.Parse("2006-01-02", args[i+1])
+				if perr != nil {
+					return fail(inputError(fmt.Errorf("%s needs a date like 2026-11-02", args[i])), progress)
+				}
+				if args[i] == "--from" {
+					from = d
+				} else {
+					to = d
+				}
+				i++
+			default:
+				refList = append(refList, args[i])
+			}
+		}
+		path, packet, e := service.WorkHabits(ctx, args[0], from, to, refList, time.Now())
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, path)
+		fmt.Fprintf(out, "%d students, %s to %s\n", len(packet.Students), packet.From, packet.To)
 	case "parent-report":
 		fullPeriod := true // --full-period is accepted; every report covers the whole term
 		var filtered []string

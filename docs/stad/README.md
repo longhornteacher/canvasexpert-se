@@ -1,6 +1,6 @@
 # Team points (STAD) plan
 
-Date: 2026-11-08. Status: **proposal; nothing implemented.** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
+Date: 2026-11-08. Status: **proposal; slice 01 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
 
 ## Result
 
@@ -210,7 +210,7 @@ When a slice lands, update `internal/localui/capabilities.go` and [engine-capabi
 
 | Slice | Status | Local evidence | Canvas Live evidence |
 |---|---|---|---|
-| 01 Work-habit facts | Proposed | — | — |
+| 01 Work-habit facts | Built in Dev 2026-11-08 (`cse work-habits`, MCP `work_habits`) | Unit and fake-Canvas tests: override due, excused, stale missing flag, non-online item, enrollment clipping | — |
 | 02 Teams to Canvas | Proposed | — | Book-club group writes live-checked (group-work 01–02) |
 | 03 Points tally | Proposed | — | — |
 | 04 Standings Page | Proposed | — | — |

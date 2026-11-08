@@ -154,7 +154,10 @@ type Enrollment struct {
 	UserID int64      `json:"user_id"`
 	Type   string     `json:"type"`
 	State  string     `json:"enrollment_state"`
-	User   CanvasUser `json:"user"`
+	// CreatedAt is when the enrollment began (RFC 3339); work due before it is
+	// not the student's.
+	CreatedAt string     `json:"created_at"`
+	User      CanvasUser `json:"user"`
 	Grades *struct {
 		CurrentScore *json.Number `json:"current_score"`
 	} `json:"grades"`
