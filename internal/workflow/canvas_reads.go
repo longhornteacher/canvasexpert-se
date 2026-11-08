@@ -157,6 +157,9 @@ type Enrollment struct {
 	// CreatedAt is when the enrollment began (RFC 3339); work due before it is
 	// not the student's.
 	CreatedAt string     `json:"created_at"`
+	// UpdatedAt is when the enrollment last changed; for an inactive or
+	// completed enrollment it is the best available end date.
+	UpdatedAt string     `json:"updated_at"`
 	User      CanvasUser `json:"user"`
 	Grades *struct {
 		CurrentScore *json.Number `json:"current_score"`

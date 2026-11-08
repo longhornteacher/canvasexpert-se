@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/workspace"
 )
 
@@ -231,5 +233,116 @@ func TestSTADTeamsFileRefusesDuplicatesAndBadOrder(t *testing.T) {
 		if err := f.Validate(); err == nil {
 			t.Errorf("%s: expected a refusal", name)
 		}
+	}
+}
+
+func TestSTADStandingsAveragesByActiveMembersAndAppliesAwardCap(t *testing.T) {
+	svc, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("standings made a write: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		enr := func(id int, created string) map[string]any {
+			return map[string]any{"user_id": id, "type": "StudentEnrollment", "enrollment_state": "active", "created_at": created, "user": map[string]any{"id": id, "name": fmt.Sprintf("Student %d", id)}}
+		}
+		sub := func(user, a int, extra map[string]any) map[string]any {
+			m := map[string]any{"user_id": user, "assignment_id": a, "assignment_visible": true}
+			for k, v := range extra {
+				m[k] = v
+			}
+			return m
+		}
+		turned := map[string]any{"attempt": 1, "submitted_at": "2026-11-03T15:00:00Z"}
+		switch r.URL.Path {
+		case "/api/v1/courses/1/enrollments":
+			_ = json.NewEncoder(w).Encode([]any{enr(10, "2026-08-01T00:00:00Z"), enr(11, "2026-08-01T00:00:00Z"), enr(12, "2026-08-01T00:00:00Z"), enr(13, "2026-11-05T00:00:00Z")})
+		case "/api/v1/courses/1/assignments":
+			_ = json.NewEncoder(w).Encode([]any{
+				map[string]any{"id": 1, "name": "First", "published": true, "grading_type": "points", "submission_types": []string{"online_upload"}, "due_at": "2026-11-03T18:00:00Z", "points_possible": 10},
+				map[string]any{"id": 2, "name": "Second", "published": true, "grading_type": "points", "submission_types": []string{"online_upload"}, "due_at": "2026-11-10T18:00:00Z", "points_possible": 10}})
+		case "/api/v1/courses/1/students/submissions":
+			late := map[string]any{"attempt": 1, "submitted_at": "2026-11-04T15:00:00Z", "late": true}
+			_ = json.NewEncoder(w).Encode([]any{
+				sub(10, 1, turned), sub(11, 1, late), sub(12, 1, turned), sub(13, 1, map[string]any{"missing": true}),
+				sub(10, 2, turned), sub(11, 2, map[string]any{"excused": true}), sub(12, 2, turned), sub(13, 2, turned)})
+		default:
+			t.Errorf("unexpected Canvas route %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	})
+	store, _ := workspace.OpenStudents(svc.Root)
+	var refs [4]string
+	for i, id := range []int64{10, 11, 12, 13} {
+		st, err := store.Upsert(svc.Client.Origin(), id, fmt.Sprintf("Student %d", id), "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		refs[i] = st.Ref
+	}
+	_ = store.Save()
+	_ = workspace.WriteTeacherDocument(svc.Root, "context/courses.md", svc.Config, "")
+	writeTeams(t, svc.Root, STADTeamsFile{Schema: 1, GroupSet: "STAD Teams", Rounds: []STADRound{{Name: "Round 1", Starts: "2026-11-02", Teams: []STADTeam{
+		{Name: "Comets", Members: []string{refs[0], refs[1]}},
+		{Name: "Rockets", Members: []string{refs[2], refs[3]}, Joined: map[string]string{refs[3]: "2026-11-05"}}}}}})
+	if err := workspace.WriteTeacherDocument(svc.Root, "context/stad/TEST/awards.md", STADAwardsFile{Schema: 1, Awards: []STADAward{
+		{Date: "2026-11-04", Student: refs[0], Points: domain.MustDecimal("5"), Reason: "vocabulary challenge"},
+		{Date: "2026-11-10", Team: "Comets", Points: domain.MustDecimal("3"), Reason: "hallway cleanup"}}}, ""); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 13, 18, 0, 0, 0, time.UTC)
+	got, err := svc.STADStandings(context.Background(), "TEST", "", "", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Comets: week 1 (1 + 0.5)/2, week 2 1/2 (Student 11 excused), two weekly
+	// bonuses of 2, the award capped at 3 (/2), the team award 3: 9.75.
+	// Rockets: week 1 student 12 alone, 13 not yet on the team: 1; week 2 (1+1)/2; two bonuses: 6.
+	want := map[string][2]string{"Comets": {"9.8", "5.5"}, "Rockets": {"6", "3"}}
+	for _, row := range got.Teams {
+		if row.Visibility != "team" || [2]string{row.ScoreRound, row.ScoreWeek} != want[row.Name] {
+			t.Errorf("%s = round %s week %s, want %v", row.Name, row.ScoreRound, row.ScoreWeek, want[row.Name])
+		}
+	}
+	if got.Teams[0].Name != "Comets" || got.Teams[0].RankRound != 1 || got.Teams[1].RankRound != 2 {
+		t.Fatalf("ranking = %+v", got.Teams)
+	}
+	if len(got.Teacher.Trimmed) != 1 || got.Teacher.Trimmed[0].Given != "5" || got.Teacher.Trimmed[0].Counted != "3" {
+		t.Fatalf("the cap must trim and say so: %+v", got.Teacher.Trimmed)
+	}
+	if got.Teacher.Visibility != "teacher" || len(got.Teacher.Students) != 4 {
+		t.Fatalf("teacher view = %+v", got.Teacher)
+	}
+	for _, d := range got.Teacher.Teams {
+		if !d.BonusProvisional {
+			t.Errorf("%s: the running week's bonus should be marked provisional", d.Name)
+		}
+	}
+}
+
+func TestSTADRankSharesTies(t *testing.T) {
+	teams := []STADTeamScore{{exactRound: big.NewRat(5, 1)}, {exactRound: big.NewRat(5, 1)}, {exactRound: big.NewRat(2, 1)}}
+	rank(teams, func(x *STADTeamScore) *big.Rat { return x.exactRound }, func(x *STADTeamScore, r int) { x.RankRound = r })
+	if teams[0].RankRound != 1 || teams[1].RankRound != 1 || teams[2].RankRound != 3 {
+		t.Fatalf("ranks = %d %d %d", teams[0].RankRound, teams[1].RankRound, teams[2].RankRound)
+	}
+}
+
+func TestSTADRulesDefaultsAndValidation(t *testing.T) {
+	root := t.TempDir()
+	if r, err := ReadSTADRules(root, "TEST"); err != nil || r.Effort.Late.String() != "0.5" || r.Awards.CapPerStudentPerWeek.String() != "3" {
+		t.Fatalf("a missing rules file means the defaults: %+v %v", r, err)
+	}
+	bad := defaultSTADRules()
+	bad.Improve = &STADImprovement{Evidence: "quizzes", Baseline: "mean_of_last 3", Bands: []STADBand{{Points: domain.MustDecimal("1")}}}
+	if err := bad.Validate(); err == nil {
+		t.Fatal("a band list with no otherwise band must be refused")
+	}
+	bad.Improve.Bands = []STADBand{{AtLeast: &[]domain.Decimal{domain.MustDecimal("0")}[0], Points: domain.MustDecimal("2")}, {Otherwise: true, Points: domain.MustDecimal("0")}}
+	if err := bad.Validate(); err != nil {
+		t.Fatalf("valid improvement rules refused: %v", err)
+	}
+	bad.Improve.Evidence = "vibes"
+	if err := bad.Validate(); err == nil {
+		t.Fatal("an unknown evidence kind must be refused")
 	}
 }

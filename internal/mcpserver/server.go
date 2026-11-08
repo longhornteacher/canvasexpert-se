@@ -118,6 +118,12 @@ type STADCourseInput struct {
 	Course string `json:"course" jsonschema:"Configured course nickname"`
 }
 
+type STADStandingsInput struct {
+	Course string `json:"course" jsonschema:"Configured course nickname"`
+	Week   string `json:"week,omitempty" jsonschema:"Any date in the week to report, YYYY-MM-DD; default the latest week of the round"`
+	Round  string `json:"round,omitempty" jsonschema:"Round name from teams.md; default the current round"`
+}
+
 type ParentReviewInput struct {
 	Folder string `json:"folder" jsonschema:"Workspace-relative run folder under courses/ holding report.json and drafts.json for grade updates, or contact.json and prepared audience.json for family contact"`
 }
@@ -297,6 +303,16 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	})
 	addActionTool(server, "stad_teams", "Check the course's classroom team file (context/stad/<course>/teams.md) against its active students: current round, any student_ref that is not active, and active students on no team. Read-only.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in STADCourseInput) (TextOutput, error) {
 		return s.longCommand(ctx, "stad", "teams", in.Course)
+	})
+	addActionTool(server, "stad_standings", "Tally classroom team points for a round from Canvas turn-in facts, rules.md and awards.md: team scores (average over active members) with ranks and ties, plus teacher-only per-student detail and any award the weekly cap trimmed. Fields tagged visibility team are safe for students; teacher fields are not. Read-only.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in STADStandingsInput) (TextOutput, error) {
+		args := []string{"stad", "standings", in.Course}
+		if in.Week != "" {
+			args = append(args, "--week", in.Week)
+		}
+		if in.Round != "" {
+			args = append(args, "--round", in.Round)
+		}
+		return s.longCommand(ctx, args...)
 	})
 	addActionTool(server, "stad_push_teams", "Make the Canvas group set named in teams.md match the current team round: creates the set and one group per team when missing, renames a group whose team was renamed, and places each member. Adds and moves only; never deletes a group or removes a student. Show the teacher the teams first and wait for their go-ahead.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in STADCourseInput) (TextOutput, error) {
 		return s.longCommand(ctx, "stad", "push-teams", in.Course)
@@ -486,7 +502,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "stad_teams", "stad_push_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "stad_teams", "stad_standings", "stad_push_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

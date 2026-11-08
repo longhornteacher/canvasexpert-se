@@ -1,6 +1,6 @@
 # Team points (STAD) plan
 
-Date: 2026-11-08. Status: **proposal; slices 01-02 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
+Date: 2026-11-08. Status: **proposal; slices 01-03 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
 
 ## Result
 
@@ -142,6 +142,8 @@ Build them in order. Slices 01–04 give effort-only team points, which is enoug
   - Per team: total and per-member average, rank, with ties shared.
   - Per student (teacher-only): effort points, improvement points (once slice 05 lands), awards, awards trimmed by the cap, and team-bonus contributions.
   - Totals for both the week and the round.
+- **Team awards and bonuses** are added to the team score directly, not averaged. Student awards are student points, so they are averaged like any other. A week still running gets a provisional `all_turned_in` bonus, judged on work due so far.
+- **Leaving students:** an inactive or completed enrollment ends on its Canvas `updated_at` date. Only currently active students' turn-in facts are read, so a student who has left contributes no past effort points, and the divisor still counts them for days they were active.
 - **Math:** exact decimals. The team score is the sum of active members' points divided by active members on each day the points were earned. That's equivalent to averaging per week when membership is stable, and it stays fair when a student joins mid-week. Rounding happens only for display, to one decimal place.
 - **Output fields carry a `visibility` tag** (`team` or `teacher`). Slice 04 publishes only `team` fields.
 - **Checks:**
@@ -212,7 +214,7 @@ When a slice lands, update `internal/localui/capabilities.go` and [engine-capabi
 |---|---|---|---|
 | 01 Work-habit facts | Built in Dev 2026-11-08 (`cse work-habits`, MCP `work_habits`) | Unit and fake-Canvas tests: override due, excused, stale missing flag, non-online item, enrollment clipping | — |
 | 02 Teams to Canvas | Built in Dev 2026-11-08 (`cse stad teams`, `cse stad push-teams`; MCP `stad_teams`, `stad_push_teams`) | Fake-Canvas tests: create, reshuffle with rename by shared members, move one student, quiet rerun, hold on unknown ref | Book-club group writes live-checked (group-work 01–02) |
-| 03 Points tally | Proposed | — | — |
+| 03 Points tally | Built in Dev 2026-11-08 (`cse stad standings`, MCP `stad_standings`); improvement points arrive with slice 05 | Fake-Canvas test: uneven teams, mid-round joiner, award cap and trim report, weekly bonus with an excused member, tie ranking, rules defaults and validation | — |
 | 04 Standings Page | Proposed | — | — |
 | 05 Improvement points | Proposed | — | — |
 | 06 Rubric-row evidence | Proposed | — | — |

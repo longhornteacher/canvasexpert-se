@@ -76,13 +76,35 @@ type WorkHabitItem struct {
 // default to the four weeks ending now. Work not yet due at now is never
 // counted. refs, when given, limits the record to those student refs.
 func (s *Service) WorkHabits(ctx context.Context, nickname string, from, to time.Time, refs []string, now time.Time) (string, WorkHabitsPacket, error) {
-	course, e := s.Course(nickname)
+	packet, e := s.workHabitsPacket(ctx, nickname, from, to, refs, now)
 	if e != nil {
 		return "", WorkHabitsPacket{}, e
 	}
+	rel := filepath.Join("courses", packet.Course, "work-habits", packet.RunID, "habits.json")
+	path, e := workspace.ConstrainPath(s.Root, rel)
+	if e != nil {
+		return "", packet, e
+	}
+	b, e := json.MarshalIndent(packet, "", "  ")
+	if e != nil {
+		return "", packet, e
+	}
+	if e = workspace.WriteFile(path, append(b, '\n'), 0644); e != nil {
+		return "", packet, e
+	}
+	return path, packet, nil
+}
+
+// workHabitsPacket does the Canvas reads and classification without saving a
+// file, so other tallies (STAD standings) can reuse the same facts.
+func (s *Service) workHabitsPacket(ctx context.Context, nickname string, from, to time.Time, refs []string, now time.Time) (WorkHabitsPacket, error) {
+	course, e := s.Course(nickname)
+	if e != nil {
+		return WorkHabitsPacket{}, e
+	}
 	scoped, e := s.ForCourse(ctx, course)
 	if e != nil {
-		return "", WorkHabitsPacket{}, e
+		return WorkHabitsPacket{}, e
 	}
 	s = scoped
 	zone := course.Timezone
@@ -91,7 +113,7 @@ func (s *Service) WorkHabits(ctx context.Context, nickname string, from, to time
 	}
 	loc, e := time.LoadLocation(zone)
 	if e != nil {
-		return "", WorkHabitsPacket{}, fmt.Errorf("unknown course timezone %q", zone)
+		return WorkHabitsPacket{}, fmt.Errorf("unknown course timezone %q", zone)
 	}
 	nowLocal := now.In(loc)
 	if to.IsZero() {
@@ -107,7 +129,7 @@ func (s *Service) WorkHabits(ctx context.Context, nickname string, from, to time
 	}
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, loc)
 	if to.Before(from) {
-		return "", WorkHabitsPacket{}, fmt.Errorf("the end date is before the start date")
+		return WorkHabitsPacket{}, fmt.Errorf("the end date is before the start date")
 	}
 
 	want := map[string]bool{}
@@ -116,11 +138,11 @@ func (s *Service) WorkHabits(ctx context.Context, nickname string, from, to time
 	}
 	students, e := workspace.OpenStudents(s.Root)
 	if e != nil {
-		return "", WorkHabitsPacket{}, e
+		return WorkHabitsPacket{}, e
 	}
 	enrollments, e := StudentEnrollments(ctx, s.Client, course.ID)
 	if e != nil {
-		return "", WorkHabitsPacket{}, e
+		return WorkHabitsPacket{}, e
 	}
 	type enrolled struct {
 		st      workspace.Student
@@ -142,7 +164,7 @@ func (s *Service) WorkHabits(ctx context.Context, nickname string, from, to time
 		}
 		st, e := students.Upsert(s.Client.Origin(), id, en.User.Name, en.User.ShortName, en.User.SISID, en.User.Login)
 		if e != nil {
-			return "", WorkHabitsPacket{}, e
+			return WorkHabitsPacket{}, e
 		}
 		if len(want) > 0 && !want[st.Ref] {
 			continue
@@ -160,17 +182,17 @@ func (s *Service) WorkHabits(ctx context.Context, nickname string, from, to time
 		byUser[id] = &enrolled{st, started}
 	}
 	if e = students.Save(); e != nil {
-		return "", WorkHabitsPacket{}, e
+		return WorkHabitsPacket{}, e
 	}
 	for r := range want {
 		if !matched[r] {
-			return "", WorkHabitsPacket{}, fmt.Errorf("student %s is not an active student in %s", r, course.Nickname)
+			return WorkHabitsPacket{}, fmt.Errorf("student %s is not an active student in %s", r, course.Nickname)
 		}
 	}
 
 	assignments, e := parentAssignments(ctx, s.Client, course.ID)
 	if e != nil {
-		return "", WorkHabitsPacket{}, e
+		return WorkHabitsPacket{}, e
 	}
 	byAssignment := map[int64]Assignment{}
 	for _, a := range assignments {
@@ -178,7 +200,7 @@ func (s *Service) WorkHabits(ctx context.Context, nickname string, from, to time
 	}
 	subs, e := courseSubmissions(ctx, s.Client, course.ID)
 	if e != nil {
-		return "", WorkHabitsPacket{}, e
+		return WorkHabitsPacket{}, e
 	}
 	perStudent := map[int64][]Submission{}
 	for _, sub := range subs {
@@ -200,19 +222,7 @@ func (s *Service) WorkHabits(ctx context.Context, nickname string, from, to time
 		packet.Notes = append(packet.Notes, "no active students matched")
 	}
 
-	rel := filepath.Join("courses", course.Nickname, "work-habits", packet.RunID, "habits.json")
-	path, e := workspace.ConstrainPath(s.Root, rel)
-	if e != nil {
-		return "", packet, e
-	}
-	b, e := json.MarshalIndent(packet, "", "  ")
-	if e != nil {
-		return "", packet, e
-	}
-	if e = workspace.WriteFile(path, append(b, '\n'), 0644); e != nil {
-		return "", packet, e
-	}
-	return path, packet, nil
+	return packet, nil
 }
 
 // buildWorkHabits classifies each published, visible assignment whose effective
