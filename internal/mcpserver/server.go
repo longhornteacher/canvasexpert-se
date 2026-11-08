@@ -124,6 +124,13 @@ type STADStandingsInput struct {
 	Round  string `json:"round,omitempty" jsonschema:"Round name from teams.md; default the current round"`
 }
 
+type STADPublishInput struct {
+	Course    string `json:"course" jsonschema:"Configured course nickname"`
+	PageTitle string `json:"page_title" jsonschema:"Title of the standings Page"`
+	Body      string `json:"body" jsonschema:"Workspace-relative Markdown file for the page body, containing {{standings}} where the computed table goes; it must not name any student"`
+	Published bool   `json:"published,omitempty" jsonschema:"Publish a new Page only when the teacher asks; default unpublished"`
+}
+
 type ParentReviewInput struct {
 	Folder string `json:"folder" jsonschema:"Workspace-relative run folder under courses/ holding report.json and drafts.json for grade updates, or contact.json and prepared audience.json for family contact"`
 }
@@ -311,6 +318,13 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		if in.Round != "" {
 			args = append(args, "--round", in.Round)
+		}
+		return s.longCommand(ctx, args...)
+	})
+	addActionTool(server, "stad_publish", "Create or update the course's team standings Page: your body with the computed standings table (team names, ranks, team scores only) inserted at {{standings}}. Refuses a body that names a student (reference or alias). Remembers the Page and holds instead of overwriting if someone edited it in Canvas since. A new Page is unpublished unless the teacher asked to publish. Show the teacher the wording first.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in STADPublishInput) (TextOutput, error) {
+		args := []string{"stad", "publish", in.Course, "--page-title", in.PageTitle, "--body", in.Body}
+		if in.Published {
+			args = append(args, "--published")
 		}
 		return s.longCommand(ctx, args...)
 	})
@@ -502,7 +516,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "stad_teams", "stad_standings", "stad_push_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "stad_teams", "stad_standings", "stad_publish", "stad_push_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

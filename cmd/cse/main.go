@@ -97,6 +97,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   work-habits COURSE [--from DATE] [--to DATE] [REF ...] Read each student's weekly turn-in record (on time, late, missing, excused) into courses/COURSE/work-habits/; default last four weeks
   stad teams COURSE             Check context/stad/COURSE/teams.md against the course's active students; read-only
   stad standings COURSE [--week DATE] [--round NAME] Tally team points (effort, awards, bonuses) for a round; read-only
+  stad publish COURSE --page-title TITLE --body FILE [--published] Publish the team standings Page (body holds {{standings}}); teams only, never students
   stad push-teams COURSE        Make the Canvas group set match the current team round (adds and moves; never deletes)
   copy-assignment SOURCE QUERY TARGET [--module-id ID] [--assignment-group-id ID] [--published] Copy with destination files; unpublished by default
   copy-module SOURCE "MODULE" COURSE [COURSE ...] Copy one module by exact title, once, into each course (each teacher's own key); never re-copies

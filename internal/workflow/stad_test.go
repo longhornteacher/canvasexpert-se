@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -236,8 +238,8 @@ func TestSTADTeamsFileRefusesDuplicatesAndBadOrder(t *testing.T) {
 	}
 }
 
-func TestSTADStandingsAveragesByActiveMembersAndAppliesAwardCap(t *testing.T) {
-	svc, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+func stadStandingsRoutes(t *testing.T) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("standings made a write: %s %s", r.Method, r.URL.Path)
 		}
@@ -269,7 +271,13 @@ func TestSTADStandingsAveragesByActiveMembersAndAppliesAwardCap(t *testing.T) {
 			t.Errorf("unexpected Canvas route %s", r.URL.Path)
 			http.NotFound(w, r)
 		}
-	})
+	}
+}
+
+// stadStandingsFixture is a course with two teams, a mid-round joiner, an
+// excused member and two awards (see the standings test for the arithmetic).
+func stadStandingsFixture(t *testing.T, handler http.HandlerFunc) (*Service, [4]string) {
+	svc, _ := workflowFixture(t, handler)
 	store, _ := workspace.OpenStudents(svc.Root)
 	var refs [4]string
 	for i, id := range []int64{10, 11, 12, 13} {
@@ -289,6 +297,12 @@ func TestSTADStandingsAveragesByActiveMembersAndAppliesAwardCap(t *testing.T) {
 		{Date: "2026-11-10", Team: "Comets", Points: domain.MustDecimal("3"), Reason: "hallway cleanup"}}}, ""); err != nil {
 		t.Fatal(err)
 	}
+	return svc, refs
+}
+
+func TestSTADStandingsAveragesByActiveMembersAndAppliesAwardCap(t *testing.T) {
+	svc, refs := stadStandingsFixture(t, stadStandingsRoutes(t))
+	_ = refs
 	now := time.Date(2026, 11, 13, 18, 0, 0, 0, time.UTC)
 	got, err := svc.STADStandings(context.Background(), "TEST", "", "", now)
 	if err != nil {
@@ -344,5 +358,87 @@ func TestSTADRulesDefaultsAndValidation(t *testing.T) {
 	bad.Improve.Evidence = "vibes"
 	if err := bad.Validate(); err == nil {
 		t.Fatal("an unknown evidence kind must be refused")
+	}
+}
+
+func TestSTADPublishCreatesUpdatesHoldsAndRefusesStudentNames(t *testing.T) {
+	routes := stadStandingsRoutes(t)
+	page := map[string]any{"page_id": 7, "url": "team-standings", "title": "", "body": "", "published": false, "updated_at": "2026-11-13T10:00:00Z"}
+	exists := false
+	posts, puts := 0, 0
+	svc, refs := stadStandingsFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v1/courses/1/pages" && r.Method == http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte("[]"))
+		case r.URL.Path == "/api/v1/courses/1/pages" && r.Method == http.MethodPost:
+			posts++
+			var in struct {
+				WikiPage map[string]any `json:"wiki_page"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&in)
+			page["title"], page["body"], page["published"], exists = in.WikiPage["title"], in.WikiPage["body"], in.WikiPage["published"], true
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(page)
+		case r.URL.Path == "/api/v1/courses/1/pages/page_id:7" && exists:
+			w.Header().Set("Content-Type", "application/json")
+			if r.Method == http.MethodPut {
+				puts++
+				var in struct {
+					WikiPage map[string]any `json:"wiki_page"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&in)
+				page["title"], page["body"] = in.WikiPage["title"], in.WikiPage["body"]
+				page["updated_at"] = fmt.Sprintf("2026-11-13T10:0%d:00Z", puts)
+			}
+			_ = json.NewEncoder(w).Encode(page)
+		default:
+			routes(w, r)
+		}
+	})
+	body := filepath.Join(t.TempDir(), "body.md")
+	write := func(text string) {
+		if err := os.WriteFile(body, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Date(2026, 11, 13, 18, 0, 0, 0, time.UTC)
+	ctx := context.Background()
+
+	write("Great week, teams!\n\n{{standings}}\n\nKeep going.")
+	rep, err := svc.STADPublish(ctx, "TEST", "Team Standings", body, false, now)
+	if err != nil || rep.Status != "created" || posts != 1 || page["published"] != false {
+		t.Fatalf("create = %+v err=%v", rep, err)
+	}
+	html := page["body"].(string)
+	if !strings.Contains(html, "<td>Comets</td>") || !strings.Contains(html, "<td>9.8</td>") || strings.Contains(html, "{{standings}}") || strings.Contains(html, refs[0]) {
+		t.Fatalf("page body = %s", html)
+	}
+	rep, err = svc.STADPublish(ctx, "TEST", "Team Standings", body, false, now)
+	if err != nil || rep.Status != "unchanged" || puts != 0 {
+		t.Fatalf("an identical republish must not write: %+v err=%v puts=%d", rep, err, puts)
+	}
+	write("New wording.\n\n{{standings}}")
+	rep, err = svc.STADPublish(ctx, "TEST", "Team Standings", body, false, now)
+	if err != nil || rep.Status != "updated" || puts != 1 {
+		t.Fatalf("update = %+v err=%v", rep, err)
+	}
+	page["updated_at"] = "2026-11-13T11:00:00Z" // someone edits the page in Canvas
+	write("Third wording.\n\n{{standings}}")
+	rep, err = svc.STADPublish(ctx, "TEST", "Team Standings", body, false, now)
+	if err != nil || rep.Status != "held" || puts != 1 {
+		t.Fatalf("a live edit must hold the update: %+v err=%v puts=%d", rep, err, puts)
+	}
+	store, _ := workspace.OpenStudents(svc.Root)
+	alias := store.Rows[0].Alias
+	for _, text := range []string{"Shout-out to " + refs[1] + "!\n\n{{standings}}", "Shout-out to " + strings.ToLower(alias) + "!\n\n{{standings}}"} {
+		write(text)
+		if _, err = svc.STADPublish(ctx, "TEST", "Team Standings", body, false, now); err == nil {
+			t.Fatalf("a body naming a student must be refused: %q", text)
+		}
+	}
+	write("No table here")
+	if _, err = svc.STADPublish(ctx, "TEST", "Team Standings", body, false, now); err == nil {
+		t.Fatal("a body without the marker must be refused")
 	}
 }

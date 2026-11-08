@@ -1,6 +1,6 @@
 # Team points (STAD) plan
 
-Date: 2026-11-08. Status: **proposal; slices 01-03 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
+Date: 2026-11-08. Status: **proposal; slices 01-04 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
 
 ## Result
 
@@ -215,7 +215,7 @@ When a slice lands, update `internal/localui/capabilities.go` and [engine-capabi
 | 01 Work-habit facts | Built in Dev 2026-11-08 (`cse work-habits`, MCP `work_habits`) | Unit and fake-Canvas tests: override due, excused, stale missing flag, non-online item, enrollment clipping | — |
 | 02 Teams to Canvas | Built in Dev 2026-11-08 (`cse stad teams`, `cse stad push-teams`; MCP `stad_teams`, `stad_push_teams`) | Fake-Canvas tests: create, reshuffle with rename by shared members, move one student, quiet rerun, hold on unknown ref | Book-club group writes live-checked (group-work 01–02) |
 | 03 Points tally | Built in Dev 2026-11-08 (`cse stad standings`, MCP `stad_standings`); improvement points arrive with slice 05 | Fake-Canvas test: uneven teams, mid-round joiner, award cap and trim report, weekly bonus with an excused member, tie ranking, rules defaults and validation | — |
-| 04 Standings Page | Proposed | — | — |
+| 04 Standings Page | Built in Dev 2026-11-08 (`cse stad publish`, MCP `stad_publish`) | Fake-Canvas test: create unpublished, identical republish writes nothing, update, hold after a live edit, refusal on a ref, an alias or a missing marker | — |
 | 05 Improvement points | Proposed | — | — |
 | 06 Rubric-row evidence | Proposed | — | — |
 | 07 Playbook | Proposed | — | — |
