@@ -1,6 +1,6 @@
 # Team points (STAD) plan
 
-Date: 2026-11-08. Status: **proposal; slices 01-04 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
+Date: 2026-11-08. Status: **proposal; slices 01-06 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
 
 ## Result
 
@@ -170,6 +170,7 @@ Build them in order. Slices 01–04 give effort-only team points, which is enoug
   - Ungraded, unreleased and excused items are not scored items.
 - **Baseline:** `mean_of_last N` takes the N most recent scored items **due before** the item being scored. That makes the baseline deterministic and keeps it from reaching into the future.
 - **First items:** a student's first scored item has no baseline. It earns the second band's points (matching STAD's "start at the middle"), which the rules can change with `no_baseline_points`.
+- **Built as:** `quizzes` evidence means New Quiz assignments (`is_quiz_lti_assignment`) or assignments with a `quiz_id`. A missing item with `missing_counts_as: zero` is a scored 0% item; with `none` it earns nothing and does not enter baselines. Items with no due date are not scored. Per-item rows appear in the teacher-only view.
 - **Output:** per scored item, the student's percent, baseline, difference, band and points, so a teacher can see why a student earned what they did.
 - **Checks:** fewer items than N, missing items handled both ways, the perfect-score rule, a regrade after a later item was scored, and a late item that is scored but due earlier.
 
@@ -216,8 +217,8 @@ When a slice lands, update `internal/localui/capabilities.go` and [engine-capabi
 | 02 Teams to Canvas | Built in Dev 2026-11-08 (`cse stad teams`, `cse stad push-teams`; MCP `stad_teams`, `stad_push_teams`) | Fake-Canvas tests: create, reshuffle with rename by shared members, move one student, quiet rerun, hold on unknown ref | Book-club group writes live-checked (group-work 01–02) |
 | 03 Points tally | Built in Dev 2026-11-08 (`cse stad standings`, MCP `stad_standings`); improvement points arrive with slice 05 | Fake-Canvas test: uneven teams, mid-round joiner, award cap and trim report, weekly bonus with an excused member, tie ranking, rules defaults and validation | — |
 | 04 Standings Page | Built in Dev 2026-11-08 (`cse stad publish`, MCP `stad_publish`) | Fake-Canvas test: create unpublished, identical republish writes nothing, update, hold after a live edit, refusal on a ref, an alias or a missing marker | — |
-| 05 Improvement points | Proposed | — | — |
-| 06 Rubric-row evidence | Proposed | — | — |
+| 05 Improvement points | Built in Dev 2026-11-08 (inside `stad standings`, when rules.md has `improvement`) | Unit tests: fewer than N, bands, perfect rule, no baseline, same-day items; fake-Canvas loader test for graded_items, quizzes and missing_counts_as | — |
+| 06 Rubric-row evidence | Built in Dev 2026-11-08 (`evidence: rubric_row`) | Unit tests: two rubrics sharing a row match by description, a renamed row is not merged, an unassessed submission is not scored; no fake-Canvas run of the rubric read | — |
 | 07 Playbook | Proposed | — | — |
 
 ## Across subjects

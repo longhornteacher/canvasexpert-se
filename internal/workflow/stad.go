@@ -190,6 +190,19 @@ func courseToday(zone string, now time.Time) string {
 // activeStudents maps student_ref to the saved student for every active
 // StudentEnrollment, registering new students in the roster as other reads do.
 func (s *Service) activeStudents(ctx context.Context, courseID int64) (map[string]workspace.Student, error) {
+	byUser, err := s.activeStudentsByUser(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]workspace.Student{}
+	for _, st := range byUser {
+		out[st.Ref] = st
+	}
+	return out, nil
+}
+
+// activeStudentsByUser maps Canvas user ID to the saved student.
+func (s *Service) activeStudentsByUser(ctx context.Context, courseID int64) (map[int64]workspace.Student, error) {
 	enrollments, err := StudentEnrollments(ctx, s.Client, courseID)
 	if err != nil {
 		return nil, err
@@ -198,7 +211,7 @@ func (s *Service) activeStudents(ctx context.Context, courseID int64) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]workspace.Student{}
+	out := map[int64]workspace.Student{}
 	for _, en := range enrollments {
 		if en.State != "active" || en.Type != "StudentEnrollment" {
 			continue
@@ -214,7 +227,7 @@ func (s *Service) activeStudents(ctx context.Context, courseID int64) (map[strin
 		if e != nil {
 			return nil, e
 		}
-		out[st.Ref] = st
+		out[id] = st
 	}
 	return out, store.Save()
 }

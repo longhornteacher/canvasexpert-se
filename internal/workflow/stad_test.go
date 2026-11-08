@@ -442,3 +442,129 @@ func TestSTADPublishCreatesUpdatesHoldsAndRefusesStudentNames(t *testing.T) {
 		t.Fatal("a body without the marker must be refused")
 	}
 }
+
+func band(atLeast string, points string) STADBand {
+	d := domain.MustDecimal(atLeast)
+	return STADBand{AtLeast: &d, Points: domain.MustDecimal(points)}
+}
+
+func stadBands() STADImprovement {
+	return STADImprovement{Evidence: "graded_items", Baseline: "mean_of_last 3", Bands: []STADBand{
+		band("10", "3"), band("0", "2"), band("-10", "1"), {Otherwise: true, Points: domain.MustDecimal("0")}},
+		Perfect: &STADPerfect{AtLeastPercent: domain.MustDecimal("100"), Points: domain.MustDecimal("3")}}
+}
+
+func pct(n int64) *big.Rat { return big.NewRat(n, 1) }
+
+func TestScoreImprovementBaselineBandsAndPerfect(t *testing.T) {
+	items := []stadScored{
+		{AssignmentID: 1, Due: "2026-11-02", Percent: pct(80)},  // first item: no baseline, second band
+		{AssignmentID: 2, Due: "2026-11-04", Percent: pct(95)},  // +15 over 80: top band
+		{AssignmentID: 3, Due: "2026-11-06", Percent: pct(80)},  // baseline mean(80,95)=87.5, -7.5: third band
+		{AssignmentID: 4, Due: "2026-11-09", Percent: pct(100)}, // baseline mean(80,95,80)=85: +15 and perfect
+		{AssignmentID: 5, Due: "2026-11-11", Percent: pct(60)},  // baseline last 3 = (95,80,100)=91.67: otherwise
+		{AssignmentID: 6, Due: "2026-11-11", Percent: pct(100)}, // same due date as 5: not each other's baseline; perfect
+	}
+	rows, err := scoreImprovement(items, stadBands())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []struct{ band, points string }{{"no_baseline", "2"}, {"at_least 10", "3"}, {"at_least -10", "1"}, {"at_least 10", "3"}, {"otherwise", "0"}, {"perfect", "3"}}
+	for i, w := range want {
+		if rows[i].Band != w.band || rows[i].Points != w.points {
+			t.Errorf("item %d = %s/%s, want %s/%s (%+v)", i+1, rows[i].Band, rows[i].Points, w.band, w.points, rows[i])
+		}
+	}
+	if rows[2].Baseline != "87.5" || rows[2].Difference != "-7.5" {
+		t.Errorf("item 3 baseline %s difference %s", rows[2].Baseline, rows[2].Difference)
+	}
+	if rows[5].Baseline != rows[4].Baseline {
+		t.Errorf("same-day items must share a baseline: %s vs %s", rows[4].Baseline, rows[5].Baseline)
+	}
+	// A rules-set no_baseline_points overrides the middle-band default.
+	im := stadBands()
+	zero := domain.MustDecimal("1")
+	im.NoBaselinePoints = &zero
+	rows, _ = scoreImprovement(items[:1], im)
+	if rows[0].Points != "1" {
+		t.Fatalf("no_baseline_points ignored: %+v", rows[0])
+	}
+}
+
+func TestRubricRowPercentMatchesExactDescriptionOnly(t *testing.T) {
+	crit := func(id, desc string) Criterion { return Criterion{ID: id, Description: desc, Points: "4"} }
+	score := func(id string, p string) map[string]RubricScore {
+		n := json.Number(p)
+		return map[string]RubricScore{id: {Points: &n}}
+	}
+	a1 := Assignment{Rubric: []Criterion{crit("c1", "Uses evidence"), crit("c2", "Organization")}}
+	a2 := Assignment{Rubric: []Criterion{crit("zz", "Uses evidence")}}   // a different rubric sharing the row
+	a3 := Assignment{Rubric: []Criterion{crit("c9", "Using evidence")}}  // renamed row: not merged
+	if p, ok := rubricRowPercent(a1, Submission{RubricAssessment: score("c1", "3")}, "Uses evidence"); !ok || p.Cmp(pct(75)) != 0 {
+		t.Fatalf("first rubric = %v %v", p, ok)
+	}
+	if p, ok := rubricRowPercent(a2, Submission{RubricAssessment: score("zz", "4")}, "Uses evidence"); !ok || p.Cmp(pct(100)) != 0 {
+		t.Fatalf("second rubric must match by description, not criterion ID: %v %v", p, ok)
+	}
+	if _, ok := rubricRowPercent(a3, Submission{RubricAssessment: score("c9", "4")}, "Uses evidence"); ok {
+		t.Fatal("a renamed row must not be merged")
+	}
+	if _, ok := rubricRowPercent(a1, Submission{}, "Uses evidence"); ok {
+		t.Fatal("an unassessed submission is not scored")
+	}
+}
+
+func TestSTADScoredItemsHonorsEvidenceAndMissingRule(t *testing.T) {
+	svc, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		sub := func(a int, extra map[string]any) map[string]any {
+			m := map[string]any{"user_id": 10, "assignment_id": a, "assignment_visible": true}
+			for k, v := range extra {
+				m[k] = v
+			}
+			return m
+		}
+		switch r.URL.Path {
+		case "/api/v1/courses/1/enrollments":
+			_ = json.NewEncoder(w).Encode([]any{map[string]any{"user_id": 10, "type": "StudentEnrollment", "enrollment_state": "active", "user": map[string]any{"id": 10, "name": "S"}}})
+		case "/api/v1/courses/1/assignments":
+			mk := func(id int, name, due string, quiz bool) map[string]any {
+				return map[string]any{"id": id, "name": name, "published": true, "grading_type": "points", "submission_types": []string{"online_upload"}, "due_at": due, "points_possible": 10, "is_quiz_lti_assignment": quiz}
+			}
+			_ = json.NewEncoder(w).Encode([]any{mk(1, "Quiz one", "2026-11-03T18:00:00Z", true), mk(2, "Essay", "2026-11-05T18:00:00Z", false), mk(3, "Quiz two", "2026-11-09T18:00:00Z", true), mk(4, "Future", "2026-12-30T18:00:00Z", false)})
+		case "/api/v1/courses/1/students/submissions":
+			turned := map[string]any{"attempt": 1, "submitted_at": "2026-11-03T15:00:00Z"}
+			_ = json.NewEncoder(w).Encode([]any{
+				sub(1, map[string]any{"score": 8, "attempt": 1, "submitted_at": turned["submitted_at"]}),
+				sub(2, map[string]any{"score": 9, "attempt": 1, "submitted_at": turned["submitted_at"]}),
+				sub(3, map[string]any{"missing": true}), sub(4, nil)})
+		default:
+			t.Errorf("unexpected route %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	})
+	_ = workspace.WriteTeacherDocument(svc.Root, "context/courses.md", svc.Config, "")
+	now := time.Date(2026, 11, 13, 18, 0, 0, 0, time.UTC)
+	count := func(im STADImprovement) (n int, last stadScored) {
+		got, err := svc.stadScoredItems(context.Background(), 1, "", im, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, items := range got {
+			n += len(items)
+			if len(items) > 0 {
+				last = items[len(items)-1]
+			}
+		}
+		return
+	}
+	if n, _ := count(STADImprovement{Evidence: "graded_items", MissingCountsAs: "none"}); n != 2 {
+		t.Fatalf("graded items with missing=none: want the two scored items, got %d", n)
+	}
+	if n, last := count(STADImprovement{Evidence: "graded_items", MissingCountsAs: "zero"}); n != 3 || !last.Missing || last.Percent.Sign() != 0 {
+		t.Fatalf("missing=zero: want the missing quiz as a 0 item, got %d %+v", n, last)
+	}
+	if n, _ := count(STADImprovement{Evidence: "quizzes", MissingCountsAs: "none"}); n != 1 {
+		t.Fatalf("quizzes only: want the one scored quiz, got %d", n)
+	}
+}

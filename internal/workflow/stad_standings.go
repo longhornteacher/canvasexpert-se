@@ -67,6 +67,10 @@ type STADStudentScore struct {
 	EffortWeek   string `json:"effort_week"`
 	AwardsRound  string `json:"awards_round"`
 	AwardsWeek   string `json:"awards_week"`
+	// Improvement points, with one row per scored item saying why.
+	ImprovementRound string               `json:"improvement_round"`
+	ImprovementWeek  string               `json:"improvement_week"`
+	Improvement      []STADImprovementRow `json:"improvement,omitempty"`
 	OnTimeRound  int    `json:"on_time_round"`
 	LateRound    int    `json:"late_round"`
 	MissingRound int    `json:"missing_round"`
@@ -254,6 +258,28 @@ func (s *Service) STADStandings(ctx context.Context, nickname, weekDate, roundNa
 		}
 	}
 
+	// Improvement points (true STAD), from the scored items in course order.
+	improvementRows := map[string][]STADImprovementRow{}
+	if rules.Improve != nil {
+		items, e := s.stadScoredItems(ctx, course.ID, course.Timezone, *rules.Improve, now)
+		if e != nil {
+			return out, e
+		}
+		for _, m := range members {
+			rows, e := scoreImprovement(items[m.ref], *rules.Improve)
+			if e != nil {
+				return out, e
+			}
+			for _, row := range rows {
+				if row.Due < round.Starts || row.Due > windowEnd || !m.activeOn(row.Due) {
+					continue
+				}
+				improvementRows[m.ref] = append(improvementRows[m.ref], row)
+				events = append(events, stadEvent{date: row.Due, ref: m.ref, team: m.team, pts: row.exactPoints, kind: "improvement"})
+			}
+		}
+	}
+
 	// Awards: student awards share a weekly cap; team awards go to the team.
 	cap := rules.Awards.CapPerStudentPerWeek.Rat()
 	spent := map[string]*big.Rat{} // ref|week
@@ -395,6 +421,7 @@ func (s *Service) STADStandings(ctx context.Context, nickname, weekDate, roundNa
 		}
 		out.Teacher.Students = append(out.Teacher.Students, STADStudentScore{Ref: m.ref, Alias: m.alias, Team: m.team, Active: m.active,
 			EffortRound: str(studentPts(m.ref, round.Starts, windowEnd, "effort")), EffortWeek: str(studentPts(m.ref, wkLo, wkHi, "effort")),
+			ImprovementRound: str(studentPts(m.ref, round.Starts, windowEnd, "improvement")), ImprovementWeek: str(studentPts(m.ref, wkLo, wkHi, "improvement")), Improvement: improvementRows[m.ref],
 			AwardsRound: str(studentPts(m.ref, round.Starts, windowEnd, "award")), AwardsWeek: str(studentPts(m.ref, wkLo, wkHi, "award")),
 			OnTimeRound: c.onTime, LateRound: c.late, MissingRound: c.missing})
 	}
@@ -405,9 +432,6 @@ func (s *Service) STADStandings(ctx context.Context, nickname, weekDate, roundNa
 		}
 		return a.Alias < b.Alias
 	})
-	if rules.Improve != nil {
-		out.Notes = append(out.Notes, "rules.md has improvement scoring; improvement points are not counted yet")
-	}
 	return out, nil
 }
 
