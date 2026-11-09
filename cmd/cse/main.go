@@ -602,8 +602,12 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return fail(inputError(e), progress)
 		}
 		saved, e := localui.SaveDraftPDF(ctx, model, handout)
+		note, e := localui.PrintableNote(e)
 		if saved != "" {
-			fmt.Fprintf(out, "Saved draft PDF: %s\n", saved)
+			fmt.Fprintf(out, "Saved draft: %s\n", saved)
+		}
+		if note != "" {
+			fmt.Fprintln(out, note)
 		}
 		return fail(e, progress)
 	}

@@ -97,7 +97,27 @@ func savePrintable(ctx context.Context, doc []byte, name string) (string, error)
 		return "", fmt.Errorf("could not make the PDF (%v) or save a printable page: %w", pdfErr, err)
 	}
 	_ = platform.OpenDefaultFile(page)
-	return page, fmt.Errorf("could not make the PDF (%v); saved a printable page instead: open it and print with Ctrl+P", pdfErr)
+	return page, &PrintablePage{Reason: pdfErr}
+}
+
+// PrintablePage reports that the file was saved and opened as a printable web
+// page because Edge could not make the PDF (some districts switch that off).
+// The teacher has what they asked for, so callers report it as a saved file
+// with a note, not as a failure.
+type PrintablePage struct{ Reason error }
+
+func (p *PrintablePage) Error() string {
+	return fmt.Sprintf("could not make the PDF (%v); saved a printable page instead: open it and print with Ctrl+P", p.Reason)
+}
+
+// PrintableNote returns the note for a saved printable page, and the error
+// that remains when err is anything else.
+func PrintableNote(err error) (string, error) {
+	var page *PrintablePage
+	if errors.As(err, &page) {
+		return "Edge could not make a PDF here, so this is a printable page: print it with Ctrl+P.", nil
+	}
+	return "", err
 }
 
 func uniquePath(dir, base, ext string) string {

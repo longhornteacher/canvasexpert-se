@@ -7,6 +7,7 @@ package gitupdate
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -342,17 +343,43 @@ func fileSHA256(path string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// gitTimeout bounds one git call. The only slow one is the fetch of a small
+// branch; a blocked network must not hold a session start for long.
+const gitTimeout = 2 * time.Minute
+
 func runGit(root string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", gitArgs(root, args)...)
+	// A proxy or filter asking for a sign-in must fail, not open a prompt
+	// nobody is watching.
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never")
+	cmd.WaitDelay = 5 * time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		return stdout.String(), fmt.Errorf("git %s: no answer after %s", args[0], gitTimeout)
+	}
+	if err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return stdout.String(), fmt.Errorf("git %s: %s", args[0], msg)
 		}
 		return stdout.String(), fmt.Errorf("git %s: %w", args[0], err)
 	}
 	return stdout.String(), nil
+}
+
+// gitArgs trusts this one folder for this one call. A folder owned by another
+// account (made by someone else, restored from a backup, or on a drive that
+// records no owner) is otherwise refused by git as "dubious ownership", and
+// updates would stop without anyone being told.
+func gitArgs(root string, args []string) []string {
+	safe := root
+	if abs, err := filepath.Abs(root); err == nil {
+		safe = abs
+	}
+	return append([]string{"-c", "safe.directory=" + filepath.ToSlash(safe), "-C", root}, args...)
 }
 
 func runGetEngine(root string, args ...string) error {

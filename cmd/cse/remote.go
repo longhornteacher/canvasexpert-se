@@ -1088,8 +1088,12 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			return fail(inputError(e), progress)
 		}
 		saved, e := localui.SaveStudentReports(ctx, sheets, label)
+		note, e := localui.PrintableNote(e)
 		if saved != "" {
 			fmt.Fprintf(out, "Saved %d student reports, one per page: %s\n", len(sheets), saved)
+		}
+		if note != "" {
+			fmt.Fprintln(out, note)
 		}
 		if e != nil {
 			return fail(e, progress)

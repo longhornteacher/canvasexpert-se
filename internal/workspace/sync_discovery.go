@@ -52,8 +52,8 @@ func defaultSyncSearchRoots() []string {
 		roots = append(roots, filepath.Join(home, "Google Drive"), filepath.Join(home, "My Drive"))
 	}
 	// Google Drive for desktop mounts a drive letter, usually G:, with "My Drive" inside.
-	for letter := 'D'; letter <= 'Z'; letter++ {
-		roots = append(roots, string(letter)+`:\My Drive`)
+	for _, drive := range localDriveRoots() {
+		roots = append(roots, drive+"My Drive")
 	}
 	return roots
 }
