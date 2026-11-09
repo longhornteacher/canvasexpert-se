@@ -4,6 +4,8 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+- New Quiz feedback for a missed question now sits where students see it: Canvas reliably shows only the picked choice's feedback, so `push_quiz` adds the correct choice's explanation (green, naming it) under every distractor's own feedback. MC questions no longer repeat it as question-level incorrect feedback; MA keeps it there for a student who left out a correct choice. The New Quiz content edit flow (`pull_quiz` / `push_document`) can now change one choice's feedback (`answer_feedback`, keyed by choice ID, other choices preserved), so existing quizzes are fixed in place. Canvas Live, 2026-11-09: 28 questions on an unpublished quiz updated in place, one read back with its answer key and choices unchanged; the student view is not yet checked.
+
 ## 2.0.0 (2026-11-09)
 
 Classroom team points (STAD), parent update emails written from the playbook, and the MC+Why quiz style.

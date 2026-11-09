@@ -99,6 +99,21 @@ func validateQuizTextChanges(changes map[string]any, item bool) error {
 			}
 			continue
 		}
+		if item && key == "answer_feedback" {
+			feedback, ok := value.(map[string]any)
+			if !ok {
+				return fmt.Errorf("answer_feedback changes must map pulled choice IDs to strings")
+			}
+			for k, v := range feedback {
+				if !quizEditID.MatchString(k) {
+					return fmt.Errorf("answer_feedback key %q is not a choice ID", k)
+				}
+				if _, ok := v.(string); !ok {
+					return fmt.Errorf("answer_feedback.%s must be a string", k)
+				}
+			}
+			continue
+		}
 		if key != "title" && !(item && key == "item_body") && !(!item && key == "instructions") {
 			return fmt.Errorf("unsupported New Quiz content change %q", key)
 		}
