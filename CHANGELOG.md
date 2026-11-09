@@ -4,6 +4,16 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 2.0.0 (2026-11-09)
+
+Classroom team points (STAD), parent update emails written from the playbook, and the MC+Why quiz style.
+
+**Breaking:** parent update drafts made before 2.0 are refused with a message to re-draft them, and the Engine no longer offers the old default or weekly email layouts. Re-draft any unsent parent update after updating.
+
+- Classroom team points (Student Teams–Achievement Divisions, STAD), new playbook `stad.md`: the agent proposes mixed teams of 4–5 and CE-SE creates them as a Canvas group set; students earn points each week for turning work in and for beating their own recent level, and team scores are the average of members' points. Teacher awards are recorded with a reason, rounds can be reshuffled, and one standings Page per course shows team names and totals only, never anything about one student. STAD points never touch the gradebook; they are recalculated from Canvas and the saved teams, rules and awards files. Includes a weekly work-habits turn-in record. Local tests only; not yet checked in Canvas Live.
+- Parent update emails take their wording from the playbook: the Engine supplies the facts (a whole-term report with each assignment's status, released score, exact percent and turned-in evidence) and draws the assignment table; the draft supplies the subject, body, cutoff, columns and labels. The Engine still holds incomplete evidence and refuses aliases, student refs or addresses in the wording. The automatic AI notice on emails and printed sheets is removed. Local tests only.
+- New quiz style, **MC+Why**: every multiple-choice question is followed by a 1-point written "Why is that answer the best? Use evidence from the text." Ask for "MC+Why" when making a quiz; plain **MC** stays the default. The "why" earns its point for reasoning backed by specific evidence, scored on its own even when the choice was wrong, and goes through the usual written-item scoring.
+
 ## 1.9.0 (2026-11-05)
 
 Real New Quiz stimulus blocks, faster parent reports, a second PC that finds its UserSync folder, safer updates and cancels, and reteach tracking.

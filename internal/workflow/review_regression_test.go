@@ -117,23 +117,12 @@ func TestRegressionUnreleasedFeedbackWithoutScore(t *testing.T) {
 		t.Fatal(err)
 	}
 	course := ParentReportCourse{WorkDue: []ParentWorkDueItem{}}
-	buildStudentReportScoped(&course, []Submission{sub}, nil, map[int64]Assignment{1: a}, now, loc, now.AddDate(0, 0, -14), now.AddDate(0, 0, 7))
-	if len(course.WorkDue) != 1 || course.WorkDue[0].Status != "awaiting_grading" || len(course.Corrections) != 1 {
-		t.Fatalf("ungraded submission must retain its inventory and corrections availability: %+v", course)
+	buildStudentReport(&course, []Submission{sub}, map[int64]Assignment{1: a}, now, loc, now.AddDate(0, 0, -14))
+	if len(course.WorkDue) != 1 || course.WorkDue[0].Status != "awaiting_grading" || course.WorkDue[0].Submission != "turned_in" || course.WorkDue[0].Current != nil {
+		t.Fatalf("ungraded submission must stay in the inventory as turned in and awaiting grading: %+v", course)
 	}
-	if len(course.Corrections) > 0 && len(course.Corrections[0].Comments) > 0 {
-		t.Fatalf("BUG: posted_at:null with no score exposed feedback: %+v", course.Corrections[0].Comments)
-	}
-	for _, posted := range []string{`,"posted_at":"2026-10-17T12:00:00-05:00"`, ""} {
-		var released Submission
-		if err := json.Unmarshal([]byte(`{"user_id":9,"assignment_id":1,"assignment_visible":true,"attempt":1,"submitted_at":"2026-10-17T11:00:00-05:00","score":null,"entered_score":null,"graded_at":null,"submission_comments":[{"author_id":77,"comment":"RELEASED FEEDBACK"}]`+posted+`}`), &released); err != nil {
-			t.Fatal(err)
-		}
-		control := ParentReportCourse{}
-		buildStudentReportScoped(&control, []Submission{released}, nil, map[int64]Assignment{1: a}, now, loc, now.AddDate(0, 0, -14), now.AddDate(0, 0, 7))
-		if len(control.Corrections) != 1 || len(control.Corrections[0].Comments) != 1 {
-			t.Fatalf("released or legacy omitted timestamp lost ordinary feedback: %+v", control)
-		}
+	if raw, _ := json.Marshal(course); strings.Contains(string(raw), "PRIVATE FEEDBACK") {
+		t.Fatalf("BUG: posted_at:null exposed feedback: %s", raw)
 	}
 }
 

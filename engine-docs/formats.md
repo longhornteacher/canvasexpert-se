@@ -315,15 +315,44 @@ Use `inbox_read` / `cse inbox-read CONVERSATION_REF` for a full thread. It reque
 Use `inbox_reply` / `cse inbox-reply CONVERSATION_REF BODY --after-message MESSAGE_REF` only in an existing thread, after the teacher's go-ahead in the conversation or when the request already included replying. The Engine re-reads the thread and refuses if its latest message differs from `after_message`. The Canvas request contains only `body`, so the existing participants are retained and no recipients, attachments, media or forwarded-message fields can be supplied. An uncertain reply must be re-read before any retry. `inbox_set_state` / `cse inbox-set-state CONVERSATION_REF... --state read|unread|archived|inbox` updates each thread separately and reports one outcome per ref; this changes workflow state, not message content, and cannot delete messages. Canvas receives `{"conversation":{"workflow_state":"read"}}` (or `unread` / `archived`) at `PUT /api/v1/conversations/:id`. The public `inbox` action sends Canvas's `read` state, returning an archived thread to the inbox as read; the result retains the requested action. An accepted write is complete without a confirmation read. Live list/read/reply evidence and state-write retest status are recorded in `docs/engine-capabilities.md`; notifications remain unobserved.
 
 
-## Weekly parent update drafts
+## Parent update reports and drafts
 
-For a requested full-term weekly update email, first pull with `pull_parent_report` `full_period: true` (CLI: `parent-report --full-period COURSE [COURSE ...]`). Then write `drafts.json` next to the saved parent `report.json` with `schema: 2`, `kind: parent-drafts`, the report `run_id`, and `layout: weekly_update`. Supply an `announcements` object keyed by exact course nickname, containing teacher-authored Markdown with no student names, aliases, references, grades or email addresses. Include a `students` entry with `student_ref` and `decision` for every student. The Engine validates known aliases, references and email addresses; authors must still avoid all student information. One student must belong to one course for this layout.
+`pull_parent_report {courses, students?}` / `cse parent-report COURSE [COURSE ...] [REF ...]` writes `courses/<first course>/parent-updates/<run>/report.json` (`schema: 2`). It covers the current grading period from its start through `as_of`; `full_period` / `--full-period` is still accepted and changes nothing. Each student has one entry per course with `course_score`, `flags` (unresolved evidence) and `work_due`: every published, visible, non-excused assignment whose student-effective due date is in that window, in due-date then title order. Each row has `assignment_id`, `title`, `url`, `due_at`, `status` (`graded`, `awaiting_grading`, `grade_not_released`, `no_grade`), `points_possible`, `canvas_score`, `percent` (two places; absent without a released score or points possible), `points_deducted` and `submission` (`turned_in`, `not_turned_in`, `no_online_submission`, `unknown`). Submission evidence is independent of the score: a zero can be turned in, and an absent upload on paper work is `no_online_submission`. Unreleased grades carry no score. The report holds facts only, with no sections, skip advice or wording.
 
-The Engine builds the week subject and Missing and Failing sections from the saved report and addresses enabled parents only. It supports a send decision for a student with no items; incomplete data must be held rather than presented as an all-clear. The default layout uses schema 1 and keeps its existing inventory and skip rules. Review and the teacher's action remain required for Outlook drafts or sending.
+The agent writes `drafts.json` beside it:
+
+```json
+{
+  "schema": 3, "kind": "parent-drafts", "run_id": "<report run_id>",
+  "subject": "{{student_name}}: Term 2 assignments below 70",
+  "body": "Hello,
+
+Here are {{student_name}}'s Term 2 assignments below 70%.
+
+{{assignment_table}}
+
+[Grade portal](https://...) for official grades.",
+  "table": {
+    "below_percent": 70,
+    "columns": ["assignment", "score", "due", "submission"],
+    "labels": {"assignment": "Assignment", "score": "Score", "due": "Due date", "submission": "Turned in?"},
+    "submission_labels": {"turned_in": "Turned in", "not_turned_in": "Not turned in", "no_online_submission": "No online submission required", "unknown": "Status unavailable"},
+    "empty_text": "No assignments below 70% this term.",
+    "course_headings": {"ELA7": "English 7"}
+  },
+  "send_when": "rows",
+  "recipients": "parents_only",
+  "students": [{"student_ref": "...", "decision": "skip", "reason": "..."}]
+}
+```
+
+`subject` and `body` (Markdown, sanitized like family contact) are the playbook's wording. Placeholders are `{{student_name}}` (the student's first name, filled privately) and `{{assignment_table}}`, which must appear once in the body on its own line. The Engine draws the table: rows are the student's `work_due` items whose released score is strictly below `below_percent` of points possible (omit it to list every row), columns from `assignment` (linked title), `score`, `percent`, `due` and `submission`, each needing a label; `submission` also needs all four `submission_labels`. A student in several courses gets one table per course, headed by `course_headings` or the nickname. An empty table shows `empty_text`.
+
+`send_when: "rows"` (default) sends to students with at least one row and skips the rest with `empty_text` as the reason; `"all"` sends to everyone. `students` entries override a decision. A send is held as `flag` when the student's course has unresolved flags or a row has an invalid date, link or score. `recipients: "parents_only"` leaves the student off; otherwise the student is To and enabled parents are CC. The saved `sign_off` is appended as in family contact. Wording that contains a student alias, ref or email address is rejected. Older schema 1/2 drafts are refused with a re-draft message; their report and outcomes are kept.
 
 ## Printed grade sheets
 
-Every parent report also saves, per course, an `upcoming` list: published work the student can see whose student-effective due date is after `as_of` and on or before the period end, each with `turned_in` when Canvas shows a submission. `print_student_reports` needs only `report.json`: it prints one table per student, `work_due` rows with the current Canvas score or status text and `upcoming` rows with a check box. `drafts.json` is optional and supplies only `student_intro`. Pull with `full_period: true` for the whole term. Undated work is not listed.
+Every parent report also saves, per course, an `upcoming` list: published work the student can see whose student-effective due date is after `as_of` and on or before the period end, each with `turned_in` when Canvas shows a submission. `print_student_reports` needs only `report.json`: it prints one table per student, `work_due` rows with the current Canvas score or status text and `upcoming` rows with a check box. `drafts.json` is optional and supplies only `student_intro` per student entry. Undated work is not listed.
 
 ## Exact feedback sample (offline)
 

@@ -29,6 +29,8 @@ Write every student-facing line to these limits:
 
 Answer choices are shuffled by default. Write every choice so it still makes sense in any order: no "A and B", no "all/none of the above", no ranges that only read correctly in sequence. Keep distractors about as long and as specific as the correct answer; the longest choice must not give the answer away. Distractors are real, predictable misconceptions: no jokes, trick wording or obvious fakes. Bold **NOT** or **EXCEPT** when a stem needs it.
 
+A quiz is **MC** by default. **MC+Why** follows every multiple-choice question with a 1-point "Why is that answer the best? Use evidence from the text." See `playbooks/quizzes.md`.
+
 When building a unit quiz, offer once to add one or two spiral items from earlier units, choosing first from that class's open entries in `context/reteach.md`. Do not add them unasked.
 
 ## Rubrics for every writing prompt
