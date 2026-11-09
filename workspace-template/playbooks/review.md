@@ -51,7 +51,7 @@ Do the teaching choices fit this teacher, this grade and these students? Judge a
 
 - alignment: the Learning Target, task, items and rubric measure the same skill at the intended rigor (DOK 2-3 by default)
 - wording: `TEACHER.md` budgets, sentence length for the grade, academic words bolded and defined once
-- quiz design: distractors are real misconceptions, choices survive shuffling, the longest choice doesn't give the answer away
+- quiz design: distractors are real misconceptions, choices survive shuffling, the longest choice doesn't give the answer away; in an MC+Why quiz, every MC item is followed by its "why", numbered to match, and each answer has evidence a student could point to
 - tiers scaffold the same standard and never lower it; Green supports actually support emergent bilingual students
 - feedback is specific, actionable and in the teacher's saved voice and `feedback_guidance`
 - authored exemplars (including private models saved for later scoring) show strong, attainable work at the actual grade in both language and thinking, using taught skills; they neither demand adult polish nor excuse shallow thinking, and add no hidden rubric requirements (see `teacher-context.md`)

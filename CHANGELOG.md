@@ -4,6 +4,8 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+- New quiz style, **MC+Why**: every multiple-choice question is followed by a 1-point written "Why is that answer the best? Use evidence from the text." Ask for "MC+Why" when making a quiz; plain **MC** stays the default. The "why" earns its point for reasoning backed by specific evidence, scored on its own even when the choice was wrong, and goes through the usual written-item scoring.
+
 ## 1.9.0 (2026-11-05)
 
 Real New Quiz stimulus blocks, faster parent reports, a second PC that finds its UserSync folder, safer updates and cancels, and reteach tracking.
