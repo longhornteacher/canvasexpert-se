@@ -800,6 +800,9 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			if report.Message != "" {
 				fmt.Fprintln(out, report.Message)
 			}
+			if report.Timetable != "" {
+				fmt.Fprintln(out, "Grading timetable:", report.Timetable)
+			}
 		}
 		if e != nil {
 			return fail(workflowError(e), progress)

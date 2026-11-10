@@ -585,6 +585,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return fail(json.NewEncoder(out).Encode(sample), progress)
 		}
 		fmt.Fprintf(out, "Valid document: %s\n", p)
+		previewTimetable(root, p, out)
 		previewResults(root, p, out)
 		return 0
 	}
@@ -635,6 +636,23 @@ func documentPath(root, name string) (string, error) {
 		return workspace.ConstrainPath(root, relative)
 	}
 	return workspace.ConstrainPath(root, name)
+}
+
+// previewTimetable prints the grading timetable a create draft will get, from
+// local files only; push adds Canvas's late-penalty amount.
+func previewTimetable(root, path string, out io.Writer) {
+	var doc domain.AssignmentDocument
+	if _, err := workspace.ReadDocument(path, &doc); err != nil || doc.Kind != "assignment" {
+		return
+	}
+	lines := workflow.PreviewTimetable(root, doc)
+	if len(lines) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "Grading timetable preview:")
+	for _, l := range lines {
+		fmt.Fprintln(out, "  "+l)
+	}
 }
 
 // previewResults prints each student's computed assessment and late timing so the

@@ -23,6 +23,7 @@ type PushReport struct {
 	Resources                  *domain.CreatedResources
 	UpdateOutcome              domain.ActionOutcome
 	TierPages                  []domain.TierPage // differentiated hub pages, when the document has tiers
+	Timetable                  string            // grading timetable note for the teacher
 }
 
 // deliverHub creates or verifies the tier pages, records them in the document's
@@ -177,6 +178,24 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	html, err := render.TeachingHTML(bound, doc.BodyFormat)
 	if err != nil {
 		return report, err
+	}
+	// The timetable is fixed on the first attempt so a resume sends the same body.
+	// An in-flight create from before timetables existed keeps its recorded body.
+	if doc.Created == nil || (doc.Created.Timetable == nil && doc.Created.IntendedHTML == "" && doc.Created.AssignmentID == 0) {
+		rec := s.createTimetable(ctx, &doc, course.ID)
+		if doc.Created == nil {
+			doc.Created = &domain.CreatedResources{StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+		}
+		doc.Created.Timetable = rec
+	}
+	if t := doc.Created.Timetable; t != nil {
+		if t.HTML != "" {
+			html = withTimetable(html, t.HTML)
+		}
+		report.Timetable = t.Note
+		if t.LockAt != "" {
+			report.Timetable = strings.TrimPrefix(strings.Join([]string{report.Timetable, "lock_at set to the extra-time close date " + t.LockAt}, "; "), "; ")
+		}
 	}
 	if doc.Created == nil {
 		doc.Created = &domain.CreatedResources{StartedAt: time.Now().UTC().Format(time.RFC3339Nano), IntendedHTML: html}
@@ -683,6 +702,12 @@ func (s *Service) pushUpdate(ctx context.Context, path string, d *domain.Assignm
 		report.Status = "completed"
 		report.Message = "update already completed; pull-item before another edit"
 		return report, nil
+	}
+	if d.UpdateOutcome.Status == "" {
+		var note string
+		if body, note = s.refreshTimetable(ctx, d, body); note != "" {
+			report.Timetable = note
+		}
 	}
 	patch, err := PlanEdit(*d, body)
 	if err != nil {

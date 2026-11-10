@@ -24,7 +24,7 @@ type capabilityGroup struct {
 
 // Keep this teacher-facing snapshot aligned with docs/engine-capabilities.md.
 // Recorded live evidence and local checks are different kinds of verification.
-const capabilitiesReviewed = "2026-11-09"
+const capabilitiesReviewed = "2026-11-10"
 
 var capabilityGroups = []capabilityGroup{
 	{
@@ -74,6 +74,7 @@ var capabilityGroups = []capabilityGroup{
 		Title: "Partial or awaiting meaningful validation", Status: capabilityYellow,
 		Summary: "This group includes implemented features awaiting validation and features with partial support. Each entry states its limits and remaining checks; pending evidence alone does not prevent supported use.",
 		Items: []capability{
+			{"Grading timetable on new assignments", "Dev 2026-11-04: adds due, late-penalty, correction and closing dates to a collapsed assignment block using school days and the Canvas late policy. Local tests cover create and update; a disposable Canvas assignment stored the block, but a full push and student view remain unverified. Parent update emails omit correction deadlines."},
 			{"Weekly turn-in record (work_habits)", "Added in Dev, 2026-11-08, local tests only; no Canvas Live check yet. Reads each active student's due work by week as on time, late, missing, excused, no online turn-in, or graded with no turn-in, using the same due-date, visibility and positive-grade rules as the parent report. Work due before a student enrolled is listed apart and never counted. Read-only; students are pseudonymized. First step toward classroom team points (docs/stad)."},
 			{"Classroom teams to Canvas (stad_teams, stad_push_teams)", "Added in Dev, 2026-11-08, local tests only against a fake Canvas; no Canvas Live STAD check yet (book-club group writes it reuses were checked live on CS8). Validates the teacher's team file against active students, then makes one collaborative group set match the current round: creates the set and groups, renames a group whose team was renamed, places each student. Adds and moves only; never deletes a group or removes a student."},
 			{"Classroom team standings (stad_standings)", "Added in Dev, 2026-11-08, local tests only against a fake Canvas. Tallies team points for a round from turn-in facts, the teacher's point rules and awards: team score is the average over active members, a team bonus when everyone turns in everything, weekly award cap with every trimmed award reported, ranks with shared ties. Points never touch the gradebook. Student-level numbers are marked teacher-only."},

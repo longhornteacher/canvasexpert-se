@@ -10,6 +10,8 @@ Execution-readiness review: **2026-10-28**, against the current Dev working tree
 
 | Handoff | Kind | Scope |
 |---|---|---|
+| [Grading timetable](active/HANDOFF_Grading_Timetable_2026-11-04.md) | Draft plan (Engine + playbooks), waiting on developer decisions D1–D4 | Collapsed late-work/corrections/close-date block on new assignments, computed in school days; parent emails omit correction deadlines |
+| [Late-work reconciliation](active/HANDOFF_Late_Work_Reconciliation_2026-11-10.md) | Draft plan (Engine + playbooks), waiting on developer decisions D1–D6 | Per-student extra days and absences entered in the WebUI, counted by the Engine; a read-only course sweep that proposes corrected late marks |
 
 | Handoff | Execution status | What the review clarified |
 |---|---|---|

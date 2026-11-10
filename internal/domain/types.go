@@ -29,10 +29,37 @@ type CourseConfig struct {
 	Courses    []Course `yaml:"courses"`
 }
 type GradingConfig struct {
-	Schema           int    `yaml:"schema"`
-	Voice            string `yaml:"voice,omitempty"`
-	FeedbackGuidance string `yaml:"feedback_guidance,omitempty"`
+	Schema           int             `yaml:"schema"`
+	Voice            string          `yaml:"voice,omitempty"`
+	FeedbackGuidance string          `yaml:"feedback_guidance,omitempty"`
+	LateWork         *LateWorkPolicy `yaml:"late_work,omitempty"`
 }
+
+// LateWorkPolicy is the teacher's school-day schedule shown in a new
+// assignment's grading timetable. Zero leaves that row out. The penalty and
+// its floor are not here: they come from Canvas's course late policy.
+type LateWorkPolicy struct {
+	CorrectionSchoolDays int `yaml:"correction_school_days,omitempty"`
+	CloseAfterSchoolDays int `yaml:"close_after_school_days,omitempty"`
+	ExtraTimeSchoolDays  int `yaml:"extra_time_school_days,omitempty"`
+}
+
+// Validate keeps each count a plausible number of school days.
+func (p *LateWorkPolicy) Validate() error {
+	if p == nil {
+		return nil
+	}
+	for _, v := range []struct {
+		name string
+		n    int
+	}{{"correction_school_days", p.CorrectionSchoolDays}, {"close_after_school_days", p.CloseAfterSchoolDays}, {"extra_time_school_days", p.ExtraTimeSchoolDays}} {
+		if v.n < 0 || v.n > 60 {
+			return fmt.Errorf("late_work.%s must be between 0 and 60 school days", v.name)
+		}
+	}
+	return nil
+}
+
 type StudentNotes struct {
 	Schema int           `yaml:"schema"`
 	Notes  []StudentNote `yaml:"notes"`
@@ -152,6 +179,16 @@ type CreatedResources struct {
 	Publication         ActionOutcome               `yaml:"publication,omitempty"`
 	Overrides           []AssignmentOverrideOutcome `yaml:"overrides,omitempty"`
 	Visibility          ActionOutcome               `yaml:"visibility,omitempty"`
+	Timetable           *TimetableRecord            `yaml:"timetable,omitempty"`
+}
+
+// TimetableRecord is the grading timetable fixed on the first create attempt,
+// so a resumed create sends the same body. LockAt is set when the Engine chose
+// the assignment's lock date; Note explains an omitted timetable or row.
+type TimetableRecord struct {
+	HTML   string `yaml:"html,omitempty"`
+	LockAt string `yaml:"lock_at,omitempty"`
+	Note   string `yaml:"note,omitempty"`
 }
 type AssignmentOverrideOutcome struct {
 	Key        string        `yaml:"key"`
@@ -184,6 +221,7 @@ type AssignmentDocument struct {
 	Overrides                      []AssignmentOverrideRow `yaml:"overrides,omitempty"`
 	Rubric                         *Rubric                 `yaml:"rubric,omitempty"`
 	Tiers                          []Tier                  `yaml:"tiers,omitempty"` // create-time differentiated hub
+	GradingTimetable               *bool                   `yaml:"grading_timetable,omitempty"`
 	Observed                       *AssignmentSnapshot     `yaml:"observed,omitempty"`
 	Created                        *CreatedResources       `yaml:"created,omitempty"`
 	UpdateOutcome                  ActionOutcome           `yaml:"update_outcome,omitempty"`
@@ -277,32 +315,32 @@ type WrittenFile struct {
 	Reason string `yaml:"reason,omitempty"`
 }
 type StudentWorkDocument struct {
-	Schema                 int               `yaml:"schema"`
-	Kind                   string            `yaml:"kind"`
-	WorkPurpose            string            `yaml:"work_purpose,omitempty"` // score or score-and-late; late-only appears only in older packets
-	StudentRef             string            `yaml:"student_ref"`
-	Alias                  string            `yaml:"alias"`
-	AssignmentID           int64             `yaml:"assignment_id"`
-	AssignmentVisible      *bool             `yaml:"assignment_visible,omitempty"`
-	Current                AttemptWork       `yaml:"current"`
-	Prior                  []AttemptWork     `yaml:"prior,omitempty"`
-	Comments               []ExistingComment `yaml:"comments,omitempty"`
-	EnteredGradeKnown      bool              `yaml:"entered_grade_known"`
-	EnteredGrade           *Decimal          `yaml:"entered_grade,omitempty"`
-	ObservedEnteredScore   *Decimal          `yaml:"observed_entered_score,omitempty"`
-	ObservedScore          *Decimal          `yaml:"observed_score,omitempty"`
+	Schema               int               `yaml:"schema"`
+	Kind                 string            `yaml:"kind"`
+	WorkPurpose          string            `yaml:"work_purpose,omitempty"` // score or score-and-late; late-only appears only in older packets
+	StudentRef           string            `yaml:"student_ref"`
+	Alias                string            `yaml:"alias"`
+	AssignmentID         int64             `yaml:"assignment_id"`
+	AssignmentVisible    *bool             `yaml:"assignment_visible,omitempty"`
+	Current              AttemptWork       `yaml:"current"`
+	Prior                []AttemptWork     `yaml:"prior,omitempty"`
+	Comments             []ExistingComment `yaml:"comments,omitempty"`
+	EnteredGradeKnown    bool              `yaml:"entered_grade_known"`
+	EnteredGrade         *Decimal          `yaml:"entered_grade,omitempty"`
+	ObservedEnteredScore *Decimal          `yaml:"observed_entered_score,omitempty"`
+	ObservedScore        *Decimal          `yaml:"observed_score,omitempty"`
 	// ObservedGradedAt is Canvas's graded_at at pull time. Any SpeedGrader
 	// save moves it, so a later difference means someone graded since.
 	ObservedGradedAt string `yaml:"observed_graded_at,omitempty"`
 	// ObservedQuizResult is a New Quiz attempt's current result version at
 	// pull time. Every SpeedGrader save, even an item-comment-only one, makes
 	// a new version, so item scores hold when it has changed.
-	ObservedQuizResult string `yaml:"observed_quiz_result,omitempty"`
-	ObservedPointsDeducted *Decimal          `yaml:"observed_points_deducted,omitempty"`
-	EnteredGradeReason     string            `yaml:"entered_grade_reason,omitempty"`
-	Excused                bool              `yaml:"excused"`
-	Monitored              bool              `yaml:"monitored"`
-	ExtraTime              *bool             `yaml:"extra_time,omitempty"` // private saved fact; absent in older packets
+	ObservedQuizResult     string   `yaml:"observed_quiz_result,omitempty"`
+	ObservedPointsDeducted *Decimal `yaml:"observed_points_deducted,omitempty"`
+	EnteredGradeReason     string   `yaml:"entered_grade_reason,omitempty"`
+	Excused                bool     `yaml:"excused"`
+	Monitored              bool     `yaml:"monitored"`
+	ExtraTime              *bool    `yaml:"extra_time,omitempty"` // private saved fact; absent in older packets
 	// DiscussionEvidence references this student's own attributed posts in the
 	// pulled conversation packet when the assignment is a graded discussion.
 	DiscussionEvidence *DiscussionEvidenceRef `yaml:"discussion_evidence,omitempty"`
@@ -353,6 +391,7 @@ func ItemFeedback(components []ComponentScore) bool {
 	}
 	return len(components) > 0
 }
+
 type PriorComparison struct {
 	Attempt         AttemptRef `yaml:"attempt"`
 	Basis           string     `yaml:"basis"` // academic evidence, never teacher grade
