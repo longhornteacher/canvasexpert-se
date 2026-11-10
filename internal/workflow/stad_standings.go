@@ -15,14 +15,14 @@ import (
 // are safe for the student-facing standings Page; "teacher" fields name
 // individual students and stay in the conversation.
 type STADStandings struct {
-	Course    string          `json:"course"`
-	Round     string          `json:"round"`
-	Window    [2]string       `json:"window"` // first and last school date counted
-	Week      [2]string       `json:"week"`   // Monday and Sunday of the week reported
-	AsOf      string          `json:"as_of"`
-	Teams     []STADTeamScore `json:"teams"`
-	Teacher   STADTeacherView `json:"teacher"`
-	Notes     []string        `json:"notes,omitempty"`
+	Course  string          `json:"course"`
+	Round   string          `json:"round"`
+	Window  [2]string       `json:"window"` // first and last school date counted
+	Week    [2]string       `json:"week"`   // Monday and Sunday of the week reported
+	AsOf    string          `json:"as_of"`
+	Teams   []STADTeamScore `json:"teams"`
+	Teacher STADTeacherView `json:"teacher"`
+	Notes   []string        `json:"notes,omitempty"`
 }
 
 type STADTeamScore struct {
@@ -60,21 +60,21 @@ type STADTeamDetail struct {
 }
 
 type STADStudentScore struct {
-	Ref          string `json:"student_ref"`
-	Alias        string `json:"alias"`
-	Team         string `json:"team"`
-	EffortRound  string `json:"effort_round"`
-	EffortWeek   string `json:"effort_week"`
-	AwardsRound  string `json:"awards_round"`
-	AwardsWeek   string `json:"awards_week"`
+	Ref         string `json:"student_ref"`
+	Alias       string `json:"alias"`
+	Team        string `json:"team"`
+	EffortRound string `json:"effort_round"`
+	EffortWeek  string `json:"effort_week"`
+	AwardsRound string `json:"awards_round"`
+	AwardsWeek  string `json:"awards_week"`
 	// Improvement points, with one row per scored item saying why.
 	ImprovementRound string               `json:"improvement_round"`
 	ImprovementWeek  string               `json:"improvement_week"`
 	Improvement      []STADImprovementRow `json:"improvement,omitempty"`
-	OnTimeRound  int    `json:"on_time_round"`
-	LateRound    int    `json:"late_round"`
-	MissingRound int    `json:"missing_round"`
-	Active       bool   `json:"active"`
+	OnTimeRound      int                  `json:"on_time_round"`
+	LateRound        int                  `json:"late_round"`
+	MissingRound     int                  `json:"missing_round"`
+	Active           bool                 `json:"active"`
 }
 
 type STADTrimmedAward struct {

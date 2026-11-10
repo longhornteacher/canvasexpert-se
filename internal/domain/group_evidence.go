@@ -90,8 +90,9 @@ type GroupWorkMembership struct {
 type GroupWorkMember struct {
 	StudentRef          string             `yaml:"student_ref"`
 	Alias               string             `yaml:"alias"`
-	ExtraTime           *bool              `yaml:"extra_time,omitempty"`   // private saved fact; absent in older packets
-	WorkPurpose         string             `yaml:"work_purpose,omitempty"` // score or score-and-late; late-only appears only in older packets
+	ExtraTime           *bool              `yaml:"extra_time,omitempty"`             // private saved fact; absent in older packets
+	ExtraTimeSchoolDays int                `yaml:"extra_time_school_days,omitempty"` // saved allowance in school days; private
+	WorkPurpose         string             `yaml:"work_purpose,omitempty"`           // score or score-and-late; late-only appears only in older packets
 	CurrentMember       bool               `yaml:"current_member"`
 	MembershipState     string             `yaml:"membership_state,omitempty"`
 	SubmissionID        int64              `yaml:"submission_id"`

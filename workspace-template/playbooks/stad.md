@@ -82,7 +82,7 @@ awards:
 
 Start effort-only, and say so plainly: "Students earn a point for turning work in on time and half a point if it's late. A team gets a bonus in any week that everyone turns everything in."
 
-- If missing work is rare in this class, count only on-time turn-ins (`late: 0`).
+- If missing work is rare in this class, count only on-time turn-ins (`late: 0`). A late turn-in earns `late` points only inside the course's late-work window; where late work is not accepted (a course limit of 0) none arrives, so leave it at `late: 0`.
 - Add improvement points once each student has two or three scored items, because baselines need history.
 - Write the choices into `rules.md`. The Engine refuses an unknown key or bands that don't end with `otherwise`, and says which line.
 

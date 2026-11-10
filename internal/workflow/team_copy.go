@@ -509,7 +509,7 @@ func (s *Service) checkCopiedItems(ctx context.Context, courseID, moduleID, sour
 	}
 	type assignment struct {
 		Description         string            `json:"description"`
-		OnlyToOverrides bool              `json:"only_visible_to_overrides"`
+		OnlyToOverrides     bool              `json:"only_visible_to_overrides"`
 		Overrides           []json.RawMessage `json:"overrides"`
 		AssignmentOverrides []json.RawMessage `json:"assignment_overrides"`
 	}

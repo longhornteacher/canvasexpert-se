@@ -1,6 +1,12 @@
 # Handoff: Late-work reconciliation (2026-11-10)
 
-**Status:** Draft plan. The developer chose the three directions in "Chosen" on 2026-11-10; the defaults in §1 still need a yes. Nothing is built.
+**Status:** On 2026-11-10 the developer accepted every default in §1. **Slices 1-5 are built in Dev the same day, local tests only.** No Canvas Live check has run: the read-only CS8 sweep and one corrected late mark in §3 are still open and each needs its own go-ahead.
+
+As built, differing from the plan below:
+- The sweep's row for a student with more than one attempt times the lowest-numbered attempt.
+- `absent_dates` in provenance are the saved absences from the Canvas due date through the counted submission; the write is held when that list differs at post time.
+- A Home command "Fix late marks" was added to the seed `context/commands.md`.
+- Shared-grade group timing is unchanged: members with different absences do not share one decision and are held, as before for any differing deadline.
 
 ## Problem
 

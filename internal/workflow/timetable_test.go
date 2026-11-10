@@ -199,3 +199,53 @@ func TestPushCreateAddsTimetableAndUpdateKeepsItCurrent(t *testing.T) {
 }
 
 func ptr(v string) *string { return &v }
+
+func TestTimetableLateWorkCutoff(t *testing.T) {
+	due := mustTime(t, "2026-11-05T23:59:00-06:00") // Thursday
+	three, zero := 3, 0
+	policy := domain.LateWorkPolicy{CorrectionSchoolDays: 4, CloseAfterSchoolDays: 11, ExtraTimeSchoolDays: 1, LateCutoffSchoolDays: &three}
+	tt, err := buildTimetable(timetableInput{Due: due, Points: domain.MustDecimal("100"), Calendar: timetableCalendar(), Policy: policy, Late: defaultLatePolicy, ProposeLock: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Join(tt.Lines(), "\n")
+	// Thu + 3 school days = Tue 11/10 (Fri, Mon, Tue).
+	if !strings.Contains(lines, "Late work accepted through: Tue 11/10") {
+		t.Fatalf("cutoff row missing:\n%s", lines)
+	}
+	if tt.DefaultLock == nil || tt.DefaultLock.Format(time.RFC3339) != "2026-11-10T23:59:00-06:00" {
+		t.Fatalf("lock should be the regular cutoff, not the extra-time close: %v", tt.DefaultLock)
+	}
+
+	policy.LateCutoffSchoolDays = &zero
+	tt, err = buildTimetable(timetableInput{Due: due, Points: domain.MustDecimal("100"), Calendar: timetableCalendar(), Policy: policy, Late: defaultLatePolicy, ProposeLock: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines = strings.Join(tt.Lines(), "\n")
+	if !strings.Contains(lines, "Late work: not accepted after the due date") || strings.Contains(lines, "penalty") {
+		t.Fatalf("no-late-work course:\n%s", lines)
+	}
+	if tt.DefaultLock == nil || tt.DefaultLock.Format(time.RFC3339) != "2026-11-05T23:59:00-06:00" {
+		t.Fatalf("lock should be the due date: %v", tt.DefaultLock)
+	}
+
+	// A teacher-set lock date stays as written.
+	lock := mustTime(t, "2026-12-01T23:59:00-06:00")
+	tt, err = buildTimetable(timetableInput{Due: due, LockAt: &lock, Points: domain.MustDecimal("100"), Calendar: timetableCalendar(), Policy: domain.LateWorkPolicy{LateCutoffSchoolDays: &three}, Late: defaultLatePolicy})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tt.DefaultLock != nil {
+		t.Fatalf("Engine proposed a lock over the teacher's: %v", tt.DefaultLock)
+	}
+}
+
+func TestCourseLateWorkLineOverridesGradingMd(t *testing.T) {
+	two, five := 2, 5
+	base := &domain.LateWorkPolicy{LateCutoffSchoolDays: &five, CorrectionSchoolDays: 4}
+	got := base.Merged(&domain.LateWorkPolicy{LateCutoffSchoolDays: &two})
+	if got.LateCutoffSchoolDays == nil || *got.LateCutoffSchoolDays != 2 || got.CorrectionSchoolDays != 4 {
+		t.Fatalf("merged=%+v", got)
+	}
+}

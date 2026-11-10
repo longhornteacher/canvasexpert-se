@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" data-appearance="{{.Appearance.Mode}}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CanvasExpert-SE absences</title>
+<style>{{pageCSS}}</style>
+<main class="wide">
+{{nav "Classroom" "Absences" .Appearance}}
+<h1>Absences</h1>
+<p>Tick who was out. A day a student was absent is not counted as late time for that student, and work due that day is due on their next day back. This stays on your computer: nothing is read from attendance and nothing is sent to Canvas until you ask to fix late marks.</p>
+{{if .Message}}<p class="error">{{.Message}}</p>{{end}}{{if .Notice}}<p class="ok">{{.Notice}}</p>{{end}}
+{{if .CalendarProblem}}<p class="error">{{.CalendarProblem}}</p>{{else}}<p>{{.Calendar}}</p>{{end}}
+{{if .Tabs}}<nav class="course-tabs" aria-label="Active courses">{{range .Tabs}}<a href="/absences?course={{.ID}}&amp;date={{$.Date}}" {{if .Selected}}aria-current="page"{{end}}>{{.Name}}</a>{{end}}</nav>
+<h2 class="grp">{{.CourseName}}</h2>
+<form method="get" action="/absences" class="row"><input type="hidden" name="course" value="{{.CourseID}}"><label>Day <input type="date" name="date" value="{{.Date}}" required></label> <button type="submit" class="secondary">Show this day</button></form>
+{{if .Rows}}<form method="post" action="/absences">
+<input type="hidden" name="request_secret" value="{{.Secret}}"><input type="hidden" name="absences_version" value="{{.Version}}"><input type="hidden" name="course" value="{{.CourseID}}"><input type="hidden" name="date" value="{{.Date}}">
+<h3>Out on {{.DateLabel}}</h3>
+<div class="table-scroll"><table><thead><tr><th scope="col">Absent</th><th scope="col">Student</th></tr></thead><tbody>
+{{range .Rows}}<tr><td><input type="checkbox" id="absent_{{.Ref}}" name="absent_{{.Ref}}" {{if .Absent}}checked{{end}}></td><td><label for="absent_{{.Ref}}">{{.Name}}</label></td></tr>
+{{end}}</tbody></table></div>
+<p><label>Out through (optional, for several days in a row) <input type="date" name="through" min="{{.Date}}"></label></p>
+<p>With one day, unticking a student clears that day. With a last day filled in, the ticked students are marked absent on every school day in the range.</p>
+<button type="submit">Save absences</button>
+</form>{{else}}<p class="card">No students loaded for this course yet. Open <a href="/students?course={{.CourseID}}">Students</a> and choose Refresh from Canvas.</p>{{end}}
+<h3>Recorded absences</h3>
+{{if .Entries}}<div class="table-scroll"><table><thead><tr><th scope="col">Day</th><th scope="col">Student</th><th scope="col"></th></tr></thead><tbody>
+{{range .Entries}}<tr><td>{{.Label}}</td><td>{{.Name}}</td><td><form method="post" action="/absences/remove"><input type="hidden" name="request_secret" value="{{$.Secret}}"><input type="hidden" name="course" value="{{$.CourseID}}"><input type="hidden" name="view" value="{{$.Date}}"><input type="hidden" name="ref" value="{{.Ref}}"><input type="hidden" name="date" value="{{.Date}}"><button type="submit" class="small">Remove</button></form></td></tr>
+{{end}}</tbody></table></div>{{else}}<p>None recorded for this course.</p>{{end}}
+{{else}}<p class="card">No courses yet. <a href="/courses">Choose your courses</a> and their students will show up here.</p>{{end}}
+</main>
+{{if .Appearance.Enabled}}<script src="/_cse/appearance.js" defer></script>{{end}}
+</html>

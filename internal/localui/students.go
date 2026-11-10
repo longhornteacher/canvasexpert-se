@@ -302,6 +302,48 @@ func (h *studentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		v.Monitored = r.PostForm.Get("monitored_"+v.Ref) == "on"
 		v.ExtraTime = r.PostForm.Get("extra_time_"+v.Ref) == "on"
+		// Older forms without the days box keep the saved number.
+		if raw, sent := r.PostForm["extra_days_"+v.Ref]; sent {
+			days := 0
+			if text := strings.TrimSpace(raw[0]); text != "" {
+				n, err := strconv.Atoi(text)
+				if err != nil || n < 0 || n > workspace.MaxExtraTimeDays {
+					h.store.Rows = before
+					h.page(w, 400, fmt.Sprintf("Extra days need a whole number from 0 to %d.", workspace.MaxExtraTimeDays))
+					return
+				}
+				days = n
+			}
+			if days > 0 && !v.ExtraTime {
+				h.store.Rows = before
+				h.page(w, 400, "Extra days were entered for a student without Extra time ticked. Tick Extra time, or clear the days.")
+				return
+			}
+			v.ExtraTimeDays = days
+		}
+		if raw, sent := r.PostForm["extra_percent_"+v.Ref]; sent {
+			percent := 0
+			if text := strings.TrimSpace(raw[0]); text != "" {
+				n, err := strconv.Atoi(text)
+				if err != nil || n < 0 || n > workspace.MaxExtraTimePercent {
+					h.store.Rows = before
+					h.page(w, 400, fmt.Sprintf("Extra time percent needs a whole number from 0 to %d.", workspace.MaxExtraTimePercent))
+					return
+				}
+				percent = n
+			}
+			if percent > 0 && !v.ExtraTime {
+				h.store.Rows = before
+				h.page(w, 400, "An extra time percent was entered for a student without Extra time ticked. Tick Extra time, or clear the percent.")
+				return
+			}
+			if percent > 0 && v.ExtraTimeDays > 0 {
+				h.store.Rows = before
+				h.page(w, 400, "A student has extra days or an extra time percent, not both. Clear one of them.")
+				return
+			}
+			v.ExtraTimePercent = percent
+		}
 		// Older forms that only edit aliases/monitoring must retain quiz settings.
 		if _, sent := r.PostForm["quiz_time_"+v.Ref]; sent {
 			quizTime := r.PostForm.Get("quiz_time_" + v.Ref)

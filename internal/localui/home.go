@@ -25,7 +25,7 @@ type homeData struct {
 	RulesMode, RulesRoot, SyncRoot, RulesError        string
 	FoundSync                                         []string
 	FoundSyncNote                                     string
-	Commands                                         []homeCommand
+	Commands                                          []homeCommand
 	CommandsNote, PickedCourse, FirstPrompt           string
 	TeamWarnings                                      []string
 }

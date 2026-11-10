@@ -194,7 +194,7 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 		}
 		report.Timetable = t.Note
 		if t.LockAt != "" {
-			report.Timetable = strings.TrimPrefix(strings.Join([]string{report.Timetable, "lock_at set to the extra-time close date " + t.LockAt}, "; "), "; ")
+			report.Timetable = strings.TrimPrefix(strings.Join([]string{report.Timetable, "lock_at set to the timetable's close date " + t.LockAt}, "; "), "; ")
 		}
 	}
 	if doc.Created == nil {

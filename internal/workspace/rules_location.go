@@ -324,7 +324,7 @@ func sharedFiles(root string, isShared func(string) bool) ([]string, error) {
 	var files []string
 	// Private contact JSON follows the teacher between PCs but remains outside
 	// ordinary teacher-rule classification and MCP file access.
-	for _, private := range []string{contactsFile, ".cse/students.csv", ".cse/rosters.json"} {
+	for _, private := range []string{contactsFile, ".cse/students.csv", ".cse/rosters.json", absencesFile} {
 		if err := rejectLinkedPrefixes(root, private); err != nil {
 			return nil, err
 		}

@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "pull-quiz": {2, 2}, "rubrics": {1, 2}, "pull-rubric": {2, 2}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "parent-report": {1, 200}, "work-habits": {1, 200}, "stad": {2, 8}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "push-quiz": {2, 3}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "quiz-accommodations": {3, 4}, "set-tags": {1, 2}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}, "replace-text": {5, 200}}
+	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "pull-quiz": {2, 2}, "rubrics": {1, 2}, "pull-rubric": {2, 2}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "late-sweep": {1, 3}, "personal-dates": {1, 3}, "parent-report": {1, 200}, "work-habits": {1, 200}, "stad": {2, 8}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "push-quiz": {2, 3}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "quiz-accommodations": {3, 4}, "set-tags": {1, 2}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}, "replace-text": {5, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -941,6 +941,41 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		default:
 			return fail(inputError(fmt.Errorf("stad needs teams, push-teams, standings or publish")), progress)
 		}
+	case "personal-dates":
+		var assignmentID int64
+		preview := false
+		for _, arg := range args[1:] {
+			if arg == "--preview" {
+				preview = true
+				continue
+			}
+			id, convErr := strconv.ParseInt(arg, 10, 64)
+			if convErr != nil || id <= 0 || assignmentID != 0 {
+				return fail(inputError(fmt.Errorf("usage: personal-dates COURSE [ASSIGNMENT_ID] [--preview]")), progress)
+			}
+			assignmentID = id
+		}
+		report, e := service.PersonalDates(ctx, args[0], assignmentID, preview, time.Now())
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, mustJSON(report))
+		if report.Held > 0 {
+			return 3
+		}
+	case "late-sweep":
+		period := ""
+		if len(args) > 1 {
+			if len(args) != 3 || args[1] != "--period" {
+				return fail(inputError(fmt.Errorf("usage: late-sweep COURSE [--period NAME]")), progress)
+			}
+			period = args[2]
+		}
+		report, e := service.LateSweep(ctx, args[0], period, time.Now())
+		if e != nil {
+			return fail(workflowError(e), progress)
+		}
+		fmt.Fprintln(out, mustJSON(report))
 	case "work-habits":
 		var from, to time.Time
 		var refList []string

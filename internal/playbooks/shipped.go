@@ -35,11 +35,11 @@ type UpdateRow struct {
 
 type UpdateReport struct {
 	// ManagedBy is "git" when git delivers the playbooks; Update then changes nothing.
-	ManagedBy string `json:"managed_by,omitempty"`
-	Note      string `json:"note,omitempty"`
+	ManagedBy string      `json:"managed_by,omitempty"`
+	Note      string      `json:"note,omitempty"`
 	Previous  string      `json:"previous_shipped,omitempty"`
-	Current  string      `json:"current_shipped"`
-	Files    []UpdateRow `json:"files"`
+	Current   string      `json:"current_shipped"`
+	Files     []UpdateRow `json:"files"`
 }
 
 // SeedLabel names this Engine's seed by release version and content hash, so

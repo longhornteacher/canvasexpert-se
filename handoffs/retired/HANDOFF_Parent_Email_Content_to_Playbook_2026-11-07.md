@@ -1,3 +1,5 @@
+> **Retired 2026-11-10 — implemented in Dev** (commit 1ce88d5, released in 2.0.0). The Engine supplies parent-report facts, an Engine-drawn table and safe delivery; the playbook writes the email wording, sections and send policy. Local tests only; no Canvas Live or family-delivery check is claimed. Historical instructions follow; do not execute them again.
+
 # HANDOFF: Parent update emails: the Engine supplies facts, the playbook writes the email
 
 Date: 2026-11-07. Facts mapped at `6854757` plus the uncommitted 2026-11-07 parent-update playbook, context and doc edits in the working tree. Build on those edits; do not revert them.

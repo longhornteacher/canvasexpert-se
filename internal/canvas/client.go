@@ -214,6 +214,7 @@ func retryDelay(h http.Header, fallback time.Duration) time.Duration {
 	}
 	return d
 }
+
 // writeStatusUncertain reports whether a non-2xx answer to a write leaves it
 // unknown whether the change landed.
 func writeStatusUncertain(status int) bool {

@@ -392,6 +392,13 @@ func (s *Service) calculateTiming(choice LateTimingStudentDecision, canvasDue st
 	if err != nil {
 		return nil, "selected first genuine submission time is malformed"
 	}
+	// A day the student was absent is a non-school day for that student, and a
+	// deadline on such a day moves to their next day back. Counting starts after
+	// the deadline, so an absence before the due date changes nothing.
+	absent, err := s.absentDates(choice.StudentRef)
+	if err != nil {
+		return nil, "saved absences are unavailable: " + err.Error()
+	}
 	calendar := workspace.SchoolCalendar{}
 	allowanceBase := ""
 	if choice.AllowanceSchoolDays > 0 {
@@ -406,10 +413,13 @@ func (s *Service) calculateTiming(choice LateTimingStudentDecision, canvasDue st
 		if calendar, err = workspace.ReadSchoolCalendar(s.Root); err != nil {
 			return nil, "school calendar is unavailable to count the allowance: " + err.Error()
 		}
-		if deadline, err = calendar.AddSchoolDays(base, choice.AllowanceSchoolDays); err != nil {
+		allowanceBase = base.Format(time.RFC3339)
+		if base, err = calendar.DeadlineAfterAbsences(base, absent); err != nil {
 			return nil, "allowance cannot be counted: " + err.Error()
 		}
-		allowanceBase = base.Format(time.RFC3339)
+		if deadline, err = calendar.WithAbsences(absent).AddSchoolDays(base, choice.AllowanceSchoolDays); err != nil {
+			return nil, "allowance cannot be counted: " + err.Error()
+		}
 		basis = strings.TrimSpace(choice.AccommodationBasis)
 	}
 	if submitted.After(deadline) && calendar.Timezone == "" {
@@ -418,6 +428,16 @@ func (s *Service) calculateTiming(choice LateTimingStudentDecision, canvasDue st
 			return nil, "school calendar is unavailable for a late interval: " + err.Error()
 		}
 	}
+	var absentUsed []string
+	if calendar.Timezone != "" && len(absent) > 0 {
+		if choice.AllowanceSchoolDays == 0 {
+			if deadline, err = calendar.DeadlineAfterAbsences(deadline, absent); err != nil {
+				return nil, "school time cannot be calculated: " + err.Error()
+			}
+		}
+		absentUsed = calendar.AbsencesBetween(absent, due, submitted)
+		calendar = calendar.WithAbsences(absent)
+	}
 	counted, err := calendar.CountSchoolTime(deadline, submitted)
 	if err != nil {
 		return nil, "school time cannot be calculated: " + err.Error()
@@ -425,9 +445,18 @@ func (s *Service) calculateTiming(choice LateTimingStudentDecision, canvasDue st
 	if !observed.StatusKnown || !observed.SecondsLateKnown || !observed.LateKnown {
 		return nil, "current Canvas timing was not fully observed; pull the assignment again"
 	}
-	provenance := &domain.SchoolTimeProvenance{Attempt: source.Ref, SubmittedAt: source.Ref.SubmittedAt, Deadline: deadline.Format(time.RFC3339), Status: counted.Status, SecondsLate: counted.SecondsLate, SkippedDates: append([]string(nil), counted.SkippedDates...), AllowanceSchoolDays: choice.AllowanceSchoolDays, AllowanceBase: allowanceBase}
+	provenance := &domain.SchoolTimeProvenance{Attempt: source.Ref, SubmittedAt: source.Ref.SubmittedAt, Deadline: deadline.Format(time.RFC3339), Status: counted.Status, SecondsLate: counted.SecondsLate, SkippedDates: append([]string(nil), counted.SkippedDates...), AllowanceSchoolDays: choice.AllowanceSchoolDays, AllowanceBase: allowanceBase, AbsentDates: absentUsed}
 	timing := &domain.LateTiming{Status: counted.Status, SecondsLate: counted.SecondsLate, DueAt: due.Format(time.RFC3339), Basis: basis, SchoolTime: provenance, Observed: observed}
 	return timing, ""
+}
+
+// absentDates is every saved absence for one student, oldest first.
+func (s *Service) absentDates(studentRef string) ([]string, error) {
+	store, err := workspace.OpenAbsences(s.Root)
+	if err != nil {
+		return nil, err
+	}
+	return store.Dates(s.Config.Instance, studentRef), nil
 }
 
 func timingMatchesObserved(timing domain.LateTiming, observed domain.ObservedTiming) bool {

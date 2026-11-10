@@ -20,6 +20,9 @@ type Course struct {
 	// EffortFloor is the lowest grade the teacher enters for an honest attempt,
 	// as a percent of the assignment's points; nil means no floor.
 	EffortFloor *Decimal `yaml:"effort_floor,omitempty" json:"effort_floor,omitempty"`
+	// LateWork holds this course's own late-work settings; a line set here wins
+	// over the same line in context/grading.md.
+	LateWork *LateWorkPolicy `yaml:"late_work,omitempty" json:"late_work,omitempty"`
 }
 type CourseConfig struct {
 	Schema     int      `yaml:"schema"`
@@ -39,9 +42,37 @@ type GradingConfig struct {
 // assignment's grading timetable. Zero leaves that row out. The penalty and
 // its floor are not here: they come from Canvas's course late policy.
 type LateWorkPolicy struct {
-	CorrectionSchoolDays int `yaml:"correction_school_days,omitempty"`
-	CloseAfterSchoolDays int `yaml:"close_after_school_days,omitempty"`
-	ExtraTimeSchoolDays  int `yaml:"extra_time_school_days,omitempty"`
+	CorrectionSchoolDays int `yaml:"correction_school_days,omitempty" json:"correction_school_days,omitempty"`
+	CloseAfterSchoolDays int `yaml:"close_after_school_days,omitempty" json:"close_after_school_days,omitempty"`
+	ExtraTimeSchoolDays  int `yaml:"extra_time_school_days,omitempty" json:"extra_time_school_days,omitempty"`
+	// LateCutoffSchoolDays is the school's late-work limit: work is not accepted
+	// more than this many school days after the due date, and the assignment
+	// locks then. 0 means late work is not accepted at all; nil means no limit.
+	LateCutoffSchoolDays *int `yaml:"late_cutoff_school_days,omitempty" json:"late_cutoff_school_days,omitempty"`
+}
+
+// Merged returns p with every line set in course taking its place.
+func (p *LateWorkPolicy) Merged(course *LateWorkPolicy) *LateWorkPolicy {
+	if course == nil {
+		return p
+	}
+	out := LateWorkPolicy{}
+	if p != nil {
+		out = *p
+	}
+	if course.CorrectionSchoolDays > 0 {
+		out.CorrectionSchoolDays = course.CorrectionSchoolDays
+	}
+	if course.CloseAfterSchoolDays > 0 {
+		out.CloseAfterSchoolDays = course.CloseAfterSchoolDays
+	}
+	if course.ExtraTimeSchoolDays > 0 {
+		out.ExtraTimeSchoolDays = course.ExtraTimeSchoolDays
+	}
+	if course.LateCutoffSchoolDays != nil {
+		out.LateCutoffSchoolDays = course.LateCutoffSchoolDays
+	}
+	return &out
 }
 
 // Validate keeps each count a plausible number of school days.
@@ -56,6 +87,9 @@ func (p *LateWorkPolicy) Validate() error {
 		if v.n < 0 || v.n > 60 {
 			return fmt.Errorf("late_work.%s must be between 0 and 60 school days", v.name)
 		}
+	}
+	if n := p.LateCutoffSchoolDays; n != nil && (*n < 0 || *n > 60) {
+		return fmt.Errorf("late_work.late_cutoff_school_days must be between 0 and 60 school days")
 	}
 	return nil
 }
@@ -341,6 +375,9 @@ type StudentWorkDocument struct {
 	Excused                bool     `yaml:"excused"`
 	Monitored              bool     `yaml:"monitored"`
 	ExtraTime              *bool    `yaml:"extra_time,omitempty"` // private saved fact; absent in older packets
+	// ExtraTimeSchoolDays is the teacher's saved late-turn-in allowance for this
+	// student, in school days; absent when no number is saved. Private like ExtraTime.
+	ExtraTimeSchoolDays int `yaml:"extra_time_school_days,omitempty"`
 	// DiscussionEvidence references this student's own attributed posts in the
 	// pulled conversation packet when the assignment is a graded discussion.
 	DiscussionEvidence *DiscussionEvidenceRef `yaml:"discussion_evidence,omitempty"`
@@ -437,6 +474,10 @@ type SchoolTimeProvenance struct {
 	// "+N school days" into Deadline; both are empty for an absolute deadline.
 	AllowanceSchoolDays int    `yaml:"allowance_school_days,omitempty" json:"allowance_school_days,omitempty"`
 	AllowanceBase       string `yaml:"allowance_base,omitempty" json:"allowance_base,omitempty"`
+	// AbsentDates are the student's saved absences from the Canvas due date
+	// through the submission. They were treated as non-school days, and a
+	// deadline that fell on one moved to the next day the student was present.
+	AbsentDates []string `yaml:"absent_dates,omitempty" json:"absent_dates,omitempty"`
 }
 
 type ActionOutcome struct {

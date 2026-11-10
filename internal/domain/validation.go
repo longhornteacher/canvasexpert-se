@@ -36,6 +36,9 @@ func ValidateConfig(c CourseConfig) error {
 		if f := course.EffortFloor; f != nil && (f.Sign() <= 0 || f.Cmp(MustDecimal("100")) > 0) {
 			return fmt.Errorf("courses[%d]: effort_floor must be a percent above 0 and at most 100", i)
 		}
+		if e := course.LateWork.Validate(); e != nil {
+			return fmt.Errorf("courses[%d]: %w", i, e)
+		}
 	}
 	return nil
 }

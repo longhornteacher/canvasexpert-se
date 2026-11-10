@@ -498,8 +498,8 @@ func TestRubricRowPercentMatchesExactDescriptionOnly(t *testing.T) {
 		return map[string]RubricScore{id: {Points: &n}}
 	}
 	a1 := Assignment{Rubric: []Criterion{crit("c1", "Uses evidence"), crit("c2", "Organization")}}
-	a2 := Assignment{Rubric: []Criterion{crit("zz", "Uses evidence")}}   // a different rubric sharing the row
-	a3 := Assignment{Rubric: []Criterion{crit("c9", "Using evidence")}}  // renamed row: not merged
+	a2 := Assignment{Rubric: []Criterion{crit("zz", "Uses evidence")}}  // a different rubric sharing the row
+	a3 := Assignment{Rubric: []Criterion{crit("c9", "Using evidence")}} // renamed row: not merged
 	if p, ok := rubricRowPercent(a1, Submission{RubricAssessment: score("c1", "3")}, "Uses evidence"); !ok || p.Cmp(pct(75)) != 0 {
 		t.Fatalf("first rubric = %v %v", p, ok)
 	}
@@ -545,15 +545,19 @@ func TestSTADScoredItemsHonorsEvidenceAndMissingRule(t *testing.T) {
 	})
 	_ = workspace.WriteTeacherDocument(svc.Root, "context/courses.md", svc.Config, "")
 	now := time.Date(2026, 11, 13, 18, 0, 0, 0, time.UTC)
-	count := func(im STADImprovement) (n int, last stadScored) {
+	// Items come back in no fixed order (scoreImprovement sorts them), so
+	// report the missing item rather than whichever happens to be last.
+	count := func(im STADImprovement) (n int, missing stadScored) {
 		got, err := svc.stadScoredItems(context.Background(), 1, "", im, now)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, items := range got {
 			n += len(items)
-			if len(items) > 0 {
-				last = items[len(items)-1]
+			for _, it := range items {
+				if it.Missing {
+					missing = it
+				}
 			}
 		}
 		return
@@ -561,8 +565,8 @@ func TestSTADScoredItemsHonorsEvidenceAndMissingRule(t *testing.T) {
 	if n, _ := count(STADImprovement{Evidence: "graded_items", MissingCountsAs: "none"}); n != 2 {
 		t.Fatalf("graded items with missing=none: want the two scored items, got %d", n)
 	}
-	if n, last := count(STADImprovement{Evidence: "graded_items", MissingCountsAs: "zero"}); n != 3 || !last.Missing || last.Percent.Sign() != 0 {
-		t.Fatalf("missing=zero: want the missing quiz as a 0 item, got %d %+v", n, last)
+	if n, missing := count(STADImprovement{Evidence: "graded_items", MissingCountsAs: "zero"}); n != 3 || !missing.Missing || missing.AssignmentID != 3 || missing.Percent.Sign() != 0 {
+		t.Fatalf("missing=zero: want the missing quiz as a 0 item, got %d %+v", n, missing)
 	}
 	if n, _ := count(STADImprovement{Evidence: "quizzes", MissingCountsAs: "none"}); n != 1 {
 		t.Fatalf("quizzes only: want the one scored quiz, got %d", n)

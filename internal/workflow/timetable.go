@@ -65,6 +65,35 @@ func LoadLateWorkPolicy(root string) (*domain.LateWorkPolicy, error) {
 	return config.LateWork, nil
 }
 
+// CourseLateWorkPolicy is the late_work that applies to one course: the block
+// in context/grading.md with the course's own lines from context/courses.md
+// taking their place. courseID 0 matches by nickname.
+func CourseLateWorkPolicy(root string, courseID int64, nickname string) (*domain.LateWorkPolicy, error) {
+	policy, err := LoadLateWorkPolicy(root)
+	if err != nil {
+		return nil, err
+	}
+	var config domain.CourseConfig
+	if _, e := workspace.ReadTeacherDocument(root, "context/courses.md", &config); e != nil {
+		return policy, nil
+	}
+	for _, c := range config.Courses {
+		if (courseID != 0 && c.ID == courseID) || (courseID == 0 && nickname != "" && strings.EqualFold(c.Nickname, nickname)) {
+			return policy.Merged(c.LateWork), nil
+		}
+	}
+	return policy, nil
+}
+
+// lateWorkFor is the same policy for a course the Service already has loaded.
+func (s *Service) lateWorkFor(course domain.Course) (*domain.LateWorkPolicy, error) {
+	policy, err := LoadLateWorkPolicy(s.Root)
+	if err != nil {
+		return nil, err
+	}
+	return policy.Merged(course.LateWork), nil
+}
+
 // TimetableRow is one line; Extra is the date for students with the teacher's
 // general extra-time allowance, empty when none applies.
 type TimetableRow struct {
@@ -73,8 +102,10 @@ type TimetableRow struct {
 
 type Timetable struct {
 	Rows []TimetableRow
-	// DefaultLock is the lock date the Engine proposes when the draft has none:
-	// the extra-time close date, so no flagged student is locked out early.
+	// DefaultLock is the lock date the Engine proposes when the draft has none.
+	// With a late-work limit it is the regular cutoff (students with more time
+	// get personal Canvas dates); otherwise the extra-time close date, so no
+	// flagged student is locked out early.
 	DefaultLock *time.Time
 	// Notes explain rows left out (shown to the teacher, never to students).
 	Notes []string
@@ -137,7 +168,11 @@ func buildTimetable(in timetableInput) (Timetable, error) {
 	if _, _, err := pair("Due", 0, ""); err != nil {
 		return t, err
 	}
-	if penalty, ok := penaltyText(in.Late, in.Points); ok {
+	cutoff := in.Policy.LateCutoffSchoolDays
+	if cutoff != nil && *cutoff == 0 {
+		// No late work at all: there is no penalty to describe.
+		t.Rows = append(t.Rows, TimetableRow{Label: "Late work", Detail: "not accepted after the due date"})
+	} else if penalty, ok := penaltyText(in.Late, in.Points); ok {
 		if in.Late != nil && in.Late.Interval == "hour" {
 			t.Rows = append(t.Rows, TimetableRow{Label: "Late penalty", Detail: penalty})
 		} else if _, _, err := pair("Late penalty starts", 1, penalty); err != nil {
@@ -151,7 +186,31 @@ func buildTimetable(in timetableInput) (Timetable, error) {
 			return t, err
 		}
 	}
-	if n := in.Policy.CloseAfterSchoolDays; n > 0 {
+	if cutoff != nil {
+		// The school's limit closes the assignment for everyone on the regular
+		// date; a student with more time gets a personal Canvas date instead.
+		lock := in.Due
+		start := len(t.Rows)
+		if *cutoff > 0 {
+			regular, _, err := pair("Late work accepted through", *cutoff, "later work is not accepted")
+			if err != nil {
+				return t, err
+			}
+			lock = regular
+		}
+		switch {
+		case in.LockAt == nil:
+			t.DefaultLock = &lock
+			if !in.ProposeLock && *cutoff > 0 {
+				t.Rows = t.Rows[:start]
+			}
+		case !sameLocalDay(*in.LockAt, lock, loc):
+			if *cutoff > 0 {
+				t.Rows = t.Rows[:start]
+			}
+			t.Rows = append(t.Rows, TimetableRow{Label: "Assignment closes", Date: schoolDate(*in.LockAt, loc)})
+		}
+	} else if n := in.Policy.CloseAfterSchoolDays; n > 0 {
 		start := len(t.Rows)
 		_, late, err := pair("Assignment closes", n, "")
 		if err != nil {
@@ -273,8 +332,8 @@ func parseOptionalTime(v *string) (*time.Time, error) {
 // planTimetable builds the timetable for an assignment's dates. A nil result
 // with a note means no timetable (not configured, no due date, or a calendar
 // gap); the assignment itself is unaffected. late nil builds a local preview.
-func planTimetable(root string, dueAt, lockAt *string, points domain.Decimal, late *CanvasLatePolicy, proposeLock bool) (*Timetable, string) {
-	policy, err := LoadLateWorkPolicy(root)
+func planTimetable(root string, courseID int64, nickname string, dueAt, lockAt *string, points domain.Decimal, late *CanvasLatePolicy, proposeLock bool) (*Timetable, string) {
+	policy, err := CourseLateWorkPolicy(root, courseID, nickname)
 	if err != nil {
 		return nil, "grading timetable left out: " + err.Error()
 	}
@@ -306,13 +365,13 @@ func PreviewTimetable(root string, d domain.AssignmentDocument) []string {
 	if d.Operation != "create" || (d.GradingTimetable != nil && !*d.GradingTimetable) {
 		return nil
 	}
-	t, note := planTimetable(root, d.DueAt, d.LockAt, d.Points, nil, true)
+	t, note := planTimetable(root, d.CourseID, d.Course, d.DueAt, d.LockAt, d.Points, nil, true)
 	if t == nil {
 		return []string{note}
 	}
 	lines := t.Lines()
 	if t.DefaultLock != nil {
-		lines = append(lines, "lock_at will be set to "+t.DefaultLock.Format(time.RFC3339)+" (the extra-time close date) because the draft has none")
+		lines = append(lines, "lock_at will be set to "+t.DefaultLock.Format(time.RFC3339)+" (the timetable's close date) because the draft has none")
 	}
 	return lines
 }
@@ -324,11 +383,11 @@ func (s *Service) createTimetable(ctx context.Context, doc *domain.AssignmentDoc
 		return &domain.TimetableRecord{Note: "grading timetable left out: the draft opts out"}
 	}
 	// Settle everything local first so an unconfigured create makes no extra read.
-	if t, note := planTimetable(s.Root, doc.DueAt, doc.LockAt, doc.Points, nil, true); t == nil {
+	if t, note := planTimetable(s.Root, courseID, "", doc.DueAt, doc.LockAt, doc.Points, nil, true); t == nil {
 		return &domain.TimetableRecord{Note: note}
 	}
 	late := s.courseLatePolicy(ctx, courseID)
-	t, note := planTimetable(s.Root, doc.DueAt, doc.LockAt, doc.Points, &late, true)
+	t, note := planTimetable(s.Root, courseID, "", doc.DueAt, doc.LockAt, doc.Points, &late, true)
 	if t == nil {
 		return &domain.TimetableRecord{Note: note}
 	}
@@ -353,17 +412,17 @@ func (s *Service) refreshTimetable(ctx context.Context, d *domain.AssignmentDocu
 	}
 	late := s.courseLatePolicy(ctx, d.CourseID)
 	if sameDate(d.Observed.LockAt, d.LockAt) && !sameDate(d.Observed.DueAt, d.DueAt) {
-		old, _ := planTimetable(s.Root, d.Observed.DueAt, nil, d.Points, &late, false)
+		old, _ := planTimetable(s.Root, d.CourseID, "", d.Observed.DueAt, nil, d.Points, &late, false)
 		lock, _ := parseOptionalTime(d.Observed.LockAt)
 		if old != nil && old.DefaultLock != nil && lock != nil && old.DefaultLock.Equal(*lock) {
-			moved, _ := planTimetable(s.Root, d.DueAt, nil, d.Points, &late, false)
+			moved, _ := planTimetable(s.Root, d.CourseID, "", d.DueAt, nil, d.Points, &late, false)
 			if moved != nil && moved.DefaultLock != nil {
 				v := moved.DefaultLock.Format(time.RFC3339)
 				d.LockAt = &v
 			}
 		}
 	}
-	t, note := planTimetable(s.Root, d.DueAt, d.LockAt, d.Points, &late, false)
+	t, note := planTimetable(s.Root, d.CourseID, "", d.DueAt, d.LockAt, d.Points, &late, false)
 	if t == nil {
 		return body, note + "; the existing timetable was left as it is and may now be out of date"
 	}
