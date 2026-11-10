@@ -39,7 +39,7 @@ type Server struct {
 	sessionReadyWait  time.Duration
 	pulls             map[string]*pullJob
 	run               func(context.Context, ...string) (TextOutput, error) // nil uses command; tests replace it
-	newChild          func(args []string) *exec.Cmd                         // tests replace the child Engine
+	newChild          func(args []string) *exec.Cmd                        // tests replace the child Engine
 }
 
 type TextOutput struct {
@@ -84,6 +84,17 @@ type PrepareLateTimingInput struct {
 	Packet   string                               `json:"packet" jsonschema:"Workspace-relative packet or group-packet path under courses/"`
 	Students []workflow.LateTimingStudentDecision `json:"students,omitempty" jsonschema:"First-genuine choices for individual packet members"`
 	Groups   []workflow.LateTimingGroupDecision   `json:"groups,omitempty" jsonschema:"Per-member first-genuine choices for group-packet entries"`
+}
+
+type LateSweepInput struct {
+	Course string `json:"course" jsonschema:"Configured course nickname"`
+	Period string `json:"period,omitempty" jsonschema:"Grading period name from context/school-calendar.md; default the current period"`
+}
+
+type PersonalDatesInput struct {
+	Course       string `json:"course" jsonschema:"Configured course nickname"`
+	AssignmentID int64  `json:"assignment_id,omitempty" jsonschema:"Canvas assignment ID; omit to cover the course's published assignments due in the last three weeks or later"`
+	Preview      bool   `json:"preview,omitempty" jsonschema:"Report the planned dates without writing to Canvas"`
 }
 
 type CopyAssignmentInput struct {
@@ -290,6 +301,23 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 			return TextOutput{}, err
 		}
 		return TextOutput{Text: string(encoded)}, nil
+	})
+	addActionTool(server, "late_sweep", "Recompute a course's late marks in school time. For every submission Canvas shows as late on an ordinary individual assignment due in the grading period, the Engine times the earliest attempt against the student's deadline, skipping weekends, calendar closures and the teacher's saved absences, and adding saved extra-time days. Returns proposed, unchanged and held rows by student_ref and alias, and saves one late-only results file per assignment under courses/<course>/late-sweeps/ to send with post_results after the teacher's go-ahead. Read-only: it never writes to Canvas. A long sweep returns state pending; call again with the same inputs.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in LateSweepInput) (TextOutput, error) {
+		args := []string{"late-sweep", in.Course}
+		if in.Period != "" {
+			args = append(args, "--period", in.Period)
+		}
+		return s.longCommand(ctx, args...)
+	})
+	addActionTool(server, "personal_dates", "Give students their own Canvas due and lock dates on an assignment, as single-student Canvas overrides. A student with saved extra time gets a later due date (saved school days, or a saved percent of the school days from the assigned date to the due date, rounded up); a student absent on the due date is due the next day back; where the course has a late-work limit the lock date follows the student's own due date; and after the due date, students whose work was on time are reopened through the correction window. Dates only move later, a student who already has a personal Canvas due date keeps it, and group assignments are skipped. Returns planned, written and held rows by student_ref and alias; the why list is private. Use preview first, then write after the teacher's go-ahead.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PersonalDatesInput) (TextOutput, error) {
+		args := []string{"personal-dates", in.Course}
+		if in.AssignmentID > 0 {
+			args = append(args, strconv.FormatInt(in.AssignmentID, 10))
+		}
+		if in.Preview {
+			args = append(args, "--preview")
+		}
+		return s.longCommand(ctx, args...)
 	})
 	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates into courses/<course>/parent-updates/<run>/report.json: for each student and course, every assignment due this grading period so far with its released score, percent, student due date, direct link and turned-in evidence, plus upcoming work for printed sheets. Facts only; the playbook writes the email. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
 		args := append(append([]string{"parent-report"}, in.Courses...), in.Students...)
@@ -516,7 +544,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "stad_teams", "stad_standings", "stad_publish", "stad_push_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "late_sweep", "personal_dates", "stad_teams", "stad_standings", "stad_publish", "stad_push_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

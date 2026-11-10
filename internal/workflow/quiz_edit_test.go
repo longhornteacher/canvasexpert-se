@@ -55,7 +55,7 @@ func (f *contentEditFixture) handler(t *testing.T) http.HandlerFunc {
 						}
 						entry := it["entry"].(map[string]any)
 						for k, v := range wrapper["entry"].(map[string]any) {
-							if k != "title" && k != "item_body" && k != "feedback" {
+							if k != "title" && k != "item_body" && k != "feedback" && k != "answer_feedback" {
 								t.Errorf("unrelated field written: %s", k)
 							}
 							entry[k] = v
@@ -283,5 +283,33 @@ func TestQuizContentEditObservedNullAndAbsentAreDistinct(t *testing.T) {
 	r, e := s.PushQuizEdit(context.Background(), p)
 	if e != nil || len(f.patches) != 1 || r.Actions[0].Outcome.Status != "held" || r.Actions[1].Outcome.Status != "succeeded" {
 		t.Fatalf("presence semantics: %+v %v", r, e)
+	}
+}
+
+func TestQuizContentEditAnswerFeedbackKeepsOtherChoices(t *testing.T) {
+	f := newContentEditFixture()
+	f.items[0]["entry"].(map[string]any)["answer_feedback"] = map[string]any{"c1": "<p>Right.</p>", "c2": "<p>Wrong.</p>"}
+	s, _ := workflowFixture(t, f.handler(t))
+	p, d := pullContentEdit(t, s)
+	d.Items[0].Changes = map[string]any{"answer_feedback": map[string]any{"c2": "<p>Wrong.</p><p>Why right.</p>"}}
+	if e := workspace.WriteDocument(p, &d, ""); e != nil {
+		t.Fatal(e)
+	}
+	r, e := s.PushQuizEdit(context.Background(), p)
+	if e != nil || r.Status != "completed" {
+		t.Fatalf("push: %+v %v", r, e)
+	}
+	got := f.items[0]["entry"].(map[string]any)["answer_feedback"]
+	if want := map[string]any{"c1": "<p>Right.</p>", "c2": "<p>Wrong.</p><p>Why right.</p>"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("answer_feedback = %v", got)
+	}
+	// A choice ID Canvas doesn't know is held, not added.
+	p, d = pullContentEdit(t, s)
+	d.Items[0].Changes = map[string]any{"answer_feedback": map[string]any{"c9": "<p>Stray.</p>"}}
+	if e := workspace.WriteDocument(p, &d, ""); e != nil {
+		t.Fatal(e)
+	}
+	if r, _ = s.PushQuizEdit(context.Background(), p); r.Status != "partial" || r.Actions[0].Outcome.Status != "held" {
+		t.Fatalf("unknown choice not held: %+v", r)
 	}
 }

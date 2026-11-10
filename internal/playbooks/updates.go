@@ -38,6 +38,7 @@ func seedPaths() []string {
 	sort.Strings(out)
 	return out
 }
+
 // overrideFile holds the teacher's overrides of shipped defaults. Like
 // context/, it is teacher-owned: seeded when missing, never replaced.
 const overrideFile = "Teacher_Override.md"

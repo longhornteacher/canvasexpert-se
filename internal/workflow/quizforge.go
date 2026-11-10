@@ -782,7 +782,7 @@ func (it qfItem) buildChoice() map[string]any {
 	}
 	choices := make([]map[string]any, len(it.Choices))
 	feedback := map[string]any{}
-	var correct []string
+	var correct, wrong []string
 	missed := ""
 	for i, c := range it.Choices {
 		id := newUUID()
@@ -795,15 +795,24 @@ func (it qfItem) buildChoice() map[string]any {
 			feedback[id] = it.choiceFeedback(c.Correct, r)
 			if c.Correct {
 				missed += it.missedFeedback(c.Text, r)
+			} else {
+				wrong = append(wrong, id)
 			}
 		}
 		if c.Correct {
 			correct = append(correct, id)
 		}
 	}
+	// Canvas reliably shows only the picked choice's feedback, so each wrong
+	// choice also carries the correct answer's explanation.
+	for _, id := range wrong {
+		feedback[id] = feedback[id].(string) + missed
+	}
 	entry := map[string]any{"title": it.title(it.Type), "item_body": it.Prompt, "interaction_data": map[string]any{"choices": choices}, "answer_feedback": feedback}
 	general := it.neutralFeedback()
-	if missed != "" {
+	// An MA student who leaves out a correct choice picks no wrong choice, so
+	// the question's incorrect feedback still names the correct choices.
+	if missed != "" && it.Type == "MA" {
 		general["incorrect"] = missed
 	}
 	if len(general) > 0 {

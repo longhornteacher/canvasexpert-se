@@ -93,6 +93,8 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   set-file-access COURSE FILE_ID --access course|hidden|locked Change an existing course file's access
   pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only timing changes; never writes to Canvas
+  late-sweep COURSE [--period NAME] Recompute a course's late marks in school time (weekends, closures, saved absences and extra days) and save late-only results to post; never writes to Canvas
+  personal-dates COURSE [ASSIGNMENT_ID] [--preview] Give students their own Canvas due and lock dates: saved extra time, an absence on the due date, and on-time work reopened for corrections; dates only move later
   parent-report COURSE [REF ...] Read this term's assignment facts (score, percent, due date, turned-in evidence) into courses/COURSE/parent-updates/
   work-habits COURSE [--from DATE] [--to DATE] [REF ...] Read each student's weekly turn-in record (on time, late, missing, excused) into courses/COURSE/work-habits/; default last four weeks
   stad teams COURSE             Check context/stad/COURSE/teams.md against the course's active students; read-only
@@ -538,7 +540,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		}
 		return 0
 	}
-	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "inbox-list": true, "inbox-read": true, "inbox-reply": true, "inbox-set-state": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-quiz": true, "rubrics": true, "pull-rubric": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "work-habits": true, "stad": true, "copy-module": true, "copy-assignment": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "quiz-accommodations": true, "set-tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true, "replace-text": true}
+	known := map[string]bool{"students": true, "courses": true, "modules": true, "external-resources": true, "inbox-list": true, "inbox-read": true, "inbox-reply": true, "inbox-set-state": true, "groups": true, "pull-group-set": true, "pull-group-memberships": true, "push": true, "pull-page": true, "pull-quiz": true, "rubrics": true, "pull-rubric": true, "pull-discussion": true, "page-history": true, "upload-file": true, "pull-item": true, "pull-assignment-dates": true, "prepare-audience": true, "pull-work": true, "prepare-late-timing": true, "parent-report": true, "work-habits": true, "late-sweep": true, "personal-dates": true, "stad": true, "copy-module": true, "copy-assignment": true, "family-contact-prepare": true, "parent-review": true, "student-report": true, "draft-pdf": true, "post": true, "push-quiz": true, "validate": true, "results-init": true, "api": true, "quiz-points": true, "tags": true, "quiz-accommodations": true, "set-tags": true, "assign-to": true, "assign-modules": true, "audience-report": true, "set-file-access": true, "replace-text": true}
 	if !known[cmd] {
 		return fail(inputError(fmt.Errorf("unknown command %q; run cse help", cmd)), progress)
 	}
@@ -585,6 +587,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return fail(json.NewEncoder(out).Encode(sample), progress)
 		}
 		fmt.Fprintf(out, "Valid document: %s\n", p)
+		previewTimetable(root, p, out)
 		previewResults(root, p, out)
 		return 0
 	}
@@ -635,6 +638,23 @@ func documentPath(root, name string) (string, error) {
 		return workspace.ConstrainPath(root, relative)
 	}
 	return workspace.ConstrainPath(root, name)
+}
+
+// previewTimetable prints the grading timetable a create draft will get, from
+// local files only; push adds Canvas's late-penalty amount.
+func previewTimetable(root, path string, out io.Writer) {
+	var doc domain.AssignmentDocument
+	if _, err := workspace.ReadDocument(path, &doc); err != nil || doc.Kind != "assignment" {
+		return
+	}
+	lines := workflow.PreviewTimetable(root, doc)
+	if len(lines) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "Grading timetable preview:")
+	for _, l := range lines {
+		fmt.Fprintln(out, "  "+l)
+	}
 }
 
 // previewResults prints each student's computed assessment and late timing so the

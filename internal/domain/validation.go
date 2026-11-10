@@ -36,6 +36,9 @@ func ValidateConfig(c CourseConfig) error {
 		if f := course.EffortFloor; f != nil && (f.Sign() <= 0 || f.Cmp(MustDecimal("100")) > 0) {
 			return fmt.Errorf("courses[%d]: effort_floor must be a percent above 0 and at most 100", i)
 		}
+		if e := course.LateWork.Validate(); e != nil {
+			return fmt.Errorf("courses[%d]: %w", i, e)
+		}
 	}
 	return nil
 }
@@ -44,7 +47,7 @@ func (c *GradingConfig) Validate() error {
 	if c.Schema != 1 {
 		return fmt.Errorf("schema must be 1")
 	}
-	return nil
+	return c.LateWork.Validate()
 }
 func (s *StudentNotes) Validate() error {
 	if s.Schema != 1 {
@@ -116,6 +119,9 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 	}
 	if d.Operation == "create" && strings.TrimSpace(body) == "" {
 		return fmt.Errorf("assignment teaching body cannot be empty")
+	}
+	if d.GradingTimetable != nil && d.Operation != "create" {
+		return fmt.Errorf("grading_timetable applies only to a create; an update keeps an existing timetable current from its dates")
 	}
 	if d.Instance != "" && !validInstance(d.Instance) {
 		return fmt.Errorf("instance must be an HTTPS Canvas origin")

@@ -73,12 +73,24 @@ func TestMissedChoiceItemsExplainTheCorrectAnswer(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := q.itemPayloads()
-	if got, want := entryOf(p[0])["feedback"].(map[string]any)["incorrect"], fbGreen+`Why “Simile” is the best answer:</strong> It uses like.</p>`; got != want {
-		t.Errorf("MC incorrect feedback = %v, want %v", got, want)
+	mc := entryOf(p[0])
+	if _, ok := mc["feedback"]; ok {
+		t.Errorf("MC must not repeat the explanation as question feedback: %v", mc["feedback"])
+	}
+	why := fbGreen + `Why “Simile” is the best answer:</strong> It uses like.</p>`
+	got := strings.Join(feedbackTexts(t, p[0]), "\n")
+	if !strings.Contains(got, fbRed+`Why this isn't the best answer:</strong> No.</p>`+why) {
+		t.Errorf("MC distractor must carry the correct answer's explanation: %s", got)
+	}
+	if strings.Count(got, why) != 1 {
+		t.Errorf("only the distractor carries the explanation, once: %s", got)
 	}
 	want := fbGreen + `Why “A” is a correct choice:</strong> One.</p>` + fbGreen + `Why “B” is a correct choice:</strong> Two.</p>`
 	if got := entryOf(p[1])["feedback"].(map[string]any)["incorrect"]; got != want {
 		t.Errorf("MA incorrect feedback = %v, want %v", got, want)
+	}
+	if got := strings.Join(feedbackTexts(t, p[1]), "\n"); !strings.Contains(got, fbRed+`Why this choice isn't correct:</strong> Three.</p>`+want) {
+		t.Errorf("MA distractor must carry the correct choices' explanations: %s", got)
 	}
 }
 

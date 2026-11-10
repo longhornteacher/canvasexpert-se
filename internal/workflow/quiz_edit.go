@@ -73,7 +73,7 @@ func (it *quizContentItem) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(raw.Entry, &fields); err != nil {
 		return err
 	}
-	it.Entry.Fields = quizContentFields(fields, "title", "item_body", "feedback", "body", "instructions")
+	it.Entry.Fields = quizContentFields(fields, "title", "item_body", "feedback", "answer_feedback", "body", "instructions")
 	return nil
 }
 
@@ -175,16 +175,23 @@ type QuizEditReport struct {
 func quizTextPatch(observed, live, changes map[string]any) (map[string]any, string) {
 	patch := map[string]any{}
 	for key, want := range changes {
-		if key == "feedback" {
+		if key == "feedback" || key == "answer_feedback" {
 			requested := want.(map[string]any)
 			old, _ := observed[key].(map[string]any)
 			now, ok := live[key].(map[string]any)
 			if live[key] != nil && !ok {
 				return nil, "Current feedback cannot be preserved; pull the quiz again."
 			}
+			if key == "answer_feedback" {
+				for id := range requested {
+					if _, known := now[id]; !known {
+						return nil, fmt.Sprintf("answer_feedback: choice %s has no feedback in Canvas; edit only pulled choice IDs.", id)
+					}
+				}
+			}
 			sub, held := quizTextPatch(old, now, requested)
 			if held != "" {
-				return nil, "feedback: " + held
+				return nil, key + ": " + held
 			}
 			if len(sub) > 0 {
 				merged := map[string]any{}

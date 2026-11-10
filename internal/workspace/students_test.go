@@ -79,7 +79,7 @@ func TestQuizSettingValidation(t *testing.T) {
 		t.Run(tc.field, func(t *testing.T) {
 			root := t.TempDir()
 			path := filepath.Join(root, ".cse", "students.csv")
-			data := strings.Join(studentHeader, ",") + "\ns-test,https://school.example,7,Ana,Ana,Pikachu,,,false,false,teacher," + tc.time + "," + tc.choices + "\n"
+			data := strings.Join(quizStudentHeader, ",") + "\ns-test,https://school.example,7,Ana,Ana,Pikachu,,,false,false,teacher," + tc.time + "," + tc.choices + "\n"
 			if err := WriteFile(path, []byte(data), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -246,5 +246,37 @@ func TestNameNoteRequiresTargetIdentityInRoster(t *testing.T) {
 	got, warnings := NotesFor(notes, "ELA", a, []Student{a})
 	if len(got) != 1 || len(warnings) != 0 {
 		t.Fatalf("unique target note missing: %v %v", got, warnings)
+	}
+}
+
+func TestExtraTimePercentSavesReloadsAndExcludesDays(t *testing.T) {
+	root := makeRulesInstall(t)
+	path := filepath.Join(root, ".cse", "students.csv")
+	old := strings.Join(extraDaysStudentHeader, ",") + "\ns-a,https://school.example,7,Ana Smith,Ana,Pikachu,,,true,true,teacher,,false,0\n"
+	if err := WriteFile(path, []byte(old), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenStudents(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.Rows[0].ExtraTimePercent != 0 || !store.Rows[0].ExtraTime {
+		t.Fatalf("legacy row changed: %+v", store.Rows[0])
+	}
+	store.Rows[0].ExtraTimePercent = 50
+	if err = store.Save(); err != nil {
+		t.Fatal(err)
+	}
+	store, err = OpenStudents(root)
+	if err != nil || store.Rows[0].ExtraTimePercent != 50 || store.Rows[0].Alias != "Pikachu" {
+		t.Fatalf("reload: %v %+v", err, store.Rows)
+	}
+	store.Rows[0].ExtraTimeDays = 2
+	if err = store.Save(); err == nil || !strings.Contains(err.Error(), "extra_time_percent") {
+		t.Fatalf("days and percent together must be rejected: %v", err)
+	}
+	store.Rows[0].ExtraTimeDays, store.Rows[0].ExtraTimePercent = 0, MaxExtraTimePercent+1
+	if err = store.Save(); err == nil {
+		t.Fatal("percent over the maximum was saved")
 	}
 }

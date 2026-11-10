@@ -178,8 +178,12 @@ func (s *Service) schoolTimeHold(live Submission, target *domain.LateTiming) str
 	if err != nil {
 		return "school-time submission time is invalid; recompute timing"
 	}
+	absentNow, err := s.absentDatesForUser(live.UserID)
+	if err != nil {
+		return "saved absences are unavailable; recompute timing before posting"
+	}
 	var result workspace.SchoolTimeResult
-	if submitted.After(deadline) {
+	if submitted.After(deadline) || len(absentNow) > 0 || len(p.AbsentDates) > 0 {
 		calendarData, readErr := workspace.ReadSchoolCalendar(s.Root)
 		if readErr != nil {
 			return "school calendar is unavailable; recompute timing before posting"
@@ -187,7 +191,11 @@ func (s *Service) schoolTimeHold(live Submission, target *domain.LateTiming) str
 		if err := calendarData.Validate(); err != nil {
 			return "school calendar is invalid; recompute timing before posting"
 		}
-		result, err = calendarData.CountSchoolTime(deadline, submitted)
+		due, dueErr := time.Parse(time.RFC3339Nano, target.DueAt)
+		if dueErr != nil || !sameSchoolTimeDates(calendarData.AbsencesBetween(absentNow, due, submitted), p.AbsentDates) {
+			return "saved absences changed since lateness was calculated; recompute timing before posting"
+		}
+		result, err = calendarData.WithAbsences(p.AbsentDates).CountSchoolTime(deadline, submitted)
 		if err != nil {
 			return "school calendar no longer covers this timing interval; recompute timing before posting"
 		}
@@ -198,6 +206,24 @@ func (s *Service) schoolTimeHold(live Submission, target *domain.LateTiming) str
 		return "school calendar changed since lateness was calculated; recompute timing before posting"
 	}
 	return ""
+}
+
+// absentDatesForUser finds the student by Canvas ID in the private table; a
+// student the table has never seen has no saved absences.
+func (s *Service) absentDatesForUser(userID int64) ([]string, error) {
+	absences, err := workspace.OpenAbsences(s.Root)
+	if err != nil || len(absences.Rows) == 0 {
+		return nil, err
+	}
+	students, err := workspace.OpenStudents(s.Root)
+	if err != nil {
+		return nil, err
+	}
+	ref := studentRefByCanvasID(students, s.Config.Instance, userID)
+	if ref == "" {
+		return nil, nil
+	}
+	return absences.Dates(s.Config.Instance, ref), nil
 }
 
 func sameSchoolTimeDates(a, b []string) bool {

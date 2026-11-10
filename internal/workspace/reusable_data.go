@@ -7,7 +7,7 @@ import (
 // initializeReusableData upgrades the former rules-only UserSync boundary. Existing
 // UserSync data wins, and local originals remain intact. Session work is excluded.
 func initializeReusableData(source, destination string) error {
-	for _, relative := range []string{"context/courses.md", "context/students.md", ".cse/students.csv", ".cse/rosters.json", contactsFile} {
+	for _, relative := range []string{"context/courses.md", "context/students.md", ".cse/students.csv", ".cse/rosters.json", absencesFile, contactsFile} {
 		if err := rejectLinkedPrefixes(source, relative); err != nil {
 			return err
 		}

@@ -28,6 +28,7 @@ Do not add Due Soon, first/current score history, a complete inventory of passin
 - List **every current released assignment score below 70%** in that term, including a recorded zero. Set `below_percent: 70` in the draft; the Engine compares each released score to its points possible. Exactly 70% is not below 70: 34/50 is listed, 35/50 is not.
 - The report already uses published, student-visible, non-excused work and each student's own effective due date. An individualized deadline controls term membership.
 - Low-scoring work is listed whether or not it was turned in. A recorded zero does not prove that work was never submitted.
+- A zero from a course's late-work cutoff is not "not turned in" unless Canvas shows no submission; say the work came in after the course's limit, never guess.
 - The Engine uses the latest released grade. An earlier failing score raised to 70% or above is no longer listed.
 - An absent or unreleased grade is not a zero and is never listed as below 70.
 

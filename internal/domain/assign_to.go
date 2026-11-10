@@ -64,15 +64,15 @@ type AssignToOutcome struct {
 }
 
 type AssignToTarget struct {
-	Module     Ref            `yaml:"module,omitempty"`
-	Page       Ref            `yaml:"page,omitempty"`
-	Quiz       Ref            `yaml:"quiz,omitempty"`
-	Assignment Ref            `yaml:"assignment,omitempty"`
-	Discussion Ref            `yaml:"discussion,omitempty"`
-	Tags       []string       `yaml:"tags,omitempty"`
-	Everyone   *bool          `yaml:"everyone,omitempty"`
-	Cascade    string         `yaml:"cascade,omitempty"` // module only: none, clear_item_overrides, apply_to_items
-	Dates      *AssignToDates `yaml:"dates,omitempty"`
+	Module     Ref             `yaml:"module,omitempty"`
+	Page       Ref             `yaml:"page,omitempty"`
+	Quiz       Ref             `yaml:"quiz,omitempty"`
+	Assignment Ref             `yaml:"assignment,omitempty"`
+	Discussion Ref             `yaml:"discussion,omitempty"`
+	Tags       []string        `yaml:"tags,omitempty"`
+	Everyone   *bool           `yaml:"everyone,omitempty"`
+	Cascade    string          `yaml:"cascade,omitempty"` // module only: none, clear_item_overrides, apply_to_items
+	Dates      *AssignToDates  `yaml:"dates,omitempty"`
 	Outcome    AssignToOutcome `yaml:"outcome,omitempty"`
 }
 
