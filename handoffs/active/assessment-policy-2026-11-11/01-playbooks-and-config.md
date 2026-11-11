@@ -27,7 +27,7 @@ No test searches playbook prose.
 1. **Config.** Add a `retakes` block to `GradingConfig` (`internal/domain/types.go`): `cap_percent` and `school_days`, validated like the existing percent and school-day fields. No block means retake operations report that no retake policy is set. No default is invented for other teachers.
 2. **Exemplar.** In `internal/render/render.go`, show a part's exemplar at every score and label it `Exemplar`. Remove the below-threshold condition and the `Hand-copy exemplar` wording in both `partText` and the item-comment path. Whether copying earns Daily points is the playbook's sentence, not the Engine's.
 3. **Corrections row.** One optional authoring setting, on assignment drafts and QuizForge settings, that omits `Last day for corrections` from the timetable (`internal/workflow/timetable.go:184`). The Engine prints no retake policy text; the agent writes that sentence in the assignment's own instructions.
-4. **`personal_dates`.** It reopens on-time students through the correction window (`internal/workflow/personal_dates.go:317`). It must not do that for an assignment that has a retake quiz by title, because a reopened Major invites the second submission the policy removes.
+4. **`personal_dates`.** It reopens on-time students through the correction window (`internal/workflow/personal_dates.go:317`). It must not do that for an assignment that has a retake quiz by the slice 02 pairing rule, because a reopened Major invites the second submission the policy removes.
 
 ## Tests
 

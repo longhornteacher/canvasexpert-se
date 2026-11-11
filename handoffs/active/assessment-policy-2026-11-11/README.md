@@ -1,6 +1,6 @@
 # Major retakes, Daily corrections and the honest-effort floor
 
-Date: 2026-11-11. Status: **plan revised after review; nothing is built**. Baseline: Dev `6a2a5b4`. This revision replaces the eight-slice plan in that commit (still in git history) with four slices. It is written for further adversarial review before execution.
+Date: 2026-11-11. Status: **plan revised after two reviews; nothing is built**. Baseline: Dev `6a2a5b4`. This revision replaces the eight-slice plan in that commit (still in git history) with four slices. A second review of `4cd1d61` traced ten cases through the plan and the Engine; all ten are folded into slices 02-04. It is written for further adversarial review before execution.
 
 No release, install, UserInstall/UserSync edit, real grading, publication or Canvas Live write is authorized by this plan. Execute one slice at a time when asked.
 
@@ -56,18 +56,18 @@ Exact rational arithmetic, rounded once at the end with the existing floor round
 
 ## Shared rules
 
-- **Canvas is the record.** The retake belongs to the original whose name follows the fixed prefix, in the same course. Exactly one match, or the Engine holds and names the problem. No local pairing file, so any PC can run any step.
+- **Canvas is the record.** The retake carries its original's assignment ID in a hidden marker in its instructions (slice 02, pairing rule). Exactly one match, or the Engine holds and names the problem. No local pairing file, so any PC can run any step. Engine-written comment lines record what was added or awarded; the Engine trusts them only when a teacher account wrote them.
 - **One student's problem never stops the others.** A held student gets a specific reason.
 - **Honest scores stay honest.** Item points, rubric points and the earned line in comments are never changed by the floor or the cap.
-- **Teacher's own courses first.** In a course with an `owner` (team teaching), retake assignment and application hold with an explanation. The exact retake title has no room for the `(CE)` consent tag, and that conflict is not solved here.
+- **Teacher's own courses first.** In a course with an `owner` (team teaching), retake assignment and application hold with an explanation. This is a scope choice, not a technical limit: a `(CE)` original gives a `(CE)` retake title, and the Engine finds the tag anywhere in a title. What is unplanned is how hidden grades waiting for the teammate to post interact with the posted-date window.
 - **Evidence.** Each slice updates `internal/localui/capabilities.go` and `docs/engine-capabilities.md` together, keeping local tests, Canvas Live and pending apart. Completion checks follow `handoffs/README.md`.
 
 ## Cut from the previous plan, and why
 
 | Cut | Reason |
 |---|---|
-| `retake-results` document kind with saved baselines | The formula never lowers a grade, so recomputing at post time is safe. One operation with a preview replaces it. |
-| Pairing sidecar, `retake_for` identity object, context-note cross-references | Title match in Canvas is enough and works across PCs. |
+| `retake-results` document kind with full baselines and stage outcomes | One operation replaces it. The preview saves only the reviewed values, and a student who changed since is held (slice 04). |
+| Pairing sidecar, `retake_for` identity object, context-note cross-references | The original's ID is recorded in the retake in Canvas, which works across PCs. |
 | Tutorial-release document with per-student eligibility records | Replaced by assigning every failing student once; the access code is the gate. |
 | Due-date anchored window and its provenance record | The window starts at the posted date, which Canvas stores per student. |
 | `assessment_category` field and timetable refresh on category change | The timetable cannot show a retake date any more; one authoring setting omits the corrections row. |
@@ -91,11 +91,11 @@ Not a slice. Edits go through the Engine's authority-aware tools, after re-readi
 
 These are the planner's, not the teacher's. Reviewers should attack them first.
 
-1. Pairing by exact title alone. A renamed original breaks the link; the Engine holds and says so.
+1. Pairing by a hidden marker in the retake's instructions, with a two-way unique title match as the fallback if New Quiz instructions cannot keep it.
 2. A student with no graded attempt on the original is not assigned the retake. They are listed for the teacher.
 3. Team-taught courses are held in this version.
-4. The hold against later lowering reads an Engine-written comment line (slice 04).
-5. A floored New Quiz that is later re-scored above the floor holds for the teacher instead of recalculating fudge (slice 03).
-6. Students with saved extra time get the existing extra-time rule applied to the 4-day window (slice 02).
+4. The hold against later lowering, and the re-score arithmetic for a floored quiz, read amounts from Engine-written comment lines (slices 03 and 04). A teacher who deletes the comment removes the protection.
+5. Retake apply writes the comment before the grade so that a retry needs no local record (slice 04).
+6. Students with saved extra time get it applied to the 4-day window itself: a percent of 4 days, or their saved days (slice 02).
 7. The exemplar is shown at every score for every teacher (slice 01).
 8. `personal_dates` stops reopening a Major original for corrections (slice 01).
