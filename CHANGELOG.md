@@ -4,6 +4,12 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 2.2.1 (2026-11-11)
+
+Playbook wording only; the Engine is unchanged from 2.2.0.
+
+- Playbooks no longer state "no points for copying" or "no second submission" on a Major. A Major's instructions describe only the tutorial retake for failing students and are otherwise silent on corrections; the teacher handles points back directly. Engine behavior is unchanged.
+
 ## 2.2.0 (2026-11-11)
 
 Major tutorial retakes, always-shown exemplars and a retake policy. Checked with local tests only; not yet observed in Canvas Live.
