@@ -4,6 +4,10 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 2.2.2 (2026-11-11)
+
+Retake playbook wording, plus two classroom-team additions in the Engine. Checked with local tests only.
+
 - Classroom teams (STAD): optional recognition levels in `rules.md` (Super/Great/Good team style) replace ranks on the standings Page, so no team is shown as last, and `cse stad print-teams` / MCP `stad_print_teams` saves a printable team list with students' real names for the teacher. Local tests only.
 
 - Playbooks: a Major's tutorial retake is now written after the Major is scored, from what the students below the retake line actually missed, and sized for a 20 to 30 minute tutorial. It is no longer a full parallel form written alongside the Major. Engine behavior is unchanged.
