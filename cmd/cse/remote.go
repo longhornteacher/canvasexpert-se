@@ -929,6 +929,28 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			if rep.Status == "held" {
 				return 3
 			}
+		case "print-teams":
+			round := ""
+			if len(args) == 4 && args[2] == "--round" {
+				round = args[3]
+			} else if len(args) != 2 {
+				return fail(inputError(fmt.Errorf("stad print-teams takes COURSE [--round NAME]")), progress)
+			}
+			doc, label, n, e := service.STADTeamSheet(args[1], round)
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			saved, e := localui.SaveTeamSheet(ctx, doc, label)
+			note, e := localui.PrintableNote(e)
+			if saved != "" {
+				fmt.Fprintf(out, "Saved the team list (%d teams, with student names): %s\n", n, saved)
+			}
+			if note != "" {
+				fmt.Fprintln(out, note)
+			}
+			if e != nil {
+				return fail(e, progress)
+			}
 		case "push-teams":
 			rep, e := service.STADPushTeams(ctx, args[1], time.Now())
 			if e != nil {
@@ -939,7 +961,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 				return 3
 			}
 		default:
-			return fail(inputError(fmt.Errorf("stad needs teams, push-teams, standings or publish")), progress)
+			return fail(inputError(fmt.Errorf("stad needs teams, push-teams, print-teams, standings or publish")), progress)
 		}
 	case "personal-dates":
 		var assignmentID int64

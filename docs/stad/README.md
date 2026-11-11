@@ -1,6 +1,6 @@
 # Team points (STAD) plan
 
-Date: 2026-11-08. Status: **built in Dev; slices 01-07 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
+Date: 2026-11-08. Status: **built in Dev; slices 01-07 and 09-10 built (local tests only).** This plan does not authorize Canvas Live writes, classroom use or UserInstall changes. Read [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [SCORING-RULES.md](../SCORING-RULES.md) and [PRIVACY.md](../PRIVACY.md) first.
 
 ## Result
 
@@ -45,9 +45,9 @@ Nothing named points, standings or STAD teams exists yet. **"Team" already means
 
 ## Files
 
-All three files live in `context/stad/` and follow the teacher-setup authority (UserSync when configured), so a second PC sees the same teams and awards. They are agent-readable and keyed by student_ref, with aliases shown for readability.
+The STAD files live in `context/stad/<course nickname>/` and follow the teacher-setup authority (UserSync when configured), so a second PC sees the same teams and awards. They are agent-readable and keyed by student_ref, with aliases shown for readability.
 
-### `context/stad/<course-id>/teams.md`: rounds and rosters
+### `context/stad/<course>/teams.md`: rounds and rosters
 
 ```yaml
 schema: 1
@@ -61,11 +61,11 @@ rounds:
 ```
 
 - **A round's membership is fixed for that round.** A reshuffle appends a new round, and the Engine never rewrites past rounds.
-- **A student who joins mid-round** is added to a team with an optional `joined: <date>`. Their points count from that date.
+- **A student who joins mid-round** is added to the team's `members` and to its `joined` map (`joined: { s-iiii: 2026-11-23 }`). Their points count from that date.
 - **A student who leaves** (no active enrollment) drops out of averages from the date their enrollment ends.
-- **Role labels** ("strong", "needs a push") and the reasons behind placements go in the playbook's teacher-only notes (`context/stad/<course-id>/notes.md`), never in `teams.md`. The Engine never reads notes.md, so a label can't leak through an Engine output.
+- **Role labels** ("strong", "needs a push") and the reasons behind placements go in the playbook's teacher-only notes (`context/stad/<course>/notes.md`), never in `teams.md`. The Engine never reads notes.md, so a label can't leak through an Engine output.
 
-### `context/stad/<course-id>/rules.md`: the class's point rules
+### `context/stad/<course>/rules.md`: the class's point rules
 
 The playbook writes this file from the teacher's choices. The Engine validates it and applies it exactly.
 
@@ -90,13 +90,19 @@ improvement:                  # optional; leave out for effort-only
   perfect: { at_least_percent: 100, points: 3 }   # STAD's rule: a perfect score always earns top points
 awards:
   cap_per_student_per_week: 3
+recognition:                  # optional; levels replace ranks on the standings Page
+  basis: week                 # week | round: which team score the levels judge
+  levels:                     # highest first; a team takes the first it reaches
+    - { name: "Super Team", at_least: 4 }
+    - { name: "Great Team", at_least: 3 }
+    - { name: "Good Team", at_least: 0 }
 ```
 
 - **Defaults:** a missing rules file means effort-only with the defaults above.
 - **Validation:** an unknown key, an unknown evidence kind, or bands that don't end with `otherwise` are refused with a plain message naming the line.
 - **Field names:** the names are a contract that later slices extend. A new field is optional, and its default keeps the old behavior.
 
-### `context/stad/<course-id>/awards.md`: teacher awards
+### `context/stad/<course>/awards.md`: teacher awards
 
 ```yaml
 schema: 1
@@ -159,7 +165,7 @@ Build them in order. Slices 01–04 give effort-only team points, which is enoug
 - **Command:** `cse stad publish --course <nick> --page-title "Team Standings" --body FILE`. MCP: `stad_publish`.
 - **Content split:** the agent writes the page body (playbook judgment: celebration wording, team names, shout-outs). The Engine inserts the standings table from the slice 03 `team` fields at a marker in the body (`{{standings}}`), so the numbers are always computed and never typed by the agent.
 - **Repeated publishing:** this is a managed page. The Engine records the page ID and the `updated_at` of its last write in `.cse/stad-pages.json`. A republish needs no fresh pull. If the live page changed since CE-SE's last write, the Engine holds the update and reports it, the same protection `push_document` gives.
-- **Privacy guard** (cheap and consequential): the Engine refuses a body that contains any student_ref or any roster alias, and it renders only `team` fields. The first version keeps shout-outs at team level. Named student shout-outs wait on open question 3.
+- **Privacy guard** (cheap and consequential): the Engine refuses a body that contains any student_ref or any roster alias, and it renders only `team` fields. The first version keeps shout-outs at team level. Named student shout-outs wait on open question 2.
 - **Checks:** first publish, a republish, a hold after a live edit, and refusal on a ref or alias in the body.
 
 ### 05: Improvement points (true STAD)
@@ -205,6 +211,18 @@ Pure judgment, drafted alongside slice 01 and extended with each later slice:
 
 Routing sentence for the shipped `AGENTS.md`: "For classroom teams, team points or standings, read `stad.md`."
 
+### 09: Recognition levels
+
+- **Why:** a ranked table shows last place even when no wording names it. Slavin's STAD recognizes teams by fixed criteria (Super, Great, Good team), so every team can earn recognition.
+- **Rules:** optional `recognition` in `rules.md`; level names and thresholds are the teacher's, written by the playbook. The Engine validates (names unique, `at_least` strictly descending, basis `week` or `round`) and gives each team the first level its exact score reaches.
+- **Page:** with levels set, the table lists teams in name order with level and scores and no rank column. Ranks stay in the `stad_standings` output for the teacher.
+
+### 10: Printable team list
+
+- **Command:** `cse stad print-teams --course <nick> [--round NAME]`. MCP: `stad_print_teams`.
+- **Why:** on the day teams are announced, the teacher needs students' real names on a projected or posted list, and the agent only knows aliases.
+- **Behavior:** one landscape page of team cards with real names from the private roster, saved to the teacher's Downloads folder and opened, like `print_student_reports`. The default is the newest round, so it works before the round starts. The agent gets the path and team count only. A member missing from the roster is refused, never printed blank.
+
 ### 08: Capabilities and docs
 
 When a slice lands, update `internal/localui/capabilities.go` and [engine-capabilities.md](../engine-capabilities.md), keeping local tests apart from Canvas Live evidence, and update this status table.
@@ -219,6 +237,8 @@ When a slice lands, update `internal/localui/capabilities.go` and [engine-capabi
 | 04 Standings Page | Built in Dev 2026-11-08 (`cse stad publish`, MCP `stad_publish`) | Fake-Canvas test: create unpublished, identical republish writes nothing, update, hold after a live edit, refusal on a ref, an alias or a missing marker | — |
 | 05 Improvement points | Built in Dev 2026-11-08 (inside `stad standings`, when rules.md has `improvement`) | Unit tests: fewer than N, bands, perfect rule, no baseline, same-day items; fake-Canvas loader test for graded_items, quizzes and missing_counts_as | — |
 | 06 Rubric-row evidence | Built in Dev 2026-11-08 (`evidence: rubric_row`) | Unit tests: two rubrics sharing a row match by description, a renamed row is not merged, an unassessed submission is not scored; no fake-Canvas run of the rubric read | — |
+| 09 Recognition levels | Built in Dev 2026-11-08 (`recognition` in rules.md; `stad_standings` level, `stad_publish` levels table) | Fake-Canvas test: levels at a threshold, name order with no rank column, validation | — |
+| 10 Printable team list | Built in Dev 2026-11-08 (`cse stad print-teams`, MCP `stad_print_teams`) | Unit test: newest round by default, escaping, real names, unknown round and unknown member refused | — |
 | 07 Playbook | Drafted in Dev 2026-11-08 (`workspace-template/playbooks/stad.md`, routed from the shipped `AGENTS.md`) | Playbook tests that cover shipped files | — |
 
 ## Across subjects
@@ -241,14 +261,14 @@ The Engine sees only scored items, rubric rows and turn-ins, so it doesn't care 
 4. Points are derived from Canvas Live plus saved files. Only rounds and awards are stored.
 5. Team score is the average over active members.
 6. Code and file names use `stad` so they don't collide with team teaching.
+7. A holiday week stands as a short week; it is not merged or skipped (was open question 1). The average already handles it.
+8. Owned courses (team teaching): STAD writes are a group set and a Page, which are content, so a request naming the teammate is enough. No `(CE)` tag is needed (was open question 4).
 
 ## Open questions
 
-1. **Week boundaries vs. school calendar:** should a holiday week merge with the next week, or stand as a short week? The proposal is that a short week stands, because the average already handles it.
-2. **Late-timing source:** use Canvas's late flag (proposed), or the Engine's own late-timing decision when one exists for that assignment? These differ only when the teacher hasn't posted the decision yet.
-3. **Shout-outs with names:** the standings Page is student-facing. Should a cleared shout-out use the student's real first name? The Engine knows it, the agent does not. Or should shout-outs stay team-level only in the first version (simplest)?
-4. **Owned courses (team teaching):** STAD writes are a group set and a Page, which are content, so the rules say a request naming the teammate is enough. Confirm that no `(CE)` tag is needed.
-5. **Rounds across grading periods:** should a round end automatically at a grading-period boundary? The proposal is no: rounds belong to the teacher.
+1. **Late-timing source:** use Canvas's late flag (proposed), or the Engine's own late-timing decision when one exists for that assignment? These differ only when the teacher hasn't posted the decision yet.
+2. **Shout-outs with names:** the standings Page is student-facing. Should a cleared shout-out use the student's real first name? The Engine knows it, the agent does not. Or should shout-outs stay team-level only in the first version (simplest)?
+3. **Rounds across grading periods:** should a round end automatically at a grading-period boundary? The proposal is no: rounds belong to the teacher.
 
 ## Out of scope
 

@@ -30,6 +30,12 @@ commands:
   - name: Reopen for corrections
     about: Give extra-time and on-time students their own Canvas dates when late work has a cutoff.
     prompt: "Set personal dates and reopen on-time work for corrections in {course}."
+  - name: Class teams
+    about: Sort students into mixed teams that earn points together. Points never touch grades.
+    prompt: "Help me set up classroom teams for {course}."
+  - name: Team points this week
+    about: See how the teams did and update the standings page.
+    prompt: "Show this week's team standings for {course} and update the standings page."
   - name: Fix in Canvas
     about: Change a page, due date or assignment that's already live.
     prompt: "I need to change something that's already live in Canvas for {course}."

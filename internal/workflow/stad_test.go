@@ -572,3 +572,63 @@ func TestSTADScoredItemsHonorsEvidenceAndMissingRule(t *testing.T) {
 		t.Fatalf("quizzes only: want the one scored quiz, got %d", n)
 	}
 }
+
+func TestSTADRecognitionLevelsReplaceRanksOnThePage(t *testing.T) {
+	svc, _ := stadStandingsFixture(t, stadStandingsRoutes(t))
+	rules := defaultSTADRules()
+	rules.Recognition = &STADRecognition{Levels: []STADLevel{{Name: "Super Team", AtLeast: domain.MustDecimal("5")}, {Name: "Great Team", AtLeast: domain.MustDecimal("3")}}}
+	if err := workspace.WriteTeacherDocument(svc.Root, "context/stad/TEST/rules.md", rules, ""); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.STADStandings(context.Background(), "TEST", "", "", time.Date(2026, 11, 13, 18, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Week scores: Comets 5.5, Rockets 3 (exactly at the threshold).
+	levels := map[string]string{}
+	for _, row := range got.Teams {
+		levels[row.Name] = row.Level
+	}
+	if got.RecognitionBasis != "week" || levels["Comets"] != "Super Team" || levels["Rockets"] != "Great Team" {
+		t.Fatalf("levels = %v basis %q", levels, got.RecognitionBasis)
+	}
+	got.Teams[0], got.Teams[1] = got.Teams[1], got.Teams[0] // order must come from names, not input
+	table := standingsTable(got)
+	if strings.Contains(table, "Rank") || !strings.Contains(table, "Super Team") || strings.Index(table, "Comets") > strings.Index(table, "Rockets") {
+		t.Fatalf("a levels table lists teams by name with no ranks: %s", table)
+	}
+
+	rules.Recognition.Levels = append(rules.Recognition.Levels, STADLevel{Name: "Good Team", AtLeast: domain.MustDecimal("3")})
+	if err := rules.Validate(); err == nil {
+		t.Fatal("levels that do not run highest first must be refused")
+	}
+	rules.Recognition.Levels = rules.Recognition.Levels[:2]
+	rules.Recognition.Basis = "month"
+	if err := rules.Validate(); err == nil {
+		t.Fatal("an unknown basis must be refused")
+	}
+}
+
+func TestSTADTeamSheetUsesNewestRoundAndRealNames(t *testing.T) {
+	svc, _, refs := stadFixture(t)
+	writeTeams(t, svc.Root, STADTeamsFile{Schema: 1, GroupSet: "STAD Teams", Rounds: []STADRound{
+		{Name: "Round 1", Starts: "2026-11-02", Teams: []STADTeam{{Name: "Comets", Members: refs[:]}}},
+		{Name: "Round 2", Starts: "2026-12-07", Teams: []STADTeam{{Name: "Rockets", Members: refs[:2]}, {Name: "Waves <3", Members: refs[2:]}}},
+	}})
+	doc, label, n, err := svc.STADTeamSheet("TEST", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := string(doc)
+	if n != 2 || label != "TEST Round 2" || !strings.Contains(page, "Student 10") || !strings.Contains(page, "Waves &lt;3") || strings.Contains(page, "Comets") || strings.Contains(page, refs[0]) {
+		t.Fatalf("sheet n=%d label=%q: %s", n, label, page)
+	}
+	if _, _, _, err = svc.STADTeamSheet("TEST", "Round 9"); err == nil {
+		t.Fatal("an unknown round must be refused")
+	}
+	writeTeams(t, svc.Root, STADTeamsFile{Schema: 1, GroupSet: "STAD Teams", Rounds: []STADRound{
+		{Name: "Round 1", Starts: "2026-11-02", Teams: []STADTeam{{Name: "Comets", Members: []string{"s-nobody"}}}}}})
+	if _, _, _, err = svc.STADTeamSheet("TEST", ""); err == nil {
+		t.Fatal("a member missing from the roster must be refused, not printed blank")
+	}
+}

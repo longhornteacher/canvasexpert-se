@@ -69,6 +69,12 @@ func SaveStudentReports(ctx context.Context, sheets []workflow.StudentSheet, lab
 	return savePrintable(ctx, doc, "Student reports "+label)
 }
 
+// SaveTeamSheet writes the printable team list (real names) to the teacher's
+// Downloads folder and opens it; the path is outside the workspace.
+func SaveTeamSheet(ctx context.Context, doc []byte, label string) (string, error) {
+	return savePrintable(ctx, doc, "Teams "+label)
+}
+
 // savePrintable saves doc as a PDF in the teacher's Downloads folder and opens
 // it, or saves a printable HTML page when Edge cannot make the PDF.
 func savePrintable(ctx context.Context, doc []byte, name string) (string, error) {

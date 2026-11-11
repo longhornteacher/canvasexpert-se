@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -182,9 +183,21 @@ func (s *Service) refuseStudentNames(body string) error {
 	return nil
 }
 
-// standingsTable renders team-visible fields only.
+// standingsTable renders team-visible fields only. With recognition levels
+// the table lists teams by name with their level and no ranks, so no team
+// is shown as last.
 func standingsTable(st STADStandings) string {
 	var b strings.Builder
+	if st.RecognitionBasis != "" {
+		teams := append([]STADTeamScore(nil), st.Teams...)
+		sort.SliceStable(teams, func(i, j int) bool { return strings.ToLower(teams[i].Name) < strings.ToLower(teams[j].Name) })
+		b.WriteString("<table><thead><tr><th>Team</th><th>Level</th><th>This week</th><th>This round</th></tr></thead><tbody>")
+		for _, t := range teams {
+			fmt.Fprintf(&b, "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>", html.EscapeString(t.Name), html.EscapeString(t.Level), html.EscapeString(t.ScoreWeek), html.EscapeString(t.ScoreRound))
+		}
+		b.WriteString("</tbody></table>")
+		return b.String()
+	}
 	b.WriteString("<table><thead><tr><th>Rank</th><th>Team</th><th>This week</th><th>This round</th></tr></thead><tbody>")
 	for _, t := range st.Teams {
 		fmt.Fprintf(&b, "<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td></tr>", t.RankRound, html.EscapeString(t.Name), html.EscapeString(t.ScoreWeek), html.EscapeString(t.ScoreRound))

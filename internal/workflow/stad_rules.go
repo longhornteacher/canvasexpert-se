@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math/big"
 	"path/filepath"
 	"strings"
 	"time"
@@ -22,6 +23,22 @@ type STADRules struct {
 	TeamBonus  STADTeamBonus    `yaml:"team_bonus"`
 	Improve    *STADImprovement `yaml:"improvement,omitempty"`
 	Awards     STADAwardRules   `yaml:"awards"`
+	// Recognition, when set, gives each team a level by fixed thresholds
+	// (Slavin's Super/Great/Good team), and the standings Page shows levels
+	// in team-name order instead of ranks.
+	Recognition *STADRecognition `yaml:"recognition,omitempty"`
+}
+
+type STADRecognition struct {
+	Basis  string      `yaml:"basis"` // week (default) | round: which team score the levels judge
+	Levels []STADLevel `yaml:"levels"`
+}
+
+// STADLevel is one recognition level; levels run highest first and a team
+// takes the first it reaches. A team below every level gets none.
+type STADLevel struct {
+	Name    string         `yaml:"name"`
+	AtLeast domain.Decimal `yaml:"at_least"`
 }
 
 type STADEffort struct {
@@ -97,6 +114,9 @@ func (r STADRules) Validate() error {
 			return fmt.Errorf("%s cannot be negative", name)
 		}
 	}
+	if err := r.Recognition.validate(); err != nil {
+		return err
+	}
 	if r.Improve == nil {
 		return nil
 	}
@@ -132,6 +152,42 @@ func (r STADRules) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (rc *STADRecognition) validate() error {
+	if rc == nil {
+		return nil
+	}
+	if rc.Basis != "" && rc.Basis != "week" && rc.Basis != "round" {
+		return fmt.Errorf("recognition: basis must be week or round")
+	}
+	if len(rc.Levels) == 0 {
+		return fmt.Errorf("recognition: levels are required")
+	}
+	names := map[string]bool{}
+	for i, l := range rc.Levels {
+		if strings.TrimSpace(l.Name) == "" || names[l.Name] {
+			return fmt.Errorf("recognition: level %d needs its own name", i+1)
+		}
+		names[l.Name] = true
+		if !l.AtLeast.IsSet() {
+			return fmt.Errorf("recognition: level %q needs at_least", l.Name)
+		}
+		if i > 0 && l.AtLeast.Cmp(rc.Levels[i-1].AtLeast) >= 0 {
+			return fmt.Errorf("recognition: levels must run highest first; %q is not below %q", l.Name, rc.Levels[i-1].Name)
+		}
+	}
+	return nil
+}
+
+// level is the first level the score reaches, or "".
+func (rc *STADRecognition) level(score *big.Rat) string {
+	for _, l := range rc.Levels {
+		if score.Cmp(l.AtLeast.Rat()) >= 0 {
+			return l.Name
+		}
+	}
+	return ""
 }
 
 // ParseBaseline reads "mean_of_last N".
