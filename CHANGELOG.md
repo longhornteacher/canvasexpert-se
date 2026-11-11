@@ -4,7 +4,9 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
-Major retakes, always-shown exemplars and a retake policy (Dev; local tests only, nothing released or checked in Canvas Live).
+## 2.2.0 (2026-11-11)
+
+Major tutorial retakes, always-shown exemplars and a retake policy. Checked with local tests only; not yet observed in Canvas Live.
 
 - Majors and Dailies are different. A Major gives no points for copying rationales or exemplars and no immediate second submission; every Major gets a parallel `TUTORIAL-ONLY RETAKE - <name>` New Quiz instead. A Daily is unchanged. Set `retakes: {cap_percent, school_days}` in `context/grading.md`.
 - `push_quiz` with `retake_for` creates the retake protected: unpublished, behind an access code, assigned to nobody and not counting toward the course grade.
