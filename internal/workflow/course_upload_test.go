@@ -73,9 +73,9 @@ func uploadWorkflowFixture(t *testing.T) (*Service, string, *uploadFixtureState)
 				}
 				_ = json.NewDecoder(r.Body).Decode(&b)
 				state.file.Locked, state.file.Hidden = &b.Locked, &b.Hidden
-					if b.Visibility != "" {
-						state.file.VisibilityLevel = b.Visibility
-					}
+				if b.Visibility != "" {
+					state.file.VisibilityLevel = b.Visibility
+				}
 			}
 			// Include unsafe response-only values to prove they are never receipts.
 			b, _ := json.Marshal(state.file)

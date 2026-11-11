@@ -4,6 +4,30 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 2.2.1 (2026-11-11)
+
+Playbook wording only; the Engine is unchanged from 2.2.0.
+
+- Playbooks no longer state "no points for copying" or "no second submission" on a Major. A Major's instructions describe only the tutorial retake for failing students and are otherwise silent on corrections; the teacher handles points back directly. Engine behavior is unchanged.
+
+## 2.2.0 (2026-11-11)
+
+Major tutorial retakes, always-shown exemplars and a retake policy. Checked with local tests only; not yet observed in Canvas Live.
+
+- Majors and Dailies are different. A Major gives no points for copying rationales or exemplars and no immediate second submission; every Major gets a parallel `TUTORIAL-ONLY RETAKE - <name>` New Quiz instead. A Daily is unchanged. Set `retakes: {cap_percent, school_days}` in `context/grading.md`.
+- `push_quiz` with `retake_for` creates the retake protected: unpublished, behind an access code, assigned to nobody and not counting toward the course grade.
+- New `retake` tool. `assign` gives the retake to every student who failed the original, each with their own deadline counted from the day their grade was posted; `apply` raises each original to at most the cap percent, never lowering it, with one comment per student, from a reviewed preview. A later re-score cannot silently take awarded retake credit away.
+- The exemplar now shows at every score. `omit_corrections: true` leaves the corrections row out of a Major's grading timetable, and `personal_dates` no longer reopens an original that has a retake.
+- Not done: the honest-effort floor on a New Quiz needs an approved live probe first; for now the teacher enters that floor in SpeedGrader.
+
+## 2.1.0 (2026-11-10)
+
+A late-work limit per course, extra time as a percent, personal Canvas dates, and school-time late marks for a whole class.
+
+- Late-work limit and personal dates. A course can set how many school days after the due date late work is accepted (0 = none; school policy: ELA7 and ELA7PAP 3 days, CS8 none) on the Courses page or as `late_cutoff_school_days`; new assignments lock at the cutoff. The Students page can save extra time as a percent of the school days between assigned and due. New `personal_dates` (CLI `personal-dates`) gives extra-time, absent and on-time students their own Canvas due and lock dates, with a preview first. Local tests only; Canvas Live and the courses' missing-work policies are unchecked.
+- Fix late marks for a class. Canvas counts lateness in calendar time; CE-SE can now recount it in school time for a whole course. New **Absences** page in the WebUI (Classroom): tick who was out for a day or several days in a row. The **Students** page has a number of extra school days beside Extra time. When late time is counted, weekends, calendar days off and a student's absent days don't count, work due on an absent day is due the next day back, and saved extra days are added. Ask "Fix the late marks for <course>": the new `late_sweep` (CLI `cse late-sweep COURSE [--period NAME]`) reads every late mark on ordinary assignments due this grading period, reports what would change, and saves late-only results to post after the teacher's go-ahead. Scoring sessions use the same absences and saved days. Group assignments, New Quizzes, excused work and work never turned in are left out. Local tests only; not yet checked in Canvas Live.
+- New assignments with a due date end with a collapsed grading timetable (due date, late penalty start, last day for corrections, close date), counted in school days from `late_work` in `context/grading.md`. An unpublished CS8 assignment kept the block byte-for-byte (2026-11-04); the student view and a full create are not yet checked.
+
 - New Quiz feedback for a missed question now sits where students see it: Canvas reliably shows only the picked choice's feedback, so `push_quiz` adds the correct choice's explanation (green, naming it) under every distractor's own feedback. MC questions no longer repeat it as question-level incorrect feedback; MA keeps it there for a student who left out a correct choice. The New Quiz content edit flow (`pull_quiz` / `push_document`) can now change one choice's feedback (`answer_feedback`, keyed by choice ID, other choices preserved), so existing quizzes are fixed in place. Canvas Live, 2026-11-09: 28 questions on an unpublished quiz updated in place, one read back with its answer key and choices unchanged; the student view is not yet checked.
 
 ## 2.0.0 (2026-11-09)

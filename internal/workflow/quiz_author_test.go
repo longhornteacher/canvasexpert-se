@@ -1,8 +1,8 @@
 package workflow
 
 import (
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -106,13 +106,13 @@ func TestQuizForgeRejectsWhatCanvasCannotDo(t *testing.T) {
 		return `{"title":"x","items":[` + item + `]}`
 	}
 	cases := map[string]string{
-		"essay with rationale":   `{"title":"x","items":[{"id":"E","type":"ESSAY","prompt":"q","points":5}],"rationales":[{"item_id":"E","rationale":"teacher note"}]}`,
-		"no points":              wrap(`{"type":"TF","prompt":"q","answer":true}`),
-		"two correct MC":         wrap(`{"type":"MC","prompt":"q","points":1,"choices":[{"text":"a","correct":true},{"text":"b","correct":true}]}`),
-		"fitb 0 blanks":          wrap(`{"type":"FITB","prompt":"q","points":1,"accept":["a"]}`),
-		"bad stim ref":           wrap(`{"type":"TF","prompt":"q","points":1,"answer":true,"stimulus_id":"nope"}`),
+		"essay with rationale":    `{"title":"x","items":[{"id":"E","type":"ESSAY","prompt":"q","points":5}],"rationales":[{"item_id":"E","rationale":"teacher note"}]}`,
+		"no points":               wrap(`{"type":"TF","prompt":"q","answer":true}`),
+		"two correct MC":          wrap(`{"type":"MC","prompt":"q","points":1,"choices":[{"text":"a","correct":true},{"text":"b","correct":true}]}`),
+		"fitb 0 blanks":           wrap(`{"type":"FITB","prompt":"q","points":1,"accept":["a"]}`),
+		"bad stim ref":            wrap(`{"type":"TF","prompt":"q","points":1,"answer":true,"stimulus_id":"nope"}`),
 		"unknown stimulus layout": `{"title":"x","items":[{"id":"S","type":"STIMULUS","layout":"left","prompt":"p"},{"type":"TF","prompt":"q","points":1,"answer":true,"stimulus_id":"S"}]}`,
-		"in-stimulus without id": `{"title":"x","items":[{"id":"S","type":"STIMULUS","prompt":"p"},{"type":"TF","prompt":"q","points":1,"answer":true},{"type":"STIMULUS_END"}]}`,
+		"in-stimulus without id":  `{"title":"x","items":[{"id":"S","type":"STIMULUS","prompt":"p"},{"type":"TF","prompt":"q","points":1,"answer":true},{"type":"STIMULUS_END"}]}`,
 	}
 	for name, body := range cases {
 		if _, e := ReadQuizForge(writeQF(t, body)); e == nil {

@@ -48,7 +48,7 @@ func timingStillMatches(timing domain.LateTiming, due string, sub Submission, ca
 	if calendar != nil {
 		active = *calendar
 	}
-	counted, err := active.CountSchoolTime(deadline, submitted)
+	counted, err := active.WithAbsences(timing.SchoolTime.AbsentDates).CountSchoolTime(deadline, submitted)
 	if err != nil || counted.Status != timing.Status || counted.SecondsLate != timing.SecondsLate || !sameStrings(counted.SkippedDates, timing.SchoolTime.SkippedDates) {
 		return false
 	}

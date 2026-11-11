@@ -217,10 +217,12 @@ func TestDraftValidation(t *testing.T) {
 		return err
 	}
 	for name, mut := range map[string]func(*ParentDrafts){
-		"older schema":        func(d *ParentDrafts) { d.Schema = 1 },
-		"other run":           func(d *ParentDrafts) { d.RunID = "R2" },
-		"unknown student":     func(d *ParentDrafts) { d.Students = []ParentStudentDraft{{Ref: "s-nobody", Decision: "skip"}} },
-		"twice":               func(d *ParentDrafts) { d.Students = []ParentStudentDraft{{Ref: a.Ref, Decision: "skip"}, {Ref: a.Ref, Decision: "skip"}} },
+		"older schema":    func(d *ParentDrafts) { d.Schema = 1 },
+		"other run":       func(d *ParentDrafts) { d.RunID = "R2" },
+		"unknown student": func(d *ParentDrafts) { d.Students = []ParentStudentDraft{{Ref: "s-nobody", Decision: "skip"}} },
+		"twice": func(d *ParentDrafts) {
+			d.Students = []ParentStudentDraft{{Ref: a.Ref, Decision: "skip"}, {Ref: a.Ref, Decision: "skip"}}
+		},
 		"bad decision":        func(d *ParentDrafts) { d.Students = []ParentStudentDraft{{Ref: b.Ref, Decision: "maybe"}} },
 		"no table":            func(d *ParentDrafts) { d.Body = "Hello" },
 		"table twice":         func(d *ParentDrafts) { d.Body += "\n\n{{assignment_table}}" },
@@ -434,4 +436,3 @@ func TestParentsAreToWhenNoStudentEmail(t *testing.T) {
 		t.Fatalf("to=%v cc=%v parents=%d err=%v", to, cc, parents, err)
 	}
 }
-

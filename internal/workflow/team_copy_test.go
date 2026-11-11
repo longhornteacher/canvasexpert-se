@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -241,12 +241,14 @@ func TestCopyModulePreflightStopsBeforeAnyDestinationRequest(t *testing.T) {
 		dests  []string
 		want   string
 	}{
-		"missing module":  {func(f *copyFake) { f.modules = `[]` }, []string{"MINE P1"}, `No module titled "Unit 3: Argument" in Collab.`},
-		"duplicate title": {func(f *copyFake) { f.modules = `[{"id":10,"name":"Unit 3: Argument"},{"id":12,"name":"Unit 3: Argument"}]` }, []string{"MINE P1"}, `Collab has 2 modules titled "Unit 3: Argument"; rename one first.`},
-		"empty module":    {func(f *copyFake) { f.items = `[]` }, []string{"MINE P1"}, `"Unit 3: Argument" in Collab has no items yet.`},
-		"consent tag":     {func(f *copyFake) { f.items = `[{"title":"Reading"},{"title":"Essay 3 (CE)"}]` }, []string{"MINE P1", "Turner P2"}, `Remove (CE) from "Essay 3 (CE)" in Collab first. Each teacher adds (CE) in their own course.`},
-		"source as dest":  {func(*copyFake) {}, []string{"MINE P1", "Collab"}, "is the source"},
-		"no destination":  {func(*copyFake) {}, []string{"Collab"}, "is the source"},
+		"missing module": {func(f *copyFake) { f.modules = `[]` }, []string{"MINE P1"}, `No module titled "Unit 3: Argument" in Collab.`},
+		"duplicate title": {func(f *copyFake) {
+			f.modules = `[{"id":10,"name":"Unit 3: Argument"},{"id":12,"name":"Unit 3: Argument"}]`
+		}, []string{"MINE P1"}, `Collab has 2 modules titled "Unit 3: Argument"; rename one first.`},
+		"empty module":   {func(f *copyFake) { f.items = `[]` }, []string{"MINE P1"}, `"Unit 3: Argument" in Collab has no items yet.`},
+		"consent tag":    {func(f *copyFake) { f.items = `[{"title":"Reading"},{"title":"Essay 3 (CE)"}]` }, []string{"MINE P1", "Turner P2"}, `Remove (CE) from "Essay 3 (CE)" in Collab first. Each teacher adds (CE) in their own course.`},
+		"source as dest": {func(*copyFake) {}, []string{"MINE P1", "Collab"}, "is the source"},
+		"no destination": {func(*copyFake) {}, []string{"Collab"}, "is the source"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

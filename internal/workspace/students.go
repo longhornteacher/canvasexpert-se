@@ -23,6 +23,13 @@ type Student struct {
 	Ref, Instance, Name, FirstName, Alias, SISID, Login string
 	UserID                                              int64
 	Monitored, ExtraTime                                bool
+	// ExtraTimeDays is the saved late-turn-in allowance in whole school days;
+	// 0 means no number is saved for this student.
+	ExtraTimeDays int
+	// ExtraTimePercent gives the student that much more of the time between
+	// the day work is assigned and its due date (50 means half again as long);
+	// 0 means none saved. A student has days or a percent, not both.
+	ExtraTimePercent int
 	// Quiz settings are private; ExtraTime above remains a deadline flag.
 	QuizTime       string `json:"-" yaml:"-"`
 	ReducedChoices bool   `json:"-" yaml:"-"`
@@ -46,7 +53,15 @@ const (
 var legacyStudentHeader = []string{"student_ref", "instance", "canvas_user_id", "name", "first_name", "alias", "sis_id", "login", "monitored"}
 var extraTimeStudentHeader = append(append([]string(nil), legacyStudentHeader...), "extra_time")
 var aliasSourceStudentHeader = append(append([]string(nil), extraTimeStudentHeader...), "alias_source")
-var studentHeader = append(append([]string(nil), aliasSourceStudentHeader...), "quiz_time", "reduced_choices")
+var quizStudentHeader = append(append([]string(nil), aliasSourceStudentHeader...), "quiz_time", "reduced_choices")
+var extraDaysStudentHeader = append(append([]string(nil), quizStudentHeader...), "extra_time_days")
+var studentHeader = append(append([]string(nil), extraDaysStudentHeader...), "extra_time_percent")
+
+// MaxExtraTimeDays bounds the saved late-turn-in allowance.
+const MaxExtraTimeDays = 30
+
+// MaxExtraTimePercent bounds the saved proportional allowance (200 = triple time).
+const MaxExtraTimePercent = 200
 
 // aliasPool is frozen: aliases are derived from the Canvas identity by position
 // in this list and by its length, so any change to it would give students
@@ -110,7 +125,21 @@ func OpenStudents(root string) (*StudentStore, error) {
 				return nil, fmt.Errorf("private student table row %d: invalid reduced_choices flag", i+2)
 			}
 		}
-		s.Rows = append(s.Rows, Student{Ref: row[0], Instance: row[1], UserID: id, Name: row[3], FirstName: row[4], Alias: row[5], SISID: row[6], Login: row[7], Monitored: flag, ExtraTime: extraTime, AliasSource: source, QuizTime: quizTime, ReducedChoices: reducedChoices})
+		extraDays := 0
+		if len(row) > 13 {
+			extraDays, e = strconv.Atoi(row[13])
+			if e != nil || extraDays < 0 || extraDays > MaxExtraTimeDays {
+				return nil, fmt.Errorf("private student table row %d: invalid extra_time_days", i+2)
+			}
+		}
+		extraPercent := 0
+		if len(row) > 14 {
+			extraPercent, e = strconv.Atoi(row[14])
+			if e != nil || extraPercent < 0 || extraPercent > MaxExtraTimePercent {
+				return nil, fmt.Errorf("private student table row %d: invalid extra_time_percent", i+2)
+			}
+		}
+		s.Rows = append(s.Rows, Student{ExtraTimePercent: extraPercent, Ref: row[0], Instance: row[1], UserID: id, Name: row[3], FirstName: row[4], Alias: row[5], SISID: row[6], Login: row[7], Monitored: flag, ExtraTime: extraTime, ExtraTimeDays: extraDays, AliasSource: source, QuizTime: quizTime, ReducedChoices: reducedChoices})
 	}
 	if e = s.validate(); e != nil {
 		return nil, e
@@ -124,7 +153,7 @@ func OpenStudents(root string) (*StudentStore, error) {
 	return s, nil
 }
 func knownStudentHeader(row []string) bool {
-	for _, h := range [][]string{studentHeader, aliasSourceStudentHeader, extraTimeStudentHeader, legacyStudentHeader} {
+	for _, h := range [][]string{studentHeader, extraDaysStudentHeader, quizStudentHeader, aliasSourceStudentHeader, extraTimeStudentHeader, legacyStudentHeader} {
 		if strings.Join(row, "\x00") == strings.Join(h, "\x00") {
 			return true
 		}
@@ -211,6 +240,12 @@ func (s *StudentStore) validate() error {
 		if !ValidQuizTime(v.QuizTime) {
 			return fmt.Errorf("private student table row %d: invalid quiz_time", i+2)
 		}
+		if v.ExtraTimeDays < 0 || v.ExtraTimeDays > MaxExtraTimeDays {
+			return fmt.Errorf("private student table row %d: invalid extra_time_days", i+2)
+		}
+		if v.ExtraTimePercent < 0 || v.ExtraTimePercent > MaxExtraTimePercent || (v.ExtraTimePercent > 0 && v.ExtraTimeDays > 0) {
+			return fmt.Errorf("private student table row %d: invalid extra_time_percent", i+2)
+		}
 		refs[v.Ref] = true
 		ids[key] = true
 		aliases[aliasKey] = true
@@ -225,7 +260,7 @@ func (s *StudentStore) Save() error {
 	w := csv.NewWriter(&b)
 	_ = w.Write(studentHeader)
 	for _, v := range s.Rows {
-		_ = w.Write([]string{v.Ref, v.Instance, strconv.FormatInt(v.UserID, 10), v.Name, v.FirstName, v.Alias, v.SISID, v.Login, strconv.FormatBool(v.Monitored), strconv.FormatBool(v.ExtraTime), v.AliasSource, v.QuizTime, strconv.FormatBool(v.ReducedChoices)})
+		_ = w.Write([]string{v.Ref, v.Instance, strconv.FormatInt(v.UserID, 10), v.Name, v.FirstName, v.Alias, v.SISID, v.Login, strconv.FormatBool(v.Monitored), strconv.FormatBool(v.ExtraTime), v.AliasSource, v.QuizTime, strconv.FormatBool(v.ReducedChoices), strconv.Itoa(v.ExtraTimeDays), strconv.Itoa(v.ExtraTimePercent)})
 	}
 	w.Flush()
 	if e := w.Error(); e != nil {

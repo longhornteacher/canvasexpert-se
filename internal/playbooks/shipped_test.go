@@ -64,7 +64,10 @@ func TestUpdateKeepsTeacherChoicesAndAdoptsUneditedSeeds(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(root, overrideFile)); string(b) != "Always skip review when I ask to post." {
 		t.Fatal("override file was replaced")
 	}
-	if seed, _ := SeedBytes("playbooks/score.md"); func() bool { b, _ := os.ReadFile(filepath.Join(root, "playbooks", "score.md")); return string(b) != string(seed) }() {
+	if seed, _ := SeedBytes("playbooks/score.md"); func() bool {
+		b, _ := os.ReadFile(filepath.Join(root, "playbooks", "score.md"))
+		return string(b) != string(seed)
+	}() {
 		t.Fatal("unedited playbook did not adopt the new seed")
 	}
 	if old, _ := filepath.Glob(filepath.Join(root, "playbook-old", "*", "playbooks", "score.md")); len(old) != 1 {

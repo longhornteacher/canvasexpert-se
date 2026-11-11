@@ -184,3 +184,19 @@ func TestRevisionOutcomeMustReferToSelectedComment(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRetakePolicyValidation(t *testing.T) {
+	ok := GradingConfig{Schema: 1, Retakes: &RetakePolicy{CapPercent: 70, SchoolDays: 4}}
+	if err := ok.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&GradingConfig{Schema: 1}).Validate(); err != nil {
+		t.Fatalf("absent block must be valid: %v", err)
+	}
+	for _, bad := range []RetakePolicy{{0, 4}, {101, 4}, {70, 0}, {70, 61}} {
+		bad := bad
+		if err := (&GradingConfig{Schema: 1, Retakes: &bad}).Validate(); err == nil {
+			t.Fatalf("%+v should be rejected", bad)
+		}
+	}
+}

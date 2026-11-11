@@ -38,13 +38,14 @@ type quizReportRow struct {
 		Score    *json.Number    `json:"score"`
 	} `json:"item_responses"`
 }
+
 // writtenQuizItem is one entry of the New Quizzes items list. Canvas nests the
 // question type and body under "entry"; the outer id is the quiz-entry id and
 // entry.id is the item id, so either may be the id other reports use.
 type writtenQuizItem struct {
 	ID     json.Number `json:"id"`
 	Points json.Number `json:"points_possible"`
-	Entry struct {
+	Entry  struct {
 		ID   json.Number `json:"id"`
 		Type string      `json:"interaction_type_slug"`
 		Body string      `json:"item_body"`
@@ -53,11 +54,11 @@ type writtenQuizItem struct {
 	Body string `json:"-"`
 }
 type newQuizRow struct {
-	Attempt     int
-	SubmittedAt string
-	Responses   []domain.WrittenResponse
-	Files       []domain.WrittenFile
-	FileItemIDs []string
+	Attempt        int
+	SubmittedAt    string
+	Responses      []domain.WrittenResponse
+	Files          []domain.WrittenFile
+	FileItemIDs    []string
 	AutoScored     *domain.AutoScored
 	AutoScoredNote string
 }
@@ -151,7 +152,9 @@ func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmen
 		if entry.Attempt != 0 && row.Student.Attempt < entry.Attempt {
 			continue
 		}
-		if entry.Attempt != row.Student.Attempt { entry = newQuizRow{} }
+		if entry.Attempt != row.Student.Attempt {
+			entry = newQuizRow{}
+		}
 		entry.Attempt, entry.SubmittedAt = row.Student.Attempt, row.Student.SubmittedAt
 		entry.FileItemIDs = append([]string(nil), fileItemIDs...)
 		entry.AutoScored, entry.AutoScoredNote = autoScoredTotal(autoItems, row)

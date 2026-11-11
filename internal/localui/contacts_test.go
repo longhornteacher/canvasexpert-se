@@ -26,7 +26,7 @@ func TestStudentContactsOptionalDestinationsAndInvalidDraft(t *testing.T) {
 	form := url.Values{"request_secret": {"nonce"}, "alias_" + student.Ref: {student.Alias}, "student_email_" + student.Ref: {"student@example.com"}, "contact_phone_" + student.Ref: {"", "+1 (512) 555-0123"}, "contact_email_" + student.Ref: {"parent@example.com", ""}, "contact_text_" + student.Ref + "_0": {"yes"}, "contact_send_email_" + student.Ref + "_1": {"yes"}}
 	post := func() *httptest.ResponseRecorder {
 		form.Set("students_version", studentsVersionNow(t, root))
-		r :=httptest.NewRequest(http.MethodPost, h.origin+"/students", strings.NewReader(form.Encode()))
+		r := httptest.NewRequest(http.MethodPost, h.origin+"/students", strings.NewReader(form.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.Header.Set("Origin", h.origin)
 		w := httptest.NewRecorder()

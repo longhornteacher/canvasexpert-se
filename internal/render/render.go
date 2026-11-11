@@ -44,8 +44,7 @@ type FeedbackInput struct {
 // RenderFeedback produces a deterministic Canvas comment. The order is the
 // scores, each part's rubric lines, and the teacher's conversational feedback.
 // When parts carry their own feedback, each part is one block instead: its
-// score line, its feedback and, below the exemplar threshold, its hand-copy
-// exemplar.
+// score line, its feedback and, its exemplar.
 func RenderFeedback(in FeedbackInput) (string, error) {
 	if err := domain.ValidateInterpretation(in.Rubric, in.Interpretation); err != nil {
 		return "", fmt.Errorf("invalid interpretation: %w", err)
@@ -157,7 +156,7 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		if len(criteria) > 1 {
 			lines = append(lines, criteria...)
 		}
-		text := partText(score, earned, possible)
+		text := partText(score)
 		if text != "" {
 			lines = append(lines, text)
 		}
@@ -188,7 +187,7 @@ type QuizItem struct {
 // QuizItems gives each New Quiz part that names a written item its points on
 // the quiz's scale (the item's points times the part's earned share of its
 // rubric points, rounded once to two places) and its comment (the part's
-// feedback, with the hand-copy exemplar below the threshold). The comment
+// feedback, with its exemplar). The comment
 // layout uses the same numbers and text.
 func QuizItems(rubric domain.Rubric, interp domain.Interpretation, components []domain.ComponentScore, partPoints map[string]domain.Decimal) map[string]QuizItem {
 	scores := make(map[string]domain.ComponentScore, len(components))
@@ -217,33 +216,30 @@ func QuizItems(rubric domain.Rubric, interp domain.Interpretation, components []
 			possible.Add(possible, criterion.Points.Rat())
 		}
 		points := scalePart(max.Rat(), earned, possible)
-		out[component.Key] = QuizItem{Points: points, Comment: itemComment(score, points, max, earned, possible)}
+		out[component.Key] = QuizItem{Points: points, Comment: itemComment(score, points, max)}
 	}
 	return out
 }
 
 // itemComment is a New Quiz item's own comment: its score on the item's
 // points, the part's explanation and, when the part earned under the
-// exemplar threshold, its exemplar.
-func itemComment(score domain.ComponentScore, points, max domain.Decimal, earned, possible *big.Rat) string {
+// exemplar.
+func itemComment(score domain.ComponentScore, points, max domain.Decimal) string {
 	lines := []string{shortNumber(points) + "/" + shortNumber(domain.RoundRat(max.Rat(), 2))}
 	if text := strings.TrimSpace(score.Feedback); text != "" {
 		lines = append(lines, text)
 	}
-	below := domain.MustDecimal(domain.ExemplarBelow).Rat()
-	if exemplar := strings.TrimSpace(score.Exemplar); exemplar != "" && possible.Sign() > 0 && new(big.Rat).Quo(earned, possible).Cmp(below) < 0 {
+	if exemplar := strings.TrimSpace(score.Exemplar); exemplar != "" {
 		lines = append(lines, "Exemplar: "+exemplar)
 	}
 	return strings.Join(lines, "\n")
 }
 
-// partText is a part's own feedback, with its hand-copy exemplar when the
-// part earned under the exemplar threshold.
-func partText(score domain.ComponentScore, earned, possible *big.Rat) string {
+// partText is a part's own feedback with its exemplar.
+func partText(score domain.ComponentScore) string {
 	text := strings.TrimSpace(score.Feedback)
-	below := domain.MustDecimal(domain.ExemplarBelow).Rat()
-	if exemplar := strings.TrimSpace(score.Exemplar); exemplar != "" && possible.Sign() > 0 && new(big.Rat).Quo(earned, possible).Cmp(below) < 0 {
-		text = strings.TrimSpace(text + " (Hand-copy exemplar: " + exemplar + ")")
+	if exemplar := strings.TrimSpace(score.Exemplar); exemplar != "" {
+		text = strings.TrimSpace(text + " (Exemplar: " + exemplar + ")")
 	}
 	return text
 }

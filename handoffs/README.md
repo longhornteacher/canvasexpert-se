@@ -4,16 +4,19 @@ A handoff is bounded execution work for an agent session. It should say whether 
 
 ## Active work
 
+**Assessment policy (2026-11-11).** [Four execution slices](active/assessment-policy-2026-11-11/README.md), revised the same day after review, cover: Major retakes as a protected, non-counting parallel New Quiz assigned to students who fail, with a window of 4 school days from the posted date and a 70% contribution cap that never lowers the original; unchanged Daily corrections; and a 40% honest-effort floor for written work, including New Quizzes through fudge points. The slices are playbooks and config, retake quiz creation and assignment, the New Quiz floor (one live probe first), and applying the retake to the original. **Built in Dev 2026-11-11 except the New Quiz floor (slice 03, waiting on a live probe); local tests only.** The brief lists the teacher's decisions, what was cut from the first eight-slice plan (commit `6a2a5b4`) and the planner's own choices still open to challenge.
+
 Execution-readiness review: **2026-10-28**, against the current Dev working tree. The remaining handoffs are written for **6.1 Terra or 6.1 Sol** to execute one bounded slice at a time. Readiness here means the scope, integration points, contracts, checks and unresolved evidence are explicit; it does not mean the features are built or the undocumented Canvas behavior is known.
 
 **Architecture slices (2026-11-04).** Written from the [unified review](Unified%20Architecture%20Review.md) and the developer's decisions, with facts mapped at `2818e36`. Each is self-contained; the source reviews are not needed. All architecture slices A-I are done and retired (2026-11-04); D2 and F were built from specs the developer approved the same day, and H's past-family-message question was answered (a: contact details only, nothing to build).
 
 | Handoff | Kind | Scope |
 |---|---|---|
+| [Grading timetable](active/HANDOFF_Grading_Timetable_2026-11-04.md) | Decisions accepted and slices 0–5 built 2026-11-04, committed 2026-11-10 (`39157e2`); student view, mobile rendering and a full live create still open | Collapsed late-work/corrections/close-date block on new assignments, computed in school days; parent emails omit correction deadlines |
+| [Late-work reconciliation](active/HANDOFF_Late_Work_Reconciliation_2026-11-10.md) | Decisions D1–D6 accepted and slices 1–5 built in Dev 2026-11-10; local tests only, no Canvas Live check yet | Per-student extra days and absences entered in the WebUI, counted by the Engine; a read-only course sweep that proposes corrected late marks |
 
 | Handoff | Execution status | What the review clarified |
 |---|---|---|
-| [Parent email content to playbook](active/HANDOFF_Parent_Email_Content_to_Playbook_2026-11-07.md) | Implemented in Dev 2026-11-07 (not yet committed); full tests, vet, the 58-tool compiled MCP smoke and `git diff --check` passed. Local tests only. Retire with the commit hash once committed. | The Engine hard-codes the parent email's wording, sections, AI notice and send policy; this moves them to the playbook and keeps the Engine on facts, an Engine-drawn table and safe delivery. |
 | [Quiz accommodation writes and New Quiz item scores](active/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md) | Consolidated 2026-10-28 from the open remainder of the two retired handoffs below. Part A writes are implemented and the student-side timer/attempt effect was teacher-confirmed on 2026-10-29; only the course/quiz combination is open. Part B (Engine-written New Quiz item scores) is **complete** (2026-10-29): captured, built, L1–L8 passed live, and the playbooks use it. | Which test identity is available, what each observation enables, and the item-score Engine design to build only after the save is observed. |
 
 <a id="execution-notes-for-the-three-active-handoffs"></a>
@@ -50,6 +53,8 @@ The [unified architecture review](Unified%20Architecture%20Review.md) (2026-11-0
 ## Completed work and evidence
 
 The 2026-11-04 architecture slices B-I are retired in `retired/` with banners naming their commits.
+
+The [parent email content to playbook handoff](retired/HANDOFF_Parent_Email_Content_to_Playbook_2026-11-07.md) is retired (2026-11-10): implemented in Dev 2026-11-07, committed as `1ce88d5` and released in 2.0.0. The Engine keeps facts, an Engine-drawn table and safe delivery; the playbook writes the email's wording, sections and send policy. Full tests, vet, the 58-tool compiled MCP smoke and `git diff --check` passed at implementation; local tests only.
 
 The [Canvas 2026 additions handoff](retired/HANDOFF_Canvas_2026_Additions_2026-10-28.md) is retired (2026-10-28): authenticated direction-image downloads, bulk differentiation tags and shared rubrics (with CS8 Canvas Live library-reuse, New Quiz attachment and Test Student assessment evidence) are complete; the explicit accommodation tool, saved quiz settings, `from_saved` planning and the publication hold are in Dev with local evidence. The [review-page retirement handoff](retired/HANDOFF_Retire_Review_Page_and_New_Quiz_Item_Scores_2026-10-28.md) is retired with Part 1 complete: the scoring/authoring review page and `start_review` are gone, the check-in is in the conversation with an Engine-rendered sample, and family review is unchanged. Accommodation writes and New Quiz item scores moved to the active handoff above. Full uncached tests, vet, the 57-tool compiled MCP smoke and `git diff --check` were rerun and passed at retirement.
 

@@ -49,7 +49,9 @@ func TestAllowanceDecisionValidation(t *testing.T) {
 		mutate func(*LateTimingStudentDecision)
 		want   string
 	}{
-		"both fields":       {func(d *LateTimingStudentDecision) { d.AllowanceSchoolDays, d.AccommodatedDeadline, d.AccommodationBasis = 1, "2026-10-16T16:00:00-05:00", "x" }, "not both"},
+		"both fields": {func(d *LateTimingStudentDecision) {
+			d.AllowanceSchoolDays, d.AccommodatedDeadline, d.AccommodationBasis = 1, "2026-10-16T16:00:00-05:00", "x"
+		}, "not both"},
 		"missing basis":     {func(d *LateTimingStudentDecision) { d.AllowanceSchoolDays = 1 }, "accommodation_basis is required"},
 		"base without days": {func(d *LateTimingStudentDecision) { d.AllowanceBase = "2026-10-16T16:00:00-05:00" }, "requires allowance_school_days"},
 		"negative days":     {func(d *LateTimingStudentDecision) { d.AllowanceSchoolDays = -1 }, "positive"},

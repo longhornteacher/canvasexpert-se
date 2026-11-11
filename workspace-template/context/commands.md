@@ -24,6 +24,12 @@ commands:
   - name: Book club unit
     about: Set up clubs, club pages and discussions in Canvas.
     prompt: "Help me set up a book club unit for {course}."
+  - name: Fix late marks
+    about: Take weekends, days off, absences and extra time out of Canvas's late penalties.
+    prompt: "Fix the late marks for {course}."
+  - name: Reopen for corrections
+    about: Give extra-time and on-time students their own Canvas dates when late work has a cutoff.
+    prompt: "Set personal dates and reopen on-time work for corrections in {course}."
   - name: Fix in Canvas
     about: Change a page, due date or assignment that's already live.
     prompt: "I need to change something that's already live in Canvas for {course}."

@@ -89,7 +89,7 @@ func TestMissedChoiceItemsExplainTheCorrectAnswer(t *testing.T) {
 	if got := entryOf(p[1])["feedback"].(map[string]any)["incorrect"]; got != want {
 		t.Errorf("MA incorrect feedback = %v, want %v", got, want)
 	}
-	if got := strings.Join(feedbackTexts(t, p[1]), "\n");!strings.Contains(got, fbRed+`Why this choice isn't correct:</strong> Three.</p>`+want) {
+	if got := strings.Join(feedbackTexts(t, p[1]), "\n"); !strings.Contains(got, fbRed+`Why this choice isn't correct:</strong> Three.</p>`+want) {
 		t.Errorf("MA distractor must carry the correct choices' explanations: %s", got)
 	}
 }

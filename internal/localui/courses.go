@@ -20,6 +20,7 @@ type courseRow struct {
 	State               string
 	Owner               string
 	Floor               string // honest-effort floor, percent of points; blank is none
+	Cutoff              string // late-work limit in school days; blank is none
 	Active, Unpublished bool
 }
 
@@ -70,6 +71,7 @@ func (h *Hub) coursesPage(w http.ResponseWriter, r *http.Request) {
 		row := courseRow{ID: c.ID, Name: c.Name, Code: c.Code, State: c.State, Unpublished: c.State == "unpublished", Nick: ""}
 		if known, ok := configured[c.ID]; ok {
 			row.Nick, row.Active, row.Owner, row.Floor = known.Nickname, known.Current, known.Owner, floorText(known.EffortFloor)
+			row.Cutoff = cutoffText(known.LateWork)
 		}
 		rows = append(rows, row)
 	}
@@ -79,7 +81,7 @@ func (h *Hub) coursesPage(w http.ResponseWriter, r *http.Request) {
 	})
 	for _, c := range config.Courses {
 		if !seen[c.ID] {
-			rows = append(rows, courseRow{ID: c.ID, Name: c.Nickname, Nick: c.Nickname, Active: c.Current, Owner: c.Owner, Floor: floorText(c.EffortFloor)})
+			rows = append(rows, courseRow{ID: c.ID, Name: c.Nickname, Nick: c.Nickname, Active: c.Current, Owner: c.Owner, Floor: floorText(c.EffortFloor), Cutoff: cutoffText(c.LateWork)})
 		}
 	}
 	team, _ := workspace.ReadTeam(h.root)
@@ -127,7 +129,15 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 			h.redirect(w, r, "/courses", "", "Not saved: the honest-effort floor is a percent from 1 to 100, such as 50, or blank for none.")
 			return
 		}
+		cutoff, cutoffSent, ok := parseCutoff(r.PostForm, "cutoff_"+raw)
+		if !ok {
+			h.redirect(w, r, "/courses", "", "Not saved: the late-work limit is a whole number of school days from 0 to 60, or blank for none.")
+			return
+		}
 		if i, ok := index[id]; ok {
+			if cutoffSent {
+				config.Courses[i].LateWork = withCutoff(config.Courses[i].LateWork, cutoff)
+			}
 			if nick != "" {
 				config.Courses[i].Nickname = nick
 			}
@@ -142,7 +152,7 @@ func (h *Hub) saveCourses(w http.ResponseWriter, r *http.Request) {
 			h.redirect(w, r, "/courses", "", "Every active course needs a nickname.")
 			return
 		}
-		added = append(added, domain.Course{Nickname: nick, ID: id, Current: true, EffortFloor: floor})
+		added = append(added, domain.Course{Nickname: nick, ID: id, Current: true, EffortFloor: floor, LateWork: withCutoff(nil, cutoff)})
 	}
 	config.Courses = append(config.Courses, added...)
 	if err = domain.ValidateConfig(config); err != nil {
@@ -182,4 +192,45 @@ func parseFloor(raw string) (*domain.Decimal, bool) {
 		return nil, false
 	}
 	return &d, true
+}
+
+func cutoffText(p *domain.LateWorkPolicy) string {
+	if p == nil || p.LateCutoffSchoolDays == nil {
+		return ""
+	}
+	return strconv.Itoa(*p.LateCutoffSchoolDays)
+}
+
+// parseCutoff reads the late-work limit box. sent is false for an older form
+// without the box, which keeps the saved value.
+func parseCutoff(form map[string][]string, key string) (cutoff *int, sent, ok bool) {
+	raw, sent := form[key]
+	if !sent {
+		return nil, false, true
+	}
+	text := strings.TrimSpace(raw[0])
+	if text == "" {
+		return nil, true, true
+	}
+	n, err := strconv.Atoi(text)
+	if err != nil || n < 0 || n > 60 {
+		return nil, true, false
+	}
+	return &n, true, true
+}
+
+// withCutoff sets or clears the limit, keeping the course's other late-work lines.
+func withCutoff(p *domain.LateWorkPolicy, cutoff *int) *domain.LateWorkPolicy {
+	if p == nil {
+		if cutoff == nil {
+			return nil
+		}
+		return &domain.LateWorkPolicy{LateCutoffSchoolDays: cutoff}
+	}
+	out := *p
+	out.LateCutoffSchoolDays = cutoff
+	if out == (domain.LateWorkPolicy{}) {
+		return nil
+	}
+	return &out
 }

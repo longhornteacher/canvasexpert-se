@@ -496,7 +496,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 					summary.Handled++
 					continue
 				}
-				doc := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: st.Ref, Alias: st.Alias, AssignmentID: a.ID, AssignmentVisible: sub.AssignmentVisible, Excused: sub.Excused, Monitored: st.Monitored, ExtraTime: &st.ExtraTime}
+				doc := domain.StudentWorkDocument{Schema: 1, Kind: "student-work", StudentRef: st.Ref, Alias: st.Alias, AssignmentID: a.ID, AssignmentVisible: sub.AssignmentVisible, Excused: sub.Excused, Monitored: st.Monitored, ExtraTime: &st.ExtraTime, ExtraTimeSchoolDays: st.ExtraTimeDays}
 				if options.Session {
 					switch {
 					case needsTiming:

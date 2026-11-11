@@ -4,6 +4,8 @@ Use this for emails about class activities, reminders, field trips or selected s
 
 Read `TEACHER.md`, `Teacher_Override.md`, relevant teaching context and `context/parent-updates.md`. Speak in plain classroom terms. The teacher chooses the audience and purpose; draft the requested message using known coursework and dates. Do not invent parent tasks, promises or student facts. Keep grade details out of this flow.
 
+When a message mentions late work, state the course's late-work limit exactly as the teacher set it, never describe a policy zero as "not turned in" without evidence, and keep any student's extra time or absences out of it.
+
 ## Prepare the message
 
 Use the Engine's `engine_reference` formats for the Family Contact contract. Save the draft in a new `courses/<first course>/family-contact/<run>/` folder in UserInstall using `write_draft`; keep images and files in its `assets/` with `write_asset`. Keep the run and saved outcomes in UserInstall even when teacher preferences use UserSync. If `list_courses` reports `found_sync`, the contacts are in a shared folder this PC isn't using yet; connect it as `setup.md` describes before preparing, rather than asking the teacher to enter contacts again.

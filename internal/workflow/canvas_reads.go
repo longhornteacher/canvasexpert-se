@@ -68,6 +68,8 @@ type Assignment struct {
 	Checkpoints            *[]domain.AssignmentCheckpoint `json:"checkpoints"`
 	Overrides              []AssignmentOverrideLive       `json:"overrides"`
 	OnlyVisibleToOverrides *bool                          `json:"only_visible_to_overrides"`
+	OmitFromFinalGrade     *bool                          `json:"omit_from_final_grade"`
+	PostToSIS              *bool                          `json:"post_to_sis"`
 	AllDates               *[]AssignmentAllDateLive       `json:"all_dates"`
 	Anonymous              bool                           `json:"anonymous_grading"`
 	Moderated              bool                           `json:"moderated_grading"`
@@ -151,17 +153,17 @@ type CanvasUser struct {
 	Login     string `json:"login_id"`
 }
 type Enrollment struct {
-	UserID int64      `json:"user_id"`
-	Type   string     `json:"type"`
-	State  string     `json:"enrollment_state"`
+	UserID int64  `json:"user_id"`
+	Type   string `json:"type"`
+	State  string `json:"enrollment_state"`
 	// CreatedAt is when the enrollment began (RFC 3339); work due before it is
 	// not the student's.
-	CreatedAt string     `json:"created_at"`
+	CreatedAt string `json:"created_at"`
 	// UpdatedAt is when the enrollment last changed; for an inactive or
 	// completed enrollment it is the best available end date.
 	UpdatedAt string     `json:"updated_at"`
 	User      CanvasUser `json:"user"`
-	Grades *struct {
+	Grades    *struct {
 		CurrentScore *json.Number `json:"current_score"`
 	} `json:"grades"`
 }

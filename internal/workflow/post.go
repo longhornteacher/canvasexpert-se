@@ -634,6 +634,11 @@ func (s *Service) postGrade(ctx context.Context, doc *domain.ResultsDocument, ro
 	// The course's effort floor may raise the entered grade above the honest
 	// assessment; the rubric and the comment's score lines stay as assessed.
 	entered := domain.EnteredGrade(g.Assessment, doc.Assignment.Points, s.effortFloor(doc.Assignment.CourseID), g.HonestEffort)
+	// Retake credit already awarded is never silently taken back by a re-score.
+	if amount, ok := retakeCreditAmount(live); ok && entered.Rat().Cmp(amount) < 0 && !definite(g.Outcomes.Grade) {
+		holdGrade(g, fmt.Sprintf("retake credit of %s applied; not lowered", shortRat(amount)))
+		return save()
+	}
 	if ambiguous(g.Outcomes.Grade) {
 		if grade := decimalPointer(live.EnteredScore); grade != nil && grade.Cmp(entered) == 0 {
 			g.Outcomes.Grade = domain.ActionOutcome{Status: "preserved", Message: "computed assessment is present on intended attempt"}

@@ -1,9 +1,9 @@
 package localui
 
 import (
-	"fmt"
 	"bytes"
 	"context"
+	"fmt"
 	"html/template"
 	"net/http"
 
