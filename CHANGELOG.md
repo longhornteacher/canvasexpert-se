@@ -4,6 +4,16 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 2.2.0 (2026-11-11)
+
+Major tutorial retakes, always-shown exemplars and a retake policy. Checked with local tests only; not yet observed in Canvas Live.
+
+- Majors and Dailies are different. A Major gives no points for copying rationales or exemplars and no immediate second submission; every Major gets a parallel `TUTORIAL-ONLY RETAKE - <name>` New Quiz instead. A Daily is unchanged. Set `retakes: {cap_percent, school_days}` in `context/grading.md`.
+- `push_quiz` with `retake_for` creates the retake protected: unpublished, behind an access code, assigned to nobody and not counting toward the course grade.
+- New `retake` tool. `assign` gives the retake to every student who failed the original, each with their own deadline counted from the day their grade was posted; `apply` raises each original to at most the cap percent, never lowering it, with one comment per student, from a reviewed preview. A later re-score cannot silently take awarded retake credit away.
+- The exemplar now shows at every score. `omit_corrections: true` leaves the corrections row out of a Major's grading timetable, and `personal_dates` no longer reopens an original that has a retake.
+- Not done: the honest-effort floor on a New Quiz needs an approved live probe first; for now the teacher enters that floor in SpeedGrader.
+
 ## 2.1.0 (2026-11-10)
 
 A late-work limit per course, extra time as a percent, personal Canvas dates, and school-time late marks for a whole class.

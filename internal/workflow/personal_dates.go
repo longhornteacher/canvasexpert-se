@@ -182,8 +182,23 @@ func (s *Service) PersonalDates(ctx context.Context, nickname string, assignment
 			}
 		}
 	}
+	// A retake never gets personal dates of its own, and an original that has
+	// one is not reopened for corrections: the retake replaces the second try.
+	var retaken map[int64]bool
+	if all, e := sweepAssignments(ctx, s, course.ID); e == nil {
+		retaken = retakenOriginals(all)
+	} else if assignmentID > 0 {
+		return report, e
+	}
 	untagged := 0
 	for _, a := range assignments {
+		if isRetake(a) {
+			continue
+		}
+		aPolicy := *policy
+		if retaken[a.ID] {
+			aPolicy.CorrectionSchoolDays = 0
+		}
 		if owned && !domain.HasConsentTag(a.Name) {
 			untagged++
 			continue
@@ -192,7 +207,7 @@ func (s *Service) PersonalDates(ctx context.Context, nickname string, assignment
 			report.Skipped = append(report.Skipped, fmt.Sprintf("%s: group assignments get no personal dates", a.Name))
 			continue
 		}
-		entry, e := s.personalDatesFor(ctx, course, a, active, absences, cal, *policy, preview, now, &report)
+		entry, e := s.personalDatesFor(ctx, course, a, active, absences, cal, aPolicy, preview, now, &report)
 		if e != nil {
 			return report, e
 		}

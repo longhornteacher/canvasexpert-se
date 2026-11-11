@@ -249,3 +249,35 @@ func TestCourseLateWorkLineOverridesGradingMd(t *testing.T) {
 		t.Fatalf("merged=%+v", got)
 	}
 }
+
+func TestTimetableOmitCorrectionsLeavesOtherRowsAlone(t *testing.T) {
+	in := timetableInput{
+		Due: mustTime(t, "2026-11-05T23:59:00-06:00"), Points: domain.MustDecimal("100"), Calendar: timetableCalendar(),
+		Policy: domain.LateWorkPolicy{CorrectionSchoolDays: 4, CloseAfterSchoolDays: 11}, Late: defaultLatePolicy, ProposeLock: true,
+	}
+	with, err := buildTimetable(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.OmitCorrections = true
+	without, err := buildTimetable(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, line := range with.Lines() {
+		if !strings.Contains(line, "Last day for corrections") {
+			want = append(want, line)
+		}
+	}
+	if strings.Join(without.Lines(), "\n") != strings.Join(want, "\n") || len(want) != len(with.Lines())-1 {
+		t.Fatalf("omit changed other rows:\n%v\nwant:\n%v", without.Lines(), want)
+	}
+	html := without.HTML()
+	if strings.Contains(html, "orrections") || !hasTimetable(html) {
+		t.Fatalf("html still talks about corrections: %s", html)
+	}
+	if !strings.Contains(with.HTML(), "Corrections are available") {
+		t.Fatal("default block lost its corrections sentence")
+	}
+}

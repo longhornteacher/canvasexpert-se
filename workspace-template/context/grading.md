@@ -24,4 +24,14 @@ Extra time can be a whole number of days or, on the Students page, a percent of 
 
 `extra_time_school_days` is also the allowance used to correct late marks for a student with Extra time ticked and no number of their own. A number typed beside a student's Extra time box on the Students page wins for that student.
 
+To set the Major tutorial-retake policy, add a `retakes` block to the settings above:
+
+```yaml
+retakes:
+  cap_percent: 70   # a retake adds at most this percent to the original, and a student below it is assigned the retake
+  school_days: 4    # the retake window, counted in school days from the day the grade was posted
+```
+
+With no `retakes` block the retake operations report that no retake policy is set; nothing is assumed.
+
 Leave out a line to leave that row out. The late penalty and lowest late grade come from the course's Canvas late policy.
