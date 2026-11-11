@@ -103,6 +103,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   stad standings COURSE [--week DATE] [--round NAME] Tally team points (effort, awards, bonuses) for a round; read-only
   stad publish COURSE --page-title TITLE --body FILE [--published] Publish the team standings Page (body holds {{standings}}); teams only, never students
   stad push-teams COURSE        Make the Canvas group set match the current team round (adds and moves; never deletes)
+  stad print-teams COURSE [--round NAME] Save a printable team list with student names (newest round by default) and open it
   copy-assignment SOURCE QUERY TARGET [--module-id ID] [--assignment-group-id ID] [--published] Copy with destination files; unpublished by default
   copy-module SOURCE "MODULE" COURSE [COURSE ...] Copy one module by exact title, once, into each course (each teacher's own key); never re-copies
   family-contact-prepare RUN_FOLDER Resolve a free-form contact.json audience against Canvas
@@ -607,8 +608,12 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 			return fail(inputError(e), progress)
 		}
 		saved, e := localui.SaveDraftPDF(ctx, model, handout)
+		note, e := localui.PrintableNote(e)
 		if saved != "" {
-			fmt.Fprintf(out, "Saved draft PDF: %s\n", saved)
+			fmt.Fprintf(out, "Saved draft: %s\n", saved)
+		}
+		if note != "" {
+			fmt.Fprintln(out, note)
 		}
 		return fail(e, progress)
 	}

@@ -15,14 +15,17 @@ import (
 // are safe for the student-facing standings Page; "teacher" fields name
 // individual students and stay in the conversation.
 type STADStandings struct {
-	Course  string          `json:"course"`
-	Round   string          `json:"round"`
-	Window  [2]string       `json:"window"` // first and last school date counted
-	Week    [2]string       `json:"week"`   // Monday and Sunday of the week reported
-	AsOf    string          `json:"as_of"`
-	Teams   []STADTeamScore `json:"teams"`
-	Teacher STADTeacherView `json:"teacher"`
-	Notes   []string        `json:"notes,omitempty"`
+	Course    string          `json:"course"`
+	Round     string          `json:"round"`
+	Window    [2]string       `json:"window"` // first and last school date counted
+	Week      [2]string       `json:"week"`   // Monday and Sunday of the week reported
+	AsOf      string          `json:"as_of"`
+	Teams     []STADTeamScore `json:"teams"`
+	// RecognitionBasis is week or round when rules.md sets recognition levels;
+	// the standings Page then shows levels instead of ranks.
+	RecognitionBasis string `json:"recognition_basis,omitempty"`
+	Teacher   STADTeacherView `json:"teacher"`
+	Notes     []string        `json:"notes,omitempty"`
 }
 
 type STADTeamScore struct {
@@ -34,6 +37,7 @@ type STADTeamScore struct {
 	ScoreWeek     string `json:"score_week"`
 	ActiveMembers int    `json:"active_members"`
 	Tie           bool   `json:"tie,omitempty"` // shares its round rank with another team
+	Level         string `json:"level,omitempty"` // recognition level reached, when rules.md sets levels
 	exactRound    *big.Rat
 	exactWeek     *big.Rat
 }
@@ -410,6 +414,19 @@ func (s *Service) STADStandings(ctx context.Context, nickname, weekDate, roundNa
 			if i != j && out.Teams[i].RankRound == out.Teams[j].RankRound {
 				out.Teams[i].Tie = true
 			}
+		}
+	}
+	if rc := rules.Recognition; rc != nil {
+		out.RecognitionBasis = rc.Basis
+		if out.RecognitionBasis == "" {
+			out.RecognitionBasis = "week"
+		}
+		for i := range out.Teams {
+			score := out.Teams[i].exactWeek
+			if out.RecognitionBasis == "round" {
+				score = out.Teams[i].exactRound
+			}
+			out.Teams[i].Level = rc.level(score)
 		}
 	}
 	sort.SliceStable(out.Teams, func(i, j int) bool { return out.Teams[i].RankRound < out.Teams[j].RankRound })

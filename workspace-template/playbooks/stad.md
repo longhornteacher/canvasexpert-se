@@ -8,7 +8,7 @@ Read `TEACHER.md`, `Teacher_Override.md` and the teacher's context first. Speak 
 
 The Engine produces the same answer every time from the same Canvas state and saved files: turn-in facts, exact point math, the Canvas group set and the standings Page. You decide everything a reasonable teacher might do differently: who goes on which team, what counts as effort, how generous the bands are, the wording students read. Point values live in `rules.md`, never in your head or the page.
 
-Tools: `work_habits` (turn-in facts by week), `stad_teams` (check the team file), `stad_push_teams` (make the Canvas group set match), `stad_standings` (the tally), `stad_publish` (the standings Page). `list_courses` gives the nickname used everywhere below.
+Tools: `work_habits` (turn-in facts by week), `stad_teams` (check the team file), `stad_push_teams` (make the Canvas group set match), `stad_print_teams` (a printable team list with real names, for announcing teams), `stad_standings` (the tally), `stad_publish` (the standings Page). `list_courses` gives the nickname used everywhere below.
 
 ## The files
 
@@ -77,6 +77,7 @@ awards:
 5. Explain each placement to the teacher in a line or two, by alias, and save the reasons in `notes.md`. Let the teacher move anyone. Then write `teams.md` with the final teams and give each team a friendly name (or let students rename later; a rename in `teams.md` renames the Canvas group when you push).
 6. Run `stad_teams`. Fix any student it says is not active. Mention active students on no team and ask what to do.
 7. Show the teacher the teams and say what pushing will do: create or update one group set in Canvas named in `teams.md`, adding and moving students only. After the teacher's go-ahead, run `stad_push_teams` and report what it created, renamed and placed. Report anything it held.
+8. For announcing the teams, offer `stad_print_teams`: it opens a one-page list of team cards with students' real names on the teacher's computer, ready to project or print. You only get the file path back; don't open or read the file. It uses the newest round, so it works before the round starts.
 
 ## Choosing the rules
 
@@ -85,6 +86,22 @@ Start effort-only, and say so plainly: "Students earn a point for turning work i
 - If missing work is rare in this class, count only on-time turn-ins (`late: 0`). A late turn-in earns `late` points only inside the course's late-work window; where late work is not accepted (a course limit of 0) none arrives, so leave it at `late: 0`.
 - Add improvement points once each student has two or three scored items, because baselines need history.
 - Write the choices into `rules.md`. The Engine refuses an unknown key or bands that don't end with `otherwise`, and says which line.
+- A short week (a holiday) stands as its own week. Points are averaged, so it isn't unfair, but a team bonus is easier to earn when less is due.
+
+### Recognition levels
+
+A ranked table always shows a last place, even when the wording never names it. Original STAD avoids that by recognizing every team that reaches a level. Suggest levels when the teacher sets up the rules, and recommend them for younger students or a class where one team keeps trailing:
+
+```yaml
+recognition:
+  basis: week              # week (a fresh chance every week) or round
+  levels:                  # highest first; a team gets the first level it reaches
+    - { name: "Super Team", at_least: 4 }
+    - { name: "Great Team", at_least: 3 }
+    - { name: "Good Team", at_least: 0 }
+```
+
+Set the thresholds from what this class can reach: look at a week or two of `stad_standings` and put the top level where a strong team gets it in a good week. A last level at 0 means every team gets a name. Let the teacher or the students name the levels. With levels set, the standings Page lists teams by name with their level and no ranks; `stad_standings` still shows ranks to you and the teacher.
 
 ### Improvement points
 
@@ -117,7 +134,7 @@ A rubric row is matched by its exact description across rubrics; a differently w
 ## Weekly standings and awards
 
 1. When the teacher asks for standings, run `stad_standings`. The `teams` section is safe to share with students; the `teacher` section names individual students and stays in the conversation.
-2. Give the teacher the picture in a few lines: who leads this week and this round, anything surprising, any award the weekly cap trimmed (the Engine reports every trimmed award; never hide one), and notes the Engine returned. Ties are ties; say "tied for first."
+2. Give the teacher the picture in a few lines: who leads this week and this round (or which level each team reached), anything surprising, any award the weekly cap trimmed (the Engine reports every trimmed award; never hide one), and notes the Engine returned. Ties are ties; say "tied for first."
 3. For "give Team Comet 3 points for the hallway cleanup," add an entry to `awards.md` (keep earlier entries) with the date, the team or student, points and a reason. Explain the cap: it exists so one student can't carry a team.
 4. Extra credit in the gradebook is a separate choice. If the teacher wants it, handle it as ordinary grading, not through STAD.
 
@@ -133,6 +150,10 @@ The Page is student-facing: team names, ranks and team scores, nothing about any
 ## Reshuffle
 
 Suggest a new round every four to six weeks, or sooner if teams feel stuck. Explain it to students as a fresh start with new teammates, not a reward or a punishment. Sort again as above, append a new round to `teams.md` with the new start date, and run `stad_push_teams`. Past rounds keep their own rosters and points; `stad_standings --round` shows them. A student who should switch teams mid-round: ask the teacher; usually the answer is to wait for the next round.
+
+## Team-taught courses
+
+For a course with an `owner`, teams and the standings Page are course content: the teacher's request naming the teammate is enough, and no `(CE)` tag is needed. Read `team.md` for routing.
 
 ## Families
 

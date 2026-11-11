@@ -31,7 +31,7 @@ Before scoring anyone, identify the required response units from the directions,
 
 ## Assess honestly
 
-**Majors and retakes.** After Major grades are posted, run `retake` action `assign` so failing students are given the tutorial retake (`TEACHER.md`, Corrections); after retakes are scored, run `retake` action `apply` to enter the capped result on each original.
+**Majors and retakes.** When scoring a Major, save what the students below the retake line missed most in the assignment's note (`context/courses/<course-id>/assignments/<assignment-id>.md`): each concept, its standard code when known, and how many of those students missed it. Counts only, no names or aliases. The retake is written from this list, in this session or a later one. After Major grades are posted, write the tutorial retake from what the students below the retake line missed (`authoring.md`), then run `retake` action `assign` so failing students are given the tutorial retake (`TEACHER.md`, Corrections); after retakes are scored, run `retake` action `apply` to enter the capped result on each original.
 
 - Score a missing required response as missing; don't average only the answered parts. Report missing submissions; don't enter zeros.
 - Unreadable work gets `evidence: unknown`: hold that student, explain the specific missing evidence, and continue independent students within the teacher's posting scope.
