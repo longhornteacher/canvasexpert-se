@@ -2,7 +2,7 @@
 
 Use this for content students will see: assignments, quizzes with their answer keys and rationales, Pages, tier supports, exemplars, rubrics, discussion prompts and scoring feedback. Run it on finished work before the check-in or report, and before any write when the request already included one. Family messages, Inbox replies, discussion replies and parent updates are not reviewed this way yet. The goal is the most reliable product for the fewest tokens: every fact proven against a source, every explanation sound, every teaching choice fit for this teacher and these students, and each helper reading only what its job needs.
 
-For a Major, review the assignment or quiz and its tutorial retake together: each key against its own passage, and comparable demand, response types and concepts between the two forms.
+Review a Major's tutorial retake against the original: each key against its own passage, questions aimed at the concepts students missed on the original, comparable demand and response types, and a length a typical student finishes in 20 to 30 minutes.
 
 ## Roles
 

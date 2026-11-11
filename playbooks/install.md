@@ -148,9 +148,11 @@ District security can stop `engine\cse.exe` from running. The usual signs are "A
 
 Confirm the cause from the Windows log, which the teacher's own account can read:
 
-`Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Windows Defender/Operational'; Id=1121; StartTime=(Get-Date).AddHours(-1)} | Where-Object Message -match 'cse\.exe' | Select-Object -First 1 -ExpandProperty Message`
+`Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Windows Defender/Operational'; Id=1121; StartTime=(Get-Date).AddHours(-1)} | Where-Object Message -match 'cse(-mcp-launcher)?\.exe' | Select-Object -First 1 -ExpandProperty Message`
 
 Event 1121 with rule ID `01443614-cd74-433a-b99e-2ecdc07bfc25` means the district's Microsoft Defender blocks programs that are not yet widely used ("prevalence, age or trusted list"). Every CanvasExpert release is a new file, so time alone will not fix it, and allowing one file by its checksum stops working at the next update. If the log shows a different rule, or no event, report what you see and do not guess.
+
+The same rule can block `cse-mcp-launcher.exe`, the small starter Claude's extension keeps in Claude's own folder, even when `engine\cse.exe` runs. Then the local check passes but Claude never shows the CanvasExpert tools. The event names that path. Say which of the two programs is blocked; an allowance for this folder does not cover the one in Claude's folder.
 
 Tell the teacher: "Your district's security software blocks programs it doesn't recognise yet, and it is blocking CanvasExpert. That's a district setting, so your IT team needs to allow it. Here's a note you can send them:" Then give a short note in the teacher's voice with:
 
