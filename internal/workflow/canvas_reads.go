@@ -68,6 +68,8 @@ type Assignment struct {
 	Checkpoints            *[]domain.AssignmentCheckpoint `json:"checkpoints"`
 	Overrides              []AssignmentOverrideLive       `json:"overrides"`
 	OnlyVisibleToOverrides *bool                          `json:"only_visible_to_overrides"`
+	OmitFromFinalGrade     *bool                          `json:"omit_from_final_grade"`
+	PostToSIS              *bool                          `json:"post_to_sis"`
 	AllDates               *[]AssignmentAllDateLive       `json:"all_dates"`
 	Anonymous              bool                           `json:"anonymous_grading"`
 	Moderated              bool                           `json:"moderated_grading"`

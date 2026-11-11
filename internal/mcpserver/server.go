@@ -97,6 +97,14 @@ type PersonalDatesInput struct {
 	Preview      bool   `json:"preview,omitempty" jsonschema:"Report the planned dates without writing to Canvas"`
 }
 
+type RetakeInput struct {
+	Action     string   `json:"action" jsonschema:"assign: give the original's tutorial retake to every student who failed it; apply: raise each original by its scored retake (capped, never lowering)"`
+	Course     string   `json:"course" jsonschema:"Configured course nickname"`
+	OriginalID int64    `json:"original_id" jsonschema:"Canvas assignment ID of the original Major (not the retake)"`
+	Preview    bool     `json:"preview,omitempty" jsonschema:"Report the plan without writing to Canvas"`
+	Genuine    []string `json:"genuine,omitempty" jsonschema:"apply only: student_refs or aliases whose written retake you judged a genuine attempt, so the course's honest-effort floor applies inside the retake formula"`
+}
+
 type CopyAssignmentInput struct {
 	SourceCourse      string `json:"source_course" jsonschema:"Configured source course nickname"`
 	Query             string `json:"query" jsonschema:"Source assignment title or exact ID"`
@@ -316,6 +324,17 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		if in.Preview {
 			args = append(args, "--preview")
+		}
+		return s.longCommand(ctx, args...)
+	})
+	addActionTool(server, "retake", "Tutorial retakes for Major assignments. Action assign, run after the Major's grades are posted: finds the protected retake quiz paired with the original (its hidden marker names the original), re-checks it is visible only to overrides, needs an access code and does not count, then gives every student whose entered grade (before any late deduction) is below the cap percent in context/grading.md `retakes` their own override with a deadline of retakes.school_days school days from the day their grade was posted (extra time is taken from that window), applies saved quiz accommodations, comments on the original, and publishes the retake. Students with no graded attempt or an unposted grade are listed and skipped; a rerun does only what is unfinished. Action apply, after retakes are scored: each student's original becomes max(original entered grade, original points x min(retake percent, cap) / 100), never lower; a student with a written retake you judged genuine (genuine) gets the course floor inside the retake percent. One comment per student says what the retake earned and what was entered, and the late deduction on the original still applies. The first apply run saves the reviewed values in the course drafts folder and writes nothing; the second writes exactly those, holding any student whose retake or original changed since. A New Quiz original is held with the number to enter in SpeedGrader. Team-taught courses and shared group grades are held. Use preview first, then write after the teacher's go-ahead. The teacher hands out the access code.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in RetakeInput) (TextOutput, error) {
+		args := []string{"retake", in.Action, in.Course, strconv.FormatInt(in.OriginalID, 10)}
+		if in.Preview {
+			args = append(args, "--preview")
+		}
+		if len(in.Genuine) > 0 {
+			args = append(args, "--genuine")
+			args = append(args, in.Genuine...)
 		}
 		return s.longCommand(ctx, args...)
 	})
@@ -544,7 +563,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "late_sweep", "personal_dates", "stad_teams", "stad_standings", "stad_publish", "stad_push_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "late_sweep", "personal_dates", "retake", "stad_teams", "stad_standings", "stad_publish", "stad_push_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

@@ -24,7 +24,7 @@ import (
 )
 
 func runRemote(ctx context.Context, root, cmd string, args []string, out, progress io.Writer) int {
-	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "pull-quiz": {2, 2}, "rubrics": {1, 2}, "pull-rubric": {2, 2}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "late-sweep": {1, 3}, "personal-dates": {1, 3}, "parent-report": {1, 200}, "work-habits": {1, 200}, "stad": {2, 8}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "push-quiz": {2, 3}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "quiz-accommodations": {3, 4}, "set-tags": {1, 2}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}, "replace-text": {5, 200}}
+	arities := map[string][2]int{"courses": {0, 2}, "modules": {1, 1}, "external-resources": {1, 5}, "inbox-list": {0, 6}, "inbox-read": {1, 2}, "inbox-reply": {4, 4}, "inbox-set-state": {3, 200}, "groups": {1, 6}, "pull-group-set": {2, 2}, "pull-group-memberships": {2, 2}, "push": {1, 1}, "pull-page": {2, 4}, "pull-quiz": {2, 2}, "rubrics": {1, 2}, "pull-rubric": {2, 2}, "page-history": {2, 6}, "pull-discussion": {2, 4}, "upload-file": {3, 12}, "pull-item": {2, 2}, "pull-assignment-dates": {2, 2}, "prepare-audience": {2, 3}, "pull-work": {0, 6}, "prepare-late-timing": {1, 1}, "late-sweep": {1, 3}, "personal-dates": {1, 3}, "retake": {3, 200}, "parent-report": {1, 200}, "work-habits": {1, 200}, "stad": {2, 8}, "copy-module": {3, 200}, "copy-assignment": {3, 8}, "family-contact-prepare": {1, 1}, "parent-review": {1, 1}, "student-report": {1, 1}, "post": {1, 1}, "push-quiz": {2, 3}, "api": {1, 1}, "quiz-points": {2, 200}, "tags": {1, 1}, "quiz-accommodations": {3, 4}, "set-tags": {1, 2}, "assign-to": {1, 2}, "assign-modules": {1, 24}, "audience-report": {1, 3}, "set-file-access": {2, 4}, "replace-text": {5, 200}}
 	n := arities[cmd]
 	if len(args) < n[0] || len(args) > n[1] {
 		return fail(inputError(fmt.Errorf("wrong arguments for %s; run cse help", cmd)), progress)
@@ -961,6 +961,48 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		}
 		fmt.Fprintln(out, mustJSON(report))
 		if report.Held > 0 {
+			return 3
+		}
+	case "retake":
+		usage := fmt.Errorf("usage: retake assign COURSE ORIGINAL_ID [--preview] | retake apply COURSE ORIGINAL_ID [--preview] [--genuine REF ...]")
+		originalID, convErr := strconv.ParseInt(args[2], 10, 64)
+		if convErr != nil || originalID <= 0 || (args[0] != "assign" && args[0] != "apply") {
+			return fail(inputError(usage), progress)
+		}
+		preview, genuine, inGenuine := false, []string{}, false
+		for _, arg := range args[3:] {
+			switch {
+			case arg == "--preview":
+				preview, inGenuine = true, false
+			case arg == "--genuine" && args[0] == "apply":
+				inGenuine = true
+			case inGenuine && !strings.HasPrefix(arg, "--"):
+				genuine = append(genuine, arg)
+			default:
+				return fail(inputError(usage), progress)
+			}
+		}
+		held := false
+		if args[0] == "assign" {
+			report, e := service.RetakeAssign(ctx, args[1], originalID, preview)
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			fmt.Fprintln(out, mustJSON(report))
+			for _, row := range report.Rows {
+				held = held || row.Status == "held"
+			}
+		} else {
+			report, e := service.RetakeApply(ctx, args[1], originalID, genuine, preview)
+			if e != nil {
+				return fail(workflowError(e), progress)
+			}
+			fmt.Fprintln(out, mustJSON(report))
+			for _, row := range report.Rows {
+				held = held || row.Status == "held"
+			}
+		}
+		if held {
 			return 3
 		}
 	case "late-sweep":

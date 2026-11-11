@@ -1,6 +1,6 @@
 # Slice 01 - Playbooks, config and exemplars
 
-Status: **not started**. Kind: seed playbooks plus three small Engine changes. Read the [README](README.md) first. This slice edits Dev seeds, not the teacher's live files.
+Status: **built in Dev 2026-11-11, local tests only**. Kind: seed playbooks plus three small Engine changes. Read the [README](README.md) first. This slice edits Dev seeds, not the teacher's live files.
 
 ## Result
 

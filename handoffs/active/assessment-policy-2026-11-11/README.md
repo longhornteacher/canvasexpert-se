@@ -1,6 +1,6 @@
 # Major retakes, Daily corrections and the honest-effort floor
 
-Date: 2026-11-11. Status: **plan revised after two reviews; nothing is built**. Baseline: Dev `6a2a5b4`. This revision replaces the eight-slice plan in that commit (still in git history) with four slices. A second review of `4cd1d61` traced ten cases through the plan and the Engine; all ten are folded into slices 02-04. It is written for further adversarial review before execution.
+Date: 2026-11-11. Status: **slices 01, 02 and 04 built in Dev 2026-11-11 (local tests only); slice 03 deliberately not built, awaiting an approved live probe**. Baseline: Dev `6a2a5b4`. This revision replaces the eight-slice plan in that commit (still in git history) with four slices. A second review of `4cd1d61` traced ten cases through the plan and the Engine; all ten are folded into slices 02-04. It is written for further adversarial review before execution.
 
 No release, install, UserInstall/UserSync edit, real grading, publication or Canvas Live write is authorized by this plan. Execute one slice at a time when asked.
 

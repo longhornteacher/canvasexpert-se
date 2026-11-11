@@ -1,6 +1,6 @@
 # Slice 04 - Apply the retake to the original
 
-Status: **not started**. Kind: Engine scoring operation. Needs [02](02-retake-quiz-and-assignment.md); needs [03](03-new-quiz-floor.md) only when the original is a New Quiz. Read the [README](README.md) and `docs/SCORING-RULES.md` first.
+Status: **built in Dev 2026-11-11, local tests only. A New Quiz original's raise is held with the number to enter, because slice 03 is not built; the lowering hold covers the grade-post path only, not the New Quiz item-score path**. Kind: Engine scoring operation. Needs [02](02-retake-quiz-and-assignment.md); needs [03](03-new-quiz-floor.md) only when the original is a New Quiz. Read the [README](README.md) and `docs/SCORING-RULES.md` first.
 
 ## Result
 

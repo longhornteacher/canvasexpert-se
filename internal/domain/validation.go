@@ -47,7 +47,10 @@ func (c *GradingConfig) Validate() error {
 	if c.Schema != 1 {
 		return fmt.Errorf("schema must be 1")
 	}
-	return c.LateWork.Validate()
+	if err := c.LateWork.Validate(); err != nil {
+		return err
+	}
+	return c.Retakes.Validate()
 }
 func (s *StudentNotes) Validate() error {
 	if s.Schema != 1 {
@@ -122,6 +125,9 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 	}
 	if d.GradingTimetable != nil && d.Operation != "create" {
 		return fmt.Errorf("grading_timetable applies only to a create; an update keeps an existing timetable current from its dates")
+	}
+	if d.OmitCorrections && d.Operation != "create" {
+		return fmt.Errorf("omit_corrections applies only to a create")
 	}
 	if d.Instance != "" && !validInstance(d.Instance) {
 		return fmt.Errorf("instance must be an HTTPS Canvas origin")

@@ -39,6 +39,10 @@ type QuizSettings struct {
 	PostToSIS            *bool  `json:"post_to_sis"`
 	Published            bool   `json:"published"`
 	ModuleID             int64  `json:"module_id"`
+	// RetakeFor makes this quiz the tutorial retake of the named assignment in
+	// the same course: derived title, hidden pairing marker, access code
+	// required, unpublished, assigned to nobody and not counting.
+	RetakeFor int64 `json:"retake_for,omitempty"`
 	// Audience restricts the quiz's associated assignment to selected club
 	// members who work individually. Source IDs never become native group
 	// settings. Engine-managed state lives in the sidecar, not this file.
@@ -68,6 +72,22 @@ func (q QuizForge) settings() (s QuizSettings, err error) {
 		}
 		if s.ScoreToKeep != "" && s.ScoreToKeep != "highest" && s.ScoreToKeep != "latest" && s.ScoreToKeep != "average" && s.ScoreToKeep != "first" {
 			return s, fmt.Errorf("metadata.canvas.score_to_keep must be highest, latest, average or first")
+		}
+	}
+	if s.RetakeFor != 0 {
+		switch {
+		case s.RetakeFor < 0:
+			return s, fmt.Errorf("metadata.canvas.retake_for must be the original assignment's positive Canvas ID")
+		case strings.TrimSpace(s.AccessCode) == "":
+			return s, fmt.Errorf("metadata.canvas: a retake requires a non-blank access_code")
+		case s.Published:
+			return s, fmt.Errorf("metadata.canvas: a retake starts unpublished; `retake` action assign publishes it")
+		case s.ModuleID > 0:
+			return s, fmt.Errorf("metadata.canvas: a retake is not placed in a module")
+		case s.AllowMultipleAttempt:
+			return s, fmt.Errorf("metadata.canvas: a retake has one attempt; remove the multiple-attempt settings")
+		case s.Audience != nil:
+			return s, fmt.Errorf("metadata.canvas: a retake is assigned by `retake` action assign, not a quiz audience")
 		}
 	}
 	if e := domain.ValidateAudience(s.Audience); e != nil {
@@ -281,7 +301,7 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 	if e != nil {
 		return report, e
 	}
-	tracked := restricted || len(candidates) > 0 || rec.Stages != nil || opts.SkipAccommodations
+	tracked := restricted || len(candidates) > 0 || rec.Stages != nil || opts.SkipAccommodations || set.RetakeFor > 0
 	if rec.Instance != "" && (rec.Instance != s.Client.Origin() || rec.CourseID != 0 && rec.CourseID != course.ID) {
 		return report, fmt.Errorf("saved quiz sidecar belongs to a different Canvas/course; it was not reused")
 	}
@@ -344,6 +364,23 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 			return report, e
 		}
 		title := normalizeStudentText(strings.TrimSpace(q.Title)).(string)
+		if set.RetakeFor > 0 {
+			original, e := GetAssignment(ctx, s.Client, course.ID, set.RetakeFor)
+			if e != nil {
+				return report, fmt.Errorf("the original assignment %d was not found in this course: %w", set.RetakeFor, e)
+			}
+			if isRetake(original) {
+				return report, fmt.Errorf("assignment %d is itself a tutorial retake; name the original Major", set.RetakeFor)
+			}
+			all, e := sweepAssignments(ctx, s, course.ID)
+			if e != nil {
+				return report, e
+			}
+			if have := findRetakes(all, original); len(have) > 0 {
+				return report, fmt.Errorf("assignment %d (%s) already has a tutorial retake (assignment %d); change that one instead", original.ID, original.Name, have[0].ID)
+			}
+			title = normalizeStudentText(retakeTitle(strings.TrimSpace(original.Name))).(string)
+		}
 		for _, x := range quizzes {
 			if x.Title == title {
 				return report, fmt.Errorf("a New Quiz titled %q already exists in this course (id %s); rename this quiz; if it is an unfinished earlier push of this file, ask the teacher to rename or delete it in Canvas before pushing again", title, x.ID)
@@ -368,6 +405,10 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 		}
 		if instructions != "" {
 			quiz["instructions"] = normalizeStudentText(instructions)
+		}
+		if set.RetakeFor > 0 {
+			text, _ := quiz["instructions"].(string)
+			quiz["instructions"] = text + retakeMarker(set.RetakeFor)
 		}
 		var created struct {
 			ID json.Number `json:"id"` // Canvas returns the ID as a string
@@ -690,6 +731,11 @@ func (s *Service) finishQuiz(ctx context.Context, course domain.Course, id int64
 	}
 	if set.PostToSIS != nil {
 		fields["post_to_sis"] = *set.PostToSIS
+	}
+	if set.RetakeFor > 0 {
+		// The retake must be invisible to everyone, and must not count, from the
+		// first moment it exists. Idempotent, so a rerun repeats it harmlessly.
+		fields["only_visible_to_overrides"], fields["omit_from_final_grade"], fields["post_to_sis"] = true, true, false
 	}
 	settingsDone := stages != nil && definite(stages.Settings)
 	if len(fields) > 0 && !settingsDone {

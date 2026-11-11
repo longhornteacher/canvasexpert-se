@@ -37,6 +37,8 @@ type pdFixture struct {
 	writes []string
 	bodies map[string]map[string]any
 	over   string
+	// retake, when set, adds a tutorial retake of assignment 10 to the course list.
+	retake bool
 }
 
 func newPDFixture(t *testing.T, overrides string, personalDue map[int64]string) *pdFixture {
@@ -65,6 +67,13 @@ func newPDFixture(t *testing.T, overrides string, personalDue map[int64]string) 
 				list = append(list, Enrollment{UserID: id, Type: "StudentEnrollment", State: "active", User: CanvasUser{ID: id, Name: fmt.Sprintf("Student %d", id)}})
 			}
 			_ = json.NewEncoder(w).Encode(list)
+		case r.URL.Path == "/api/v1/courses/1/assignments":
+			list := assignment
+			if f.retake {
+				desc, _ := json.Marshal("<p>Retake</p>" + retakeMarker(10))
+				list += `,{"id":11,"course_id":1,"name":"TUTORIAL-ONLY RETAKE - Essay","description":` + string(desc) + `,"published":true,"due_at":null}`
+			}
+			_, _ = io.WriteString(w, "["+list+"]")
 		case r.URL.Path == "/api/v1/courses/1/assignments/10":
 			_, _ = io.WriteString(w, assignment)
 		case r.URL.Path == "/api/v1/courses/1/assignments/10/submissions":
@@ -228,5 +237,26 @@ func TestPersonalDatesRerunWritesNothing(t *testing.T) {
 	}
 	if report.Written != 0 || len(f.writes) != 0 || report.Planned != 0 {
 		t.Fatalf("rerun wrote: report=%+v writes=%v", report, f.writes)
+	}
+}
+
+func TestPersonalDatesDoesNotReopenAMajorThatHasARetake(t *testing.T) {
+	now := time.Date(2026, 11, 6, 18, 0, 0, 0, time.UTC)
+	plain := newPDFixture(t, "[]", nil)
+	if r, err := plain.s.PersonalDates(context.Background(), "TEST", 10, true, now); err != nil || pdRows(r)[plain.refs[4]].Status != "planned" {
+		t.Fatalf("without a retake the on-time student is reopened: %v %+v", err, pdRows(r))
+	}
+	f := newPDFixture(t, "[]", nil)
+	f.retake = true
+	r, err := f.s.PersonalDates(context.Background(), "TEST", 10, true, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := pdRows(r)
+	if row, ok := rows[f.refs[4]]; ok {
+		t.Fatalf("on-time student should not be reopened when a retake exists: %+v", row)
+	}
+	if rows[f.refs[3]].Status != "planned" {
+		t.Fatalf("extra time still applies: %+v", rows)
 	}
 }

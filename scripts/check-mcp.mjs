@@ -67,9 +67,11 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 65);
+  assert.equal(names.length, 66);
   const personalDatesTool = discovered.result.tools.find(t => t.name === 'personal_dates');
   for (const field of ['course', 'assignment_id', 'preview']) assert.ok(personalDatesTool?.inputSchema.properties[field], `personal_dates missing ${field}`);
+  const retakeTool = discovered.result.tools.find(t => t.name === 'retake');
+  for (const field of ['action', 'course', 'original_id', 'preview', 'genuine']) assert.ok(retakeTool?.inputSchema.properties[field], `retake missing ${field}`);
   const lateSweepTool = discovered.result.tools.find(t => t.name === 'late_sweep');
   for (const field of ['course', 'period']) assert.ok(lateSweepTool?.inputSchema.properties[field], `late_sweep missing ${field}`);
   const replaceTextTool = discovered.result.tools.find(t => t.name === 'replace_text');

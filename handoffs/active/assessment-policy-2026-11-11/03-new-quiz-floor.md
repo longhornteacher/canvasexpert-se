@@ -1,6 +1,6 @@
 # Slice 03 - Honest-effort floor on New Quizzes
 
-Status: **not started**. Kind: one live probe, then a small Engine change. Independent of the other slices. Read the [README](README.md), `docs/SCORING-RULES.md` and `docs/new-quiz-written-work-spec.md` first.
+Status: **step 1 (live probe) not run, it needs an explicit scoped go-ahead; step 2 not built. Fallback in place: the playbook tells the teacher the number to enter in SpeedGrader**. Kind: one live probe, then a small Engine change. Independent of the other slices. Read the [README](README.md), `docs/SCORING-RULES.md` and `docs/new-quiz-written-work-spec.md` first.
 
 ## Result
 

@@ -36,6 +36,30 @@ type GradingConfig struct {
 	Voice            string          `yaml:"voice,omitempty"`
 	FeedbackGuidance string          `yaml:"feedback_guidance,omitempty"`
 	LateWork         *LateWorkPolicy `yaml:"late_work,omitempty"`
+	Retakes          *RetakePolicy   `yaml:"retakes,omitempty"`
+}
+
+// RetakePolicy is the teacher's Major retake policy. CapPercent is the most a
+// tutorial retake can contribute to its original, and the grade below which a
+// student is offered the retake. SchoolDays is the retake window counted from
+// the day Canvas posted the student's grade. No block means no retake policy.
+type RetakePolicy struct {
+	CapPercent int `yaml:"cap_percent" json:"cap_percent"`
+	SchoolDays int `yaml:"school_days" json:"school_days"`
+}
+
+// Validate keeps both numbers plausible.
+func (p *RetakePolicy) Validate() error {
+	if p == nil {
+		return nil
+	}
+	if p.CapPercent < 1 || p.CapPercent > 100 {
+		return fmt.Errorf("retakes.cap_percent must be between 1 and 100")
+	}
+	if p.SchoolDays < 1 || p.SchoolDays > 60 {
+		return fmt.Errorf("retakes.school_days must be between 1 and 60 school days")
+	}
+	return nil
 }
 
 // LateWorkPolicy is the teacher's school-day schedule shown in a new
@@ -256,6 +280,9 @@ type AssignmentDocument struct {
 	Rubric                         *Rubric                 `yaml:"rubric,omitempty"`
 	Tiers                          []Tier                  `yaml:"tiers,omitempty"` // create-time differentiated hub
 	GradingTimetable               *bool                   `yaml:"grading_timetable,omitempty"`
+	// OmitCorrections (create only) leaves the corrections row out of the
+	// timetable, for a Major that is not reopened for a second submission.
+	OmitCorrections bool `yaml:"omit_corrections,omitempty"`
 	Observed                       *AssignmentSnapshot     `yaml:"observed,omitempty"`
 	Created                        *CreatedResources       `yaml:"created,omitempty"`
 	UpdateOutcome                  ActionOutcome           `yaml:"update_outcome,omitempty"`
@@ -408,15 +435,11 @@ type ComponentScore struct {
 	Evidence string           `yaml:"evidence"` // present, missing, unknown
 	Criteria []CriterionScore `yaml:"criteria"`
 	// Feedback explains this part's score under its own score line. Exemplar
-	// is a model answer the student hand-copies; the Engine shows it only
-	// when the part earned under ExemplarBelow of its points.
+	// is a model answer the Engine always shows with the part's feedback.
 	Feedback string `yaml:"feedback,omitempty"`
 	Exemplar string `yaml:"exemplar,omitempty"`
 }
 
-// ExemplarBelow is the share of a part's points under which its hand-copy
-// exemplar is shown.
-const ExemplarBelow = "0.9"
 
 // ItemFeedback reports whether every part carries its own feedback, so the
 // comment needs no closing feedback.

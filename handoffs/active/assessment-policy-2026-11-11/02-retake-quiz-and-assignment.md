@@ -1,6 +1,6 @@
 # Slice 02 - Retake quiz creation and assignment
 
-Status: **not started**. Kind: Engine authoring and audience. Needs the config from [01](01-playbooks-and-config.md). Read the [README](README.md) first.
+Status: **built in Dev 2026-11-11, local tests only; pairing is by hidden marker with a unique-title fallback; the marker surviving in New Quiz instructions is unobserved**. Kind: Engine authoring and audience. Needs the config from [01](01-playbooks-and-config.md). Read the [README](README.md) first.
 
 ## Result
 
