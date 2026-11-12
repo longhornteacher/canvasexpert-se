@@ -523,7 +523,7 @@ func UnsupportedAssignment(a Assignment) string {
 		return "no supported submission mode"
 	}
 	for _, t := range a.SubmissionTypes {
-		if t != "online_text_entry" && t != "online_upload" && t != "on_paper" {
+		if t != "online_text_entry" && t != "online_upload" && t != "on_paper" && t != "none" {
 			return "unsupported submission mode: " + t
 		}
 	}

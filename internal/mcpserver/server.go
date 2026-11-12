@@ -97,6 +97,13 @@ type PersonalDatesInput struct {
 	Preview      bool   `json:"preview,omitempty" jsonschema:"Report the planned dates without writing to Canvas"`
 }
 
+type CarryGradesInput struct {
+	Course    string  `json:"course" jsonschema:"Configured course nickname"`
+	TargetID  int64   `json:"target_id" jsonschema:"Canvas assignment ID of the one gradebook column that receives the scores (an ordinary points assignment, not a quiz)"`
+	SourceIDs []int64 `json:"source_ids" jsonschema:"Canvas assignment IDs whose entered scores are carried; each student should have a score on exactly one"`
+	Preview   bool    `json:"preview,omitempty" jsonschema:"Report the plan and save it for review without writing to Canvas"`
+}
+
 type RetakeInput struct {
 	Action     string   `json:"action" jsonschema:"assign: give the original's tutorial retake to every student who failed it; apply: raise each original by its scored retake (capped, never lowering)"`
 	Course     string   `json:"course" jsonschema:"Configured course nickname"`
@@ -343,6 +350,16 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.longCommand(ctx, args...)
 	})
+	addActionTool(server, "carry_grades", "Carry scores from several assignments into one gradebook column (a bridge), for example five per-book quizzes into one \"Book Club Quiz 1\" column. Each active student's value is the score entered on the one source they have a score on, before any late deduction, scaled to the target's points when they differ. Held, with the reason and nothing entered: no source score, excused, an attempt not fully graded, different scores on more than one source, a target not assigned to the student, and a target grade already higher than the source (a grade is never lowered). The first run saves the reviewed values in the course drafts folder and writes nothing; the second writes exactly those, holds any student whose source score or target grade changed since, and reads the grades back. A rerun writes nothing new. It never enters a zero for missing work and does not change posting: grades stay hidden under a manual posting policy. The target must be an ordinary points assignment (on_paper or none), not a quiz; team-taught courses are refused. The sources still count toward the course grade until they are moved to a no-weight assignment group with an assignment update. Use preview first, then write after the teacher's go-ahead.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CarryGradesInput) (TextOutput, error) {
+		args := []string{"carry-grades", in.Course, strconv.FormatInt(in.TargetID, 10)}
+		for _, id := range in.SourceIDs {
+			args = append(args, strconv.FormatInt(id, 10))
+		}
+		if in.Preview {
+			args = append(args, "--preview")
+		}
+		return s.longCommand(ctx, args...)
+	})
 	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates into courses/<course>/parent-updates/<run>/report.json: for each student and course, every assignment due this grading period so far with its released score, percent, student due date, direct link and turned-in evidence, plus upcoming work for printed sheets. Facts only; the playbook writes the email. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
 		args := append(append([]string{"parent-report"}, in.Courses...), in.Students...)
 		if in.FullPeriod {
@@ -575,7 +592,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "late_sweep", "personal_dates", "retake", "stad_teams", "stad_standings", "stad_publish", "stad_push_teams", "stad_print_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "late_sweep", "personal_dates", "retake", "carry_grades", "stad_teams", "stad_standings", "stad_publish", "stad_push_teams", "stad_print_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false

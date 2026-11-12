@@ -4,6 +4,8 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+- Bridge column: `cse carry-grades` / MCP `carry_grades` copies each student's entered score from the one source assignment they have a score on into one gradebook column, with a reviewed preview before any write; it never lowers a grade or enters a zero for missing work. Assignment documents accept `submission_types: [none]`. Local tests only.
+
 ## 2.2.2 (2026-11-11)
 
 Retake playbook wording, plus two classroom-team additions in the Engine. Checked with local tests only.
