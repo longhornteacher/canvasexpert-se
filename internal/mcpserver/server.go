@@ -29,6 +29,12 @@ const maxWorkspaceFile = 1 << 20
 
 var commandTimeout = 15 * time.Minute
 
+// pullCommandTimeout applies to pulls, which download every student upload
+// (each under 150,000,000 bytes) for a whole class and can outlast
+// commandTimeout on a school connection. Each download still fails on its
+// own once it stalls.
+var pullCommandTimeout = 2 * time.Hour
+
 type Server struct {
 	root              string
 	ctx               context.Context
@@ -634,7 +640,11 @@ func (s *Server) command(ctx context.Context, args ...string) (TextOutput, error
 	}
 	full := append([]string{"--workspace", s.root}, args...)
 	// A stalled Canvas call must not hold the client's tool call forever.
-	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	timeout := commandTimeout
+	if len(args) > 0 && (args[0] == "pull-work" || args[0] == "pull-discussion") && pullCommandTimeout > timeout {
+		timeout = pullCommandTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	graceful := len(args) > 0 && gracefulStop[args[0]]
 	var cmd *exec.Cmd

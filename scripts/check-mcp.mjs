@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 
 const engine = path.resolve(process.argv[2] || 'dist/cse.exe');
 const origin = process.env.CSE_MCP_CHECK_ORIGIN || 'https://canvas.example.edu';
@@ -67,7 +68,7 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const discovered = await request('tools/list', {});
   const names = discovered.result.tools.map(t => t.name);
-  assert.equal(names.length, 66);
+  assert.equal(names.length, 68);
   const personalDatesTool = discovered.result.tools.find(t => t.name === 'personal_dates');
   for (const field of ['course', 'assignment_id', 'preview']) assert.ok(personalDatesTool?.inputSchema.properties[field], `personal_dates missing ${field}`);
   const retakeTool = discovered.result.tools.find(t => t.name === 'retake');
@@ -220,6 +221,22 @@ try {
   const asset = Buffer.from('Synthetic binary fixture\0');
   await call('write_asset', { path: 'courses/asset.bin', base64: asset.toString('base64') });
   assert.equal(JSON.parse(await call('read_workspace_asset', { path: 'courses/asset.bin' })).base64, asset.toString('base64'));
+  const ranged = Buffer.alloc(9 * 1024 * 1024 + 123);
+  for (let i = 0; i < ranged.length; i += 1) ranged[i] = (i * 31) & 255;
+  await mkdir(path.join(root, 'courses', 'packet'), { recursive: true });
+  await writeFile(path.join(root, 'courses', 'packet', 'original.pdf'), ranged);
+  const parts = [];
+  for (let offset = 0; ;) {
+    const chunk = JSON.parse(await call('read_workspace_asset', { path: 'courses/packet/original.pdf', offset, length: 5 * 1024 * 1024 }));
+    assert.equal(chunk.total_size, ranged.length);
+    assert.equal(chunk.sha256, createHash('sha256').update(ranged).digest('hex'));
+    assert.ok(chunk.length <= 4 * 1024 * 1024, 'chunk ceiling');
+    parts.push(Buffer.from(chunk.base64, 'base64'));
+    offset = chunk.next_offset;
+    if (chunk.eof) break;
+  }
+  assert.ok(Buffer.concat(parts).equals(ranged), 'ranged read should reassemble the original');
+  await call('read_workspace_asset', { path: 'courses/packet/original.pdf', offset: ranged.length + 1 }, true);
   await call('write_draft', { path: 'courses/quiz.json', content: JSON.stringify({ title: 'Synthetic', items: [{ id: 'q1', type: 'ESSAY', prompt: 'Explain.', points: 5 }] }) });
   await call('validate_quiz', { path: 'courses/quiz.json' });
   const quizExample = await readExample('engine-docs/examples/synthetic-quizforge-mixed.md');

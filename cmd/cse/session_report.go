@@ -46,7 +46,7 @@ func printSessionReport(out io.Writer, assignments []workflow.PullAssignmentSumm
 			{"inactive", a.Inactive}, {"not visible", a.NotVisible}, {"excused", a.Excused},
 			{"unsupported", a.Unsupported}, {"undated", a.Undated}, {"effective due date is unavailable", a.DueUnavailable},
 			{"already scored", a.Handled}, {"comment posted, item points not entered", a.CommentOnlyCompleted},
-			{"missing submission", a.Missing}, {"unreadable attachments", a.UnreadableAttachments},
+			{"missing submission", a.Missing}, {"files unavailable (not downloaded)", a.UnavailableAttachments},
 		} {
 			if reason.count > 0 {
 				details = append(details, fmt.Sprintf("%s: %d", reason.label, reason.count))

@@ -161,6 +161,103 @@ func TestPullGroupAssignmentSelectedReadsOnlySelectedMembersAndKeepsUnsentResult
 	}
 }
 
+// A shared PDF (and a prior attempt's image) is downloaded once per Canvas
+// file ID and leaves a shared group ready; an unavailable file holds it with
+// an accurate reason. Mixed text and file submissions are pulled.
+func TestPullGroupSharedUploadReadinessUsesOriginalAvailability(t *testing.T) {
+	pdf := append([]byte("%PDF-1.7\n"), 0, 0xff, 'g')
+	for _, gone := range []bool{false, true} {
+		t.Run(fmt.Sprint("gone=", gone), func(t *testing.T) {
+			groupID := int64(50)
+			shared := false
+			a := fixtureAssignment()
+			a.GroupCategoryID = &groupID
+			a.GradeGroupStudentsIndividually = &shared
+			a.SubmissionTypes = []string{"online_text_entry", "online_upload"}
+			downloads := map[string]int{}
+			var serverURL string
+			s, server := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				write := func(v any) { _ = json.NewEncoder(w).Encode(v) }
+				switch path := r.URL.Path; {
+				case strings.HasPrefix(path, "/files/"):
+					downloads[path]++
+					if gone && path == "/files/report" {
+						http.NotFound(w, r)
+						return
+					}
+					_, _ = w.Write(pdf)
+				case path == "/api/v1/courses/1/assignments/10":
+					write(a)
+				case path == "/api/v1/files/900":
+					downloads[path]++
+					write(map[string]any{"id": 900, "filename": "diagram.png", "content-type": "image/png", "url": serverURL + "/files/diagram"})
+				case path == "/api/v1/group_categories/50":
+					write(map[string]any{"id": 50, "course_id": 1, "context_type": "Course", "name": "Clubs", "non_collaborative": false})
+				case path == "/api/v1/groups/60":
+					write(map[string]any{"id": 60, "course_id": 1, "context_type": "Course", "group_category_id": 50, "name": "Blue", "non_collaborative": false})
+				case path == "/api/v1/groups/60/memberships":
+					write([]any{map[string]any{"group_id": 60, "user_id": 10, "workflow_state": "accepted"}, map[string]any{"group_id": 60, "user_id": 11, "workflow_state": "accepted"}})
+				case path == "/api/v1/courses/1/enrollments":
+					write([]any{map[string]any{"user_id": 10, "type": "StudentEnrollment", "enrollment_state": "active", "user": map[string]any{"id": 10, "name": "Private Student 10"}}, map[string]any{"user_id": 11, "type": "StudentEnrollment", "enrollment_state": "active", "user": map[string]any{"id": 11, "name": "Private Student 11"}}})
+				case strings.HasSuffix(path, "/group_members"):
+					write([]any{map[string]any{"id": "10"}, map[string]any{"id": "11"}})
+				case strings.Contains(path, "/submissions/"):
+					var user int64
+					_, _ = fmt.Sscanf(path[strings.LastIndex(path, "/")+1:], "%d", &user)
+					prior := map[string]any{"id": 700 + user, "attempt": 1, "group_id": 60, "submitted_at": "2026-10-15T18:00:00Z", "submission_type": "online_upload", "attachments": []any{map[string]any{"id": 801, "filename": "draft.jpg", "url": serverURL + "/files/draft"}}}
+					// The shared body embeds a group file (saved once), an external
+					// image and another course's file (neither is fetched).
+					body := `<p>Our diagram <img src="/groups/60/files/900/preview"> <img src="https://images.example.org/cat.png"> <a href="/courses/2/files/901/download">old</a></p>`
+					write(map[string]any{"id": 700 + user, "user_id": user, "assignment_id": 10, "group_id": 60, "attempt": 2, "submitted_at": "2026-10-16T18:00:00Z", "workflow_state": "submitted", "submission_type": "online_upload", "body": body, "attachments":[]any{map[string]any{"id": 800, "filename": "report.pdf", "content-type": "application/pdf", "url": serverURL + "/files/report"}}, "submission_history": []any{prior}})
+				default:
+					t.Errorf("unexpected request %s", r.URL.String())
+					http.NotFound(w, r)
+				}
+			})
+			serverURL = server.URL
+			report, err := s.PullWorkGroup(context.Background(), "TEST", "10", 60)
+			if err != nil || len(report.Packets) != 1 || downloads["/files/report"] != 1 || downloads["/files/draft"] != 1 || downloads["/files/diagram"] != 1 || downloads["/api/v1/files/900"] != 1 {
+				t.Fatalf("pull report=%+v err=%v downloads=%v", report, err, downloads)
+			}
+			var packet domain.GroupPacketDocument
+			if _, err = workspace.ReadDocument(report.Packets[0], &packet); err != nil {
+				t.Fatal(err)
+			}
+			var work domain.GroupWorkDocument
+			if _, err = workspace.ReadDocument(filepath.Join(s.Root, filepath.FromSlash(packet.Groups[0].Path)), &work); err != nil {
+				t.Fatal(err)
+			}
+			var current *domain.GroupArtifact
+			for i := range work.Artifacts {
+				if len(work.Artifacts[i].Attachments) > 0 && work.Artifacts[i].Attachments[0].ID == 800 {
+					current = &work.Artifacts[i]
+				}
+			}
+			if current == nil || len(current.Sources) != 2 {
+				t.Fatalf("shared artifact lost a member association: %+v", work.Artifacts)
+			}
+			if len(current.Attachments) != 2 {
+				t.Fatalf("only the group's own embedded file should be added: %+v", current.Attachments)
+			}
+			if embedded := current.Attachments[1]; embedded.ID != 900 || embedded.Source != "embedded" || embedded.Status != "downloaded" || embedded.Name != "diagram.png" {
+				t.Fatalf("embedded group file not saved and marked: %+v", embedded)
+			}
+			file := current.Attachments[0]
+			if gone {
+				if work.SharedAssessmentStatus != "held" || file.Status != "failed" || file.Path != "" || !strings.Contains(file.Reason, "file unavailable") || !strings.Contains(strings.Join(work.SharedAssessmentReasons, ";"), "files are unavailable") {
+					t.Fatalf("unavailable shared file did not hold accurately: %+v %+v", work.SharedAssessmentReasons, file)
+				}
+				return
+			}
+			b, err := os.ReadFile(filepath.Join(s.Root, filepath.FromSlash(file.Path)))
+			if work.SharedAssessmentStatus != "ready" || file.Status != "downloaded" || err != nil || string(b) != string(pdf) {
+				t.Fatalf("saved shared PDF did not leave the group ready: %s %+v %+v", work.SharedAssessmentStatus, work.SharedAssessmentReasons, file)
+			}
+		})
+	}
+}
+
 func TestPullGroupAssignmentWrongGroupSetStopsBeforeSubmissionReads(t *testing.T) {
 	var submissionReads int
 	groupCategoryID := int64(50)

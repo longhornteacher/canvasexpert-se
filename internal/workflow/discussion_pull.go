@@ -41,6 +41,7 @@ type discussionAttachment struct {
 	URL         string   `json:"url"`
 	ContentType string   `json:"content-type"`
 	Size        int64    `json:"size"`
+	UpdatedAt   string   `json:"updated_at"`
 }
 
 type discussionEntry struct {
@@ -139,7 +140,7 @@ func (s *Service) PullDiscussionEvidence(ctx context.Context, nickname string, t
 		if reason != "" {
 			source.Status, source.Reason, packet.Status = "partial", reason, "partial"
 		}
-		mapped, mapReason := s.packetEntries(ctx, folder, target, entries, authors)
+		mapped, mapReason := s.packetEntries(ctx, folder, course.ID, target, entries, authors)
 		if mapReason != "" {
 			source.Status, source.Reason, packet.Status = "partial", mapReason, "partial"
 		}
@@ -326,7 +327,7 @@ func (s *Service) discussionAuthors() (map[int64]discussionAuthor, string) {
 	return byID, "complete"
 }
 
-func (s *Service) packetEntries(ctx context.Context, folder string, target discussionSourceTarget, entries []discussionEntry, authors map[int64]discussionAuthor) ([]domain.DiscussionEntry, string) {
+func (s *Service) packetEntries(ctx context.Context, folder string, courseID int64, target discussionSourceTarget, entries []discussionEntry, authors map[int64]discussionAuthor) ([]domain.DiscussionEntry, string) {
 	out := make([]domain.DiscussionEntry, 0, len(entries))
 	partial := ""
 	for _, entry := range entries {
@@ -350,34 +351,40 @@ func (s *Service) packetEntries(ctx context.Context, folder string, target discu
 			if name == "" {
 				name = a.DisplayName
 			}
-			attachments = append(attachments, Attachment{ID: int64(a.ID), Filename: name, DisplayName: a.DisplayName, URL: a.URL, ContentType: a.ContentType, Size: a.Size})
+			attachments = append(attachments, Attachment{ID: int64(a.ID), Filename: name, DisplayName: a.DisplayName, URL: a.URL, ContentType: a.ContentType, Size: a.Size, UpdatedAt: a.UpdatedAt})
 		}
-		if len(attachments) > 0 {
-			if row.Deleted {
-				for _, a := range attachments {
-					name := a.Filename
-					if name == "" {
-						name = a.DisplayName
-					}
-					row.Attachments = append(row.Attachments, domain.Attachment{ID: a.ID, Name: name, Status: "not-downloaded", Reason: "entry is deleted; attachment content was not restored"})
-				}
+		// Files embedded in a student's own post text are their evidence too.
+		var embedded []embeddedRef
+		scope := userScope(courseID, int64(entry.UserID))
+		if target.contextType == "Group" {
+			scope.groupID = target.contextID
+		}
+		if !row.Deleted && row.AuthorKind == "student" {
+			embedded = embeddedFileRefs(entry.Message, s.Client.Origin(), scope)
+		}
+		if row.Deleted {
+			for _, a := range attachments {
+				row.Attachments = append(row.Attachments, domain.Attachment{ID: a.ID, Name: uploadName(a), UpdatedAt: a.UpdatedAt, Status: "not-downloaded", Reason: "entry is deleted; attachment content was not restored"})
+			}
+		} else if len(attachments) > 0 || len(embedded) > 0 {
+			// folder is an already constrained absolute pull path; derive its
+			// workspace-relative form before using the shared safe downloader.
+			rel, err := filepath.Rel(s.Root, folder)
+			if err != nil {
+				partial = "attachments could not be placed safely: " + err.Error()
 			} else {
-				// folder is an already constrained absolute pull path; derive its
-				// workspace-relative form before using the shared safe downloader.
-				rel, err := filepath.Rel(s.Root, folder)
-				if err != nil {
-					partial = "attachments could not be placed safely: " + err.Error()
-				} else {
-					ref := fmt.Sprintf("context-%s-%d-topic-%d-entry-%d", strings.ToLower(target.contextType), target.contextID, target.topicID, id)
-					items, e := s.downloadAttachments(ctx, rel, ref, 0, attachments)
-					row.Attachments = items
-					if e != nil {
-						partial = "one or more attachments could not be saved: " + e.Error()
+				ref := fmt.Sprintf("context-%s-%d-topic-%d-entry-%d", strings.ToLower(target.contextType), target.contextID, target.topicID, id)
+				row.Attachments = s.downloadAttachments(ctx, rel, ref, 0, attachments)
+				if len(embedded) > 0 {
+					uploaded := map[int64]bool{}
+					for _, a := range attachments {
+						uploaded[a.ID] = true
 					}
-					for _, item := range items {
-						if item.Status != "readable" && item.Status != "downloaded" {
-							partial = "one or more attachments are linked but unreadable or unavailable"
-						}
+					row.Attachments = append(row.Attachments, s.embeddedUploads(ctx, filepath.Join(rel, "attachments", ref, "embedded"), entry.Message, scope, uploaded, nil)...)
+				}
+				for _, item := range row.Attachments {
+					if !item.HasOriginal() {
+						partial = "one or more attached files are unavailable (file unavailable); see each attachment's reason"
 					}
 				}
 			}

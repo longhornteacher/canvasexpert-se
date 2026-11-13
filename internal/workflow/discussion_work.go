@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/workspace"
@@ -279,7 +280,25 @@ func (g *discussionGuard) hold(s *Service, r domain.StudentResult, src postSourc
 		}
 	}
 	if domain.DiscussionEvidenceDigest(g.liveOwn[r.StudentRef]) != work.Digest {
-		return "this student's discussion posts changed since the pull; pull-work again"
+		// A packet saved before 2026-11 recorded a digest without file identity.
+		// It still validates when the posts read the same and every post carries
+		// the same Canvas file IDs it carried at pull.
+		if domain.DiscussionEvidenceLegacyDigest(g.liveOwn[r.StudentRef]) != work.Digest {
+			return "this student's discussion posts changed since the pull; pull-work again"
+		}
+		packet, err := g.storedPacket(s, work.Packet)
+		if err != nil {
+			return "the pulled discussion packet could not be read: " + err.Error()
+		}
+		var pulled []domain.DiscussionEntry
+		for _, entry := range packet.Entries {
+			if entry.StudentRef == r.StudentRef {
+				pulled = append(pulled, entry)
+			}
+		}
+		if !sameEntryFiles(pulled, g.liveOwn[r.StudentRef]) {
+			return "this student's discussion posts changed since the pull (an attached file was replaced or removed); pull-work again"
+		}
 	}
 	if len(ev.ContextRefs) > 0 {
 		packet, err := g.storedPacket(s, work.Packet)
@@ -296,12 +315,49 @@ func (g *discussionGuard) hold(s *Service, r domain.StudentResult, src postSourc
 			if !ok {
 				return "cited context entry " + ref + " is not in the pulled discussion"
 			}
-			if !live || domain.DiscussionEntrySignature(old) != domain.DiscussionEntrySignature(cur) {
+			if !live || !discussionEntryUnchanged(old, cur) {
 				return "cited context entry " + ref + " changed since the pull; pull-work again"
 			}
 		}
 	}
 	return ""
+}
+
+// discussionEntryUnchanged compares a pulled entry with its live read. An entry
+// from a packet saved before 2026-11 has files without Canvas's updated_at;
+// it compares by text, times and file IDs only.
+func discussionEntryUnchanged(old, cur domain.DiscussionEntry) bool {
+	if domain.DiscussionEntrySignature(old) == domain.DiscussionEntrySignature(cur) {
+		return true
+	}
+	for _, a := range old.Attachments {
+		if a.Source == "" && a.UpdatedAt != "" {
+			return false // pulled with file identity; a difference is a change
+		}
+	}
+	return domain.DiscussionEntryLegacySignature(old) == domain.DiscussionEntryLegacySignature(cur) && sameEntryFiles([]domain.DiscussionEntry{old}, []domain.DiscussionEntry{cur})
+}
+
+// sameEntryFiles reports whether each entry carries the same Canvas file IDs
+// in both sets.
+func sameEntryFiles(pulled, live []domain.DiscussionEntry) bool {
+	files := func(entries []domain.DiscussionEntry) map[string]string {
+		out := map[string]string{}
+		for _, e := range entries {
+			out[domain.DiscussionEntryRef(e)] = strings.Join(domain.DiscussionEntryFiles(e, false), ",")
+		}
+		return out
+	}
+	a, b := files(pulled), files(live)
+	if len(a) != len(b) {
+		return false
+	}
+	for ref, ids := range a {
+		if other, ok := b[ref]; !ok || other != ids {
+			return false
+		}
+	}
+	return true
 }
 
 func (g *discussionGuard) storedPacket(s *Service, rel string) (domain.DiscussionPacket, error) {

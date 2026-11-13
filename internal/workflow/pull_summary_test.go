@@ -23,8 +23,10 @@ func TestPullSummaryCountsObservedStatesAndSeparatesFetch(t *testing.T) {
 	s, server := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.URL.Path == "/files/unreadable":
+		case r.URL.Path == "/files/scan":
 			_, _ = w.Write([]byte{0, 1, 2})
+		case r.URL.Path == "/files/gone":
+			http.NotFound(w, r)
 		case strings.HasSuffix(r.URL.Path, "/enrollments"):
 			var enrollments []Enrollment
 			for id := int64(5); id <= 9; id++ {
@@ -38,7 +40,9 @@ func TestPullSummaryCountsObservedStatesAndSeparatesFetch(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/submissions"):
 			_ = json.NewEncoder(w).Encode([]Submission{live, missing, excused, inactive, unsupported})
 		case strings.Contains(r.URL.Path, "/submissions/5"):
-			live.Attachments = []Attachment{{ID: 500, Filename: "response.pdf", URL: origin + "/files/unreadable", ContentType: "application/pdf"}}
+			// A saved PDF of any content is an original to inspect; only the
+			// file Canvas no longer serves counts as unavailable.
+			live.Attachments = []Attachment{{ID: 500, Filename: "response.pdf", URL: origin + "/files/scan", ContentType: "application/pdf"}, {ID: 501, Filename: "missing.pdf", URL: origin + "/files/gone", ContentType: "application/pdf"}}
 			_ = json.NewEncoder(w).Encode(live)
 		default:
 			_ = json.NewEncoder(w).Encode(fixtureAssignment())
@@ -50,10 +54,10 @@ func TestPullSummaryCountsObservedStatesAndSeparatesFetch(t *testing.T) {
 		t.Fatalf("pull: %#v %v", report, e)
 	}
 	summary := report.Assignments[0]
-	if summary.Course != "TEST" || summary.AssignmentID != 10 || summary.Students != 1 || summary.Late != 1 || summary.Missing != 1 || summary.Excused != 1 || summary.Inactive != 1 || summary.Unsupported != 1 || summary.UnreadableAttachments != 1 || len(summary.Packets) != 1 {
+	if summary.Course != "TEST" || summary.AssignmentID != 10 || summary.Students != 1 || summary.Late != 1 || summary.Missing != 1 || summary.Excused != 1 || summary.Inactive != 1 || summary.Unsupported != 1 || summary.UnavailableAttachments != 1 || len(summary.Packets) != 1 {
 		t.Fatalf("incorrect summary: %#v", summary)
 	}
-	if report.DiscoveryRequests != 3 || report.FetchRequests != 3 || report.Requests != report.DiscoveryRequests+report.FetchRequests || report.DiscoveryElapsed <= 0 || report.FetchElapsed <= 0 {
+	if report.DiscoveryRequests != 3 || report.FetchRequests != 4 || report.Requests != report.DiscoveryRequests+report.FetchRequests || report.DiscoveryElapsed <= 0 || report.FetchElapsed <= 0 {
 		t.Fatalf("incorrect phase metrics: %#v", report)
 	}
 	// No actionable work needs no detailed history, rubric refetch or downloads.

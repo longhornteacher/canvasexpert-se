@@ -24,13 +24,18 @@ func TestPullDiscussionPacketMergesFullRepliesAndKeepsAuthorsPrivate(t *testing.
 	}
 	viewReplies := append([]map[string]any(nil), replies[:10]...)
 	updated := map[string]any{"id": 100, "user_id": 12, "parent_id": 1, "message": "newer version", "created_at": "2026-10-01T12:00:00Z", "updated_at": "2026-10-01T12:03:00Z"}
-	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+	// A saved PDF on an attributed entry leaves coverage complete.
+	scan := append([]byte("%PDF-1.5 "), 0, 0xff)
+	var serverURL string
+	s, server := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method + " " + r.URL.Path {
+		case "GET /files/scan":
+			_, _ = w.Write(scan)
 		case "GET /api/v1/courses/1/discussion_topics/20":
 			json.NewEncoder(w).Encode(map[string]any{"id": 20, "title": "Thread", "message": "Prompt", "assignment_id": 30})
 		case "GET /api/v1/courses/1/discussion_topics/20/view":
-			json.NewEncoder(w).Encode(map[string]any{"view": []any{map[string]any{"id": 1, "user_id": 12, "message": "<p>Opening post</p>", "created_at": "2026-10-01T11:00:00Z", "replies_count": 12, "has_more_replies": true, "replies": viewReplies}}, "new_entries": []any{updated}})
+			json.NewEncoder(w).Encode(map[string]any{"view": []any{map[string]any{"id": 1, "user_id": 12, "message": "<p>Opening post</p>", "created_at": "2026-10-01T11:00:00Z", "replies_count": 12, "has_more_replies": true, "replies": viewReplies, "attachments": []any{map[string]any{"id": 900, "filename": "scan.pdf", "content-type": "application/pdf", "url": serverURL + "/files/scan"}}}}, "new_entries": []any{updated}})
 		case "GET /api/v1/courses/1/discussion_topics/20/entries/1/replies":
 			json.NewEncoder(w).Encode(replies)
 		default:
@@ -38,6 +43,7 @@ func TestPullDiscussionPacketMergesFullRepliesAndKeepsAuthorsPrivate(t *testing.
 			http.NotFound(w, r)
 		}
 	})
+	serverURL = server.URL
 	students, err := workspace.OpenStudents(s.Root)
 	if err != nil {
 		t.Fatal(err)
@@ -64,6 +70,16 @@ func TestPullDiscussionPacketMergesFullRepliesAndKeepsAuthorsPrivate(t *testing.
 	}
 	if packet.Kind != "discussion-packet" || packet.Status != "complete" || packet.AssignmentID != 30 || len(packet.Entries) != 13 {
 		t.Fatalf("packet status=%s assignment=%d entries=%d", packet.Status, packet.AssignmentID, len(packet.Entries))
+	}
+	for _, entry := range packet.Entries {
+		if entry.EntryID == 1 {
+			if len(entry.Attachments) != 1 || entry.Attachments[0].Status != "downloaded" {
+				t.Fatalf("entry upload not saved: %+v", entry.Attachments)
+			}
+			if b, e := os.ReadFile(filepath.Join(s.Root, filepath.FromSlash(entry.Attachments[0].Path))); e != nil || !bytes.Equal(b, scan) {
+				t.Fatalf("entry upload bytes changed: %v", e)
+			}
+		}
 	}
 	seen := map[int64]bool{}
 	var merged domain.DiscussionEntry

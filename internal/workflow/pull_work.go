@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
@@ -39,8 +37,10 @@ type PullWorkOptions struct {
 }
 
 // PullAssignmentSummary reports observed discovery states and the resulting
-// packet workload. Late/missing can overlap other states; attachments count
-// unreadable or failed files across current and retrieved preceding attempts.
+// packet workload. Late/missing can overlap other states;
+// UnavailableAttachments counts uploads and New Quiz answer files whose
+// original could not be saved, across current and retrieved preceding
+// attempts. Saved originals of any type are not counted.
 type PullAssignmentSummary struct {
 	Course                   string
 	AssignmentID             int64
@@ -52,7 +52,7 @@ type PullAssignmentSummary struct {
 	Inactive                 int
 	Unsupported              int
 	Handled                  int
-	UnreadableAttachments    int
+	UnavailableAttachments   int
 	Packets                  []string
 	SkipReason               string
 	AssignmentGroupName      string
@@ -439,7 +439,6 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				return report, e
 			}
 			var newQuizRows map[int64]newQuizRow
-			var newQuizDownloadBudget int64
 			var nqVersions quizVersionReader
 			if a.NewQuiz {
 				newQuizRows, packet.WrittenItems, e = newQuizResponses(ctx, s.Client, course.ID, a.ID)
@@ -481,7 +480,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 					continue
 				}
 				for _, attempt := range append([]Submission{sub}, priorAttempts(sub)...) {
-					downloads = append(downloads, attemptDownload{roster[i].Ref, attempt})
+					downloads = append(downloads, attemptDownload{roster[i].Ref, attempt, userScope(course.ID, sub.UserID)})
 				}
 			}
 			attachments, e := s.prefetchAttachments(ctx, relDir, downloads)
@@ -529,7 +528,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 					doc.Current.WrittenResponses = row.Responses
 					doc.Current.AutoScored, doc.Current.AutoScoredNote = row.AutoScored, row.AutoScoredNote
 					participantSession, _ := newQuizSessionIDs(sub)
-					doc.Current.WrittenFiles = s.downloadNewQuizFiles(ctx, relDir, st.Ref, sub.UserID, course.ID, a.ID, sub.Attempt, row, &newQuizDownloadBudget, participantSession)
+					doc.Current.WrittenFiles = s.downloadNewQuizFiles(ctx, relDir, st.Ref, sub.UserID, course.ID, a.ID, sub.Attempt, row, participantSession)
 					if len(row.Responses) > 0 || len(row.FileItemIDs) > 0 {
 						doc.ObservedQuizResult = s.quizResultVersion(ctx, &nqVersions, course.ID, a.ID, sub)
 					}
@@ -540,15 +539,10 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				sort.Slice(doc.Prior, func(i, j int) bool { return doc.Prior[i].Ref.Attempt < doc.Prior[j].Ref.Attempt })
 				attempts := append([]domain.AttemptWork{doc.Current}, doc.Prior...)
 				for _, attempt := range attempts {
-					for _, attachment := range attempt.Attachments {
-						if attachment.Status != "readable" {
-							summary.UnreadableAttachments++
-						}
-					}
+					_, missing := fileAvailability("", attempt)
+					summary.UnavailableAttachments += missing
 				}
-				for _, c := range submissionComments(sub) {
-					doc.Comments = append(doc.Comments, domain.ExistingComment{ID: c.ID, Attempt: c.Attempt, Text: c.Comment, CreatedAt: c.CreatedAt})
-				}
+				doc.Comments = s.commentEvidence(ctx, relDir, st.Ref, sub)
 				privateNotes, warnings := workspace.NotesFor(notes, course.Nickname, st, courseRoster)
 				doc.Notes = privateNotes
 				report.Warnings = append(report.Warnings, warnings...)
@@ -715,23 +709,22 @@ type attemptKey struct {
 }
 
 type attemptDownload struct {
-	ref string
-	sub Submission
+	ref   string
+	sub   Submission
+	scope embedScope // whose Canvas files the attempt's own text may embed
 }
 
 // Attachment downloads dominate fetch time. Run attempts concurrently, at the
 // client's in-flight cap, so a temp file is open only while its download runs;
 // each attempt keeps its own attachment order.
+// A failed file never cancels other files or attempts; only the pull's own
+// cancellation ends the prefetch with an error.
 func (s *Service) prefetchAttachments(ctx context.Context, relDir string, downloads []attemptDownload) (map[attemptKey][]domain.Attachment, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	results := make([][]domain.Attachment, len(downloads))
 	slots := make(chan struct{}, 4)
-	var once sync.Once
-	var first error
 	var wg sync.WaitGroup
 	for i, d := range downloads {
-		if len(d.sub.Attachments) == 0 {
+		if len(d.sub.Attachments) == 0 && d.sub.Type != "media_recording" && embeddedFileRefs(d.sub.Body, s.Client.Origin(), d.scope) == nil {
 			continue
 		}
 		wg.Add(1)
@@ -739,20 +732,18 @@ func (s *Service) prefetchAttachments(ctx context.Context, relDir string, downlo
 			defer wg.Done()
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			items, e := s.downloadAttachments(ctx, relDir, d.ref, d.sub.Attempt, d.sub.Attachments)
-			if e != nil {
-				once.Do(func() { first = e; cancel() })
-				return
-			}
-			results[i] = items
+			results[i] = s.attemptFiles(ctx, relDir, d)
 		}()
 	}
 	wg.Wait()
+	if ctx.Err() != nil {
+		return nil, &canvas.Error{Kind: "canceled"}
+	}
 	out := map[attemptKey][]domain.Attachment{}
 	for i, d := range downloads {
 		out[attemptKey{d.ref, d.sub.Attempt}] = results[i]
 	}
-	return out, first
+	return out, nil
 }
 
 func (s *Service) attemptWork(sub Submission, attachments []domain.Attachment) domain.AttemptWork {
@@ -801,76 +792,41 @@ func (s *Service) attemptWork(sub Submission, attachments []domain.Attachment) d
 		w.Note = "Student annotation; the Engine cannot read it. Open it in SpeedGrader."
 	}
 	w.Attachments = attachments
+	for _, a := range attachments {
+		if a.Source == "media" && a.HasOriginal() {
+			w.Note = "Student submitted a recording; its file is saved with the attachments (source media). The Engine does not transcribe audio or video; listen to it or open it in SpeedGrader."
+		}
+	}
 	return w
 }
 
-func (s *Service) downloadAttachments(ctx context.Context, relDir, ref string, attempt int, attachments []Attachment) ([]domain.Attachment, error) {
+// attemptFiles saves one attempt's uploads, then a downloadable media
+// recording, then Canvas files embedded in the attempt's own text.
+func (s *Service) attemptFiles(ctx context.Context, relDir string, d attemptDownload) []domain.Attachment {
+	items := s.downloadAttachments(ctx, relDir, d.ref, d.sub.Attempt, d.sub.Attachments)
+	dir := filepath.Join(relDir, "attachments", d.ref, fmt.Sprintf("attempt-%d", d.sub.Attempt))
+	if media := s.mediaRecording(ctx, dir, d.sub); media != nil {
+		items = append(items, *media)
+	}
+	uploaded := map[int64]bool{}
+	for _, a := range d.sub.Attachments {
+		uploaded[a.ID] = true
+	}
+	return append(items, s.embeddedUploads(ctx, filepath.Join(dir, "embedded"), d.sub.Body, d.scope, uploaded, nil)...)
+}
+
+// downloadAttachments saves each upload of one attempt. Every type is kept as
+// its original; a failure affects only that file.
+func (s *Service) downloadAttachments(ctx context.Context, relDir, ref string, attempt int, attachments []Attachment) []domain.Attachment {
 	var items []domain.Attachment
 	for _, a := range attachments {
-		name := a.Filename
-		if name == "" {
-			name = a.DisplayName
-		}
-		item := domain.Attachment{ID: a.ID, Name: name, Status: "unreadable", Reason: "unsupported attachment format; original preserved"}
-		rel := filepath.Join(relDir, "attachments", ref, fmt.Sprintf("attempt-%d", attempt), fmt.Sprintf("%d-%s", a.ID, workspace.SafeFilename(name)))
-		path, e := workspace.ConstrainPath(s.Root, rel)
-		if e != nil {
-			return items, e
-		}
-		if e = os.MkdirAll(filepath.Dir(path), 0755); e != nil {
-			return items, e
-		}
-		f, e := os.CreateTemp(filepath.Dir(path), ".cse-download-*")
-		if e != nil {
-			return items, e
-		}
-		tmp := f.Name()
-		e = s.Client.Download(ctx, a.URL, f)
-		ce := f.Close()
-		if e == nil {
-			e = ce
-		}
-		if e != nil {
-			os.Remove(tmp)
-			item.Status = "failed"
-			item.Reason = e.Error()
-			items = append(items, item)
-			continue
-		}
-		if e = os.Rename(tmp, path); e != nil {
-			os.Remove(tmp)
-			return items, e
-		}
-		item.Path = filepath.ToSlash(rel)
-		if strings.HasPrefix(a.ContentType, "text/") || plainTextExtension(name) {
-			b, e := os.ReadFile(path)
-			if e != nil {
-				return items, e
-			}
-			if utf8.Valid(b) && !bytes.ContainsRune(b, 0) {
-				readable := string(b)
-				if strings.Contains(a.ContentType, "html") || strings.EqualFold(filepath.Ext(name), ".html") {
-					readable = render.HTMLText(readable)
-				}
-				textRel := rel + ".readable.txt"
-				textPath, e := workspace.ConstrainPath(s.Root, textRel)
-				if e != nil {
-					return items, e
-				}
-				if e = workspace.WriteFile(textPath, []byte(readable), 0644); e != nil {
-					return items, e
-				}
-				item.ReadablePath = filepath.ToSlash(textRel)
-				item.Status = "readable"
-				item.Reason = ""
-			} else {
-				item.Reason = "text is not valid UTF-8 or contains NUL bytes; original preserved"
-			}
-		}
-		items = append(items, item)
+		rel := filepath.Join(relDir, "attachments", ref, fmt.Sprintf("attempt-%d", attempt), fmt.Sprintf("%d-%s", a.ID, workspace.SafeFilename(uploadName(a))))
+		items = append(items, s.saveStudentUpload(ctx, rel, a))
 	}
-	return items, nil
+	return items
 }
+
+// plainTextExtension only chooses whether to try a cheap text preview.
 func plainTextExtension(name string) bool {
 	switch strings.ToLower(filepath.Ext(name)) {
 	case ".txt", ".md", ".csv", ".tsv", ".html", ".htm", ".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".java", ".c", ".h", ".cpp", ".cs", ".css", ".json", ".yaml", ".yml", ".xml", ".sql", ".sh", ".ps1", ".rb", ".rs":

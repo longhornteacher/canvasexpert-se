@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/url"
@@ -214,12 +215,14 @@ func autoScoredTotal(items []writtenQuizItem, row quizReportRow) (*domain.AutoSc
 	return &domain.AutoScored{Earned: domain.RoundRat(earned, 2), Possible: domain.RoundRat(possible, 2), Items: len(items)}, ""
 }
 
-func (s *Service) downloadNewQuizFiles(ctx context.Context, relDir, studentRef string, userID int64, courseID, assignmentID int64, attempt int, row newQuizRow, budget *int64, participantSessionID string) []domain.WrittenFile {
+// downloadNewQuizFiles saves each answer file under the per-file limit; one
+// file's failure never stops the others or later students.
+func (s *Service) downloadNewQuizFiles(ctx context.Context, relDir, studentRef string, userID int64, courseID, assignmentID int64, attempt int, row newQuizRow, participantSessionID string) []domain.WrittenFile {
 	files, err := s.Client.NewQuizFiles(ctx, courseID, assignmentID, userID, attempt, sliceSet(row.FileItemIDs), participantSessionID)
 	if err != nil {
 		for i := range row.Files {
 			row.Files[i].Status = "not-retrieved"
-			row.Files[i].Reason = err.Error()
+			row.Files[i].Reason = unavailable(err.Error())
 		}
 		return row.Files
 	}
@@ -229,7 +232,7 @@ func (s *Service) downloadNewQuizFiles(ctx context.Context, relDir, studentRef s
 	for _, f := range files {
 		base := workspace.SafeFilename(path.Base(strings.ReplaceAll(f.Name, "\\", "/")))
 		nameCounts[base]++
-		item := s.saveNewQuizFile(ctx, relDir, studentRef, attempt, f, nameCounts[base], budget)
+		item := s.saveNewQuizFile(ctx, relDir, studentRef, attempt, f, nameCounts[base])
 		replaced := false
 		for i, old := range result {
 			if !used[i] && old.ItemID == f.ItemID && old.Name == f.Name {
@@ -244,14 +247,17 @@ func (s *Service) downloadNewQuizFiles(ctx context.Context, relDir, studentRef s
 	return result
 }
 
-func (s *Service) saveNewQuizFile(ctx context.Context, relDir, studentRef string, attempt int, f canvas.NewQuizFile, duplicate int, budget *int64) domain.WrittenFile {
+// saveNewQuizFile saves one answer file. A positive declared size is checked
+// exactly; size 0 means Canvas did not say, and only the per-file limit
+// applies while streaming.
+func (s *Service) saveNewQuizFile(ctx context.Context, relDir, studentRef string, attempt int, f canvas.NewQuizFile, duplicate int) domain.WrittenFile {
 	item := domain.WrittenFile{ItemID: f.ItemID, Name: f.Name, Size: f.Size, Status: "not-retrieved"}
-	if f.Size < 0 || f.Size > 50<<20 {
-		item.Reason = "too large"
+	if f.URL == "" {
+		item.Reason = unavailable("Canvas did not return a download address for it")
 		return item
 	}
-	if *budget+f.Size > 500<<20 {
-		item.Reason = "pull size limit reached"
+	if f.Size >= maxStudentUpload {
+		item.Reason = unavailable(fmt.Sprintf("Canvas reports %d bytes; files must be under %s. Open it in SpeedGrader", f.Size, studentUploadLimitText))
 		return item
 	}
 	base := path.Base(strings.ReplaceAll(f.Name, "\\", "/"))
@@ -269,7 +275,7 @@ func (s *Service) saveNewQuizFile(ctx context.Context, relDir, studentRef string
 		rel := filepath.Join(dir, candidate)
 		dest, e := workspace.ConstrainPath(s.Root, rel)
 		if e != nil {
-			item.Reason = "unsafe destination"
+			item.Reason = unavailable("no safe place in UserInstall to save it")
 			return item
 		}
 		st, e := os.Stat(dest)
@@ -277,69 +283,58 @@ func (s *Service) saveNewQuizFile(ctx context.Context, relDir, studentRef string
 			item.Path = filepath.ToSlash(rel)
 			break
 		}
-		if e == nil && st.Size() == f.Size {
+		if e == nil && f.Size > 0 && st.Size() == f.Size {
 			item.Path = filepath.ToSlash(rel)
 			item.Status = "downloaded"
 			return item
 		}
 	}
 	dest, e := workspace.ConstrainPath(s.Root, filepath.FromSlash(item.Path))
-	if e != nil {
+	fail := func(why string) domain.WrittenFile {
 		item.Path = ""
-		item.Reason = "unsafe destination"
+		item.Reason = unavailable(why)
 		return item
 	}
+	if e != nil {
+		return fail("no safe place in UserInstall to save it")
+	}
 	if e = os.MkdirAll(filepath.Dir(dest), 0755); e != nil {
-		item.Path = ""
-		item.Reason = "file write failed"
-		return item
+		return fail("its folder could not be created in UserInstall")
 	}
 	partial := dest + ".partial"
 	out, e := os.OpenFile(partial, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if e != nil {
-		item.Path = ""
-		item.Reason = "partial file could not be created"
-		return item
+		return fail("a temporary file could not be created in UserInstall")
 	}
-	e = s.Client.DownloadUnauthenticated(ctx, f.URL, &limitedWriter{W: out, Limit: f.Size})
-	closeErr := out.Close()
-	if e == nil {
-		e = closeErr
+	limit := maxStudentUpload - 1
+	if f.Size > 0 {
+		limit = f.Size // a declared size is never exceeded
 	}
-	if e == nil {
-		st, se := os.Stat(partial)
-		if se != nil || st.Size() != f.Size {
-			e = fmt.Errorf("download size mismatch")
-		}
+	n, e := s.Client.DownloadUnauthenticatedLimited(ctx, f.URL, out, limit)
+	if closeErr := out.Close(); e == nil && closeErr != nil {
+		e = &canvas.Error{Kind: "local"}
 	}
-	if e == nil {
-		e = os.Rename(partial, dest)
+	why := ""
+	var ce *canvas.Error
+	switch {
+	case f.Size > 0 && errors.As(e, &ce) && ce.Kind == "too_large":
+		why = fmt.Sprintf("Canvas sent more than the %d bytes it declared", f.Size)
+	case e != nil:
+		why = downloadFailure(e)
+	case f.Size > 0 && n != f.Size:
+		why = fmt.Sprintf("Canvas declared %d bytes but sent %d", f.Size, n)
 	}
-	if e != nil {
+	if why == "" && os.Rename(partial, dest) != nil {
+		why = "the original could not be saved in UserInstall"
+	}
+	if why != "" {
 		_ = os.Remove(partial)
-		item.Path = ""
-		item.Reason = "download failed"
-		return item
+		return fail(why)
 	}
+	item.Size = n
 	item.Status = "downloaded"
 	item.Reason = ""
-	*budget += f.Size
 	return item
-}
-
-type limitedWriter struct {
-	W     *os.File
-	Limit int64
-	Count int64
-}
-
-func (w *limitedWriter) Write(p []byte) (int, error) {
-	if w.Count+int64(len(p)) > w.Limit {
-		return 0, fmt.Errorf("declared size exceeded")
-	}
-	n, e := w.W.Write(p)
-	w.Count += int64(n)
-	return n, e
 }
 func sliceSet(ids []string) map[string]bool {
 	m := map[string]bool{}

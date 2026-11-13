@@ -6,13 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/render"
@@ -399,6 +396,12 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 		sort.Strings(work.PropagationAudience)
 		artifactIndex := map[string]int{}
 		memberSeen := map[string]bool{}
+		// A shared body may embed a file from whichever member submitted it.
+		groupScope := userScope(course.ID)
+		for _, sub := range rowsByGroup[gid] {
+			groupScope.users[sub.UserID], groupScope.users[sub.User.ID] = true, true
+		}
+		delete(groupScope.users, 0)
 		for _, sub := range rowsByGroup[gid] {
 			userID := sub.UserID
 			if userID <= 0 {
@@ -416,6 +419,7 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 			}
 			memberSeen[st.Ref] = true
 			memberDoc := s.buildGroupMember(st, sub, currentMember, member)
+			memberDoc.Comments = s.commentEvidence(ctx, relDir, st.Ref, sub)
 			if options.Session {
 				gradeHandled := s.groupSubmissionHandled(a, st.Ref, sub, snapshot)
 				needsTiming := !gradeHandled && s.sessionTimingCandidate(course.ID, a.ID, st.Ref, sub)
@@ -440,14 +444,14 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 				}
 			}
 			if submissionGroupID(sub) > 0 && sub.Attempt > 0 && sub.SubmittedAt != nil {
-				key, artifact, materializeErr := s.groupArtifact(ctx, sub, st.Ref, gid, relDir, attachmentCache)
+				key, artifact, materializeErr := s.groupArtifact(ctx, sub, st.Ref, gid, relDir, attachmentCache, groupScope)
 				if materializeErr != nil {
 					return nil, 0, nil, materializeErr
 				}
 				memberDoc.CurrentArtifactKey = key
 				appendGroupArtifact(&work, artifactIndex, artifact)
-				if groupArtifactUnreadable(artifact) {
-					work.SharedAssessmentReasons = append(work.SharedAssessmentReasons, "one or more current submission attachments could not be read as text")
+				if groupArtifactUnavailable(artifact) {
+					work.SharedAssessmentReasons = append(work.SharedAssessmentReasons, "one or more current submission files are unavailable; see each attachment's reason")
 				}
 			}
 			seenAttempts := map[int]bool{sub.Attempt: true}
@@ -458,14 +462,14 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 				seenAttempts[prior.Attempt] = true
 				pa := domain.GroupWorkAttempt{SubmissionID: prior.ID, SubmissionGroupID: submissionGroupID(prior), Attempt: attemptRef(prior), EnteredGrade: decimalPointer(prior.EnteredScore), ObservedScore: decimalPointer(prior.Score), Late: prior.Late}
 				if prior.ID > 0 && prior.SubmittedAt != nil {
-					key, artifact, materializeErr := s.groupArtifact(ctx, prior, st.Ref, submissionGroupID(prior), relDir, attachmentCache)
+					key, artifact, materializeErr := s.groupArtifact(ctx, prior, st.Ref, submissionGroupID(prior), relDir, attachmentCache, groupScope)
 					if materializeErr != nil {
 						return nil, 0, nil, materializeErr
 					}
 					pa.ArtifactKey = key
 					appendGroupArtifact(&work, artifactIndex, artifact)
-					if groupArtifactUnreadable(artifact) {
-						work.SharedAssessmentReasons = append(work.SharedAssessmentReasons, "one or more prior submission attachments could not be read as text")
+					if groupArtifactUnavailable(artifact) {
+						work.SharedAssessmentReasons = append(work.SharedAssessmentReasons, "one or more prior submission files are unavailable; see each attachment's reason")
 					}
 				}
 				memberDoc.Prior = append(memberDoc.Prior, pa)
@@ -570,7 +574,7 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 			entry.State = "no submission"
 		}
 		if sub.Attempt > 0 && sub.SubmittedAt != nil {
-			key, artifact, e := s.groupArtifact(ctx, sub, entry.StudentRef, submissionGroupID(sub), relDir, attachmentCache)
+			key, artifact, e := s.groupArtifact(ctx, sub, entry.StudentRef, submissionGroupID(sub), relDir, attachmentCache, userScope(course.ID, uid))
 			if e != nil {
 				return nil, 0, nil, e
 			}
@@ -579,8 +583,13 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 			entry.Attachments = artifact.Attachments
 			_ = key
 		}
-		for _, c := range submissionComments(sub) {
-			entry.Comments = append(entry.Comments, domain.ExistingComment{ID: c.ID, Attempt: c.Attempt, Text: c.Comment, CreatedAt: c.CreatedAt})
+		if entry.StudentRef != "" {
+			entry.Comments = s.commentEvidence(ctx, relDir, entry.StudentRef, sub)
+		} else {
+			// Unmatched identity: comment text only, no files saved.
+			for _, c := range submissionComments(sub) {
+				entry.Comments = append(entry.Comments, domain.ExistingComment{ID: c.ID, Attempt: c.Attempt, Text: c.Comment, CreatedAt: c.CreatedAt})
+			}
 		}
 		seenAttempts := map[int]bool{sub.Attempt: true}
 		for _, prior := range sub.History {
@@ -590,7 +599,7 @@ func (s *Service) pullGroupAssignment(ctx context.Context, course domain.Course,
 			seenAttempts[prior.Attempt] = true
 			old := domain.GroupUnassignedAttempt{SubmissionID: prior.ID, SubmissionGroupID: submissionGroupID(prior), Attempt: attemptRef(prior), EnteredGrade: decimalPointer(prior.EnteredScore), ObservedScore: decimalPointer(prior.Score)}
 			if prior.ID > 0 {
-				_, artifact, artifactErr := s.groupArtifact(ctx, prior, entry.StudentRef, submissionGroupID(prior), relDir, attachmentCache)
+				_, artifact, artifactErr := s.groupArtifact(ctx, prior, entry.StudentRef, submissionGroupID(prior), relDir, attachmentCache, userScope(course.ID, uid))
 				if artifactErr != nil {
 					return nil, 0, nil, artifactErr
 				}
@@ -700,9 +709,6 @@ func (s *Service) buildGroupMember(st workspace.Student, sub Submission, current
 			m.RubricAssessment = append(m.RubricAssessment, domain.CriterionScore{CriterionID: id, Points: *p, RatingID: r.RatingID, Comment: r.Comments})
 		}
 	}
-	for _, c := range submissionComments(sub) {
-		m.Comments = append(m.Comments, domain.ExistingComment{ID: c.ID, Attempt: c.Attempt, Text: c.Comment, CreatedAt: c.CreatedAt})
-	}
 	return m
 }
 
@@ -725,7 +731,7 @@ func submissionFingerprint(sub Submission) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func (s *Service) groupArtifact(ctx context.Context, sub Submission, studentRef string, groupID int64, relDir string, cache map[int64]domain.Attachment) (string, domain.GroupArtifact, error) {
+func (s *Service) groupArtifact(ctx context.Context, sub Submission, studentRef string, groupID int64, relDir string, cache map[int64]domain.Attachment, scope embedScope) (string, domain.GroupArtifact, error) {
 	fingerprint := submissionFingerprint(sub)
 	key := "artifact-" + fingerprint[:16]
 	artifact := domain.GroupArtifact{Key: key, Fingerprint: fingerprint, SubmissionType: sub.Type, URL: sub.URL, ReadableText: render.HTMLText(sub.Body)}
@@ -744,9 +750,10 @@ func (s *Service) groupArtifact(ctx context.Context, sub Submission, studentRef 
 			if name == "" {
 				name = live.DisplayName
 			}
-			item = domain.Attachment{Name: name, Status: "unreadable", Reason: "Canvas file identity was unavailable; original was not downloaded"}
+			item = domain.Attachment{Name: name, Status: "failed", Reason: unavailable("Canvas did not return the file's ID, so the original was not downloaded")}
 		} else if cached, ok := cache[live.ID]; ok {
 			item = cached
+			item.Source = ""
 		} else {
 			item = s.downloadGroupAttachment(ctx, relDir, live)
 			cache[live.ID] = item
@@ -761,75 +768,21 @@ func (s *Service) groupArtifact(ctx context.Context, sub Submission, studentRef 
 		}
 		artifact.Attachments = append(artifact.Attachments, item)
 	}
+	uploaded := map[int64]bool{}
+	for _, live := range sub.Attachments {
+		uploaded[live.ID] = true
+	}
+	scope.groupID = groupID
+	artifact.Attachments = append(artifact.Attachments, s.embeddedUploads(ctx, filepath.Join(relDir, "attachments", "embedded"), sub.Body, scope, uploaded, cache)...)
 	source := domain.GroupArtifactSource{StudentRef: studentRef, SubmissionID: sub.ID, SubmissionGroupID: groupID, Attempt: attemptRef(sub)}
 	artifact.Sources = []domain.GroupArtifactSource{source}
 	return key, artifact, nil
 }
 
+// downloadGroupAttachment saves one shared upload once per Canvas file ID.
 func (s *Service) downloadGroupAttachment(ctx context.Context, relDir string, a Attachment) domain.Attachment {
-	name := a.Filename
-	if name == "" {
-		name = a.DisplayName
-	}
-	item := domain.Attachment{ID: a.ID, Name: name, Status: "unreadable", Reason: "unsupported attachment format; original preserved"}
-	if a.ID <= 0 || a.URL == "" {
-		item.Reason = "file ID or download URL was unavailable; original preserved"
-		return item
-	}
-	rel := filepath.Join(relDir, "attachments", fmt.Sprintf("%d-%s", a.ID, workspace.SafeFilename(name)))
-	path, err := workspace.ConstrainPath(s.Root, rel)
-	if err != nil {
-		item.Status = "failed"
-		item.Reason = err.Error()
-		return item
-	}
-	if err = os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		item.Status = "failed"
-		item.Reason = err.Error()
-		return item
-	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".cse-download-*")
-	if err != nil {
-		item.Status = "failed"
-		item.Reason = err.Error()
-		return item
-	}
-	tmp := f.Name()
-	err = s.Client.Download(ctx, a.URL, f)
-	closeErr := f.Close()
-	if err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		_ = os.Remove(tmp)
-		item.Status = "failed"
-		item.Reason = err.Error()
-		return item
-	}
-	if err = os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		item.Status = "failed"
-		item.Reason = err.Error()
-		return item
-	}
-	item.Path = filepath.ToSlash(rel)
-	if strings.HasPrefix(a.ContentType, "text/") || plainTextExtension(name) {
-		b, readErr := os.ReadFile(path)
-		if readErr == nil && utf8.Valid(b) && !strings.ContainsRune(string(b), 0) {
-			readable := string(b)
-			if strings.Contains(a.ContentType, "html") || strings.EqualFold(filepath.Ext(name), ".html") {
-				readable = render.HTMLText(readable)
-			}
-			textRel := rel + ".readable.txt"
-			textPath, pathErr := workspace.ConstrainPath(s.Root, textRel)
-			if pathErr == nil && workspace.WriteFile(textPath, []byte(readable), 0644) == nil {
-				item.ReadablePath = filepath.ToSlash(textRel)
-				item.Status = "readable"
-				item.Reason = ""
-			}
-		}
-	}
-	return item
+	rel := filepath.Join(relDir, "attachments", fmt.Sprintf("%d-%s", a.ID, workspace.SafeFilename(uploadName(a))))
+	return s.saveStudentUpload(ctx, rel, a)
 }
 
 func appendGroupArtifact(work *domain.GroupWorkDocument, index map[string]int, a domain.GroupArtifact) {
@@ -841,9 +794,13 @@ func appendGroupArtifact(work *domain.GroupWorkDocument, index map[string]int, a
 	work.Artifacts = append(work.Artifacts, a)
 }
 
-func groupArtifactUnreadable(a domain.GroupArtifact) bool {
+// groupArtifactUnavailable reports a shared upload whose original is not
+// saved. A saved original of any type is evidence to inspect, not a hold.
+func groupArtifactUnavailable(a domain.GroupArtifact) bool {
 	for _, attachment := range a.Attachments {
-		if attachment.Status != "readable" {
+		// A file referenced inside the body is reported on its row. It was never
+		// a readiness condition, so it does not hold the group.
+		if attachment.Source != "embedded" && !attachment.HasOriginal() {
 			return true
 		}
 	}

@@ -100,6 +100,118 @@ func TestWorkspaceToolsRoundTrip(t *testing.T) {
 	call("read_workspace_asset", map[string]any{"path": ".cse/private.bin"}, true)
 }
 
+func TestWorkspaceAssetRangedRead(t *testing.T) {
+	oldWhole, oldChunk, oldCeiling := assetWholeLimit, assetChunkCeiling, assetReadCeiling
+	assetWholeLimit, assetChunkCeiling, assetReadCeiling = 100, 64, 1000
+	defer func() { assetWholeLimit, assetChunkCeiling, assetReadCeiling = oldWhole, oldChunk, oldCeiling }()
+	ctx := context.Background()
+	s := &Server{root: t.TempDir()}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "test"}, nil)
+	s.registerWorkspaceTools(server)
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "test"}, nil)
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+	call := func(args map[string]any, wantError bool) string {
+		t.Helper()
+		result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "read_workspace_asset", Arguments: args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.IsError != wantError {
+			t.Fatalf("isError=%v content=%v", result.IsError, result.Content)
+		}
+		var wrapped struct {
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal([]byte(result.Content[0].(*mcp.TextContent).Text), &wrapped); err != nil {
+			return result.Content[0].(*mcp.TextContent).Text
+		}
+		return wrapped.Text
+	}
+	dir := filepath.Join(s.root, "courses", "c", "packet")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	small := []byte("small original")
+	big := make([]byte, 300)
+	for i := range big {
+		big[i] = byte(i * 7)
+	}
+	os.WriteFile(filepath.Join(dir, "small.png"), small, 0600)
+	os.WriteFile(filepath.Join(dir, "big.pdf"), big, 0600)
+	bigHash := fmt.Sprintf("%x", sha256.Sum256(big))
+
+	// Legacy whole read is unchanged.
+	var legacy map[string]any
+	if err := json.Unmarshal([]byte(call(map[string]any{"path": "courses/c/packet/small.png"}, false)), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if len(legacy) != 3 || legacy["base64"] != base64.StdEncoding.EncodeToString(small) || legacy["sha256"] != fmt.Sprintf("%x", sha256.Sum256(small)) {
+		t.Fatalf("legacy response changed: %v", legacy)
+	}
+
+	// Over the whole-file limit without a range: guidance, not a missing-file error.
+	if msg := call(map[string]any{"path": "courses/c/packet/big.pdf"}, true); !strings.Contains(msg, "300 bytes") || !strings.Contains(msg, "offset") {
+		t.Fatalf("no range guidance: %s", msg)
+	}
+
+	// Ranged read reassembles bytes and reports the whole-file hash.
+	var got []byte
+	var offset int64
+	for calls := 0; ; calls++ {
+		if calls > 20 {
+			t.Fatal("range loop did not end")
+		}
+		var r struct {
+			Path       string `json:"path"`
+			MIMEType   string `json:"mime_type"`
+			TotalSize  int64  `json:"total_size"`
+			Offset     int64  `json:"offset"`
+			Length     int64  `json:"length"`
+			NextOffset int64  `json:"next_offset"`
+			EOF        bool   `json:"eof"`
+			SHA256     string `json:"sha256"`
+			Base64     string `json:"base64"`
+		}
+		if err := json.Unmarshal([]byte(call(map[string]any{"path": "courses/c/packet/big.pdf", "offset": offset, "length": 1000}, false)), &r); err != nil {
+			t.Fatal(err)
+		}
+		chunk, _ := base64.StdEncoding.DecodeString(r.Base64)
+		if r.TotalSize != 300 || r.Offset != offset || int64(len(chunk)) != r.Length || r.Length > 64 || r.SHA256 != bigHash || r.MIMEType != "application/pdf" || r.NextOffset != offset+r.Length {
+			t.Fatalf("bad chunk: %+v", r)
+		}
+		got = append(got, chunk...)
+		offset = r.NextOffset
+		if r.EOF {
+			break
+		}
+	}
+	if string(got) != string(big) {
+		t.Fatal("reassembled bytes differ")
+	}
+
+	// Offset beyond the file, negative offset, and a file over the read ceiling.
+	call(map[string]any{"path": "courses/c/packet/big.pdf", "offset": 301}, true)
+	call(map[string]any{"path": "courses/c/packet/big.pdf", "offset": -1}, true)
+	os.WriteFile(filepath.Join(dir, "huge.bin"), make([]byte, 1001), 0600)
+	call(map[string]any{"path": "courses/c/packet/huge.bin", "offset": 0}, true)
+	call(map[string]any{"path": "courses/c/packet/huge.bin"}, true)
+
+	// Confinement applies to ranged reads too.
+	for _, p := range []string{".cse/private.bin", "courses/../context/x.md", "courses/.hidden/x.bin", "context/teacher.md"} {
+		call(map[string]any{"path": p, "offset": 0, "length": 10}, true)
+	}
+}
+
 func TestBarePlaybookNameFallsBackToPlaybooks(t *testing.T) {
 	s := &Server{root: t.TempDir()}
 	if err := os.MkdirAll(filepath.Join(s.root, "playbooks"), 0700); err != nil {

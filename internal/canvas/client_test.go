@@ -153,6 +153,78 @@ func TestDownloadForeignRedirectReceivesNoPAT(t *testing.T) {
 	}
 }
 
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("disk full") }
+
+// Student-work downloads: the foreign redirect still gets no PAT, the size cap
+// holds with and without a declared length, a stall (not the whole-request
+// timeout) ends a dead download, and size, local and network failures differ.
+func TestDownloadLimitedCapsStallsAndKeepsCredentialRules(t *testing.T) {
+	old := DownloadStall
+	DownloadStall = 150 * time.Millisecond
+	t.Cleanup(func() { DownloadStall = old })
+	foreign := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			t.Error("PAT reached foreign host")
+		}
+		_, _ = w.Write([]byte("0123456789"))
+	}))
+	defer foreign.Close()
+	release := make(chan struct{})
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/redirect":
+			http.Redirect(w, r, foreign.URL+"/file", http.StatusFound)
+		case "/chunked":
+			// Flushing first leaves out Content-Length, so only the stream check applies.
+			_, _ = w.Write([]byte("01234"))
+			w.(http.Flusher).Flush()
+			_, _ = w.Write([]byte("56789"))
+		case "/slow":
+			// Slow but steady: each pause is shorter than the stall limit.
+			for i := 0; i < 4; i++ {
+				_, _ = w.Write([]byte("ab"))
+				w.(http.Flusher).Flush()
+				time.Sleep(80 * time.Millisecond)
+			}
+		case "/stall":
+			_, _ = w.Write([]byte("ab"))
+			w.(http.Flusher).Flush()
+			<-release
+		}
+	}))
+	defer server.Close()
+	defer close(release) // runs first, so Close does not wait on the stalled handler
+	c := testClient(t, server)
+	c.http.Timeout = 200 * time.Millisecond // the stall limit, not this, governs
+	var dst bytes.Buffer
+	if n, err := c.DownloadLimited(context.Background(), server.URL+"/redirect", &dst, 10); err != nil || n != 10 || dst.String() != "0123456789" {
+		t.Fatalf("exact-cap redirect download: %d %q %v", n, dst.String(), err)
+	}
+	dst.Reset()
+	if _, err := c.DownloadLimited(context.Background(), server.URL+"/redirect", &dst, 9); err == nil || dst.Len() != 0 {
+		t.Fatalf("declared length over the cap was read: %q %v", dst.String(), err)
+	} else {
+		requireKind(t, err, "too_large")
+	}
+	dst.Reset()
+	_, err := c.DownloadLimited(context.Background(), server.URL+"/chunked", &dst, 9)
+	requireKind(t, err, "too_large")
+	if n, err := c.DownloadLimited(context.Background(), server.URL+"/slow", io.Discard, 100); err != nil || n != 8 {
+		t.Fatalf("slow but steady download failed: %d %v", n, err)
+	}
+	_, err = c.DownloadLimited(context.Background(), server.URL+"/stall", io.Discard, 100)
+	requireKind(t, err, "transport")
+	_, err = c.DownloadLimited(context.Background(), server.URL+"/chunked", failingWriter{}, 100)
+	requireKind(t, err, "local")
+	if _, err = c.DownloadUnauthenticatedLimited(context.Background(), server.URL+"/chunked", io.Discard, 9); err == nil {
+		t.Fatal("signed download ignored the cap")
+	} else {
+		requireKind(t, err, "too_large")
+	}
+}
+
 func TestAPIRejectsForeignRedirect(t *testing.T) {
 	var foreignCalls atomic.Int32
 	foreign := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { foreignCalls.Add(1) }))

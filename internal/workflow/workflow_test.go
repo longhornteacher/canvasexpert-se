@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -10,7 +11,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
@@ -34,6 +37,28 @@ func workflowFixture(t *testing.T, handler http.HandlerFunc) (*Service, *httptes
 	s := &Service{Root: root, Client: client, Config: domain.CourseConfig{Schema: 1, Instance: server.URL, Aliases: true, Courses: []domain.Course{{Nickname: "TEST", ID: 1, Current: true}}}}
 	return s, server
 }
+// lowUploadLimit makes student uploads of limit bytes or more oversize, so
+// streaming tests never need a 150 MB file.
+func lowUploadLimit(t *testing.T, limit int64) {
+	t.Helper()
+	old := maxStudentUpload
+	maxStudentUpload = limit
+	t.Cleanup(func() { maxStudentUpload = old })
+}
+
+// leftovers lists temporary or partial download files under root.
+func leftovers(t *testing.T, root string) []string {
+	t.Helper()
+	var found []string
+	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, e error) error {
+		if e == nil && !d.IsDir() && (strings.HasPrefix(d.Name(), ".cse-download-") || strings.HasSuffix(p, ".partial")) {
+			found = append(found, p)
+		}
+		return nil
+	})
+	return found
+}
+
 func fixtureAssignment() Assignment {
 	var a Assignment
 	_ = json.Unmarshal([]byte(`{"id":10,"course_id":1,"name":"Evidence essay","points_possible":20,"description":"<p>Explain your evidence.</p>","grading_type":"points","submission_types":["online_text_entry"],"published":false,"rubric_settings":{"id":20,"title":"Evidence"},"rubric_association":{"id":30,"rubric_id":20,"use_for_grading":false},"rubric":[{"id":"c1","description":"Evidence","points":100,"ratings":[{"id":"r100","description":"Complete","points":100},{"id":"r0","description":"Missing","points":0}]}]}`), &a)
@@ -802,6 +827,129 @@ func TestPullWorkFullRosterNotesAndAttachmentsAndPreservesResults(t *testing.T) 
 	}
 }
 
+// Every upload type is saved byte for byte as an original to inspect; each
+// failure is that file's alone, has a specific reason and leaves no partial.
+func TestPullWorkSavesEveryUploadTypeAndIsolatesFailures(t *testing.T) {
+	lowUploadLimit(t, 64) // under 64 bytes
+	files := map[string][]byte{
+		"scan":       append([]byte("%PDF-1.4\n"), 0, 0xff, 0xfe, 'x'),
+		"slides":     append([]byte("PK\x03\x04"), 0, 1, 2, 3, 0xff),
+		"photo":      append([]byte("\x89PNG\r\n\x1a\n"), 0, 0, 0, 13),
+		"unknown":    {1, 2, 3, 0, 250},
+		"noext":      []byte("no extension"),
+		"latin":      {'c', 'a', 'f', 0xe9},
+		"prior":      append([]byte("\xff\xd8\xff\xe0"), 0, 16),
+		"just-below": bytes.Repeat([]byte{7}, 63),
+		"at-limit":   bytes.Repeat([]byte{7}, 64),
+	}
+	live := fixtureSubmission(5)
+	var serverURL string
+	var oversizeRequests int
+	s, server := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if name, ok := strings.CutPrefix(r.URL.Path, "/files/"); ok {
+			switch name {
+			case "declared-oversize":
+				oversizeRequests++
+			case "gone":
+				http.NotFound(w, r)
+				return
+			}
+			b := files[name]
+			if len(b) > 32 {
+				// No Content-Length: only the streaming check can stop it.
+				_, _ = w.Write(b[:32])
+				w.(http.Flusher).Flush()
+				b = b[32:]
+			}
+			_, _ = w.Write(b)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/enrollments") {
+			_, _ = io.WriteString(w, `[{"user_id":5,"type":"StudentEnrollment","enrollment_state":"active","user":{"id":5,"name":"Jordan Sample"}}]`)
+			return
+		}
+		if strings.Contains(r.URL.Path, "submissions") {
+			sub := live
+			url := func(name string) string { return serverURL + "/files/" + name }
+			sub.Attachments = []Attachment{
+				{ID: 1, Filename: "scan.pdf", ContentType: "application/pdf", URL: url("scan")},                                  // size absent
+				{ID: 2, Filename: "slides.pptx", URL: url("slides"), Size: 3},                                                     // size misstated
+				{ID: 3, Filename: "photo.png", ContentType: "image/png", URL: url("photo"), Size: int64(len(files["photo"]))},     // size right
+				{ID: 4, Filename: "work.qzx", URL: url("unknown")},                                                                 // unknown extension
+				{ID: 5, Filename: "README", URL: url("noext")},                                                                     // no extension
+				{ID: 6, Filename: "notes.txt", ContentType: "text/plain", URL: url("latin")},                                     // text, not UTF-8
+				{ID: 7, Filename: "below.bin", URL: url("just-below")},                                                             // 63 bytes
+				{ID: 8, Filename: "at.bin", URL: url("at-limit")},                                                                  // 64 bytes, streamed
+				{ID: 9, Filename: "huge.mov", URL: url("declared-oversize"), Size: 64},                                            // known oversize
+				{ID: 10, Filename: "gone.pdf", URL: url("gone")},                                                                   // retrieval failure
+			}
+			sub.History = append([]Submission(nil), live.History...)
+			sub.History[0].Attachments = []Attachment{{ID: 11, Filename: "first.jpg", URL: url("prior")}}
+			if strings.HasSuffix(r.URL.Path, "/submissions") {
+				_ = json.NewEncoder(w).Encode([]Submission{sub})
+			} else {
+				_ = json.NewEncoder(w).Encode(sub)
+			}
+			return
+		}
+		_ = json.NewEncoder(w).Encode(fixtureAssignment())
+	})
+	serverURL = server.URL
+	report, e := s.PullWork(context.Background(), "TEST", "10")
+	if e != nil || len(report.Packets) != 1 {
+		t.Fatalf("pull: %#v %v", report, e)
+	}
+	if got := report.Assignments[0].UnavailableAttachments; got != 3 {
+		t.Fatalf("unavailable count %d, want 3 (at limit, declared oversize, gone)", got)
+	}
+	if oversizeRequests != 0 {
+		t.Fatal("a file Canvas reported oversize was requested")
+	}
+	var packet domain.PacketDocument
+	if _, e = workspace.ReadDocument(report.Packets[0], &packet); e != nil {
+		t.Fatal(e)
+	}
+	var work domain.StudentWorkDocument
+	if _, e = workspace.ReadDocument(filepath.Join(s.Root, filepath.FromSlash(packet.Students[0])), &work); e != nil {
+		t.Fatal(e)
+	}
+	saved := map[int64]string{1: "scan", 2: "slides", 3: "photo", 4: "unknown", 5: "noext", 6: "latin", 7: "just-below"}
+	for _, a := range append(work.Current.Attachments, work.Prior[0].Attachments...) {
+		if a.ID == 11 {
+			saved[11] = "prior"
+		}
+		name, ok := saved[a.ID]
+		if !ok {
+			if a.Status != "failed" || a.Path != "" || !strings.HasPrefix(a.Reason, "file unavailable: ") {
+				t.Fatalf("failure not reported specifically: %#v", a)
+			}
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(s.Root, filepath.FromSlash(a.Path)))
+		if a.Status != "downloaded" || err != nil || !bytes.Equal(b, files[name]) || a.Size != int64(len(files[name])) {
+			t.Fatalf("original not saved exactly: %#v %v", a, err)
+		}
+	}
+	reasons := map[int64]string{8: "or larger", 9: "Canvas reports 64 bytes", 10: "no longer has this file"}
+	for _, a := range work.Current.Attachments {
+		if want, ok := reasons[a.ID]; ok && !strings.Contains(a.Reason, want) {
+			t.Fatalf("reason for %d: %q, want %q", a.ID, a.Reason, want)
+		}
+	}
+	if left := leftovers(t, s.Root); len(left) != 0 {
+		t.Fatalf("partial downloads left behind: %v", left)
+	}
+	rel, _ := filepath.Rel(s.Root, report.Packets[0])
+	out, e := InitResults(s.Root, filepath.ToSlash(rel), time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))
+	if e != nil {
+		t.Fatal(e)
+	}
+	b, _ := os.ReadFile(filepath.Join(s.Root, filepath.FromSlash(out)))
+	if !strings.Contains(string(b), "7 saved file(s): inspect each original") || !strings.Contains(string(b), "3 file(s) unavailable") {
+		t.Fatalf("results hints: %s", b)
+	}
+}
+
 func TestCoupledRubricPostsComputedAssessment(t *testing.T) {
 	live := fixtureSubmission(5)
 	assignment := fixtureAssignment()
@@ -1064,4 +1212,131 @@ func TestRepresentativeSyntheticClassPullPost(t *testing.T) {
 		t.Fatal("new attempt was hidden by completed prior operation")
 	}
 	t.Logf("SYNTHETIC HTTP fixture only: %d students, text current+prior attempts, one rubric criterion, posted computed assessment; pull=%s/%d requests; post=%s/%d requests; handled discovery=%s/%d requests; new-attempt discovery=%s/%d requests", size, pull.Elapsed, pull.Requests, post.Elapsed, post.Requests, discovery.Elapsed, discovery.Requests, newAttempt.Elapsed, newAttempt.Requests)
+}
+
+// Files that sit outside the upload list are still the student's evidence:
+// a screenshot pasted into the text entry (the student's own file, read via
+// the verifier Canvas wrote), a course file linked in the text, a recording
+// submission and a file on the student's own comment. An external image,
+// another course's or another user's file, and a teacher's comment file are
+// never fetched.
+func TestPullWorkSavesEmbeddedMediaAndOwnCommentFilesOnly(t *testing.T) {
+	png := append([]byte("\x89PNG\r\n\x1a\n"), 0, 0, 0, 13, 'I', 'H', 'D', 'R')
+	var mu sync.Mutex
+	requests := map[string]int{}
+	var serverURL string
+	s, server := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests[r.URL.Path]++
+		mu.Unlock()
+		switch path := r.URL.Path; {
+		case path == "/api/v1/files/700":
+			http.Error(w, "forbidden", http.StatusForbidden) // the student's own file
+			return
+		case path == "/files/700/download":
+			if r.URL.Query().Get("verifier") != "v1" {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			_, _ = w.Write(png)
+			return
+		case path == "/api/v1/files/702":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 702, "filename": "notes.txt", "content-type": "text/plain", "url": serverURL + "/files/notes"})
+			return
+		case path == "/files/notes":
+			_, _ = io.WriteString(w, "course notes")
+			return
+		case path == "/media/talk", path == "/files/source":
+			_, _ = w.Write([]byte("bytes of " + path))
+			return
+		case strings.HasPrefix(path, "/api/v1/files/") || strings.HasPrefix(path, "/files/"):
+			t.Errorf("fetched a file that is not this student's evidence: %s", r.URL.String())
+			http.NotFound(w, r)
+			return
+		case strings.HasSuffix(path, "/enrollments"):
+			_, _ = io.WriteString(w, `[{"user_id":5,"type":"StudentEnrollment","enrollment_state":"active","user":{"id":5,"name":"Jordan Sample"}}]`)
+			return
+		case strings.Contains(path, "submissions"):
+			sub := fixtureSubmission(5)
+			sub.Body = `<p>My graph: <img src="/users/5/files/700/preview?verifier=v1" alt="shot"></p>` +
+				`<p><img src="https://images.example.org/cat.png"> <a href="` + serverURL + `/courses/1/files/702/download">notes</a>` +
+				` <a href="/courses/2/files/701/download">other course</a> <img src="/users/6/files/703/preview?verifier=x"></p>`
+			sub.History = append([]Submission(nil), sub.History...)
+			sub.History[0].Type = "media_recording"
+			sub.History[0].MediaComment = &struct {
+				URL         string `json:"url"`
+				DisplayName string `json:"display_name"`
+				MediaType   string `json:"media_type"`
+				ContentType string `json:"content-type"`
+			}{URL: serverURL + "/media/talk", DisplayName: "talk", MediaType: "video"}
+			sub.Comments = []SubmissionComment{
+				{ID: 91, AuthorID: 5, Comment: "My source", Attachments: []Attachment{{ID: 600, Filename: "source.pdf", URL: serverURL + "/files/source"}}},
+				{ID: 92, AuthorID: 77, Comment: "Answer key", Attachments: []Attachment{{ID: 601, Filename: "key.pdf", URL: serverURL + "/files/key"}}},
+				{ID: 93, Comment: "Unknown author", Attachments: []Attachment{{ID: 602, Filename: "mystery.pdf", URL: serverURL + "/files/mystery"}}},
+			}
+			if strings.HasSuffix(path, "/submissions") {
+				_ = json.NewEncoder(w).Encode([]Submission{sub})
+			} else {
+				_ = json.NewEncoder(w).Encode(sub)
+			}
+			return
+		}
+		_ = json.NewEncoder(w).Encode(fixtureAssignment())
+	})
+	serverURL = server.URL
+	report, e := s.PullWork(context.Background(), "TEST", "10")
+	if e != nil || len(report.Packets) != 1 {
+		t.Fatalf("pull: %#v %v", report, e)
+	}
+	var packet domain.PacketDocument
+	if _, e = workspace.ReadDocument(report.Packets[0], &packet); e != nil {
+		t.Fatal(e)
+	}
+	var work domain.StudentWorkDocument
+	if _, e = workspace.ReadDocument(filepath.Join(s.Root, filepath.FromSlash(packet.Students[0])), &work); e != nil {
+		t.Fatal(e)
+	}
+	saved := func(a domain.Attachment, want []byte) {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(s.Root, filepath.FromSlash(a.Path)))
+		if !a.HasOriginal() || err != nil || !bytes.Equal(b, want) {
+			t.Fatalf("not saved exactly: %+v %v", a, err)
+		}
+	}
+	if len(work.Current.Attachments) != 2 {
+		t.Fatalf("want the two in-scope embedded files only: %+v", work.Current.Attachments)
+	}
+	shot, notes := work.Current.Attachments[0], work.Current.Attachments[1]
+	if shot.ID != 700 || shot.Source != "embedded" || shot.ContentType != "image/png" || !strings.HasSuffix(shot.Path, ".png") {
+		t.Fatalf("pasted screenshot not saved as an image: %+v", shot)
+	}
+	saved(shot, png)
+	if notes.ID != 702 || notes.Source != "embedded" || notes.Status != "readable" {
+		t.Fatalf("linked course file not saved: %+v", notes)
+	}
+	saved(notes, []byte("course notes"))
+	if len(work.Prior) != 1 || len(work.Prior[0].Attachments) != 1 || work.Prior[0].Attachments[0].Source != "media" || !strings.Contains(work.Prior[0].Note, "saved") {
+		t.Fatalf("recording not saved on its attempt: %+v", work.Prior)
+	}
+	saved(work.Prior[0].Attachments[0], []byte("bytes of /media/talk"))
+	byID := map[int64]domain.ExistingComment{}
+	for _, c := range work.Comments {
+		byID[c.ID] = c
+	}
+	own := byID[91]
+	if !own.ByStudent || len(own.Attachments) != 1 || own.Attachments[0].Source != "comment" {
+		t.Fatalf("student's own comment file not kept as supplemental: %+v", own)
+	}
+	saved(own.Attachments[0], []byte("bytes of /files/source"))
+	for _, id := range []int64{92, 93} {
+		c := byID[id]
+		if c.ByStudent || len(c.Attachments) != 1 || c.Attachments[0].Status != "not-downloaded" || c.Attachments[0].Path != "" || !strings.Contains(c.Attachments[0].Reason, "not student evidence") {
+			t.Fatalf("comment %d file treated as student evidence: %+v", id, c)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if requests["/files/key"]+requests["/files/mystery"]+requests["/api/v1/files/701"]+requests["/api/v1/files/703"] != 0 {
+		t.Fatalf("out-of-scope files requested: %v", requests)
+	}
 }

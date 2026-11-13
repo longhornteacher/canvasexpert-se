@@ -24,13 +24,23 @@ type discussionEnv struct {
 	updatedAt  map[int64]string // entry id -> updated_at
 	checkpoint bool
 	otherLink  bool
+	files      map[int64]map[string]any // entry id -> its attached file
+	embed      bool                     // entry 501 embeds a course file in its text
 }
 
 // newDiscussionEnv serves a graded course discussion (topic 77, assignment 10)
 // with one entry per student (5 and 6) and pulls it through the real pull.
 func newDiscussionEnv(t *testing.T) (*discussionEnv, domain.PacketDocument, string) {
 	t.Helper()
-	env := &discussionEnv{updatedAt: map[int64]string{501: "2026-10-10T10:00:00Z", 502: "2026-10-10T11:00:00Z"}}
+	return newDiscussionEnvWith(t, nil)
+}
+
+func newDiscussionEnvWith(t *testing.T, setup func(*discussionEnv)) (*discussionEnv, domain.PacketDocument, string) {
+	t.Helper()
+	env := &discussionEnv{updatedAt: map[int64]string{501: "2026-10-10T10:00:00Z", 502: "2026-10-10T11:00:00Z"}, files: map[int64]map[string]any{}}
+	if setup != nil {
+		setup(env)
+	}
 	a := fixtureAssignment()
 	a.SubmissionTypes = []string{"discussion_topic"}
 	s, server := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
@@ -66,10 +76,22 @@ func newDiscussionEnv(t *testing.T) (*discussionEnv, domain.PacketDocument, stri
 			}
 			write(map[string]any{"id": 77, "assignment_id": linked, "title": "Week 1", "message": "<p>Prompt</p>"})
 		case path == "/api/v1/courses/1/discussion_topics/77/view":
-			write(map[string]any{"view": []any{
-				map[string]any{"id": 501, "user_id": 5, "message": "<p>The first student's claim</p>", "created_at": "2026-10-10T10:00:00Z", "updated_at": env.updatedAt[501]},
-				map[string]any{"id": 502, "user_id": 6, "message": "<p>The second student replies</p>", "created_at": "2026-10-10T11:00:00Z", "updated_at": env.updatedAt[502]},
-			}, "new_entries": []any{}})
+			first := map[string]any{"id": 501, "user_id": 5, "message": "<p>The first student's claim</p>", "created_at": "2026-10-10T10:00:00Z", "updated_at": env.updatedAt[501]}
+			if env.embed {
+				first["message"] = `<p>The first student's claim <img src="/courses/1/files/950/preview"></p>`
+			}
+			second := map[string]any{"id": 502, "user_id": 6, "message": "<p>The second student replies</p>", "created_at": "2026-10-10T11:00:00Z", "updated_at": env.updatedAt[502]}
+			for id, entry := range map[int64]map[string]any{501: first, 502: second} {
+				if f := env.files[id]; f != nil {
+					f["url"] = env.server.URL + "/files/entry"
+					entry["attachments"] = []any{f}
+				}
+			}
+			write(map[string]any{"view": []any{first, second}, "new_entries": []any{}})
+		case path == "/api/v1/files/950":
+			write(map[string]any{"id": 950, "filename": "diagram.png", "content-type": "image/png", "url": env.server.URL + "/files/diagram"})
+		case strings.HasPrefix(path, "/files/"):
+			_, _ = w.Write([]byte("%PDF-1.7 entry file"))
 		case strings.Contains(path, "/submissions/"):
 			var user int64
 			_, _ = fmt.Sscanf(path[strings.LastIndex(path, "/")+1:], "%d", &user)
@@ -208,6 +230,132 @@ func TestGradedDiscussionRelinkedTopicBlocksWrites(t *testing.T) {
 	}
 	if len(env.puts) != 0 {
 		t.Fatalf("writes were sent although the topic no longer links to the assignment: %+v", env.puts)
+	}
+}
+
+func (e *discussionEnv) postStatuses(t *testing.T, path string) map[string]string {
+	t.Helper()
+	if _, err := e.s.Post(context.Background(), path); err != nil {
+		t.Fatal(err)
+	}
+	var doc domain.ResultsDocument
+	if _, err := workspace.ReadDocument(path, &doc); err != nil {
+		t.Fatal(err)
+	}
+	status := map[string]string{}
+	for _, r := range doc.Students {
+		status[r.StudentRef] = r.Grade.Outcomes.Grade.Status
+	}
+	return status
+}
+
+// A file attached to a post is part of the evidence: replacing it, or Canvas
+// reporting a new version of it, holds that student only. A file embedded in
+// the post's text is saved as the student's evidence, source embedded.
+func TestGradedDiscussionReplacedAttachmentHoldsOnlyThatStudent(t *testing.T) {
+	for name, change := range map[string]map[string]any{
+		"replaced": {"id": 901, "filename": "essay-v2.pdf", "updated_at": "2026-10-12T09:00:00Z"},
+		"new version": {"id": 900, "filename": "essay.pdf", "updated_at": "2026-10-12T09:00:00Z"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env, packet, rel := newDiscussionEnvWith(t, func(env *discussionEnv) {
+				env.embed = true
+				env.files[501] = map[string]any{"id": 900, "filename": "essay.pdf", "updated_at": "2026-10-10T10:00:00Z"}
+			})
+			var work domain.StudentWorkDocument
+			if _, err := workspace.ReadDocument(filepath.Join(env.s.Root, filepath.FromSlash(packet.Students[0])), &work); err != nil {
+				t.Fatal(err)
+			}
+			var stored domain.DiscussionPacket
+			if _, err := workspace.ReadDocument(filepath.Join(env.s.Root, filepath.FromSlash(work.DiscussionEvidence.Packet)), &stored); err != nil {
+				t.Fatal(err)
+			}
+			sources := map[string]domain.Attachment{}
+			for _, e := range stored.Entries {
+				for _, a := range e.Attachments {
+					sources[a.Source] = a
+				}
+			}
+			if a := sources[""]; a.ID != 900 || a.UpdatedAt == "" || !a.HasOriginal() {
+				t.Fatalf("attached file identity not kept: %+v", a)
+			}
+			if a := sources["embedded"]; a.ID != 950 || !a.HasOriginal() || a.Name != "diagram.png" {
+				t.Fatalf("embedded course file not saved as evidence: %+v", a)
+			}
+			path, refs := env.results(t, packet, rel, []string{"100", "60"})
+			env.files[501] = change
+			status := env.postStatuses(t, path)
+			held := 0
+			for _, ref := range refs {
+				if status[ref] == "held" {
+					held++
+				}
+			}
+			if held != 1 || len(status) != 2 {
+				t.Fatalf("a changed attached file should hold its author only: %v", status)
+			}
+		})
+	}
+}
+
+// A packet saved before file identity was part of the entry signature still
+// posts when nothing changed, and still holds when the file was replaced.
+func TestGradedDiscussionLegacyPacketWithAttachment(t *testing.T) {
+	for _, replaced := range []bool{false, true} {
+		t.Run(fmt.Sprint("replaced=", replaced), func(t *testing.T) {
+			env, packet, rel := newDiscussionEnvWith(t, func(env *discussionEnv) {
+				env.files[501] = map[string]any{"id": 900, "filename": "essay.pdf", "updated_at": "2026-10-10T10:00:00Z"}
+			})
+			// Rewrite the pull as an older Engine saved it: no file versions, and
+			// digests from the signature without file identity.
+			for _, studentRel := range packet.Students {
+				workPath := filepath.Join(env.s.Root, filepath.FromSlash(studentRel))
+				var work domain.StudentWorkDocument
+				body, err := workspace.ReadDocument(workPath, &work)
+				if err != nil {
+					t.Fatal(err)
+				}
+				packetPath := filepath.Join(env.s.Root, filepath.FromSlash(work.DiscussionEvidence.Packet))
+				var stored domain.DiscussionPacket
+				packetBody, err := workspace.ReadDocument(packetPath, &stored)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var own []domain.DiscussionEntry
+				for i := range stored.Entries {
+					for j := range stored.Entries[i].Attachments {
+						stored.Entries[i].Attachments[j].UpdatedAt = ""
+					}
+					if stored.Entries[i].StudentRef == work.StudentRef {
+						own = append(own, stored.Entries[i])
+					}
+				}
+				if err = workspace.WriteDocument(packetPath, &stored, packetBody); err != nil {
+					t.Fatal(err)
+				}
+				work.DiscussionEvidence.Digest = domain.DiscussionEvidenceLegacyDigest(own)
+				if err = workspace.WriteDocument(workPath, work, body); err != nil {
+					t.Fatal(err)
+				}
+			}
+			path, refs := env.results(t, packet, rel, []string{"100", "60"})
+			if replaced {
+				env.files[501] = map[string]any{"id": 901, "filename": "essay-v2.pdf", "updated_at": "2026-10-10T10:00:00Z"}
+			}
+			status := env.postStatuses(t, path)
+			held, posted := 0, 0
+			for _, ref := range refs {
+				switch status[ref] {
+				case "held":
+					held++
+				case "succeeded":
+					posted++
+				}
+			}
+			if replaced && (held != 1 || posted != 1) || !replaced && posted != 2 {
+				t.Fatalf("legacy packet outcome replaced=%v: %v", replaced, status)
+			}
+		})
 	}
 }
 

@@ -30,29 +30,37 @@ func TestSaveNewQuizFilesSanitizesNumbersCapsAndCleansFailures(t *testing.T) {
 		}
 	})
 	serverURL = server.URL
-	budget := int64(0)
-	first := s.saveNewQuizFile(context.Background(), "courses/TEST/pulled", "s-abc", 1, canvas.NewQuizFile{ItemID: "9", Name: `../answer?.docx`, Size: 4, URL: serverURL + "/good"}, 1, &budget)
-	second := s.saveNewQuizFile(context.Background(), "courses/TEST/pulled", "s-abc", 1, canvas.NewQuizFile{ItemID: "9", Name: `answer?.docx`, Size: 4, URL: serverURL + "/good"}, 2, &budget)
-	if first.Status != "downloaded" || second.Status != "downloaded" || first.Path == second.Path || !strings.Contains(first.Path, "answer_.docx") || !strings.Contains(second.Path, "answer_ (2).docx") || budget != 8 {
-		t.Fatalf("duplicate/sanitized files: %#v %#v budget=%d", first, second, budget)
+	lowUploadLimit(t, 5) // under 5 bytes
+	first := s.saveNewQuizFile(context.Background(), "courses/TEST/pulled", "s-abc", 1, canvas.NewQuizFile{ItemID: "9", Name: `../answer?.docx`, Size: 4, URL: serverURL + "/good"}, 1)
+	second := s.saveNewQuizFile(context.Background(), "courses/TEST/pulled", "s-abc", 1, canvas.NewQuizFile{ItemID: "9", Name: `answer?.docx`, Size: 4, URL: serverURL + "/good"}, 2)
+	if first.Status != "downloaded" || second.Status != "downloaded" || first.Path == second.Path || !strings.Contains(first.Path, "answer_.docx") || !strings.Contains(second.Path, "answer_ (2).docx") {
+		t.Fatalf("duplicate/sanitized files: %#v %#v", first, second)
 	}
-	for _, f := range []canvas.NewQuizFile{{ItemID: "9", Name: "large.bin", Size: (50 << 20) + 1, URL: serverURL + "/good"}, {ItemID: "9", Name: "over-pull.bin", Size: 4, URL: serverURL + "/good"}} {
-		if f.Name == "over-pull.bin" {
-			budget = 500 << 20
-		}
-		got := s.saveNewQuizFile(context.Background(), "courses/TEST/pulled", "s-abc", 1, f, 1, &budget)
-		if got.Status != "not-retrieved" || got.Path != "" {
-			t.Fatalf("limit not enforced: %#v", got)
+	// Each file stands alone: many files just under the limit all download
+	// (no cumulative cutoff), and an unstated size (0) uses the limit while
+	// streaming.
+	for i := 0; i < 3; i++ {
+		got := s.saveNewQuizFile(context.Background(), "courses/TEST/pulled", "s-many", 1, canvas.NewQuizFile{ItemID: "9", Name: "below.bin", URL: serverURL + "/good"}, i+1)
+		if got.Status != "downloaded" || got.Size != 4 {
+			t.Fatalf("file under the limit not saved: %#v", got)
 		}
 	}
-	budget = 0
 	for _, tc := range []struct {
 		name, url string
 		size      int64
-	}{{"too-many.bin", serverURL + "/too-many", 4}, {"short.bin", serverURL + "/short", 4}, {"http.bin", "http://example.test/file", 4}} {
-		got := s.saveNewQuizFile(context.Background(), "courses/TEST/pulled", "s-abc", 1, canvas.NewQuizFile{ItemID: "9", Name: tc.name, Size: tc.size, URL: tc.url}, 1, &budget)
-		if got.Status != "not-retrieved" {
-			t.Fatalf("bad download accepted: %#v", got)
+		reason    string
+	}{
+		{"declared-at-limit.bin", serverURL + "/good", 5, "files must be under 150,000,000 bytes"},
+		{"streamed-at-limit.bin", serverURL + "/too-many", 0, "or larger"},
+		{"too-many.bin", serverURL + "/too-many", 4, "more than the 4 bytes"},
+		{"short.bin", serverURL + "/short", 4, "declared 4 bytes but sent 2"},
+		{"gone.bin", serverURL + "/gone", 4, "file unavailable"},
+		{"http.bin", "http://example.test/file", 4, "file unavailable"},
+		{"no-url.bin", "", 4, "did not return a download address"},
+	} {
+		got := s.saveNewQuizFile(context.Background(), "courses/TEST/pulled", "s-abc", 1, canvas.NewQuizFile{ItemID: "9", Name: tc.name, Size: tc.size, URL: tc.url}, 1)
+		if got.Status != "not-retrieved" || got.Path != "" || !strings.HasPrefix(got.Reason, "file unavailable: ") || !strings.Contains(got.Reason, tc.reason) {
+			t.Fatalf("bad download accepted or unclear reason: %#v", got)
 		}
 	}
 	var partials []string

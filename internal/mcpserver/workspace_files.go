@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"canvasexpertse/internal/workspace"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -75,23 +77,156 @@ func (s *Server) registerWorkspaceTools(server *mcp.Server) {
 		}
 		return s.writeWorkspaceBytes(p, b, in.ExpectedSHA256)
 	})
-	addReadTool(server, "read_workspace_asset", "Read a course attachment as base64 with its SHA-256 (20 MiB maximum).", func(_ context.Context, _ *mcp.CallToolRequest, in ReadFileInput) (TextOutput, error) {
+	addReadTool(server, "read_workspace_asset", assetReadDescription, func(_ context.Context, _ *mcp.CallToolRequest, in AssetReadInput) (TextOutput, error) {
 		p, err := s.coursePath(in.Path)
 		if err != nil {
 			return TextOutput{}, err
 		}
-		b, err := readLimited(p, maxWorkspaceAsset)
-		if err != nil {
-			return TextOutput{}, err
+		if in.Offset == nil && in.Length == nil {
+			info, statErr := os.Stat(p)
+			if statErr == nil && info.Mode().IsRegular() && info.Size() > int64(assetWholeLimit) {
+				if info.Size() > assetReadCeiling {
+					return TextOutput{}, fmt.Errorf("file is %d bytes, over the %d-byte read ceiling", info.Size(), assetReadCeiling)
+				}
+				return TextOutput{}, fmt.Errorf("file is %d bytes, too large to return whole (limit %d). Read it in pieces: call read_workspace_asset again with offset (start 0) and length (at most %d), and continue from next_offset until eof is true", info.Size(), assetWholeLimit, assetChunkCeiling)
+			}
+			b, err := readLimited(p, assetWholeLimit)
+			if err != nil {
+				return TextOutput{}, err
+			}
+			h := sha256.Sum256(b)
+			data, err := json.Marshal(struct {
+				Path   string `json:"path"`
+				SHA256 string `json:"sha256"`
+				Base64 string `json:"base64"`
+			}{s.relativePath(p), hex.EncodeToString(h[:]), base64.StdEncoding.EncodeToString(b)})
+			return TextOutput{Text: string(data)}, err
 		}
-		h := sha256.Sum256(b)
-		data, err := json.Marshal(struct {
-			Path   string `json:"path"`
-			SHA256 string `json:"sha256"`
-			Base64 string `json:"base64"`
-		}{s.relativePath(p), hex.EncodeToString(h[:]), base64.StdEncoding.EncodeToString(b)})
-		return TextOutput{Text: string(data)}, err
+		return s.readAssetRange(p, in)
 	})
+}
+
+// Whole-file reads and writes keep the 20 MiB contract. Ranged reads serve
+// student originals, which pulls save up to just under 150,000,000 bytes;
+// each ranged response carries at most assetChunkCeiling bytes (base64 adds a third).
+// The variables exist so tests can use small values.
+var (
+	assetWholeLimit   = maxWorkspaceAsset
+	assetChunkCeiling = int64(4 << 20)
+	assetReadCeiling  = int64(150_000_000 - 1)
+)
+
+const assetReadDescription = "Read a course attachment or student original as base64 with its SHA-256. " +
+	"Without offset/length, files up to 20 MiB come back whole as {path, sha256, base64}. " +
+	"Larger files (up to 149,999,999 bytes) are read in ranges: pass offset (default 0) and length (default and maximum 4194304 bytes); " +
+	"each response is {path, mime_type, total_size, offset, length, next_offset, eof, sha256, base64}, where sha256 is of the whole file. " +
+	"Repeat with offset=next_offset until eof is true, base64-decode each chunk and append them in order, then check the result's SHA-256 against sha256. " +
+	"Ranges also work on small files."
+
+type AssetReadInput struct {
+	Path   string `json:"path" jsonschema:"Workspace-relative file under courses/"`
+	Offset *int64 `json:"offset,omitempty" jsonschema:"Byte offset to start a ranged read; omit with length to read a small file whole"`
+	Length *int64 `json:"length,omitempty" jsonschema:"Bytes to return in a ranged read; capped at 4194304 per call"`
+}
+
+type assetHashKey struct {
+	path    string
+	size    int64
+	modTime int64
+}
+
+var (
+	assetHashMu    sync.Mutex
+	assetHashCache = map[assetHashKey]string{}
+)
+
+func (s *Server) readAssetRange(p string, in AssetReadInput) (TextOutput, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return TextOutput{}, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return TextOutput{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return TextOutput{}, errors.New("expected a regular file")
+	}
+	total := info.Size()
+	if total > assetReadCeiling {
+		return TextOutput{}, fmt.Errorf("file is %d bytes, over the %d-byte read ceiling", total, assetReadCeiling)
+	}
+	var offset int64
+	if in.Offset != nil {
+		offset = *in.Offset
+	}
+	length := assetChunkCeiling
+	if in.Length != nil {
+		length = *in.Length
+	}
+	if offset < 0 || offset > total {
+		return TextOutput{}, fmt.Errorf("offset %d is outside the file (total_size %d)", offset, total)
+	}
+	if length < 0 {
+		return TextOutput{}, errors.New("length must not be negative")
+	}
+	if length > assetChunkCeiling {
+		length = assetChunkCeiling
+	}
+	if remaining := total - offset; length > remaining {
+		length = remaining
+	}
+	buf := make([]byte, length)
+	n, err := f.ReadAt(buf, offset)
+	if err != nil && !(errors.Is(err, io.EOF) && int64(n) == length) {
+		return TextOutput{}, err
+	}
+	sum, err := cachedFileSHA256(f, p, info)
+	if err != nil {
+		return TextOutput{}, err
+	}
+	mimeType := mime.TypeByExtension(strings.ToLower(filepath.Ext(p)))
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	next := offset + length
+	data, err := json.Marshal(struct {
+		Path       string `json:"path"`
+		MIMEType   string `json:"mime_type"`
+		TotalSize  int64  `json:"total_size"`
+		Offset     int64  `json:"offset"`
+		Length     int64  `json:"length"`
+		NextOffset int64  `json:"next_offset"`
+		EOF        bool   `json:"eof"`
+		SHA256     string `json:"sha256"`
+		Base64     string `json:"base64"`
+	}{s.relativePath(p), mimeType, total, offset, length, next, next >= total, sum, base64.StdEncoding.EncodeToString(buf)})
+	return TextOutput{Text: string(data)}, err
+}
+
+// cachedFileSHA256 hashes the open file by streaming it, and remembers the
+// result per path, size and modification time so later chunks reuse it.
+func cachedFileSHA256(f *os.File, path string, info os.FileInfo) (string, error) {
+	key := assetHashKey{path, info.Size(), info.ModTime().UnixNano()}
+	assetHashMu.Lock()
+	sum, ok := assetHashCache[key]
+	assetHashMu.Unlock()
+	if ok {
+		return sum, nil
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, io.NewSectionReader(f, 0, info.Size())); err != nil {
+		return "", err
+	}
+	sum = hex.EncodeToString(h.Sum(nil))
+	assetHashMu.Lock()
+	if len(assetHashCache) >= 64 {
+		assetHashCache = map[assetHashKey]string{}
+	}
+	assetHashCache[key] = sum
+	assetHashMu.Unlock()
+	return sum, nil
 }
 
 func firstComponent(relative string) string {
