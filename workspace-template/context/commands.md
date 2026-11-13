@@ -27,9 +27,9 @@ commands:
   - name: Fix late marks
     about: Take weekends, days off, absences and extra time out of Canvas's late penalties.
     prompt: "Fix the late marks for {course}."
-  - name: Reopen for corrections
-    about: Give extra-time and on-time students their own Canvas dates when late work has a cutoff.
-    prompt: "Set personal dates and reopen on-time work for corrections in {course}."
+  - name: Personal dates
+    about: Give extra-time and absent students their own Canvas due and lock dates when late work has a cutoff.
+    prompt: "Set personal dates for extra time and absences in {course}."
   - name: Class teams
     about: Sort students into mixed teams that earn points together. Points never touch grades.
     prompt: "Help me set up classroom teams for {course}."

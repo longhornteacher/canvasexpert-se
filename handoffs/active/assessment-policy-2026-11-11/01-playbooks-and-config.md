@@ -1,5 +1,7 @@
 # Slice 01 - Playbooks, config and exemplars
 
+> **Superseded in part 2026-11-13:** see [HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md](../HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md) section 2. Daily corrections for points and the "corrections available" wording are removed; no default offer of another submission, extra credit or points. Exemplars, answer rationales and honest-effort-floor guidance stay. The `retakes` block now supplies settings for teacher-directed assign/apply only.
+
 Status: **built in Dev 2026-11-11, local tests only**. Kind: seed playbooks plus three small Engine changes. Read the [README](README.md) first. This slice edits Dev seeds, not the teacher's live files.
 
 ## Result

@@ -22,9 +22,9 @@ func TestLateWorkLimitBox(t *testing.T) {
 	if _, sent, ok := parseCutoff(map[string][]string{}, "k"); sent || !ok {
 		t.Fatal("older form must keep the saved value")
 	}
-	three := 3
-	p := withCutoff(&domain.LateWorkPolicy{CorrectionSchoolDays: 4}, &three)
-	if p == nil || *p.LateCutoffSchoolDays != 3 || p.CorrectionSchoolDays != 4 {
+	three, four := 3, 4
+	p := withCutoff(&domain.LateWorkPolicy{CorrectionSchoolDays: &four}, &three)
+	if p == nil || *p.LateCutoffSchoolDays != 3 || p.CorrectionWindow() != 4 {
 		t.Fatalf("%+v", p)
 	}
 	if withCutoff(&domain.LateWorkPolicy{LateCutoffSchoolDays: &three}, nil) != nil {

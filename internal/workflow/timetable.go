@@ -24,6 +24,38 @@ const timetableMarker = `data-cse="grading-timetable"`
 
 var timetableBlock = regexp.MustCompile(`(?s)<details[^>]*data-cse="grading-timetable"[^>]*>.*?</details>`)
 
+const correctionRowLabel = "Last day for corrections"
+
+// The correction lines an earlier timetable may carry: its row, its summary
+// topic, and its closing sentence (including the pre-2026-11-13 "available as
+// soon as you finish" wording). Canvas may re-serialize the HTML, so these
+// allow whitespace changes.
+var (
+	correctionRow      = regexp.MustCompile(`(?is)<li>\s*<strong>\s*` + correctionRowLabel + `:?\s*</strong>.*?</li>`)
+	correctionTopic    = regexp.MustCompile(`(?i)\(\s*late work and corrections\s*\)`)
+	correctionSentence = regexp.MustCompile(`(?i)\s*Corrections are [^<]*`)
+)
+
+// withoutCorrectionOffer removes the correction lines from the CE timetable
+// block only; the rest of the body is left exactly as it is.
+func withoutCorrectionOffer(body string) string {
+	return timetableBlock.ReplaceAllStringFunc(body, func(block string) string {
+		block = correctionRow.ReplaceAllString(block, "")
+		block = correctionTopic.ReplaceAllString(block, "(late work)")
+		return correctionSentence.ReplaceAllString(block, "")
+	})
+}
+
+// correctionsAuthorized reports whether the course has a configured correction
+// window. On a read error callers leave the body unchanged.
+func correctionsAuthorized(root string, courseID int64, nickname string) (bool, error) {
+	policy, err := CourseLateWorkPolicy(root, courseID, nickname)
+	if err != nil {
+		return false, err
+	}
+	return policy.CorrectionWindow() > 0, nil
+}
+
 // CanvasLatePolicy is the course late policy Canvas applies. Known is false when
 // it could not be read; a course with no policy reads as Known with no deduction.
 type CanvasLatePolicy struct {
@@ -136,8 +168,8 @@ type timetableInput struct {
 	// ProposeLock: with no lock date, show the close row for the lock date the
 	// Engine will set (create). Otherwise an unlocked assignment has no close row.
 	ProposeLock bool
-	// OmitCorrections leaves the corrections row and its sentence out: a Major
-	// is not reopened for a second submission.
+	// OmitCorrections leaves the corrections row and its sentence out even
+	// under a configured correction window (the draft's omit_corrections).
 	OmitCorrections bool
 }
 
@@ -150,7 +182,10 @@ func sameLocalDay(a, b time.Time, loc *time.Location) bool {
 }
 
 func buildTimetable(in timetableInput) (Timetable, error) {
-	t := Timetable{NoCorrections: in.OmitCorrections}
+	// Corrections appear only under a teacher-configured window. A due date,
+	// late-work limit, extra time or category grants nothing by itself.
+	window := in.Policy.CorrectionWindow()
+	t := Timetable{NoCorrections: in.OmitCorrections || window == 0}
 	cal := in.Calendar
 	if err := cal.Validate(); err != nil {
 		return t, fmt.Errorf("school calendar: %w", err)
@@ -199,8 +234,8 @@ func buildTimetable(in timetableInput) (Timetable, error) {
 	} else if in.Late != nil && !in.Late.Known {
 		t.Notes = append(t.Notes, "Canvas's course late policy could not be read, so the late-penalty line was left out")
 	}
-	if n := in.Policy.CorrectionSchoolDays; n > 0 && !in.OmitCorrections {
-		if _, _, err := pair("Last day for corrections", n, ""); err != nil {
+	if !t.NoCorrections {
+		if _, _, err := pair(correctionRowLabel, window, ""); err != nil {
 			return t, err
 		}
 	}
@@ -308,7 +343,7 @@ func (t Timetable) HTML() string {
 	if t.NoCorrections {
 		b.WriteString("</ul><p>Dates count school days only.</p></details>")
 	} else {
-		b.WriteString("</ul><p>Dates count school days only. Corrections are available as soon as you finish; check your feedback for rationales and exemplars.</p></details>")
+		b.WriteString("</ul><p>Dates count school days only. Corrections are accepted through the last day for corrections above.</p></details>")
 	}
 	return b.String()
 }
@@ -406,8 +441,21 @@ func PreviewTimetable(root string, d domain.AssignmentDocument) []string {
 }
 
 // createTimetable fixes the timetable for a create on its first attempt and
-// sets the Engine-chosen lock date on the document.
-func (s *Service) createTimetable(ctx context.Context, doc *domain.AssignmentDocument, courseID int64) *domain.TimetableRecord {
+// sets the Engine-chosen lock date on the document. When no new timetable is
+// made, an earlier CE timetable in html (a copy's source block) is marked to
+// lose its correction lines unless this course configures a window.
+func (s *Service) createTimetable(ctx context.Context, doc *domain.AssignmentDocument, courseID int64, html string) *domain.TimetableRecord {
+	rec := s.planCreateTimetable(ctx, doc, courseID)
+	if rec.HTML == "" && withoutCorrectionOffer(html) != html {
+		if ok, err := correctionsAuthorized(s.Root, courseID, ""); err == nil && !ok {
+			rec.DropCorrections = true
+			rec.Note = strings.TrimPrefix(rec.Note+"; correction lines removed from the earlier grading timetable in the body: no correction window is configured for this course", "; ")
+		}
+	}
+	return rec
+}
+
+func (s *Service) planCreateTimetable(ctx context.Context, doc *domain.AssignmentDocument, courseID int64) *domain.TimetableRecord {
 	if doc.GradingTimetable != nil && !*doc.GradingTimetable {
 		return &domain.TimetableRecord{Note: "grading timetable left out: the draft opts out"}
 	}
@@ -437,10 +485,13 @@ func (s *Service) refreshTimetable(ctx context.Context, d *domain.AssignmentDocu
 		return body, ""
 	}
 	if sameDate(d.Observed.DueAt, d.DueAt) && sameDate(d.Observed.LockAt, d.LockAt) {
-		return body, ""
+		return s.dropUnauthorizedCorrections(d.CourseID, body)
 	}
 	late := s.courseLatePolicy(ctx, d.CourseID)
-	omit := !strings.Contains(body, "Last day for corrections")
+	// An assignment whose timetable has no corrections row keeps it that way
+	// (omit_corrections at create, or no window then); a row stays only while
+	// the course still configures a window.
+	omit := !correctionRow.MatchString(strings.Join(timetableBlock.FindAllString(body, -1), ""))
 	if sameDate(d.Observed.LockAt, d.LockAt) && !sameDate(d.Observed.DueAt, d.DueAt) {
 		old, _ := planTimetable(s.Root, d.CourseID, "", d.Observed.DueAt, nil, d.Points, &late, false, omit)
 		lock, _ := parseOptionalTime(d.Observed.LockAt)
@@ -454,7 +505,25 @@ func (s *Service) refreshTimetable(ctx context.Context, d *domain.AssignmentDocu
 	}
 	t, note := planTimetable(s.Root, d.CourseID, "", d.DueAt, d.LockAt, d.Points, &late, false, omit)
 	if t == nil {
-		return body, note + "; the existing timetable was left as it is and may now be out of date"
+		dropped, dropNote := s.dropUnauthorizedCorrections(d.CourseID, body)
+		note += "; the existing timetable was left as it is and may now be out of date"
+		if dropNote != "" {
+			note += "; " + dropNote
+		}
+		return dropped, note
 	}
 	return withTimetable(body, t.HTML()), "grading timetable updated for the new dates"
+}
+
+// dropUnauthorizedCorrections removes correction lines from an existing CE
+// timetable when the course configures no correction window, so an older
+// default promise does not survive an edit. Teacher-written text is untouched.
+func (s *Service) dropUnauthorizedCorrections(courseID int64, body string) (string, string) {
+	if ok, err := correctionsAuthorized(s.Root, courseID, ""); err != nil || ok {
+		return body, ""
+	}
+	if out := withoutCorrectionOffer(body); out != body {
+		return out, "correction lines removed from the grading timetable: no correction window is configured for this course"
+	}
+	return body, ""
 }

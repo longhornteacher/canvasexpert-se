@@ -1,5 +1,7 @@
 # Major retakes, Daily corrections and the honest-effort floor
 
+> **Superseded in part 2026-11-13:** see [HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md](../HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md) section 2. With no explicit teacher correction policy, no student-facing offer of another submission, extra credit or correction points is made (this replaces the Daily "copy the rationale for points back" default). A Major's tutorial retake is created privately during scoring (unpublished, assigned to nobody, omitted from the final grade), and `retake assign` / `retake apply` run only on explicit teacher direction, not automatically after grading. The honest-effort floor (slice 03) and the retake formula are unaffected. The text below is the 2026-11-11 record.
+
 Date: 2026-11-11. Status: **slices 01, 02 and 04 built in Dev 2026-11-11 (local tests only); slice 03 deliberately not built, awaiting an approved live probe**. Baseline: Dev `6a2a5b4`. This revision replaces the eight-slice plan in that commit (still in git history) with four slices. A second review of `4cd1d61` traced ten cases through the plan and the Engine; all ten are folded into slices 02-04. It is written for further adversarial review before execution.
 
 No release, install, UserInstall/UserSync edit, real grading, publication or Canvas Live write is authorized by this plan. Execute one slice at a time when asked.

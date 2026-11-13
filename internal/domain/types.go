@@ -66,16 +66,29 @@ func (p *RetakePolicy) Validate() error {
 // assignment's grading timetable. Zero leaves that row out. The penalty and
 // its floor are not here: they come from Canvas's course late policy.
 type LateWorkPolicy struct {
-	CorrectionSchoolDays int `yaml:"correction_school_days,omitempty" json:"correction_school_days,omitempty"`
-	CloseAfterSchoolDays int `yaml:"close_after_school_days,omitempty" json:"close_after_school_days,omitempty"`
-	ExtraTimeSchoolDays  int `yaml:"extra_time_school_days,omitempty" json:"extra_time_school_days,omitempty"`
+	// CorrectionSchoolDays is the teacher's correction window. Only a positive
+	// value offers corrections; there is no default. A course line of 0 turns
+	// off a window set in context/grading.md for that course.
+	CorrectionSchoolDays *int `yaml:"correction_school_days,omitempty" json:"correction_school_days,omitempty"`
+	CloseAfterSchoolDays int  `yaml:"close_after_school_days,omitempty" json:"close_after_school_days,omitempty"`
+	ExtraTimeSchoolDays  int  `yaml:"extra_time_school_days,omitempty" json:"extra_time_school_days,omitempty"`
 	// LateCutoffSchoolDays is the school's late-work limit: work is not accepted
 	// more than this many school days after the due date, and the assignment
 	// locks then. 0 means late work is not accepted at all; nil means no limit.
 	LateCutoffSchoolDays *int `yaml:"late_cutoff_school_days,omitempty" json:"late_cutoff_school_days,omitempty"`
 }
 
-// Merged returns p with every line set in course taking its place.
+// CorrectionWindow is the authorized correction window in school days; 0
+// means the teacher has not offered corrections.
+func (p *LateWorkPolicy) CorrectionWindow() int {
+	if p == nil || p.CorrectionSchoolDays == nil || *p.CorrectionSchoolDays < 0 {
+		return 0
+	}
+	return *p.CorrectionSchoolDays
+}
+
+// Merged returns p with every line set in course taking its place. A course's
+// correction_school_days, including 0, replaces the shared one.
 func (p *LateWorkPolicy) Merged(course *LateWorkPolicy) *LateWorkPolicy {
 	if course == nil {
 		return p
@@ -84,7 +97,7 @@ func (p *LateWorkPolicy) Merged(course *LateWorkPolicy) *LateWorkPolicy {
 	if p != nil {
 		out = *p
 	}
-	if course.CorrectionSchoolDays > 0 {
+	if course.CorrectionSchoolDays != nil {
 		out.CorrectionSchoolDays = course.CorrectionSchoolDays
 	}
 	if course.CloseAfterSchoolDays > 0 {
@@ -107,10 +120,13 @@ func (p *LateWorkPolicy) Validate() error {
 	for _, v := range []struct {
 		name string
 		n    int
-	}{{"correction_school_days", p.CorrectionSchoolDays}, {"close_after_school_days", p.CloseAfterSchoolDays}, {"extra_time_school_days", p.ExtraTimeSchoolDays}} {
+	}{{"close_after_school_days", p.CloseAfterSchoolDays}, {"extra_time_school_days", p.ExtraTimeSchoolDays}} {
 		if v.n < 0 || v.n > 60 {
 			return fmt.Errorf("late_work.%s must be between 0 and 60 school days", v.name)
 		}
+	}
+	if n := p.CorrectionSchoolDays; n != nil && (*n < 0 || *n > 60) {
+		return fmt.Errorf("late_work.correction_school_days must be between 0 and 60 school days")
 	}
 	if n := p.LateCutoffSchoolDays; n != nil && (*n < 0 || *n > 60) {
 		return fmt.Errorf("late_work.late_cutoff_school_days must be between 0 and 60 school days")
@@ -247,6 +263,10 @@ type TimetableRecord struct {
 	HTML   string `yaml:"html,omitempty"`
 	LockAt string `yaml:"lock_at,omitempty"`
 	Note   string `yaml:"note,omitempty"`
+	// DropCorrections: no new timetable was made and an earlier CE timetable in
+	// the body (for example from a copy) loses its correction lines, because no
+	// correction window applies here.
+	DropCorrections bool `yaml:"drop_corrections,omitempty"`
 }
 type AssignmentOverrideOutcome struct {
 	Key        string        `yaml:"key"`
@@ -281,7 +301,8 @@ type AssignmentDocument struct {
 	Tiers                          []Tier                  `yaml:"tiers,omitempty"` // create-time differentiated hub
 	GradingTimetable               *bool                   `yaml:"grading_timetable,omitempty"`
 	// OmitCorrections (create only) leaves the corrections row out of the
-	// timetable, for a Major that is not reopened for a second submission.
+	// timetable even where a correction window is configured. Without a
+	// configured window the timetable says nothing about corrections anyway.
 	OmitCorrections bool `yaml:"omit_corrections,omitempty"`
 	Observed                       *AssignmentSnapshot     `yaml:"observed,omitempty"`
 	Created                        *CreatedResources       `yaml:"created,omitempty"`

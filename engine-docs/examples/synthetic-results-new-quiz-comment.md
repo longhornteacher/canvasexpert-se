@@ -37,7 +37,7 @@ students:
           evidence: present
           criteria: [{criterion_id: evidence, points: 3}, {criterion_id: reasoning, points: 4}]
           feedback: "Synthetic strength in the response. Next, a synthetic next step."
-          exemplar: "Synthetic short model answer to hand-copy."
+          exemplar: "Synthetic short model answer."
       feedback: ""
 ---
 
