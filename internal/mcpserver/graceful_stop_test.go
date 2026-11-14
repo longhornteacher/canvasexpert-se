@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"canvasexpertse/internal/workflow"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestCommandChild is the stand-in child Engine; it only runs when re-executed by these tests.
@@ -21,6 +22,10 @@ func TestCommandChild(t *testing.T) {
 	}
 	if mode == "exit3" {
 		fmt.Println("Results: synthetic")
+		os.Exit(3)
+	}
+	if mode == "pullpartial" {
+		fmt.Println("Pull outcome: partial; courses/Synthetic/packet.md; failed assignment 11: report retrieval")
 		os.Exit(3)
 	}
 	// "batch": three independent items; a stdin close asks it to stop before the next one.
@@ -40,6 +45,36 @@ func TestCommandChild(t *testing.T) {
 		fmt.Printf("item %d done\n", i)
 	}
 	os.Exit(0)
+}
+
+func TestPartialPullSurvivesCommandAndSDK(t *testing.T) {
+	ctx := context.Background()
+	s := childServer("pullpartial")
+	s.ctx = ctx
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "test"}, nil)
+	addActionTool(server, "pull_work", "synthetic pull", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
+		return s.longCommand(ctx, "pull-work", in.Course)
+	})
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "test"}, nil)
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "pull_work", Arguments: map[string]any{"course": "Synthetic"}})
+	if err != nil || result.IsError {
+		t.Fatalf("partial pull became a tool failure: %+v %v", result, err)
+	}
+	content, ok := result.Content[0].(*mcp.TextContent)
+	if !ok || !strings.Contains(content.Text, "courses/Synthetic/packet.md") || !strings.Contains(content.Text, "failed assignment 11") || !strings.Contains(content.Text, `"state":"incomplete"`) || !strings.Contains(content.Text, `"outcome":"partial"`) {
+		t.Fatalf("partial packets/outcomes lost through SDK: %+v", result)
+	}
 }
 
 func childServer(mode string) *Server {

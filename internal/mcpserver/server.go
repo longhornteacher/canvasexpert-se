@@ -741,7 +741,7 @@ func runGraceful(ctx context.Context, cmd *exec.Cmd) error {
 func exit3Outcome(args []string) string {
 	if len(args) > 0 {
 		switch args[0] {
-		case "post", "push", "push-quiz", "set-tags", "assign-to", "assign-modules", "quiz-accommodations", "upload-file", "prepare-audience", "inbox-set-state":
+		case "pull-work", "post", "push", "push-quiz", "set-tags", "assign-to", "assign-modules", "quiz-accommodations", "upload-file", "prepare-audience", "inbox-set-state":
 			return "partial"
 		}
 	}

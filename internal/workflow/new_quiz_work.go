@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,7 +11,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
@@ -68,52 +66,9 @@ type newQuizRow struct {
 // requested assignment's written items. The signed result file is fetched by
 // the Canvas client's credential-free Download path.
 func newQuizResponses(ctx context.Context, c *canvas.Client, courseID, assignmentID int64) (map[int64]newQuizRow, []domain.WrittenItem, error) {
-	var launched struct {
-		Progress struct {
-			URL string `json:"url"`
-		} `json:"progress"`
-	}
-	path := fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes/%d/reports", courseID, assignmentID)
-	if err := c.Write(ctx, "POST", path, map[string]any{"quiz_report": map[string]string{"report_type": "student_analysis", "format": "json"}}, &launched); err != nil {
-		return nil, nil, err
-	}
-	progressURL, err := canvasAPIPath(c, launched.Progress.URL)
+	rows, err := readStudentAnalysis(ctx, c, courseID, assignmentID)
 	if err != nil {
 		return nil, nil, err
-	}
-	var progress quizReportProgress
-	deadline := time.Now().Add(5 * time.Minute)
-	for {
-		if err = c.Get(ctx, progressURL, &progress); err != nil {
-			return nil, nil, err
-		}
-		if progress.WorkflowState == "completed" {
-			break
-		}
-		if progress.WorkflowState == "failed" || progress.WorkflowState == "error" {
-			return nil, nil, fmt.Errorf("Student Analysis report failed")
-		}
-		if time.Now().After(deadline) {
-			return nil, nil, fmt.Errorf("Student Analysis report did not complete")
-		}
-		t := time.NewTimer(time.Second)
-		select {
-		case <-ctx.Done():
-			t.Stop()
-			return nil, nil, ctx.Err()
-		case <-t.C:
-		}
-	}
-	if progress.Results.URL == "" {
-		return nil, nil, fmt.Errorf("Student Analysis report has no results URL")
-	}
-	var buf bytes.Buffer
-	if err = c.DownloadUnauthenticated(ctx, progress.Results.URL, &buf); err != nil {
-		return nil, nil, err
-	}
-	var rows []quizReportRow
-	if err = json.Unmarshal(buf.Bytes(), &rows); err != nil {
-		return nil, nil, fmt.Errorf("invalid Student Analysis results")
 	}
 	var items []writtenQuizItem
 	if err = c.List(ctx, fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes/%d/items?per_page=100", courseID, assignmentID), &items); err != nil {
