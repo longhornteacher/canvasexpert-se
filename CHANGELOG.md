@@ -4,6 +4,16 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 2.4.0 (2026-11-14)
+
+Faster, lighter scoring sessions: up to 8 Canvas requests at once, one New Quizzes sign-in per quiz, several students pulled and posted at once, fewer requests per pull, an Engine-computed score spread, smaller references for the agent, shared exemplars and a two-helper scoring review. A read-only Canvas Live comparison against 2.3.0 and a read-only throttle probe were run on one teacher's key; posting with several students at once is checked with local tests only.
+
+- Fewer requests in scoring pulls: a New Quiz file read also records the quiz result version, and a whole-class pull without `--session` reads every submission's history and comments in the paginated list instead of one request per student. A regression test now posts twelve students concurrently with failures among them. Checked with local tests only.
+- A shared exemplar per written part: `exemplar` on an `interpretation` component is written once and shown in every student's comment; a student's own `exemplar` replaces it.
+- Scoring review uses two helpers: the fact-checker (cheapest model) and one reviewer covering logic and pedagogy (mid-tier model). The arbiter (strongest model) runs only for a possible-AI-use flag, a rejected finding or a disputed fact. Reviews of assignments, quizzes and Pages are unchanged.
+- Less for the agent to read in a scoring session: `validate` prints the score spread (scored/held, median, middle half, range, percent bands, honest-effort count; per written part for a New Quiz) so the agent quotes the Engine's numbers; `engine_reference` / `help` add `formats-results` and `examples/NAME`; and the scoring playbook moved late timing, the late-mark sweep, personal dates and the bridge column into a new `playbooks/gradebook.md`. Checked with local tests only.
+- Faster scoring: a New Quiz signs in once per quiz instead of once per student at pull and at post, New Quizzes requests share the Engine's request limit and retry reads on rate limits, and pulls and `post` / `post_results` handle several students at once. The Engine now runs up to 8 Canvas requests at once (was 4): a read-only throttle probe on one teacher key found 8 concurrent heavy reads used about 100 of the key's 700-unit quota and 32 exhausted it. Saved outcomes, holds and resume are unchanged. Checked with local tests only.
+
 ## 2.3.0 (2026-11-14)
 
 Scoring that survives a failed assignment, original student uploads, a whole-quiz honest-effort floor on New Quizzes, and a bridge gradebook column. The floor write was checked in Canvas Live on one real student; everything else is checked with local tests only.

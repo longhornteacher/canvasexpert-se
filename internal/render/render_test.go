@@ -237,3 +237,28 @@ func TestQuizItemsCommentLeadsWithItemScoreAndAlwaysAddsExemplar(t *testing.T) {
 		t.Fatalf("full credit still shows the exemplar: %#v", got)
 	}
 }
+
+func TestSharedExemplarIsWrittenOnceAndAStudentsOwnReplacesIt(t *testing.T) {
+	rubric := domain.Rubric{Title: "R", Criteria: []domain.Criterion{{ID: "a", Description: "Explanation", Points: domain.MustDecimal("10")}}}
+	interpretation := domain.Interpretation{Mapping: "repeated", Rationale: "private", Components: []domain.Component{{Key: "q11", Label: "Q11", Weight: domain.MustDecimal("1"), Exemplar: "Shared model answer."}, {Key: "q12", Label: "Q12", Weight: domain.MustDecimal("1"), Exemplar: "Second shared model."}}}
+	components := []domain.ComponentScore{
+		{Key: "q11", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal("9")}}, Feedback: "Clear analogy."},
+		{Key: "q12", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "a", Points: domain.MustDecimal("8")}}, Feedback: "Name the second effect.", Exemplar: "This student's own model."},
+	}
+	parts := map[string]domain.Decimal{"q11": domain.MustDecimal("10"), "q12": domain.MustDecimal("10")}
+	in := FeedbackInput{Rubric: rubric, Interpretation: interpretation, Components: components, AssignmentPoints: domain.MustDecimal("20"), OmitAssessment: true, PartPoints: parts}
+	computed, err := domain.ComputeAssessment(rubric, interpretation, components, in.AssignmentPoints)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Assessment = computed.Posted
+	got, err := RenderFeedback(in)
+	want := "Q11 9/10\nClear analogy. (Exemplar: Shared model answer.)\n\nQ12 8/10\nName the second effect. (Exemplar: This student's own model.)"
+	if err != nil || got != want {
+		t.Fatalf("got %q %v, want %q", got, err, want)
+	}
+	items := QuizItems(rubric, interpretation, components, parts)
+	if items["q11"].Comment != "9/10\nClear analogy.\nExemplar: Shared model answer." || items["q12"].Comment != "8/10\nName the second effect.\nExemplar: This student's own model." {
+		t.Fatalf("item comments: %#v", items)
+	}
+}

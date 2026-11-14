@@ -6,8 +6,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
+	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/render"
 	"canvasexpertse/internal/workspace"
@@ -36,6 +40,9 @@ type postSource struct {
 	student      workspace.Student
 	work         domain.StudentWorkDocument
 	writtenItems []domain.WrittenItem // New Quiz written items from the packet
+	// quizSessions, when set, is the run's shared New Quizzes session; nil
+	// opens one for this student.
+	quizSessions *quizSessions
 }
 
 func (s *Service) Post(ctx context.Context, path string) (report PostReport, err error) {
@@ -160,106 +167,173 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 		}
 		report.Hidden = true
 	}
-	for i := range doc.Students {
-		r := &doc.Students[i]
-		v := validated[i]
-		if resultComplete(*r) || s.Skip[r.StudentRef] {
-			report.Students = append(report.Students, postReport(*r))
-			continue
-		}
-		if StopRequested() {
-			// The write in flight (if any) already finished and was recorded; leave this student
-			// untouched so a rerun starts here.
-			report.StoppedBefore++
-			report.Students = append(report.Students, postReport(*r))
-			continue
-		}
-		if v.Hold != "" {
-			holdStudentResult(r, v.Hold)
-			if err = save(); err != nil {
-				return report, err
-			}
-			report.Students = append(report.Students, postReport(*r))
-			continue
-		}
-		if r.Operation == "grade" && !basisMatches {
-			holdGrade(r.Grade, "assignment/rubric grading basis changed; pull-work for reassessment")
-			if err = save(); err != nil {
-				return report, err
-			}
-			report.Students = append(report.Students, postReport(*r))
-			continue
-		}
-		if r.Operation == "comment-only" && !basisMatches {
-			holdOutcome(&r.CommentOnly.Outcome, "assignment/rubric basis changed; pull-work for reassessment")
-			if err = save(); err != nil {
-				return report, err
-			}
-			report.Students = append(report.Students, postReport(*r))
-			continue
-		}
-		source := sources[r.StudentRef]
-		if guard != nil && r.Operation != "late-only" {
-			if hold := guard.hold(s, *r, source); hold != "" {
-				holdStudentResult(r, hold)
-				if err = save(); err != nil {
-					return report, err
-				}
-				report.Students = append(report.Students, postReport(*r))
-				continue
-			}
-		}
-		if r.Operation == "late-only" {
-			if reason := lateTimingAssignmentHold(liveAssignment, false); reason != "" {
-				holdOutcome(&r.LateOnly.Outcome, reason)
-				err = save()
-			} else {
-				err = s.postLateTiming(ctx, doc.Assignment, source.student.UserID, r.LateOnly.Attempt, &r.LateOnly.LateTiming, &r.LateOnly.Outcome, save)
-			}
-			if err != nil {
-				return report, err
-			}
-			report.Students = append(report.Students, postReport(*r))
-			continue
-		}
-		live, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, source.student.UserID)
+	// Students are posted postWorkers at a time; Canvas requests still share
+	// the client's in-flight cap. Each worker changes only its own copy of its
+	// student's row and publishes it into the document under mu before every
+	// save, so every save writes a consistent document and an interrupted run
+	// resumes from saved outcomes exactly as a serial run does.
+	quiz := &quizSessions{}
+	var mu sync.Mutex
+	var firstErr error
+	stopped := 0
+	publish := func(i int, local *domain.StudentResult) error {
+		row, e := cloneResult(*local)
 		if e != nil {
-			holdStudentResult(r, e.Error())
-			if err = save(); err != nil {
-				return report, err
+			return e
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		doc.Students[i] = row
+		return save()
+	}
+	work := make(chan int)
+	var wg sync.WaitGroup
+	for w := 0; w < postWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range work {
+				mu.Lock()
+				if firstErr != nil {
+					mu.Unlock()
+					continue
+				}
+				local, e := cloneResult(doc.Students[i])
+				mu.Unlock()
+				if e == nil {
+					rowSave := func() error { return publish(i, &local) }
+					var stop bool
+					stop, e = s.postStudent(ctx, &doc, &local, validated[i], sources[local.StudentRef], postRun{liveAssignment: liveAssignment, basisMatches: basisMatches, coupledRubric: coupledRubric, guard: guard, owned: owned, owner: owner, quiz: quiz}, rowSave)
+					if stop {
+						mu.Lock()
+						stopped++
+						mu.Unlock()
+					}
+					// Keep the in-memory row current for the report even when
+					// the last change was not saved.
+					if row, ce := cloneResult(local); ce == nil {
+						mu.Lock()
+						doc.Students[i] = row
+						mu.Unlock()
+					}
+				}
+				if e != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = e
+					}
+					mu.Unlock()
+				}
 			}
-			report.Students = append(report.Students, postReport(*r))
+		}()
+	}
+	for i := range doc.Students {
+		r := doc.Students[i]
+		if resultComplete(r) || s.Skip[r.StudentRef] {
 			continue
 		}
-		if live.UserID != source.student.UserID || live.AssignmentID != doc.Assignment.AssignmentID {
-			return report, fmt.Errorf("live submission identity disagrees with requested target")
+		mu.Lock()
+		failed := firstErr != nil
+		mu.Unlock()
+		if failed {
+			// Leave the rest untouched, as a serial run stops at its first error.
+			break
 		}
-		if owned {
-			if reason := gradeVisibleHold(owner, live); reason != "" {
-				holdStudentResult(r, reason)
-				if err = save(); err != nil {
-					return report, err
-				}
-				report.Students = append(report.Students, postReport(*r))
-				continue
-			}
-		}
-		if r.Operation == "revise-feedback" {
-			err = s.postRevision(ctx, &doc, r, v, source, live, save)
-		} else if r.Operation == "comment-only" {
-			if liveAssignment.NewQuiz != doc.Assignment.NewQuiz {
-				return report, fmt.Errorf("live assignment type changed between New Quiz and ordinary assignment")
-			}
-			err = s.postCommentOnly(ctx, &doc, r, v, source, live, save)
-		} else {
-			err = s.postGrade(ctx, &doc, r, v, source, live, coupledRubric, save)
-		}
-		if err != nil {
-			return report, err
-		}
-		report.Students = append(report.Students, postReport(*r))
+		work <- i
 	}
-	return report, nil
+	close(work)
+	wg.Wait()
+	report.StoppedBefore = stopped
+	return report, firstErr
+}
+
+// postWorkers is how many students post at once; it matches the Canvas
+// client's in-flight request cap.
+const postWorkers = canvas.Concurrency
+
+// postRun is what every student in one post run shares.
+type postRun struct {
+	liveAssignment Assignment
+	basisMatches   bool
+	coupledRubric  bool
+	guard          *discussionGuard
+	owned          bool
+	owner          workspace.Teammate
+	quiz           *quizSessions
+}
+
+// cloneResult deep-copies a results row through its saved YAML form, the same
+// form every save writes and a resumed run reads.
+func cloneResult(r domain.StudentResult) (domain.StudentResult, error) {
+	b, err := yaml.Marshal(r)
+	if err != nil {
+		return domain.StudentResult{}, err
+	}
+	var out domain.StudentResult
+	if err = yaml.Unmarshal(b, &out); err != nil {
+		return domain.StudentResult{}, err
+	}
+	return out, nil
+}
+
+// postStudent posts one student's row. stopped reports that the run was asked
+// to stop before this student started, leaving the row untouched.
+func (s *Service) postStudent(ctx context.Context, doc *domain.ResultsDocument, r *domain.StudentResult, v domain.ValidatedStudent, source postSource, run postRun, save func() error) (stopped bool, err error) {
+	if StopRequested() {
+		// Writes already in flight finished and were recorded; leave this
+		// student untouched so a rerun starts here.
+		return true, nil
+	}
+	if v.Hold != "" {
+		holdStudentResult(r, v.Hold)
+		return false, save()
+	}
+	if r.Operation == "grade" && !run.basisMatches {
+		holdGrade(r.Grade, "assignment/rubric grading basis changed; pull-work for reassessment")
+		return false, save()
+	}
+	if r.Operation == "comment-only" && !run.basisMatches {
+		holdOutcome(&r.CommentOnly.Outcome, "assignment/rubric basis changed; pull-work for reassessment")
+		return false, save()
+	}
+	source.quizSessions = run.quiz
+	if run.guard != nil && r.Operation != "late-only" {
+		if hold := run.guard.hold(s, *r, source); hold != "" {
+			holdStudentResult(r, hold)
+			return false, save()
+		}
+	}
+	if r.Operation == "late-only" {
+		if reason := lateTimingAssignmentHold(run.liveAssignment, false); reason != "" {
+			holdOutcome(&r.LateOnly.Outcome, reason)
+			return false, save()
+		}
+		return false, s.postLateTiming(ctx, doc.Assignment, source.student.UserID, r.LateOnly.Attempt, &r.LateOnly.LateTiming, &r.LateOnly.Outcome, save)
+	}
+	live, e := GetSubmission(ctx, s.Client, doc.Assignment.CourseID, doc.Assignment.AssignmentID, source.student.UserID)
+	if e != nil {
+		holdStudentResult(r, e.Error())
+		return false, save()
+	}
+	if live.UserID != source.student.UserID || live.AssignmentID != doc.Assignment.AssignmentID {
+		return false, fmt.Errorf("live submission identity disagrees with requested target")
+	}
+	if run.owned {
+		if reason := gradeVisibleHold(run.owner, live); reason != "" {
+			holdStudentResult(r, reason)
+			return false, save()
+		}
+	}
+	switch r.Operation {
+	case "revise-feedback":
+		return false, s.postRevision(ctx, doc, r, v, source, live, save)
+	case "comment-only":
+		if run.liveAssignment.NewQuiz != doc.Assignment.NewQuiz {
+			return false, fmt.Errorf("live assignment type changed between New Quiz and ordinary assignment")
+		}
+		return false, s.postCommentOnly(ctx, doc, r, v, source, live, save)
+	}
+	return false, s.postGrade(ctx, doc, r, v, source, live, run.coupledRubric, save)
 }
 
 func lateTimingAssignmentHold(a Assignment, allowGroup bool) string {
@@ -297,7 +371,7 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 	}
 	// Item scores go in first; the comment waits until they have landed.
 	if c.ItemScores && !definite(c.ItemScoresOutcome) {
-		if err := s.postItemScores(ctx, doc, c, v, source, live, save); err != nil || !definite(c.ItemScoresOutcome) {
+		if err := s.postItemScores(ctx, doc, c, v, source, live, source.quizSessions, save); err != nil || !definite(c.ItemScoresOutcome) {
 			return err
 		}
 	}

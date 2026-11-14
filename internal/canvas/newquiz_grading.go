@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // NewQuizGrading is one attempt's current New Quiz result, read through the
@@ -37,9 +38,15 @@ type NewQuizGrading struct {
 }
 
 // NewQuizSession is one assignment's native New Quizzes session, shared by
-// the students read through it. Its token stays unexported.
+// the students read through it, so a class of students costs one sign-in
+// instead of one per student. It is safe for concurrent use. Its token stays
+// unexported. When the native host rejects the token, the session signs in
+// again once and repeats the read.
 type NewQuizSession struct {
-	n *nqNative
+	client                 *Client
+	courseID, assignmentID int64
+	mu                     sync.Mutex
+	n                      *nqNative
 }
 
 // NewQuizSession opens the native session for one assignment.
@@ -51,18 +58,74 @@ func (c *Client) NewQuizSession(ctx context.Context, courseID, assignmentID int6
 	if err != nil {
 		return nil, c.mapNative(err)
 	}
-	return &NewQuizSession{n: n}, nil
+	return &NewQuizSession{client: c, courseID: courseID, assignmentID: assignmentID, n: n}, nil
+}
+
+func (s *NewQuizSession) native() *nqNative {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.n
+}
+
+// renew signs in again unless another caller already replaced stale.
+func (s *NewQuizSession) renew(ctx context.Context, stale *nqNative) (*nqNative, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.n != stale {
+		return s.n, nil
+	}
+	n, err := s.client.newQuizNative(ctx, s.courseID, s.assignmentID)
+	if err != nil {
+		return nil, s.client.mapNative(err)
+	}
+	s.n = n
+	return n, nil
+}
+
+// withNative runs a read on the current native session, signing in again
+// once if the native host rejected its token.
+func withNative[T any](ctx context.Context, s *NewQuizSession, read func(*nqNative) (T, error)) (T, error) {
+	n := s.native()
+	out, err := read(n)
+	var ce *Error
+	if err == nil || !errors.As(err, &ce) || ce.Kind != "authentication" {
+		return out, err
+	}
+	if n, err = s.renew(ctx, n); err != nil {
+		return out, err
+	}
+	return read(n)
 }
 
 // ResultVersion reads the ID of the attempt's current result. Every
 // SpeedGrader save creates a new one, including a save that changes only an
 // item comment.
 func (s *NewQuizSession) ResultVersion(ctx context.Context, participantSessionID, quizSessionID string) (string, error) {
-	g, err := s.session(ctx, participantSessionID, quizSessionID)
+	g, err := withNative(ctx, s, func(n *nqNative) (*NewQuizGrading, error) {
+		return n.session(ctx, participantSessionID, quizSessionID)
+	})
 	if err != nil {
 		return "", err
 	}
 	return g.ResultID, nil
+}
+
+// NewQuizFilesRead is one attempt's uploaded files and, when the read went
+// through the grading session for the expected quiz session, the attempt's
+// current result version (as ResultVersion reads it).
+type NewQuizFilesRead struct {
+	Files         []NewQuizFile
+	ResultVersion string
+}
+
+// Files reads one attempt's uploaded files, as Client.NewQuizFiles does,
+// through this session, and the result version it sees on the way, so a pull
+// needs no separate ResultVersion read for that student.
+func (s *NewQuizSession) Files(ctx context.Context, userID int64, attempt int, itemIDs map[string]bool, participantSessionID, quizSessionID string) (NewQuizFilesRead, error) {
+	return withNative(ctx, s, func(n *nqNative) (NewQuizFilesRead, error) {
+		files, version, err := n.files(ctx, userID, attempt, itemIDs, participantSessionID, quizSessionID)
+		return NewQuizFilesRead{Files: files, ResultVersion: version}, err
+	})
 }
 
 // NewQuizGrading reads the current result of the attempt behind one
@@ -76,12 +139,23 @@ func (c *Client) NewQuizGrading(ctx context.Context, courseID, assignmentID int6
 	if err != nil {
 		return nil, err
 	}
-	g, err := s.session(ctx, participantSessionID, quizSessionID)
+	return s.Grading(ctx, participantSessionID, quizSessionID)
+}
+
+// Grading reads the current result of one attempt, as Client.NewQuizGrading
+// does, through this session.
+func (s *NewQuizSession) Grading(ctx context.Context, participantSessionID, quizSessionID string) (*NewQuizGrading, error) {
+	if strings.TrimSpace(participantSessionID) == "" {
+		return nil, &Error{Kind: "validation"}
+	}
+	g, err := withNative(ctx, s, func(n *nqNative) (*NewQuizGrading, error) {
+		return n.session(ctx, participantSessionID, quizSessionID)
+	})
 	if err != nil {
 		return nil, err
 	}
 	var raw json.RawMessage
-	if err = secureJSON(ctx, g.httpc, http.MethodGet, g.host+"/api/quiz_sessions/"+url.PathEscape(g.QuizSessionID)+"/results/"+url.PathEscape(g.ResultID)+"/session_item_results", g.token, "Signature", nil, &raw); err != nil {
+	if err = secureJSON(ctx, g.client, g.httpc, http.MethodGet, g.host+"/api/quiz_sessions/"+url.PathEscape(g.QuizSessionID)+"/results/"+url.PathEscape(g.ResultID)+"/session_item_results", g.token, "Signature", nil, &raw); err != nil {
 		return nil, g.client.mapNative(fmt.Errorf("item results step failed: %w", err))
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
@@ -93,8 +167,7 @@ func (c *Client) NewQuizGrading(ctx context.Context, courseID, assignmentID int6
 }
 
 // session reads the grading token and the quiz session's current result.
-func (s *NewQuizSession) session(ctx context.Context, participantSessionID, quizSessionID string) (*NewQuizGrading, error) {
-	n := s.n
+func (n *nqNative) session(ctx context.Context, participantSessionID, quizSessionID string) (*NewQuizGrading, error) {
 	if strings.TrimSpace(participantSessionID) == "" {
 		return nil, &Error{Kind: "validation"}
 	}
@@ -103,7 +176,7 @@ func (s *NewQuizSession) session(ctx context.Context, participantSessionID, quiz
 		Token     string           `json:"token"`
 		SessionID nativeResourceID `json:"quiz_api_quiz_session_id"`
 	}
-	if err := secureJSON(ctx, n.httpc, http.MethodGet, n.backend+"/api/participant_sessions/"+url.PathEscape(participantSessionID)+"/grade", "Bearer "+n.token, "", nil, &grade); err != nil {
+	if err := secureJSON(ctx, n.client, n.httpc, http.MethodGet, n.backend+"/api/participant_sessions/"+url.PathEscape(participantSessionID)+"/grade", "Bearer "+n.token, "", nil, &grade); err != nil {
 		return nil, n.mapped(fmt.Errorf("grading session step failed: %w", err))
 	}
 	host, err := trustedInstructureOrigin(grade.Host)
@@ -117,7 +190,7 @@ func (s *NewQuizSession) session(ctx context.Context, participantSessionID, quiz
 	var session struct {
 		Authoritative map[string]json.RawMessage `json:"authoritative_result"`
 	}
-	if err = secureJSON(ctx, n.httpc, http.MethodGet, host+"/api/quiz_sessions/"+url.PathEscape(g.QuizSessionID), grade.Token, "Signature", nil, &session); err != nil {
+	if err = secureJSON(ctx, n.client, n.httpc, http.MethodGet, host+"/api/quiz_sessions/"+url.PathEscape(g.QuizSessionID), grade.Token, "Signature", nil, &session); err != nil {
 		return nil, n.mapped(fmt.Errorf("quiz session step failed: %w", err))
 	}
 	var id json.Number
@@ -175,7 +248,7 @@ func (g *NewQuizGrading) PostScores(ctx context.Context, scores, comments map[st
 		PointsPossible json.Number `json:"points_possible"`
 	}
 	path := "/api/quiz_sessions/" + url.PathEscape(g.QuizSessionID) + "/results"
-	if err = secureJSON(context.WithoutCancel(ctx), g.httpc, http.MethodPost, g.host+path, g.token, "Signature", body, &out); err != nil {
+	if err = secureJSON(context.WithoutCancel(ctx), g.client, g.httpc, http.MethodPost, g.host+path, g.token, "Signature", body, &out); err != nil {
 		// A write that may have landed is uncertain, as for ordinary Canvas
 		// writes: lost connection, timeout, redirect or server error, or a
 		// success whose body could not be used.

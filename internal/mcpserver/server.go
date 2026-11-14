@@ -252,7 +252,7 @@ type ValidateDocumentInput struct {
 }
 
 type HelpInput struct {
-	Topic string `json:"topic,omitempty" jsonschema:"Optional reference topic: formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, fields, or examples"`
+	Topic string `json:"topic,omitempty" jsonschema:"Optional reference topic: formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, formats-results, fields, examples, or examples/NAME for one example (such as examples/synthetic-results-two)"`
 }
 
 type DraftPDFInput struct {
@@ -282,12 +282,12 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 	addReadTool(server, "list_courses", "Read saved course nicknames, IDs, current selections and timezone locally (default source configured); source canvas discovers the authorized Canvas catalog using the saved connection. A course with an owner belongs to that teammate; the team list says whether their Canvas key is on this PC.", func(ctx context.Context, _ *mcp.CallToolRequest, in ListCoursesInput) (TextOutput, error) {
 		return s.listCourses(ctx, in)
 	})
-	addReadTool(server, "engine_reference", "Read CE-SE command help, document formats, Canvas field limits, or synthetic examples. Use formats-assignment, formats-page, formats-module, formats-quiz, or formats-inbox for a smaller focused contract.", func(ctx context.Context, _ *mcp.CallToolRequest, in HelpInput) (TextOutput, error) {
+	addReadTool(server, "engine_reference", "Read CE-SE command help, document formats, Canvas field limits, or synthetic examples. Use formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox or formats-results for a smaller focused contract, and examples/NAME for one example.", func(ctx context.Context, _ *mcp.CallToolRequest, in HelpInput) (TextOutput, error) {
 		if in.Topic == "" {
 			return s.command(ctx, "help")
 		}
 		if !embedded.IsEngineReferenceTopic(in.Topic) {
-			return TextOutput{}, errors.New("topic must be formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, fields, or examples")
+			return TextOutput{}, errors.New("topic must be formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, formats-results, fields, examples, or examples/NAME")
 		}
 		return s.command(ctx, "help", in.Topic)
 	})

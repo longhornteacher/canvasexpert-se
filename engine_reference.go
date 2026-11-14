@@ -2,16 +2,43 @@ package canvasexpertse
 
 import (
 	"fmt"
+	"path"
 	"strings"
 )
 
 // IsEngineReferenceTopic lists the offline CLI and MCP reference topics.
 func IsEngineReferenceTopic(topic string) bool {
 	switch topic {
-	case "formats", "fields", "examples", "formats-assignment", "formats-page", "formats-module", "formats-quiz", "formats-inbox":
+	case "formats", "fields", "examples", "formats-assignment", "formats-page", "formats-module", "formats-quiz", "formats-inbox", "formats-results":
 		return true
 	}
-	return false
+	_, err := EngineExample(topic)
+	return err == nil
+}
+
+// EngineExample returns one synthetic example for a topic of the form
+// examples/NAME, where NAME is a file in engine-docs/examples with or without
+// its extension, so an agent can read the one example it needs instead of all
+// of them.
+func EngineExample(topic string) (string, error) {
+	name, ok := strings.CutPrefix(topic, "examples/")
+	if !ok || name == "" || strings.ContainsAny(name, `/\`) {
+		return "", fmt.Errorf("not an example topic: %q", topic)
+	}
+	entries, err := EngineDocs.ReadDir("engine-docs/examples")
+	if err != nil {
+		return "", err
+	}
+	for _, e := range entries {
+		if e.Name() == name || strings.TrimSuffix(e.Name(), path.Ext(e.Name())) == name {
+			b, err := EngineDocs.ReadFile("engine-docs/examples/" + e.Name())
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("# %s\n\n%s\n", e.Name(), b), nil
+		}
+	}
+	return "", fmt.Errorf("no example named %q", name)
 }
 
 // EngineFormatSection returns focused contracts from the same embedded format
@@ -34,6 +61,8 @@ func EngineFormatSection(section string) (string, error) {
 		headings = []string{"## Quiz file (QuizForge)", "### Existing New Quiz content (`new-quiz-edit`)", "## Explicit New Quiz accommodations"}
 	case "inbox":
 		headings = []string{"## Canvas Inbox"}
+	case "results":
+		headings = []string{"### Scoring without a Canvas rubric", "### Student operations", "## Exact feedback sample (offline)"}
 	default:
 		return "", fmt.Errorf("unknown format section %q", section)
 	}
@@ -45,7 +74,7 @@ func EngineFormatSection(section string) (string, error) {
 	}
 	if section != "quiz" {
 		for _, line := range strings.Split(text, "\n") {
-			if strings.HasPrefix(line, "| `"+section+"` |") {
+			if strings.HasPrefix(line, "| `"+section+"` |") || section == "results" && (strings.HasPrefix(line, "| `packet` |") || strings.HasPrefix(line, "| `student-work` |")) {
 				out.WriteString("| Kind | Contract |\n|---|---|\n" + line + "\n\n")
 			}
 		}

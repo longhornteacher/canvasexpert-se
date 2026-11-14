@@ -84,6 +84,12 @@ func (t countingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	return t.base.RoundTrip(r)
 }
 
+// Concurrency is how many Canvas requests a client runs at once until Canvas
+// rate-limits it. Canvas Live, 2026-11-14 (read-only probe, one teacher key):
+// 8 concurrent detailed submission lists for eight seconds used about 100 of
+// the key's 700-unit quota; 32 exhausted it.
+const Concurrency = 8
+
 // New accepts an HTTPS origin, without credentials, a path, or query parameters.
 // The default transport uses normal platform TLS trust and environment proxies.
 func New(origin, token string) (*Client, error) {
@@ -93,7 +99,7 @@ func New(origin, token string) (*Client, error) {
 	}
 	u.Path = ""
 	u.Host = strings.ToLower(u.Host)
-	c := &Client{origin: u, token: token, limit: 4, changed: make(chan struct{}), backoff: 250 * time.Millisecond}
+	c := &Client{origin: u, token: token, limit: Concurrency, changed: make(chan struct{}), backoff: 250 * time.Millisecond}
 	c.http = &http.Client{Timeout: 45 * time.Second, Transport: countingTransport{http.DefaultTransport, &c.requests}}
 	c.http.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 || req.URL.Scheme != "https" || req.URL.User != nil {

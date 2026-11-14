@@ -130,6 +130,21 @@ func TestNewQuizFilesKeepsTokensOnTheirHostsAndChecksItemAttempt(t *testing.T) {
 			if err = c.DownloadUnauthenticated(context.Background(), c.Origin()+"/signed", &body); err != nil || body.String() != "bytes" {
 				t.Fatalf("signed download %q %v", body.String(), err)
 			}
+			if knownSession {
+				// The file read reports the result version it saw, so a pull
+				// needs no second read, but only for the expected quiz session.
+				s, err := c.NewQuizSession(context.Background(), 1, 2)
+				if err != nil {
+					t.Fatal(err)
+				}
+				read, err := s.Files(context.Background(), 5, 1, map[string]bool{"99": true}, "ps", "7001")
+				if err != nil || len(read.Files) != 1 || read.ResultVersion != "123" {
+					t.Fatalf("files with version: %#v %v", read, err)
+				}
+				if read, err = s.Files(context.Background(), 5, 1, map[string]bool{"99": true}, "ps", "7999"); err != nil || len(read.Files) != 1 || read.ResultVersion != "" {
+					t.Fatalf("a different quiz session's version was kept: %#v %v", read, err)
+				}
+			}
 		})
 	}
 }

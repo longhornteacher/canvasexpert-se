@@ -156,7 +156,7 @@ func RenderFeedback(in FeedbackInput) (string, error) {
 		if len(criteria) > 1 {
 			lines = append(lines, criteria...)
 		}
-		text := partText(score)
+		text := partText(score, component)
 		if text != "" {
 			lines = append(lines, text)
 		}
@@ -216,7 +216,7 @@ func QuizItems(rubric domain.Rubric, interp domain.Interpretation, components []
 			possible.Add(possible, criterion.Points.Rat())
 		}
 		points := scalePart(max.Rat(), earned, possible)
-		out[component.Key] = QuizItem{Points: points, Comment: itemComment(score, points, max)}
+		out[component.Key] = QuizItem{Points: points, Comment: itemComment(score, component, points, max)}
 	}
 	return out
 }
@@ -224,21 +224,30 @@ func QuizItems(rubric domain.Rubric, interp domain.Interpretation, components []
 // itemComment is a New Quiz item's own comment: its score on the item's
 // points, the part's explanation and, when the part earned under the
 // exemplar.
-func itemComment(score domain.ComponentScore, points, max domain.Decimal) string {
+func itemComment(score domain.ComponentScore, component domain.Component, points, max domain.Decimal) string {
 	lines := []string{shortNumber(points) + "/" + shortNumber(domain.RoundRat(max.Rat(), 2))}
 	if text := strings.TrimSpace(score.Feedback); text != "" {
 		lines = append(lines, text)
 	}
-	if exemplar := strings.TrimSpace(score.Exemplar); exemplar != "" {
+	if exemplar := exemplarFor(score, component); exemplar != "" {
 		lines = append(lines, "Exemplar: "+exemplar)
 	}
 	return strings.Join(lines, "\n")
 }
 
-// partText is a part's own feedback with its exemplar.
-func partText(score domain.ComponentScore) string {
-	text := strings.TrimSpace(score.Feedback)
+// exemplarFor is the student's own exemplar for a part, or else the part's
+// shared exemplar from the interpretation.
+func exemplarFor(score domain.ComponentScore, component domain.Component) string {
 	if exemplar := strings.TrimSpace(score.Exemplar); exemplar != "" {
+		return exemplar
+	}
+	return strings.TrimSpace(component.Exemplar)
+}
+
+// partText is a part's own feedback with its exemplar.
+func partText(score domain.ComponentScore, component domain.Component) string {
+	text := strings.TrimSpace(score.Feedback)
+	if exemplar := exemplarFor(score, component); exemplar != "" {
 		text = strings.TrimSpace(text + " (Exemplar: " + exemplar + ")")
 	}
 	return text

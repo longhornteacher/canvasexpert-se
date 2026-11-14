@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -47,9 +48,14 @@ func RedactTeamLogPath(path string) string {
 	return strings.Join(parts, "/")
 }
 
+// teamLogMu keeps concurrent posts from interleaving log lines.
+var teamLogMu sync.Mutex
+
 // AppendTeamLog appends one line under the UserInstall root. The log is per
 // machine, so it never follows a UserSync authority.
 func AppendTeamLog(installRoot string, e TeamLogEntry) error {
+	teamLogMu.Lock()
+	defer teamLogMu.Unlock()
 	if e.Time == "" {
 		e.Time = time.Now().UTC().Format(time.RFC3339)
 	}
