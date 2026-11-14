@@ -10,7 +10,7 @@ import (
 	"canvasexpertse/internal/workflow"
 )
 
-func printSessionReport(out io.Writer, assignments []workflow.PullAssignmentSummary) {
+func printSessionReport(out io.Writer, assignments []workflow.PullAssignmentSummary, list bool) {
 	table := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	shown, collapsed := 0, 0
 	counts := map[string]int{}
@@ -30,7 +30,9 @@ func printSessionReport(out io.Writer, assignments []workflow.PullAssignmentSumm
 			collapsed++
 			continue
 		}
-		if shown == 0 {
+		if shown == 0 && list {
+			fmt.Fprintln(table, "Course\tAssignment\tTitle\tGroup (weight)\tDue state\tCanvas needs grading\tOutcome\tDetails")
+		} else if shown == 0 {
 			fmt.Fprintln(table, "Course\tAssignment\tTitle\tGroup (weight)\tDue state\tCanvas needs grading\tEligible\tPulled\tTiming candidates\tOutcome\tDetails")
 		}
 		shown++
@@ -62,7 +64,9 @@ func printSessionReport(out io.Writer, assignments []workflow.PullAssignmentSumm
 		if a.SkipReason != "" {
 			details = append(details, a.SkipReason)
 		}
-		if a.NeedsGradingCountUnknown {
+		if a.NeedsGradingCountUnknown && list {
+			details = append(details, "Canvas count unavailable")
+		} else if a.NeedsGradingCountUnknown {
 			details = append(details, "Canvas count unavailable; submission discovery used")
 		}
 		for _, reason := range []struct {
@@ -79,13 +83,21 @@ func printSessionReport(out io.Writer, assignments []workflow.PullAssignmentSumm
 				details = append(details, fmt.Sprintf("%s: %d", reason.label, reason.count))
 			}
 		}
-		if a.NeedsGradingCount != nil && *a.NeedsGradingCount != a.Students+a.CommentOnlyCompleted {
+		if !list && a.NeedsGradingCount != nil && *a.NeedsGradingCount != a.Students+a.CommentOnlyCompleted {
 			details = append(details, "Canvas count differs from pulled count")
+		}
+		if list {
+			fmt.Fprintf(table, "%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n", compact(a.Course), a.AssignmentID, compact(a.Title), compact(group), compact(a.DueState), count, outcome, compact(strings.Join(details, "; ")))
+			continue
 		}
 		fmt.Fprintf(table, "%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\n", compact(a.Course), a.AssignmentID, compact(a.Title), compact(group), compact(a.DueState), count, eligible, a.Students, a.TimingCandidates, outcome, compact(strings.Join(details, "; ")))
 	}
 	_ = table.Flush()
-	fmt.Fprintf(out, "Assignments: %d known; %d completed; %d no eligible work; %d skipped; %d failed; %d not reached.\n", len(assignments), counts["complete"], counts["filtered"], counts["skipped"], counts["failed"], counts["not-reached"])
+	if list {
+		fmt.Fprintf(out, "Assignments: %d known; %d listed; %d skipped.\n", len(assignments), counts["listed"], counts["skipped"])
+	} else {
+		fmt.Fprintf(out, "Assignments: %d known; %d completed; %d no eligible work; %d skipped; %d failed; %d not reached.\n", len(assignments), counts["complete"], counts["filtered"], counts["skipped"], counts["failed"], counts["not-reached"])
+	}
 	if collapsed > 0 {
 		fmt.Fprintf(out, "Canvas reports no work needing grading for %d skipped assignment(s); submissions were not inspected.\n", collapsed)
 	}

@@ -84,6 +84,37 @@ type PullWorkInput struct {
 	Assignment string `json:"assignment,omitempty" jsonschema:"Optional assignment title or ID"`
 	GroupID    *int64 `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID; requires course and assignment"`
 	Session    bool   `json:"session,omitempty" jsonschema:"Pull unscored submitted work for a scoring session, including not-yet-due work; timing applies only to work being scored"`
+	List       bool   `json:"list,omitempty" jsonschema:"With session: list assignments that have work to score without pulling anything"`
+}
+
+// pullWorkArgs validates a pull_work request and builds the Engine arguments.
+func pullWorkArgs(in PullWorkInput) ([]string, error) {
+	if in.List && (!in.Session || in.Assignment != "" || in.GroupID != nil) {
+		return nil, errors.New("list requires session and cannot be combined with assignment or group_id")
+	}
+	args := []string{"pull-work"}
+	if in.Course != "" {
+		args = append(args, in.Course)
+	}
+	if in.Assignment != "" {
+		if in.Course == "" {
+			return nil, errors.New("course is required when assignment is specified")
+		}
+		args = append(args, in.Assignment)
+	}
+	if in.GroupID != nil {
+		if *in.GroupID <= 0 || in.Course == "" || in.Assignment == "" {
+			return nil, errors.New("positive group_id requires explicit course and assignment")
+		}
+		args = append(args, "--group", strconv.FormatInt(*in.GroupID, 10))
+	}
+	if in.Session {
+		args = append(args, "--session")
+	}
+	if in.List {
+		args = append(args, "--list")
+	}
+	return args, nil
 }
 
 type PrepareLateTimingInput struct {
@@ -291,25 +322,10 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "help", in.Topic)
 	})
-	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Set session for targeted scoring discovery (Canvas needs-grading counts) Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
-		args := []string{"pull-work"}
-		if in.Course != "" {
-			args = append(args, in.Course)
-		}
-		if in.Assignment != "" {
-			if in.Course == "" {
-				return TextOutput{}, errors.New("course is required when assignment is specified")
-			}
-			args = append(args, in.Assignment)
-		}
-		if in.GroupID != nil {
-			if *in.GroupID <= 0 || in.Course == "" || in.Assignment == "" {
-				return TextOutput{}, errors.New("positive group_id requires explicit course and assignment")
-			}
-			args = append(args, "--group", strconv.FormatInt(*in.GroupID, 10))
-		}
-		if in.Session {
-			args = append(args, "--session")
+	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Set session for targeted scoring discovery (Canvas needs-grading counts) Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. With session and list, it only lists the assignments that have work to score (no assignment or group_id) and downloads nothing; then pull the chosen ones with session. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
+		args, err := pullWorkArgs(in)
+		if err != nil {
+			return TextOutput{}, err
 		}
 		return s.longCommand(ctx, args...)
 	})

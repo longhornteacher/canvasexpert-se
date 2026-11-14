@@ -91,7 +91,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
                                 Assign each module to its same-named tag
   audience-report COURSE [--module TITLE|ID] Show who can see each module and item; flags items in several modules
   set-file-access COURSE FILE_ID --access course|hidden|locked Change an existing course file's access
-  pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
+  pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session [--list]] Pull scoring-session work; no scope uses current courses; --list only lists assignments with work to score
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only timing changes; never writes to Canvas
   late-sweep COURSE [--period NAME] Recompute a course's late marks in school time (weekends, closures, saved absences and extra days) and save late-only results to post; never writes to Canvas
   personal-dates COURSE [ASSIGNMENT_ID] [--preview] Give students their own Canvas due and lock dates for saved extra time and an absence on the due date; on-time work stays open through a correction window only when the teacher configured one; dates only move later

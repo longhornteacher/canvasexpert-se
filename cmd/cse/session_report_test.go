@@ -16,7 +16,7 @@ func TestSessionReportCollapsesZeroCountsAndExplainsAttention(t *testing.T) {
 		{Outcome: "skipped", SkipReason: "Canvas reports no work needing grading", Course: "CS8", AssignmentID: 1, Title: "Finished", NeedsGradingCount: &zero},
 		{Course: "CS8", AssignmentID: 2, Title: "Quiz", AssignmentGroupName: "Daily", AssignmentGroupWeight: json.Number("30"), DueState: "not due yet", NeedsGradingCount: &two, Students: 1, CommentOnlyCompleted: 1},
 		{Course: "CS8", AssignmentID: 3, Title: "Closed", ClosedGradingPeriod: true, SkipReason: "closed grading period, not pulled"},
-	})
+	}, false)
 	text := out.String()
 	for _, want := range []string{"Daily (30%)", "not due yet", "comment posted, item points not entered: 1", "closed grading period, not pulled", "3 known; 1 completed; 0 no eligible work; 2 skipped; 0 failed; 0 not reached", "submissions were not inspected"} {
 		if !strings.Contains(text, want) {
@@ -39,7 +39,7 @@ func TestSessionReportAccountsForPartialAndKeepsRetryScope(t *testing.T) {
 		{Course: "Synthetic", AssignmentID: 11, GroupID: 8, Title: "Failed middle", Outcome: "failed", FailurePhase: "submission discovery", FailureReason: "Canvas denied this operation", NeedsGradingCount: &one},
 		{Course: "Synthetic", AssignmentID: 12, Outcome: "filtered", CandidatesKnown: true, Inactive: 1, Missing: 1, NeedsGradingCount: &one},
 		{Course: "Synthetic", AssignmentID: 13, Outcome: "not-reached", NeedsGradingCount: &one},
-	})
+	}, false)
 	text := out.String()
 	for _, want := range []string{"4 known; 1 completed; 1 no eligible work; 0 skipped; 1 failed; 1 not reached", "Failed middle", "submission discovery", "inactive: 1", "missing submission: 1", "not processed", `"assignment":"11"`, `"group_id":8`, `"session":true`} {
 		if !strings.Contains(text, want) {
