@@ -171,23 +171,29 @@ func autoScoredTotal(items []writtenQuizItem, row quizReportRow) (*domain.AutoSc
 }
 
 // downloadNewQuizFiles saves each answer file under the per-file limit; one
-// file's failure never stops the others or later students.
-func (s *Service) downloadNewQuizFiles(ctx context.Context, sessions *quizSessions, relDir, studentRef string, userID int64, courseID, assignmentID int64, attempt int, row newQuizRow, participantSessionID string) []domain.WrittenFile {
-	var files []canvas.NewQuizFile
+// file's failure never stops the others or later students. version is the
+// attempt's current quiz result version when the file read saw it for the
+// submission's own quiz session, so the pull needs no second read for it.
+func (s *Service) downloadNewQuizFiles(ctx context.Context, sessions *quizSessions, relDir, studentRef string, userID int64, courseID, assignmentID int64, attempt int, row newQuizRow, participantSessionID, quizSessionID string) (written []domain.WrittenFile, version string) {
+	var read canvas.NewQuizFilesRead
 	var err error
 	if len(row.FileItemIDs) == 0 {
 		err = &canvas.Error{Kind: "validation"}
 	} else if session, e := sessions.get(ctx, s, courseID, assignmentID); e != nil {
 		err = e
 	} else {
-		files, err = session.Files(ctx, userID, attempt, sliceSet(row.FileItemIDs), participantSessionID)
+		read, err = session.Files(ctx, userID, attempt, sliceSet(row.FileItemIDs), participantSessionID, quizSessionID)
 	}
 	if err != nil {
 		for i := range row.Files {
 			row.Files[i].Status = "not-retrieved"
 			row.Files[i].Reason = unavailable(err.Error())
 		}
-		return row.Files
+		return row.Files, ""
+	}
+	files := read.Files
+	if participantSessionID != "" {
+		version = read.ResultVersion
 	}
 	result := append([]domain.WrittenFile(nil), row.Files...)
 	used := make([]bool, len(result))
@@ -207,7 +213,7 @@ func (s *Service) downloadNewQuizFiles(ctx context.Context, sessions *quizSessio
 			result = append(result, item)
 		}
 	}
-	return result
+	return result, version
 }
 
 // saveNewQuizFile saves one answer file. A positive declared size is checked

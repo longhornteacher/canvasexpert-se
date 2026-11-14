@@ -393,8 +393,16 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				}
 				basic := sessionLists[a.ID]
 				e = nil
+				// A whole-class explicit pull reads history, comments and rubric
+				// assessments in the paginated list, as a session does, instead
+				// of listing and then fetching each student. The built-in test
+				// student keeps its single-student read.
+				wholeClass := !options.Session && builtin == nil
 				if !options.Session {
-					basic, e = Submissions(ctx, s.Client, course.ID, a.ID, false)
+					basic, e = Submissions(ctx, s.Client, course.ID, a.ID, wholeClass)
+					if e == nil && wholeClass {
+						e = checkSubmissionIdentity(a.ID, basic)
+					}
 				}
 				if e != nil {
 					return e
@@ -494,7 +502,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				var roster []workspace.Student
 				assignmentPhase = "submission fetch"
 				fetched := candidates
-				if !options.Session {
+				if !options.Session && !wholeClass {
 					fetched, e = fetchSubmissions(ctx, s.Client, course.ID, a.ID, candidates)
 				}
 				if e != nil {
@@ -832,7 +840,7 @@ type attemptDownload struct {
 // cancellation ends the prefetch with an error.
 func (s *Service) prefetchAttachments(ctx context.Context, relDir string, downloads []attemptDownload) (map[attemptKey][]domain.Attachment, error) {
 	results := make([][]domain.Attachment, len(downloads))
-	slots := make(chan struct{}, 4)
+	slots := make(chan struct{}, canvas.Concurrency)
 	var wg sync.WaitGroup
 	for i, d := range downloads {
 		if len(d.sub.Attachments) == 0 && d.sub.Type != "media_recording" && embeddedFileRefs(d.sub.Body, s.Client.Origin(), d.scope) == nil {
@@ -872,7 +880,7 @@ type newQuizRead struct {
 // prefetch with an error.
 func (s *Service) prefetchNewQuizReads(ctx context.Context, sessions *quizSessions, relDir string, courseID, assignmentID int64, detailed []Submission, roster []workspace.Student, skip []bool, rows map[int64]newQuizRow) ([]newQuizRead, error) {
 	out := make([]newQuizRead, len(detailed))
-	slots := make(chan struct{}, 4)
+	slots := make(chan struct{}, canvas.Concurrency)
 	var wg sync.WaitGroup
 	for i, sub := range detailed {
 		row, ok := rows[sub.UserID]
@@ -884,9 +892,12 @@ func (s *Service) prefetchNewQuizReads(ctx context.Context, sessions *quizSessio
 			defer wg.Done()
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			participantSession, _ := newQuizSessionIDs(sub)
-			out[i].files = s.downloadNewQuizFiles(ctx, sessions, relDir, roster[i].Ref, sub.UserID, courseID, assignmentID, sub.Attempt, row, participantSession)
-			if len(row.Responses) > 0 || len(row.FileItemIDs) > 0 {
+			participantSession, quizSession := newQuizSessionIDs(sub)
+			out[i].files, out[i].version = s.downloadNewQuizFiles(ctx, sessions, relDir, roster[i].Ref, sub.UserID, courseID, assignmentID, sub.Attempt, row, participantSession, quizSession)
+			// The file read already saw the result version; read it on its
+			// own only for a student without one (typed answers only, or a
+			// file read that failed).
+			if out[i].version == "" && (len(row.Responses) > 0 || len(row.FileItemIDs) > 0) {
 				out[i].version = s.quizResultVersion(ctx, sessions, courseID, assignmentID, sub)
 			}
 		}()

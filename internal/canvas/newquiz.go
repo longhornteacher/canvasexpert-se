@@ -63,13 +63,17 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 	if err != nil {
 		return nil, err
 	}
-	return n.files(ctx, userID, attempt, itemIDs, participantSessionID)
+	files, _, err := n.files(ctx, userID, attempt, itemIDs, participantSessionID, "")
+	return files, err
 }
 
 // files reads one attempt's uploaded files through an open native session.
-func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs map[string]bool, participantSessionID string) ([]NewQuizFile, error) {
+// version is the attempt's current result version (what ResultVersion
+// returns), read on the way; it is empty unless the read went through the
+// grading session and, when quizSessionID is given, that session matches it.
+func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs map[string]bool, participantSessionID, quizSessionID string) ([]NewQuizFile, string, error) {
 	if userID <= 0 || attempt < 1 || len(itemIDs) == 0 {
-		return nil, &Error{Kind: "validation"}
+		return nil, "", &Error{Kind: "validation"}
 	}
 	c := n.client
 	httpc, backend, nativeToken := n.httpc, n.backend, n.token
@@ -84,7 +88,7 @@ func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs
 		}
 		var participantRaw json.RawMessage
 		if err = secureJSON(ctx, c, httpc, http.MethodGet, backend+"/api/assignments/"+url.PathEscape(n.resource)+"/participants?no_pagination=true", "Bearer "+nativeToken, "application/json", nil, &participantRaw); err != nil {
-			return nil, fmt.Errorf("participants step failed: %w", err)
+			return nil, "", fmt.Errorf("participants step failed: %w", err)
 		}
 		var participants []participant
 		if len(participantRaw) > 0 && participantRaw[0] == '[' {
@@ -97,7 +101,7 @@ func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs
 			participants = envelope.Data
 		}
 		if err != nil {
-			return nil, fmt.Errorf("participants step failed: %w", &Error{Kind: "validation"})
+			return nil, "", fmt.Errorf("participants step failed: %w", &Error{Kind: "validation"})
 		}
 		for _, p := range participants {
 			if p.CanvasUserID == userID && len(p.Sessions) > 0 {
@@ -106,7 +110,7 @@ func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs
 			}
 		}
 		if participantSession == "" {
-			return nil, fmt.Errorf("participants step found no matching student session: %w", &Error{Kind: "not_found"})
+			return nil, "", fmt.Errorf("participants step found no matching student session: %w", &Error{Kind: "not_found"})
 		}
 	}
 	var result struct {
@@ -117,14 +121,16 @@ func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs
 	}
 	// The grading read (what SpeedGrader uses) carries each file's URL in the
 	// item results; the older results read is the fallback.
+	fromGrade := true
 	if err = secureJSON(ctx, c, httpc, http.MethodGet, backend+"/api/participant_sessions/"+url.PathEscape(participantSession)+"/grade", "Bearer "+nativeToken, "", nil, &result); err != nil {
+		fromGrade = false
 		if err = secureJSON(ctx, c, httpc, http.MethodGet, backend+"/api/participant_sessions/"+url.PathEscape(participantSession)+"/results", "Bearer "+nativeToken, "application/json", nil, &result); err != nil {
-			return nil, fmt.Errorf("participant results step failed: %w", err)
+			return nil, "", fmt.Errorf("participant results step failed: %w", err)
 		}
 	}
 	quizHost, err := trustedInstructureOrigin(result.Host)
 	if err != nil || result.Token == "" {
-		return nil, fmt.Errorf("quiz host step failed: %w", &Error{Kind: "validation"})
+		return nil, "", fmt.Errorf("quiz host step failed: %w", &Error{Kind: "validation"})
 	}
 	// Canvas sends these session IDs as numbers live; strings stay accepted.
 	quizSession := string(result.SessionID)
@@ -132,7 +138,7 @@ func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs
 		quizSession = string(result.OldSessionID)
 	}
 	if quizSession == "" {
-		return nil, fmt.Errorf("participant results step failed: %w", &Error{Kind: "validation"})
+		return nil, "", fmt.Errorf("participant results step failed: %w", &Error{Kind: "validation"})
 	}
 	var session struct {
 		Authoritative struct {
@@ -140,10 +146,10 @@ func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs
 		} `json:"authoritative_result"`
 	}
 	if err = secureJSON(ctx, c, httpc, http.MethodGet, quizHost+"/api/quiz_sessions/"+url.PathEscape(quizSession), result.Token, "Signature", nil, &session); err != nil {
-		return nil, fmt.Errorf("quiz session step failed: %w", err)
+		return nil, "", fmt.Errorf("quiz session step failed: %w", err)
 	}
 	if session.Authoritative.ID == "" {
-		return nil, fmt.Errorf("quiz session step failed: %w", &Error{Kind: "validation"})
+		return nil, "", fmt.Errorf("quiz session step failed: %w", &Error{Kind: "validation"})
 	}
 	var itemResults []struct {
 		ItemID  json.Number `json:"item_id"`
@@ -155,7 +161,7 @@ func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs
 		} `json:"scored_data"`
 	}
 	if err = secureJSON(ctx, c, httpc, http.MethodGet, quizHost+"/api/quiz_sessions/"+url.PathEscape(quizSession)+"/results/"+url.PathEscape(session.Authoritative.ID.String())+"/session_item_results", result.Token, "Signature", nil, &itemResults); err != nil {
-		return nil, fmt.Errorf("item results step failed: %w", err)
+		return nil, "", fmt.Errorf("item results step failed: %w", err)
 	}
 	var files []NewQuizFile
 	matchedAttempt := false
@@ -193,11 +199,15 @@ func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs
 	}
 	if !matchedAttempt {
 		if attemptMismatch {
-			return nil, fmt.Errorf("item results attempt did not match requested attempt")
+			return nil, "", fmt.Errorf("item results attempt did not match requested attempt")
 		}
-		return nil, fmt.Errorf("item results step had no matching file-upload item")
+		return nil, "", fmt.Errorf("item results step had no matching file-upload item")
 	}
-	return files, nil
+	version := ""
+	if fromGrade && (quizSessionID == "" || quizSessionID == quizSession) {
+		version = session.Authoritative.ID.String()
+	}
+	return files, version, nil
 }
 
 // nqNative is a native New Quizzes session for one assignment: the cookie
@@ -341,7 +351,7 @@ func trustedInstructureOrigin(raw string) (string, error) {
 
 // secureJSON sends one JSON request to a native New Quizzes host. With a
 // client it shares that client's request slots and throttle, so native calls
-// count toward the same four-at-a-time limit as Canvas calls, and a read is
+// count toward the same in-flight limit as Canvas calls, and a read is
 // retried like a Canvas read (rate limit, server error, lost connection).
 // Writes are sent once.
 func secureJSON(ctx context.Context, c *Client, hc *http.Client, method, rawURL, authorization, authType string, body any, out any, domainHeader ...string) error {

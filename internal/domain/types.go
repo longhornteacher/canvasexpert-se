@@ -473,6 +473,9 @@ type Component struct {
 	// ItemID names the New Quiz written item this part scores (from the
 	// packet's written_items), so the comment shows it in quiz points.
 	ItemID string `yaml:"item_id,omitempty"`
+	// Exemplar is the part's shared model answer, written once for every
+	// student; a student's own component exemplar replaces it.
+	Exemplar string `yaml:"exemplar,omitempty"`
 }
 type Interpretation struct {
 	Mapping    string      `yaml:"mapping"` // repeated or direct
@@ -490,7 +493,8 @@ type ComponentScore struct {
 	Evidence string           `yaml:"evidence"` // present, missing, unknown
 	Criteria []CriterionScore `yaml:"criteria"`
 	// Feedback explains this part's score under its own score line. Exemplar
-	// is a model answer the Engine always shows with the part's feedback.
+	// is a model answer the Engine always shows with the part's feedback; when
+	// empty, the interpretation component's shared exemplar is shown.
 	Feedback string `yaml:"feedback,omitempty"`
 	Exemplar string `yaml:"exemplar,omitempty"`
 }

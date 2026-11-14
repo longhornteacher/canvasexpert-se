@@ -110,11 +110,21 @@ func (s *NewQuizSession) ResultVersion(ctx context.Context, participantSessionID
 	return g.ResultID, nil
 }
 
+// NewQuizFilesRead is one attempt's uploaded files and, when the read went
+// through the grading session for the expected quiz session, the attempt's
+// current result version (as ResultVersion reads it).
+type NewQuizFilesRead struct {
+	Files         []NewQuizFile
+	ResultVersion string
+}
+
 // Files reads one attempt's uploaded files, as Client.NewQuizFiles does,
-// through this session.
-func (s *NewQuizSession) Files(ctx context.Context, userID int64, attempt int, itemIDs map[string]bool, participantSessionID string) ([]NewQuizFile, error) {
-	return withNative(ctx, s, func(n *nqNative) ([]NewQuizFile, error) {
-		return n.files(ctx, userID, attempt, itemIDs, participantSessionID)
+// through this session, and the result version it sees on the way, so a pull
+// needs no separate ResultVersion read for that student.
+func (s *NewQuizSession) Files(ctx context.Context, userID int64, attempt int, itemIDs map[string]bool, participantSessionID, quizSessionID string) (NewQuizFilesRead, error) {
+	return withNative(ctx, s, func(n *nqNative) (NewQuizFilesRead, error) {
+		files, version, err := n.files(ctx, userID, attempt, itemIDs, participantSessionID, quizSessionID)
+		return NewQuizFilesRead{Files: files, ResultVersion: version}, err
 	})
 }
 

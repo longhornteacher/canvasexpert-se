@@ -310,7 +310,7 @@ func TestErrorClassificationAndSanitization(t *testing.T) {
 	}
 }
 
-func TestFourRequestConcurrencyLimit(t *testing.T) {
+func TestRequestConcurrencyLimit(t *testing.T) {
 	var active, maxActive atomic.Int32
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := active.Add(1)
@@ -326,7 +326,7 @@ func TestFourRequestConcurrencyLimit(t *testing.T) {
 	defer server.Close()
 	c := testClient(t, server)
 	var wg sync.WaitGroup
-	for i := 0; i < 12; i++ {
+	for i := 0; i < 3*Concurrency; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -337,7 +337,7 @@ func TestFourRequestConcurrencyLimit(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if maxActive.Load() > 4 || maxActive.Load() < 2 {
+	if maxActive.Load() > Concurrency || maxActive.Load() < 2 {
 		t.Fatalf("unexpected concurrency %d", maxActive.Load())
 	}
 }

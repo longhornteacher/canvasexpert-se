@@ -38,12 +38,18 @@ func TestPullSummaryCountsObservedStatesAndSeparatesFetch(t *testing.T) {
 			}
 			_ = json.NewEncoder(w).Encode(enrollments)
 		case strings.HasSuffix(r.URL.Path, "/submissions"):
-			_ = json.NewEncoder(w).Encode([]Submission{live, missing, excused, inactive, unsupported})
-		case strings.Contains(r.URL.Path, "/submissions/5"):
-			// A saved PDF of any content is an original to inspect; only the
-			// file Canvas no longer serves counts as unavailable.
+			// A whole-class pull reads history and attachments in this list;
+			// no student is fetched on their own. A saved PDF of any content
+			// is an original to inspect; only the file Canvas no longer serves
+			// counts as unavailable.
+			if !strings.Contains(r.URL.RawQuery, "submission_history") {
+				t.Errorf("whole-class pull listed submissions without their history: %s", r.URL.RawQuery)
+			}
 			live.Attachments = []Attachment{{ID: 500, Filename: "response.pdf", URL: origin + "/files/scan", ContentType: "application/pdf"}, {ID: 501, Filename: "missing.pdf", URL: origin + "/files/gone", ContentType: "application/pdf"}}
-			_ = json.NewEncoder(w).Encode(live)
+			_ = json.NewEncoder(w).Encode([]Submission{live, missing, excused, inactive, unsupported})
+		case strings.Contains(r.URL.Path, "/submissions/"):
+			t.Errorf("whole-class pull fetched a student on their own: %s", r.URL.Path)
+			http.NotFound(w, r)
 		default:
 			_ = json.NewEncoder(w).Encode(fixtureAssignment())
 		}
@@ -57,10 +63,10 @@ func TestPullSummaryCountsObservedStatesAndSeparatesFetch(t *testing.T) {
 	if summary.Course != "TEST" || summary.AssignmentID != 10 || summary.Students != 1 || summary.Late != 1 || summary.Missing != 1 || summary.Excused != 1 || summary.Inactive != 1 || summary.Unsupported != 1 || summary.UnavailableAttachments != 1 || len(summary.Packets) != 1 {
 		t.Fatalf("incorrect summary: %#v", summary)
 	}
-	if report.DiscoveryRequests != 3 || report.FetchRequests != 4 || report.Requests != report.DiscoveryRequests+report.FetchRequests || report.DiscoveryElapsed <= 0 || report.FetchElapsed <= 0 {
+	if report.DiscoveryRequests != 3 || report.FetchRequests != 3 || report.Requests != report.DiscoveryRequests+report.FetchRequests || report.DiscoveryElapsed <= 0 || report.FetchElapsed <= 0 {
 		t.Fatalf("incorrect phase metrics: %#v", report)
 	}
-	// No actionable work needs no detailed history, rubric refetch or downloads.
+	// No actionable work needs no rubric refetch or downloads.
 	live.Excused = true
 	report, e = s.PullWork(context.Background(), "TEST", "10")
 	if e != nil || report.FetchRequests != 0 || report.DiscoveryRequests != 3 || report.Students != 0 {

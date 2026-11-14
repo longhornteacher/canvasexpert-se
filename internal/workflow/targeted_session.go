@@ -27,12 +27,7 @@ func detailedSessionSubmissions(ctx context.Context, client *canvas.Client, cour
 			defer wg.Done()
 			rows, err := Submissions(ctx, client, courseID, a.ID, true)
 			if err == nil {
-				for _, sub := range rows {
-					if sub.AssignmentID != a.ID || sub.UserID <= 0 || sub.User.ID != 0 && sub.User.ID != sub.UserID {
-						err = fmt.Errorf("live submission identity disagrees with requested pull target")
-						break
-					}
-				}
+				err = checkSubmissionIdentity(a.ID, rows)
 			}
 			if err != nil {
 				mu.Lock()
@@ -47,6 +42,17 @@ func detailedSessionSubmissions(ctx context.Context, client *canvas.Client, cour
 	}
 	wg.Wait()
 	return out, failures
+}
+
+// checkSubmissionIdentity rejects a listed submission that names another
+// assignment or a different student than its user record.
+func checkSubmissionIdentity(assignmentID int64, rows []Submission) error {
+	for _, sub := range rows {
+		if sub.AssignmentID != assignmentID || sub.UserID <= 0 || sub.User.ID != 0 && sub.User.ID != sub.UserID {
+			return fmt.Errorf("live submission identity disagrees with requested pull target")
+		}
+	}
+	return nil
 }
 
 func assignmentDueState(a Assignment, now time.Time) string {

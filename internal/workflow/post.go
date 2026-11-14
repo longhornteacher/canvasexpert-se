@@ -11,6 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/render"
 	"canvasexpertse/internal/workspace"
@@ -248,7 +249,7 @@ func (s *Service) Post(ctx context.Context, path string) (report PostReport, err
 
 // postWorkers is how many students post at once; it matches the Canvas
 // client's in-flight request cap.
-const postWorkers = 4
+const postWorkers = canvas.Concurrency
 
 // postRun is what every student in one post run shares.
 type postRun struct {
