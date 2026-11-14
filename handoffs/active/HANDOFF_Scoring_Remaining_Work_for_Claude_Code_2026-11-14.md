@@ -74,6 +74,8 @@ Deliver actual client evidence and narrowly fix a reproducible transfer/inspecti
 
 ## Independent follow-up: diagnose the missing Student Analysis URL
 
+**Run 2026-11-14 (teacher-authorized, release 2.3.0 Engine, read-only except the report POST):** a scoped pull of assignment 3721619 completed on the first try: 2 students, both written responses and the auto-scored subtotal (45/60 each) present, no failure phase. The earlier missing-URL failure did not reproduce, so no request shape was observed and nothing was changed; it was most likely transient report generation. Batch 1 would now name the phase and facts if it recurs. The fresh packet is the current evidence for scoring the two students; nothing was posted.
+
 Known incident target: course 120638, assignment 3721619, "Informational Final Retest: Nature and Practical Knowledge". Two Canvas needs-grading flags remained; no response packet was retrieved. The counterpart in course 120669, assignment 3721673, was successfully scored and posted and must not be replayed.
 
 The exact old error proves the Engine parsed `workflow_state: completed` and then found no `results.url`. It does not establish Canvas's underlying failure or the two attempts' states. No raw lifecycle evidence was retained. Batch 1 prevents this assignment from hiding unrelated work but does not claim to fix that root cause.
