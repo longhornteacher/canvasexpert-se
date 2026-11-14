@@ -22,6 +22,8 @@ Required validation passed: `go test ./internal/workflow ./cmd/cse ./internal/mc
 
 ## Batch 2: explicit whole-quiz honest-effort minimum
 
+**Built in Dev 2026-11-14, local tests only.** `comment_only.honest_effort` (needs `item_scores` and a course `effort_floor`) reports earned total, existing adjustment, minimum and total to enter; the raise-only fudge write exists but `quizFloorWrites` is false until the live probe below. Item scores write as before meanwhile.
+
 ### Problem and intended behavior
 
 The teacher has a 50% honest-effort floor in the affected courses. Ordinary grades already support an agent's explicit `honest_effort` judgment. New Quiz item-score posting keeps earned item points and existing fudge points, but cannot raise the quiz total to the course floor. The incident encountered two qualifying genuine attempts below the floor; their item scores/comments succeeded and the teacher was given a manual SpeedGrader adjustment. A separate blank written response was correctly excluded.

@@ -651,7 +651,11 @@ type CommentOnlyOperation struct {
 	// ItemScores, on a New Quiz, first writes each part's item points (the
 	// numbers the comment shows) into the quiz result, then posts the comment.
 	// It uses an undocumented internal New Quizzes call.
-	ItemScores        bool          `yaml:"item_scores,omitempty"`
+	ItemScores bool `yaml:"item_scores,omitempty"`
+	// HonestEffort is the agent's explicit judgment that the written work is a
+	// genuine try. With item_scores and a course effort_floor it raises the
+	// whole-quiz total to the floor, never lowering it.
+	HonestEffort      bool          `yaml:"honest_effort,omitempty"`
 	ItemScoresOutcome ActionOutcome `yaml:"item_scores_outcome,omitempty"`
 	// QuizScore is the quiz total Canvas reported once item scores landed,
 	// as X/Y; the whole-assignment comment states it. The Engine owns it.

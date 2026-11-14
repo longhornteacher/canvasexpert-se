@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"math/big"
 	"net/url"
 	"sort"
 	"strconv"
@@ -61,6 +62,15 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 		holdOutcome(o, "could not read the current quiz result: "+err.Error())
 		return save()
 	}
+	var floor *quizFloorPlan
+	if c.HonestEffort {
+		plan, why := s.planQuizFloor(doc.Assignment.CourseID, g, want)
+		if why != "" {
+			holdOutcome(o, why)
+			return save()
+		}
+		floor = plan
+	}
 	landed := true
 	for entry, score := range want {
 		current, ok := g.Item(entry)
@@ -76,8 +86,8 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 			landed = false
 		}
 	}
-	if landed {
-		*o = domain.ActionOutcome{Status: "preserved", PostedText: summary, Message: "the quiz result already shows these item points and comments"}
+	if landed && (floor == nil || floor.raise.Sign() == 0 || !quizFloorWrites) {
+		*o = domain.ActionOutcome{Status: "preserved", PostedText: summary, Message: "the quiz result already shows these item points and comments" + floor.note()}
 		c.QuizScore = quizTotal(g)
 		return save()
 	}
@@ -97,6 +107,11 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 	if err := save(); err != nil {
 		return err
 	}
+	if floor != nil && floor.raise.Sign() > 0 && quizFloorWrites {
+		g.FudgePoints = json.RawMessage(floor.adjustment.String())
+		summary += floor.note()
+		o.PostedText = summary
+	}
 	version, err := g.PostScores(ctx, want, comments)
 	if err != nil {
 		*o = failedOutcome(err)
@@ -104,11 +119,82 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 		return save()
 	}
 	*o = domain.ActionOutcome{Status: "succeeded", PostedText: summary, Message: "quiz result version " + version}
+	if floor != nil && !quizFloorWrites {
+		o.Message += floor.note()
+	}
 	c.QuizScore = quizTotal(g)
 	if id, e := strconv.ParseInt(version, 10, 64); e == nil {
 		o.ID = id
 	}
 	return save()
+}
+
+// quizFloorWrites is off until a probe on a disposable quiz establishes how
+// New Quizzes scales fudge points against the quiz total, whether the total
+// is before late deductions, and how a retry behaves. While off, honest_effort
+// still writes the earned item points and reports the floor numbers so the
+// teacher can enter the adjustment in SpeedGrader; it never writes fudge points.
+var quizFloorWrites = false
+
+// quizFloorPlan is the whole-quiz floor worked out from the live result.
+type quizFloorPlan struct {
+	earned, existing, minimum, projected, adjustment, raise domain.Decimal
+}
+
+// planQuizFloor works from the result as it stands: the total Canvas reports,
+// with the named items' current points swapped for the points about to be
+// written, so a rerun after the raise landed adds nothing. It returns a
+// reason when the floor cannot be computed honestly.
+func (s *Service) planQuizFloor(courseID int64, g *canvas.NewQuizGrading, want map[string]string) (*quizFloorPlan, string) {
+	floor := s.effortFloor(courseID)
+	if floor == nil {
+		return nil, "honest_effort needs this course's effort_floor; set it in Courses, or leave honest_effort off"
+	}
+	total, e1 := domain.ParseDecimal(g.Score)
+	possible, e2 := domain.ParseDecimal(g.PointsPossible)
+	if e1 != nil || e2 != nil || possible.Sign() <= 0 {
+		return nil, "Canvas did not report the quiz total; enter the points and any minimum in SpeedGrader"
+	}
+	existing := domain.MustDecimal("0")
+	if raw := strings.TrimSpace(string(g.FudgePoints)); raw != "" && raw != "null" {
+		d, err := domain.ParseDecimal(raw)
+		if err != nil {
+			return nil, "the quiz result's adjustment could not be read; enter the minimum in SpeedGrader"
+		}
+		existing = d
+	}
+	delta := new(big.Rat)
+	for entry, score := range want {
+		cur, _ := g.Item(entry)
+		if d, err := domain.ParseDecimal(cur.Score); err == nil {
+			delta.Sub(delta, d.Rat())
+		}
+		d, _ := domain.ParseDecimal(score)
+		delta.Add(delta, d.Rat())
+	}
+	projected := domain.RoundRat(new(big.Rat).Add(total.Rat(), delta), 2)
+	minimum, adjustment := domain.QuizFloor(possible, projected, existing, *floor)
+	earned := domain.RoundRat(new(big.Rat).Sub(projected.Rat(), existing.Rat()), 2)
+	raise := domain.RoundRat(new(big.Rat).Sub(adjustment.Rat(), existing.Rat()), 2)
+	return &quizFloorPlan{earned: earned, existing: existing, minimum: minimum, projected: projected, adjustment: adjustment, raise: raise}, ""
+}
+
+// note states the floor numbers for the teacher: earned total, the adjustment
+// already in the result, the course minimum and the proposed entered total.
+// Canvas applies any late deduction itself; these are before it.
+func (p *quizFloorPlan) note() string {
+	if p == nil {
+		return ""
+	}
+	if p.raise.Sign() == 0 {
+		return fmt.Sprintf("; honest-effort floor: total %s already meets the minimum %s, nothing added", trimZeros(p.projected.String()), trimZeros(p.minimum.String()))
+	}
+	entered := domain.RoundRat(new(big.Rat).Add(p.projected.Rat(), p.raise.Rat()), 2)
+	verb := "enter"
+	if quizFloorWrites {
+		verb = "entered"
+	}
+	return fmt.Sprintf("; honest-effort floor: earned %s, existing adjustment %s, minimum %s, %s total %s by adding %s adjustment points (before any late deduction)", trimZeros(p.earned.String()), trimZeros(p.existing.String()), trimZeros(p.minimum.String()), verb, trimZeros(entered.String()), trimZeros(p.raise.String()))
 }
 
 // quizVersionReader opens one native New Quizzes session per assignment
