@@ -501,7 +501,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 					return e
 				}
 				var newQuizRows map[int64]newQuizRow
-				var nqVersions quizVersionReader
+				var nqSessions quizSessions
 				if a.NewQuiz {
 					assignmentPhase = "New Quiz report"
 					newQuizRows, packet.WrittenItems, e = newQuizResponses(ctx, s.Client, course.ID, a.ID)
@@ -552,6 +552,16 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				if e != nil {
 					return e
 				}
+				var nqReads []newQuizRead
+				if a.NewQuiz {
+					skip := make([]bool, len(detailed))
+					for i := range detailed {
+						skip[i] = (options.Session || query == "") && handled[i]
+					}
+					if nqReads, e = s.prefetchNewQuizReads(ctx, &nqSessions, relDir, course.ID, a.ID, detailed, roster, skip, newQuizRows); e != nil {
+						return e
+					}
+				}
 				for i, sub := range detailed {
 					st := roster[i]
 					gradeHandled := handled[i]
@@ -593,11 +603,7 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 						}
 						doc.Current.WrittenResponses = row.Responses
 						doc.Current.AutoScored, doc.Current.AutoScoredNote = row.AutoScored, row.AutoScoredNote
-						participantSession, _ := newQuizSessionIDs(sub)
-						doc.Current.WrittenFiles = s.downloadNewQuizFiles(ctx, relDir, st.Ref, sub.UserID, course.ID, a.ID, sub.Attempt, row, participantSession)
-						if len(row.Responses) > 0 || len(row.FileItemIDs) > 0 {
-							doc.ObservedQuizResult = s.quizResultVersion(ctx, &nqVersions, course.ID, a.ID, sub)
-						}
+						doc.Current.WrittenFiles, doc.ObservedQuizResult = nqReads[i].files, nqReads[i].version
 					}
 					for _, prior := range priorAttempts(sub) {
 						doc.Prior = append(doc.Prior, s.attemptWork(prior, attachments[attemptKey{st.Ref, prior.Attempt}]))
@@ -847,6 +853,47 @@ func (s *Service) prefetchAttachments(ctx context.Context, relDir string, downlo
 	out := map[attemptKey][]domain.Attachment{}
 	for i, d := range downloads {
 		out[attemptKey{d.ref, d.sub.Attempt}] = results[i]
+	}
+	return out, nil
+}
+
+// newQuizRead is one student's New Quiz upload files and current result
+// version, read ahead of the per-student loop.
+type newQuizRead struct {
+	files   []domain.WrittenFile
+	version string
+}
+
+// prefetchNewQuizReads reads each eligible student's New Quiz files and
+// result version concurrently, at the client's in-flight cap, through the
+// assignment's one shared native session. A student whose report row does
+// not match the submission is left for the loop to report. One student's
+// failure never stops the others; only the pull's own cancellation ends the
+// prefetch with an error.
+func (s *Service) prefetchNewQuizReads(ctx context.Context, sessions *quizSessions, relDir string, courseID, assignmentID int64, detailed []Submission, roster []workspace.Student, skip []bool, rows map[int64]newQuizRow) ([]newQuizRead, error) {
+	out := make([]newQuizRead, len(detailed))
+	slots := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	for i, sub := range detailed {
+		row, ok := rows[sub.UserID]
+		if skip[i] || !ok || row.Attempt != sub.Attempt {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			participantSession, _ := newQuizSessionIDs(sub)
+			out[i].files = s.downloadNewQuizFiles(ctx, sessions, relDir, roster[i].Ref, sub.UserID, courseID, assignmentID, sub.Attempt, row, participantSession)
+			if len(row.Responses) > 0 || len(row.FileItemIDs) > 0 {
+				out[i].version = s.quizResultVersion(ctx, sessions, courseID, assignmentID, sub)
+			}
+		}()
+	}
+	wg.Wait()
+	if ctx.Err() != nil {
+		return nil, &canvas.Error{Kind: "canceled"}
 	}
 	return out, nil
 }

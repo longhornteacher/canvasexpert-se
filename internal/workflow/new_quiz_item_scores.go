@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"canvasexpertse/internal/canvas"
 	"canvasexpertse/internal/domain"
@@ -24,7 +25,7 @@ import (
 // most one write per run: a pending or uncertain write is reconciled against
 // the quiz result and never repeated blindly, and a grade someone entered in
 // Canvas since the pull is not overwritten.
-func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocument, c *domain.CommentOnlyOperation, v domain.ValidatedStudent, source postSource, live Submission, save func() error) error {
+func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocument, c *domain.CommentOnlyOperation, v domain.ValidatedStudent, source postSource, live Submission, sessions *quizSessions, save func() error) error {
 	o := &c.ItemScoresOutcome
 	parts, err := partPoints(doc, source.writtenItems, v.Interpretation)
 	if err != nil {
@@ -58,7 +59,14 @@ func (s *Service) postItemScores(ctx context.Context, doc *domain.ResultsDocumen
 		holdOutcome(o, "Canvas did not report this attempt's quiz session; enter the item points in SpeedGrader")
 		return save()
 	}
-	g, err := s.Client.NewQuizGrading(ctx, doc.Assignment.CourseID, doc.Assignment.AssignmentID, ps, qs)
+	if sessions == nil {
+		sessions = &quizSessions{}
+	}
+	var g *canvas.NewQuizGrading
+	session, err := sessions.get(ctx, s, doc.Assignment.CourseID, doc.Assignment.AssignmentID)
+	if err == nil {
+		g, err = session.Grading(ctx, ps, qs)
+	}
 	if err != nil {
 		holdOutcome(o, "could not read the current quiz result: "+err.Error())
 		return save()
@@ -253,29 +261,33 @@ func priorFloorRaise(live Submission, attempt domain.AttemptRef) domain.Decimal 
 	return d
 }
 
-// quizVersionReader opens one native New Quizzes session per assignment
-// during a pull and reads each attempt's current result version through it.
-type quizVersionReader struct {
+// quizSessions opens one native New Quizzes session per assignment on first
+// use and shares it across that assignment's students, at pull and at post,
+// so a class costs one sign-in instead of one per student. Safe for
+// concurrent use.
+type quizSessions struct {
+	once    sync.Once
 	session *canvas.NewQuizSession
-	failed  bool
+	err     error
+}
+
+func (r *quizSessions) get(ctx context.Context, s *Service, courseID, assignmentID int64) (*canvas.NewQuizSession, error) {
+	r.once.Do(func() { r.session, r.err = s.Client.NewQuizSession(ctx, courseID, assignmentID) })
+	return r.session, r.err
 }
 
 // quizResultVersion records an attempt's current result version, or nothing
 // when it cannot be read; item scores then hold until a fresh pull.
-func (s *Service) quizResultVersion(ctx context.Context, r *quizVersionReader, courseID, assignmentID int64, sub Submission) string {
+func (s *Service) quizResultVersion(ctx context.Context, r *quizSessions, courseID, assignmentID int64, sub Submission) string {
 	ps, qs := newQuizSessionIDs(sub)
-	if ps == "" || r.failed {
+	if ps == "" {
 		return ""
 	}
-	if r.session == nil {
-		session, err := s.Client.NewQuizSession(ctx, courseID, assignmentID)
-		if err != nil {
-			r.failed = true
-			return ""
-		}
-		r.session = session
+	session, err := r.get(ctx, s, courseID, assignmentID)
+	if err != nil {
+		return ""
 	}
-	version, err := r.session.ResultVersion(ctx, ps, qs)
+	version, err := session.ResultVersion(ctx, ps, qs)
 	if err != nil {
 		return ""
 	}

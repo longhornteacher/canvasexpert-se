@@ -4,6 +4,8 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+- Faster scoring: a New Quiz signs in once per quiz instead of once per student at pull and at post, New Quizzes requests share the Engine's four-at-a-time limit and retry reads on rate limits, pulls read New Quiz files four students at a time, and `post` / `post_results` posts four students at a time. Saved outcomes, holds and resume are unchanged. Checked with local tests only.
+
 ## 2.3.0 (2026-11-14)
 
 Scoring that survives a failed assignment, original student uploads, a whole-quiz honest-effort floor on New Quizzes, and a bridge gradebook column. The floor write was checked in Canvas Live on one real student; everything else is checked with local tests only.

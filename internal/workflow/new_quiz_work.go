@@ -172,8 +172,16 @@ func autoScoredTotal(items []writtenQuizItem, row quizReportRow) (*domain.AutoSc
 
 // downloadNewQuizFiles saves each answer file under the per-file limit; one
 // file's failure never stops the others or later students.
-func (s *Service) downloadNewQuizFiles(ctx context.Context, relDir, studentRef string, userID int64, courseID, assignmentID int64, attempt int, row newQuizRow, participantSessionID string) []domain.WrittenFile {
-	files, err := s.Client.NewQuizFiles(ctx, courseID, assignmentID, userID, attempt, sliceSet(row.FileItemIDs), participantSessionID)
+func (s *Service) downloadNewQuizFiles(ctx context.Context, sessions *quizSessions, relDir, studentRef string, userID int64, courseID, assignmentID int64, attempt int, row newQuizRow, participantSessionID string) []domain.WrittenFile {
+	var files []canvas.NewQuizFile
+	var err error
+	if len(row.FileItemIDs) == 0 {
+		err = &canvas.Error{Kind: "validation"}
+	} else if session, e := sessions.get(ctx, s, courseID, assignmentID); e != nil {
+		err = e
+	} else {
+		files, err = session.Files(ctx, userID, attempt, sliceSet(row.FileItemIDs), participantSessionID)
+	}
 	if err != nil {
 		for i := range row.Files {
 			row.Files[i].Status = "not-retrieved"

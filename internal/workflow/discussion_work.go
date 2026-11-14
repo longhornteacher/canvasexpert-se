@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"canvasexpertse/internal/domain"
 	"canvasexpertse/internal/workspace"
@@ -168,7 +169,9 @@ type discussionGuard struct {
 	liveOwn    map[string][]domain.DiscussionEntry
 	liveByRef  map[string]domain.DiscussionEntry
 	livePacket domain.DiscussionPacket
-	stored     map[string]domain.DiscussionPacket
+	// mu guards stored; students post concurrently.
+	mu     sync.Mutex
+	stored map[string]domain.DiscussionPacket
 }
 
 func hasCheckpoints(a domain.AssignmentSnapshot) bool {
@@ -361,6 +364,8 @@ func sameEntryFiles(pulled, live []domain.DiscussionEntry) bool {
 }
 
 func (g *discussionGuard) storedPacket(s *Service, rel string) (domain.DiscussionPacket, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	if p, ok := g.stored[rel]; ok {
 		return p, nil
 	}

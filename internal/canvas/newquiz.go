@@ -63,7 +63,17 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 	if err != nil {
 		return nil, err
 	}
+	return n.files(ctx, userID, attempt, itemIDs, participantSessionID)
+}
+
+// files reads one attempt's uploaded files through an open native session.
+func (n *nqNative) files(ctx context.Context, userID int64, attempt int, itemIDs map[string]bool, participantSessionID string) ([]NewQuizFile, error) {
+	if userID <= 0 || attempt < 1 || len(itemIDs) == 0 {
+		return nil, &Error{Kind: "validation"}
+	}
+	c := n.client
 	httpc, backend, nativeToken := n.httpc, n.backend, n.token
+	var err error
 	participantSession := participantSessionID
 	if participantSession == "" {
 		type participant struct {
@@ -73,7 +83,7 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 			} `json:"participant_sessions"`
 		}
 		var participantRaw json.RawMessage
-		if err = secureJSON(ctx, httpc, http.MethodGet, backend+"/api/assignments/"+url.PathEscape(n.resource)+"/participants?no_pagination=true", "Bearer "+nativeToken, "application/json", nil, &participantRaw); err != nil {
+		if err = secureJSON(ctx, c, httpc, http.MethodGet, backend+"/api/assignments/"+url.PathEscape(n.resource)+"/participants?no_pagination=true", "Bearer "+nativeToken, "application/json", nil, &participantRaw); err != nil {
 			return nil, fmt.Errorf("participants step failed: %w", err)
 		}
 		var participants []participant
@@ -107,8 +117,8 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 	}
 	// The grading read (what SpeedGrader uses) carries each file's URL in the
 	// item results; the older results read is the fallback.
-	if err = secureJSON(ctx, httpc, http.MethodGet, backend+"/api/participant_sessions/"+url.PathEscape(participantSession)+"/grade", "Bearer "+nativeToken, "", nil, &result); err != nil {
-		if err = secureJSON(ctx, httpc, http.MethodGet, backend+"/api/participant_sessions/"+url.PathEscape(participantSession)+"/results", "Bearer "+nativeToken, "application/json", nil, &result); err != nil {
+	if err = secureJSON(ctx, c, httpc, http.MethodGet, backend+"/api/participant_sessions/"+url.PathEscape(participantSession)+"/grade", "Bearer "+nativeToken, "", nil, &result); err != nil {
+		if err = secureJSON(ctx, c, httpc, http.MethodGet, backend+"/api/participant_sessions/"+url.PathEscape(participantSession)+"/results", "Bearer "+nativeToken, "application/json", nil, &result); err != nil {
 			return nil, fmt.Errorf("participant results step failed: %w", err)
 		}
 	}
@@ -129,7 +139,7 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 			ID json.Number `json:"id"`
 		} `json:"authoritative_result"`
 	}
-	if err = secureJSON(ctx, httpc, http.MethodGet, quizHost+"/api/quiz_sessions/"+url.PathEscape(quizSession), result.Token, "Signature", nil, &session); err != nil {
+	if err = secureJSON(ctx, c, httpc, http.MethodGet, quizHost+"/api/quiz_sessions/"+url.PathEscape(quizSession), result.Token, "Signature", nil, &session); err != nil {
 		return nil, fmt.Errorf("quiz session step failed: %w", err)
 	}
 	if session.Authoritative.ID == "" {
@@ -144,7 +154,7 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 			Value json.RawMessage `json:"value"`
 		} `json:"scored_data"`
 	}
-	if err = secureJSON(ctx, httpc, http.MethodGet, quizHost+"/api/quiz_sessions/"+url.PathEscape(quizSession)+"/results/"+url.PathEscape(session.Authoritative.ID.String())+"/session_item_results", result.Token, "Signature", nil, &itemResults); err != nil {
+	if err = secureJSON(ctx, c, httpc, http.MethodGet, quizHost+"/api/quiz_sessions/"+url.PathEscape(quizSession)+"/results/"+url.PathEscape(session.Authoritative.ID.String())+"/session_item_results", result.Token, "Signature", nil, &itemResults); err != nil {
 		return nil, fmt.Errorf("item results step failed: %w", err)
 	}
 	var files []NewQuizFile
@@ -289,7 +299,7 @@ func (c *Client) newQuizNative(ctx context.Context, courseID, assignmentID int64
 		Token string `json:"token"`
 	}
 	jwtPath := "/api/v1/jwts?canvas_audience=false&workflows[]=new_quizzes_native_launch&context_id=" + url.QueryEscape(config.AccountID.String()) + "&context_type=account"
-	if err = secureJSON(ctx, httpc, http.MethodPost, c.Origin()+jwtPath, "Bearer "+c.token, "", map[string]any{}, &jwt); err != nil || jwt.Token == "" {
+	if err = secureJSON(ctx, c, httpc, http.MethodPost, c.Origin()+jwtPath, "Bearer "+c.token, "", map[string]any{}, &jwt); err != nil || jwt.Token == "" {
 		var ce *Error
 		if errors.As(err, &ce) && ce.Kind == "authentication" {
 			return nil, ce
@@ -304,7 +314,7 @@ func (c *Client) newQuizNative(ctx context.Context, courseID, assignmentID int64
 			ResourceID nativeResourceID `json:"resourceId"`
 		} `json:"entry_path"`
 	}
-	if err = secureJSON(ctx, httpc, http.MethodPost, backend+"/api/native/launch", "Bearer "+jwt.Token, "", map[string]any{"params": json.RawMessage(config.NewQuizzes.Params), "signature": config.NewQuizzes.Signature}, &native, c.origin.Host); err != nil {
+	if err = secureJSON(ctx, c, httpc, http.MethodPost, backend+"/api/native/launch", "Bearer "+jwt.Token, "", map[string]any{"params": json.RawMessage(config.NewQuizzes.Params), "signature": config.NewQuizzes.Signature}, &native, c.origin.Host); err != nil {
 		return nil, fmt.Errorf("native launch step failed: %w", err)
 	}
 	nativeToken := native.Token
@@ -329,21 +339,68 @@ func trustedInstructureOrigin(raw string) (string, error) {
 	return strings.TrimRight(u.String(), "/"), nil
 }
 
-func secureJSON(ctx context.Context, hc *http.Client, method, rawURL, authorization, authType string, body any, out any, domainHeader ...string) error {
+// secureJSON sends one JSON request to a native New Quizzes host. With a
+// client it shares that client's request slots and throttle, so native calls
+// count toward the same four-at-a-time limit as Canvas calls, and a read is
+// retried like a Canvas read (rate limit, server error, lost connection).
+// Writes are sent once.
+func secureJSON(ctx context.Context, c *Client, hc *http.Client, method, rawURL, authorization, authType string, body any, out any, domainHeader ...string) error {
+	attempts := 1
+	if method == http.MethodGet {
+		attempts = 3
+	}
+	backoff := 250 * time.Millisecond
+	if c != nil && c.backoff > 0 {
+		backoff = c.backoff
+	}
+	for attempt := 0; ; attempt++ {
+		if c != nil {
+			if err := c.acquire(ctx); err != nil {
+				return err
+			}
+		}
+		header, err := secureJSONOnce(ctx, hc, method, rawURL, authorization, authType, body, out, domainHeader...)
+		if c != nil {
+			c.release()
+		}
+		if err == nil {
+			return nil
+		}
+		var ce *Error
+		if !errors.As(err, &ce) {
+			return err
+		}
+		delay := retryDelay(header, backoff<<attempt)
+		if ce.Kind == "throttled" && c != nil {
+			c.throttle(delay)
+		}
+		retry := ce.Kind == "throttled" || (ce.Kind == "transport" && ctx.Err() == nil) || ce.Status == 500 || ce.Status == 502 || ce.Status == 503 || ce.Status == 504
+		if !retry || attempt+1 >= attempts {
+			return err
+		}
+		if err := pause(ctx, delay); err != nil {
+			return err
+		}
+	}
+}
+
+// secureJSONOnce sends the request once and returns the response header of
+// a failed answer, for Retry-After.
+func secureJSONOnce(ctx context.Context, hc *http.Client, method, rawURL, authorization, authType string, body any, out any, domainHeader ...string) (http.Header, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Scheme != "https" || u.User != nil || u.Host == "" {
-		return &Error{Kind: "validation"}
+		return nil, &Error{Kind: "validation"}
 	}
 	var data []byte
 	if body != nil {
 		data, err = json.Marshal(body)
 		if err != nil {
-			return &Error{Kind: "validation"}
+			return nil, &Error{Kind: "validation"}
 		}
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), bytes.NewReader(data))
 	if err != nil {
-		return &Error{Kind: "validation"}
+		return nil, &Error{Kind: "validation"}
 	}
 	req.Header.Set("Accept", "application/json")
 	if authorization != "" {
@@ -360,26 +417,29 @@ func secureJSON(ctx context.Context, hc *http.Client, method, rawURL, authorizat
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return &Error{Kind: "transport"}
+		return nil, &Error{Kind: "transport"}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		if resp.StatusCode == http.StatusUnauthorized {
-			return &Error{Kind: "authentication", Status: resp.StatusCode}
+		switch resp.StatusCode {
+		case http.StatusUnauthorized:
+			return resp.Header, &Error{Kind: "authentication", Status: resp.StatusCode}
+		case http.StatusTooManyRequests:
+			return resp.Header, &Error{Kind: "throttled", Status: resp.StatusCode}
 		}
-		return &Error{Kind: "validation", Status: resp.StatusCode}
+		return resp.Header, &Error{Kind: "validation", Status: resp.StatusCode}
 	}
 	// A 2xx whose body cannot be used keeps its status so a write caller can
 	// tell it from a request that never reached the server.
 	data, err = io.ReadAll(io.LimitReader(resp.Body, maxJSON+1))
 	if err != nil || len(data) > maxJSON {
-		return &Error{Kind: "validation", Status: resp.StatusCode}
+		return nil, &Error{Kind: "validation", Status: resp.StatusCode}
 	}
 	if json.Unmarshal(data, out) != nil {
-		return &Error{Kind: "validation", Status: resp.StatusCode}
+		return nil, &Error{Kind: "validation", Status: resp.StatusCode}
 	}
-	return nil
+	return nil, nil
 }
 
 // canvasENV extracts and decodes the JSON object assigned to the launch page's

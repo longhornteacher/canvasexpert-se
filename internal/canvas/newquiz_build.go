@@ -35,7 +35,7 @@ func (c *Client) OpenNewQuizBuild(ctx context.Context, courseID, assignmentID in
 		Token  string           `json:"token"`
 		QuizID nativeResourceID `json:"quiz_api_quiz_id"`
 	}
-	if err = secureJSON(ctx, n.httpc, http.MethodGet, n.backend+"/api/assignments/"+url.PathEscape(n.resource)+"?scope=quiz.build", "Bearer "+n.token, "", nil, &sess); err != nil {
+	if err = secureJSON(ctx, n.client, n.httpc, http.MethodGet, n.backend+"/api/assignments/"+url.PathEscape(n.resource)+"?scope=quiz.build", "Bearer "+n.token, "", nil, &sess); err != nil {
 		return nil, c.mapNative(fmt.Errorf("quiz editor session step failed: %w", err))
 	}
 	host, err := trustedInstructureOrigin(sess.Host)
@@ -94,7 +94,7 @@ func (b *NewQuizBuild) LinkToStimulus(ctx context.Context, itemEntryID, stimulus
 
 func (b *NewQuizBuild) write(ctx context.Context, method, suffix string, body, out any) error {
 	path := "/api/quizzes/" + url.PathEscape(b.quizID) + suffix
-	err := secureJSON(context.WithoutCancel(ctx), b.n.httpc, method, b.host+path, b.token, "Signature", body, out)
+	err := secureJSON(context.WithoutCancel(ctx), b.n.client, b.n.httpc, method, b.host+path, b.token, "Signature", body, out)
 	if err != nil {
 		var ce *Error
 		if errors.As(err, &ce) && (ce.Kind == "transport" || writeStatusUncertain(ce.Status) || (ce.Status >= 200 && ce.Status < 300)) {
