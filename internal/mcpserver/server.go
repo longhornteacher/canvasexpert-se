@@ -624,9 +624,15 @@ func externalTool(name string) bool {
 func boolPointer(v bool) *bool { return &v }
 
 func addTool[In any](server *mcp.Server, name, description string, annotations mcp.ToolAnnotations, fn func(context.Context, *mcp.CallToolRequest, In) (TextOutput, error)) {
-	mcp.AddTool(server, &mcp.Tool{Name: name, Description: description, Annotations: &annotations}, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, TextOutput, error) {
+	// Results are prose or Markdown, so they go out as one plain text block. Out is
+	// any on purpose: the SDK then adds no output schema to the tool list and no
+	// second structured copy of every result.
+	mcp.AddTool(server, &mcp.Tool{Name: name, Description: description, Annotations: &annotations}, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
 		out, err := fn(ctx, req, in)
-		return nil, out, err
+		if err != nil {
+			return nil, nil, err
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: resultText(out)}}}, nil, nil
 	})
 }
 

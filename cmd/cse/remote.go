@@ -1214,7 +1214,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		for _, m := range report.Warnings {
 			fmt.Fprintln(progress, "Note:", m)
 		}
-		fmt.Fprintf(progress, "Discovery: %s, %d HTTP requests; fetch/download: %s, %d HTTP requests\n", report.DiscoveryElapsed.Round(time.Millisecond), report.DiscoveryRequests, report.FetchElapsed.Round(time.Millisecond), report.FetchRequests)
+		fmt.Fprintf(status, "Discovery: %s, %d HTTP requests; fetch/download: %s, %d HTTP requests\n", report.DiscoveryElapsed.Round(time.Millisecond), report.DiscoveryRequests, report.FetchElapsed.Round(time.Millisecond), report.FetchRequests)
 		if e != nil {
 			var partial *workflow.PullIncompleteError
 			if errors.As(e, &partial) {

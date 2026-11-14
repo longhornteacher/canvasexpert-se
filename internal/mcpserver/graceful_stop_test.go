@@ -72,7 +72,7 @@ func TestPartialPullSurvivesCommandAndSDK(t *testing.T) {
 		t.Fatalf("partial pull became a tool failure: %+v %v", result, err)
 	}
 	content, ok := result.Content[0].(*mcp.TextContent)
-	if !ok || !strings.Contains(content.Text, "courses/Synthetic/packet.md") || !strings.Contains(content.Text, "failed assignment 11") || !strings.Contains(content.Text, `"state":"incomplete"`) || !strings.Contains(content.Text, `"outcome":"partial"`) {
+	if !ok || !strings.Contains(content.Text, "courses/Synthetic/packet.md") || !strings.Contains(content.Text, "failed assignment 11") || !strings.HasPrefix(content.Text, "state: incomplete\noutcome: partial\n\n") {
 		t.Fatalf("partial packets/outcomes lost through SDK: %+v", result)
 	}
 }

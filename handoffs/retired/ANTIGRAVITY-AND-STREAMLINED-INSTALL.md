@@ -13,7 +13,7 @@ This handoff details the design and implementation plan for three interconnected
 
 ## Architectural Separation
 
-Per [`AGENTS.md`](file:///d:/Development%20Projects/CanvasExpert-SE/AGENTS.md) and [`ARCHITECTURE.md`](file:///d:/Development%20Projects/CanvasExpert-SE/ARCHITECTURE.md):
+Per [`AGENTS.md`](../../AGENTS.md) and [`ARCHITECTURE.md`](../../docs/ARCHITECTURE.md):
 * **Engine (Go code in `cmd/`, `internal/`)**: Owns client configuration parsing, safe file merging, backup preservation, process launching, and diagnostics. No instructional judgment.
 * **Playbooks & Context (`workspace-template/`)**: Owns the teacher conversation, plain-language scripts, contextual guidance, course nickname proposals, pedagogical standards, and task kickoffs.
 * **Shared Authority**: Credentials, courses (`context/courses.md`), and teacher preferences (`context/`) stay in **Install**. When multiple clients are registered, they all point to the same Install `--workspace`, sharing the single Canvas credential and course list with zero duplicate setup.
@@ -102,7 +102,7 @@ Do not leave the user at a blank prompt, but do not overwhelm them with a 20-que
 * Capture context **just-in-time** when a specific activity is triggered:
   * On first page build: ask about visual style (e.g., *Clean & Academic* vs. *Warm & Engaging*).
   * On first grading session: ask about rubric scale / feedback style.
-* Automatically save these preferences to [`context/teaching-profile.md`](file:///d:/Development%20Projects/CanvasExpert-SE/workspace-template/context/teaching-profile.md) and [`context/grading.md`](file:///d:/Development%20Projects/CanvasExpert-SE/workspace-template/context/grading.md) so they persist across future sessions.
+* Automatically save these preferences to [`context/teaching-profile.md`](../../workspace-template/context/teaching-profile.md) and [`context/grading.md`](../../workspace-template/context/grading.md) so they persist across future sessions.
 
 ---
 
@@ -248,4 +248,4 @@ A dedicated `TEACHER.md` document provides the pedagogical operating system for 
 ### Step 5: Verification & Documentation
 1. Run local test suite: `go test ./internal/installation/... ./internal/localui/... ./cmd/cse/...`.
 2. Verify with mock configs for all three clients in a temporary fixture.
-3. Update [`docs/engine-capabilities.md`](file:///d:/Development%20Projects/CanvasExpert-SE/docs/engine-capabilities.md) and [`internal/localui/capabilities.go`](file:///d:/Development%20Projects/CanvasExpert-SE/internal/localui/capabilities.go) to document Antigravity support, auto-client installation, and built-in pedagogical standards.
+3. Update [`docs/engine-capabilities.md`](../../docs/engine-capabilities.md) and [`internal/localui/capabilities.go`](../../internal/localui/capabilities.go) to document Antigravity support, auto-client installation, and built-in pedagogical standards.

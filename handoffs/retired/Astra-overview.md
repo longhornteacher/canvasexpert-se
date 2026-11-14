@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** Planning review superseded by the completed playbook-orchestration slices. Unselected proposals are not an approved backlog. Remaining live/client evidence and scope limits are recorded in [pending observations](../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # Astra-overview: Playbook orchestration efficiency
 
 Prepared 2026-11-14 for Fable's review. This is a strategic review handoff, not an approved implementation specification.

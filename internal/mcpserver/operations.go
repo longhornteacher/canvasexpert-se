@@ -514,6 +514,9 @@ func (s *Server) registerOperationTools(server *mcp.Server) {
 		}
 		result, err := s.command(ctx, op)
 		if op == "version" {
+			// The dependency list is diagnostics (the CLI `version` still prints it); the agent's
+			// session-start check needs the build identity and install_kind.
+			result.Text = withoutDependencyLines(result.Text)
 			result.Text = "loaded_adapter: " + AdapterVersion() + "\nchild_engine:\n" + result.Text
 		}
 		return result, err
@@ -599,4 +602,15 @@ func quizPointsArgs(course, quiz string, changes []QuizPointChange) ([]string, e
 		args = append(args, fmt.Sprintf("%d=%s", change.Position, points.String()))
 	}
 	return args, nil
+}
+
+func withoutDependencyLines(text string) string {
+	lines := strings.Split(text, "\n")
+	kept := lines[:0]
+	for _, line := range lines {
+		if !strings.HasPrefix(strings.TrimSpace(line), "dependency ") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
 }

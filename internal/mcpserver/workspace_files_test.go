@@ -129,13 +129,7 @@ func TestWorkspaceAssetRangedRead(t *testing.T) {
 		if result.IsError != wantError {
 			t.Fatalf("isError=%v content=%v", result.IsError, result.Content)
 		}
-		var wrapped struct {
-			Text string `json:"text"`
-		}
-		if err := json.Unmarshal([]byte(result.Content[0].(*mcp.TextContent).Text), &wrapped); err != nil {
-			return result.Content[0].(*mcp.TextContent).Text
-		}
-		return wrapped.Text
+		return result.Content[0].(*mcp.TextContent).Text
 	}
 	dir := filepath.Join(s.root, "courses", "c", "packet")
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -416,14 +410,7 @@ func TestMCPSharedRulesRefreshesAcrossConnectedClients(t *testing.T) {
 		if wantError {
 			return ""
 		}
-		text := result.Content[0].(*mcp.TextContent).Text
-		var structured map[string]any
-		if json.Unmarshal([]byte(text), &structured) == nil {
-			if value, ok := structured["text"].(string); ok {
-				return value
-			}
-		}
-		return text
+		return result.Content[0].(*mcp.TextContent).Text
 	}
 	readA := call(a, "read_workspace_file", map[string]any{"path": "context/grading.md"}, false)
 	if !strings.Contains(readA, "authority_root: "+syncRoot) || !strings.Contains(readA, "initial shared voice") {

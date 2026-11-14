@@ -2,7 +2,7 @@
 
 # HANDOFF B: Native New Quiz writes honor the write contract
 
-Date: 2026-11-04. Slice B of the [unified architecture review](../Unified%20Architecture%20Review.md). Layer: **Engine** (`internal/canvas`, `internal/workflow`). No playbook change expected.
+Date: 2026-11-04. Slice B of the [unified architecture review](Unified%20Architecture%20Review.md). Layer: **Engine** (`internal/canvas`, `internal/workflow`). No playbook change expected.
 
 Before starting: `git fetch`, bring `dev` up to date, read root `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/SCORING-RULES.md`, [docs/team/README.md](../../docs/team/README.md) and the [shared execution notes](../README.md#execution-notes-for-the-active-handoffs). Facts below were mapped at `2818e36`; line numbers are hints, so find the symbols with `rg`.
 

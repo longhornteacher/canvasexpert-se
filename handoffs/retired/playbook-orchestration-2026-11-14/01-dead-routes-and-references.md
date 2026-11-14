@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** All five slices are committed: c8b5a17, 612629d, 23202b2, 9631f84 and 5dc068c. This is historical execution text, not work to repeat. Remaining live/client evidence and scope limits are recorded in [pending observations](../../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # Slice 1: dead routes and focused references
 
 Playbook text only. Files: `workspace-template/playbooks/edit.md`, `native-content.md`, `authoring.md`, `quizzes.md`, `score.md`.

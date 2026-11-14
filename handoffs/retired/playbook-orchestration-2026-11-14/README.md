@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** All five slices are committed: c8b5a17, 612629d, 23202b2, 9631f84 and 5dc068c. This is historical execution text, not work to repeat. Remaining live/client evidence and scope limits are recorded in [pending observations](../../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # Playbook orchestration: five slices for a Sonnet session
 
 Development handoff, 2026-11-14. Planned by Fable from [Astra's overview](../Astra-overview.md), checked against Dev at `3a0d57e` (2.4.0). The developer made the policy decisions; they are recorded in each slice and are settled. You are executing, not redesigning.

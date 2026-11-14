@@ -17,7 +17,7 @@ Rule (developer, 2026-11-07): "Engine keeps factual/deterministic things. Playbo
 | Holding a student whose evidence is incomplete; refusing wording with aliases, refs or addresses | When to send (`send_when`, per-student overrides), recipients (`parents_only`) |
 | Real-name substitution, recipient routing, teammate reply-to note, Outlook delivery, outcomes and no-resend | Anything else a family reads |
 
-Before 2026-11-07 the Engine also wrote the subject, section headings, an AI disclaimer, the weekly email's sentences, and the correction, Due Soon and skip policies. Those are gone from the Engine; the [handoff](../handoffs/active/HANDOFF_Parent_Email_Content_to_Playbook_2026-11-07.md) records the audit.
+Before 2026-11-07 the Engine also wrote the subject, section headings, an AI disclaimer, the weekly email's sentences, and the correction, Due Soon and skip policies. Those are gone from the Engine; the [handoff](../handoffs/retired/HANDOFF_Parent_Email_Content_to_Playbook_2026-11-07.md) records the audit.
 
 ## Current requirements (teacher, 2026-11-07)
 

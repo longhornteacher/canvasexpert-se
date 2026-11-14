@@ -52,16 +52,10 @@ func TestEngineInfoPlaybookStatusAndReplacement(t *testing.T) {
 		return r.Content[0].(*mcp.TextContent).Text
 	}
 	text := call(map[string]any{"operation": "playbooks-status"}, false)
-	var wrapped struct {
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal([]byte(text), &wrapped); err != nil {
-		t.Fatal(err)
-	}
 	var status struct {
 		Files []playbooks.StatusRow `json:"files"`
 	}
-	if err := json.Unmarshal([]byte(wrapped.Text), &status); err != nil {
+	if err := json.Unmarshal([]byte(text), &status); err != nil {
 		t.Fatal(err)
 	}
 	var hash string

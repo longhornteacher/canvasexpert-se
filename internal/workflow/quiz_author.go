@@ -296,28 +296,43 @@ func (s *Service) PushQuiz(ctx context.Context, nickname, path string, options .
 	report.ItemsTotal = len(items)
 	base := fmt.Sprintf("/api/quiz/v1/courses/%d/quizzes", course.ID)
 	rec := readSidecar(path)
-	restricted := set.Audience != nil || rec.Audience != nil
-	candidates, e := s.savedQuizCandidates()
+	_, e = s.savedQuizCandidates()
 	if e != nil {
 		return report, e
 	}
-	tracked := restricted || len(candidates) > 0 || rec.Stages != nil || opts.SkipAccommodations || set.RetakeFor > 0
-	if rec.Instance != "" && (rec.Instance != s.Client.Origin() || rec.CourseID != 0 && rec.CourseID != course.ID) {
+	if rec.Instance != "" && rec.Instance != s.Client.Origin() || rec.CourseID != 0 && rec.CourseID != course.ID {
 		return report, fmt.Errorf("saved quiz sidecar belongs to a different Canvas/course; it was not reused")
 	}
-	if tracked {
-		if rec.Instance == "" {
-			rec.Instance, rec.CourseID = s.Client.Origin(), course.ID
+	// Older receipts did not bind the ID to a course. Verify it through the
+	// course-scoped quiz listing before adopting that identity.
+	if rec.AssignmentID > 0 && (rec.Instance == "" || rec.CourseID == 0) {
+		var quizzes []struct {
+			ID json.Number `json:"id"`
 		}
-		if rec.Stages == nil {
-			rec.Stages = &quizStages{}
+		if e = s.Client.List(ctx, base, &quizzes); e != nil {
+			return report, fmt.Errorf("cannot verify the saved quiz in the requested course: %w", e)
 		}
-		if rec.Audience == nil {
-			rec.Audience = set.Audience
+		found := false
+		for _, quiz := range quizzes {
+			id, _ := quiz.ID.Int64()
+			if id == rec.AssignmentID {
+				found = true
+				break
+			}
 		}
-		if err := writeSidecar(path, rec); err != nil {
-			return report, err
+		if !found {
+			return report, fmt.Errorf("saved quiz %d could not be verified in the requested course; no writes were made", rec.AssignmentID)
 		}
+	}
+	rec.Instance, rec.CourseID = s.Client.Origin(), course.ID
+	if rec.Stages == nil {
+		rec.Stages = &quizStages{}
+	}
+	if rec.Audience == nil {
+		rec.Audience = set.Audience
+	}
+	if err := writeSidecar(path, rec); err != nil {
+		return report, err
 	}
 	id, existing := rec.AssignmentID, 0
 	if id == 0 && rec.Creating != "" {
@@ -817,6 +832,9 @@ func (s *Service) finishQuiz(ctx context.Context, course domain.Course, id int64
 		if !complete {
 			return false, nil
 		}
+	}
+	if stages != nil && definite(stages.Publication) {
+		report.Published = true
 	}
 	if set.Published && (stages == nil || !definite(stages.Publication)) {
 		var a Assignment

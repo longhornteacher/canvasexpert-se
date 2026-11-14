@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** Implementation is delivered or superseded by current contracts. Historical instructions and status statements below are not current execution directions. Remaining live/client evidence and scope limits are recorded in [pending observations](../../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # Slice 02 - Retake quiz creation and assignment
 
 > **Superseded in part 2026-11-13:** see [HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md](../HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md) section 2. The retake is created privately during Major scoring and `retake assign` / `retake apply` run only on explicit teacher direction; any wording below that triggers them automatically after grading, a low grade or a saved `retakes` block is superseded. Engine operation behavior is otherwise unchanged.

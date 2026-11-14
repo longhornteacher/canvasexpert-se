@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** Architecture slices A-I are complete and retired; this preserves the agreed decisions and review history. Remaining live/client evidence and scope limits are recorded in [pending observations](../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # Unified architecture handoff — 2026-11-04
 
 ## Agreements first
@@ -141,7 +143,7 @@ Decide supported cross-PC continuation and the evidence needed for a useful warn
 
 ## Proposed implementation order after direction is agreed
 
-Execution handoffs for B–I are in `handoffs/active/` (`HANDOFF_<slice>_…_2026-11-04.md`) and listed in the [handoff index](README.md). They carry the current code facts and supersede this section's candidate wording where they differ.
+Execution handoffs for B–I are in `handoffs/active/` (`HANDOFF_<slice>_…_2026-11-04.md`) and listed in the [handoff index](../README.md). They carry the current code facts and supersede this section's candidate wording where they differ.
 
 Updated 2026-11-04 to follow the developer decisions above:
 

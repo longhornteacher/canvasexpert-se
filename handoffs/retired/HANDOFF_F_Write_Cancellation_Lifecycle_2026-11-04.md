@@ -2,7 +2,7 @@
 
 # HANDOFF F: What cancelling a write means (spec first)
 
-Date: 2026-11-04. Slice F of the [unified architecture review](../Unified%20Architecture%20Review.md). Layer: **Engine / MCP adapter** (`internal/mcpserver`, CLI exit codes).
+Date: 2026-11-04. Slice F of the [unified architecture review](Unified%20Architecture%20Review.md). Layer: **Engine / MCP adapter** (`internal/mcpserver`, CLI exit codes).
 
 Developer decision 7: agree the lifecycle first, then reuse existing task/status and receipt mechanisms. A cancelled batch must not silently continue all writes just because its context changed. So this handoff's first deliverable is **a short spec the developer approves**; code follows only that.
 

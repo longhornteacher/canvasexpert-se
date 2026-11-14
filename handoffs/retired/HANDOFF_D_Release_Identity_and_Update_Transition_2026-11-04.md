@@ -2,7 +2,7 @@
 
 # HANDOFF D: One artifact set per release; a coherent update transition
 
-Date: 2026-11-04. Slice D of the [unified architecture review](../Unified%20Architecture%20Review.md). Layer: **Dev packaging scripts** (D1) and **Engine update lifecycle** (D2).
+Date: 2026-11-04. Slice D of the [unified architecture review](Unified%20Architecture%20Review.md). Layer: **Dev packaging scripts** (D1) and **Engine update lifecycle** (D2).
 
 Developer decision 8: fix artifact immutability independently, and inspect and specify the smallest coherent update transition before adopting Engine-first as the solution. So:
 - **D1 is implementation.**

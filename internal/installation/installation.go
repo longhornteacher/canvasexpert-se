@@ -514,6 +514,8 @@ func compactEngineVersion(text string) string {
 }
 
 func replyText(response *mcp.CallToolResult) string {
+	// Results are plain text. An older adapter wraps the text as {"text": ...},
+	// in structuredContent and in the text block; read that shape too.
 	b, _ := json.Marshal(response.StructuredContent)
 	var out struct {
 		Text string `json:"text"`
@@ -523,9 +525,10 @@ func replyText(response *mcp.CallToolResult) string {
 	}
 	for _, content := range response.Content {
 		if text, ok := content.(*mcp.TextContent); ok {
-			if json.Unmarshal([]byte(text.Text), &out) == nil {
+			if json.Unmarshal([]byte(text.Text), &out) == nil && out.Text != "" {
 				return out.Text
 			}
+			return text.Text
 		}
 	}
 	return ""

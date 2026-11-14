@@ -1,8 +1,10 @@
+> **Retired 2026-11-14.** Implementation is delivered or superseded by current contracts. Historical instructions and status statements below are not current execution directions. Remaining live/client evidence and scope limits are recorded in [pending observations](../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # HANDOFF: Finish New Quiz accommodation writes; post New Quiz item scores
 
 Date: 2026-10-28. To: whoever picks this up in Dev (CE-SE repo, `dev` branch). Run `git fetch` and bring `dev` up to date before starting (root `AGENTS.md`).
 
-This handoff carries the open remainder of two retired handoffs: [Canvas 2026 additions](../retired/HANDOFF_Canvas_2026_Additions_2026-10-28.md) (Parts B and C) and [Retire review page and New Quiz item scores](../retired/HANDOFF_Retire_Review_Page_and_New_Quiz_Item_Scores_2026-10-28.md) (Part 2). Their execution records hold the dated evidence for what landed; this file is the instruction for what is left. Read the [shared execution notes](../README.md#execution-notes-for-the-active-handoffs) for the check commands and live-write rules.
+This handoff carries the open remainder of two retired handoffs: [Canvas 2026 additions](HANDOFF_Canvas_2026_Additions_2026-10-28.md) (Parts B and C) and [Retire review page and New Quiz item scores](HANDOFF_Retire_Review_Page_and_New_Quiz_Item_Scores_2026-10-28.md) (Part 2). Their execution records hold the dated evidence for what landed; this file is the instruction for what is left. Read the [shared execution notes](../README.md#execution-notes-for-the-active-handoffs) for the check commands and live-write rules.
 
 **Status 2026-10-29:** Part A's Q6 is answered (teacher-confirmed 2026-10-29); only Q7, the course/quiz combination, is open, and course sync stays frozen. Part B is **complete** (2026-10-29): Step A captured, Engine built, L1–L8 passed live, and the playbooks use item scores (§3.4 record). Do not guess an undocumented protocol and write to Canvas to "see what happens"; do not test on a real student's record or attempt. When the evidence below is unavailable, stop and say exactly which observation is missing.
 

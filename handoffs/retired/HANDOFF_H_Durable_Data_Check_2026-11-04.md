@@ -2,7 +2,7 @@
 
 # HANDOFF H: Durable teacher data is stored and retrievable
 
-Date: 2026-11-04. Slice H of the [unified architecture review](../Unified%20Architecture%20Review.md), reframed by developer decisions 1 and 4. Layer: **Engine storage** (`internal/workspace`, `internal/workflow`) and **docs**. It is mostly verification; fix only a concrete gap.
+Date: 2026-11-04. Slice H of the [unified architecture review](Unified%20Architecture%20Review.md), reframed by developer decisions 1 and 4. Layer: **Engine storage** (`internal/workspace`, `internal/workflow`) and **docs**. It is mostly verification; fix only a concrete gap.
 
 ## Decision (developer, 2026-11-04)
 

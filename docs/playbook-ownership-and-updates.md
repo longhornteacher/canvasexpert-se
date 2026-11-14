@@ -66,7 +66,7 @@ Neither choice makes that decision disposable during a product update.
 - Use school-day lateness, excluding weekends and calendar breaks;
   early-release days count as full days.
 - Superseded 2026-11-13 (see
-  [the handoff](../handoffs/active/HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md),
+  [the handoff](../handoffs/retired/HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md),
   section 2): the earlier default of corrections open for 14 calendar days,
   advertised as "Corrections available" in every assignment, is gone. With no
   explicit teacher correction policy, a new assignment, quiz or feedback comment

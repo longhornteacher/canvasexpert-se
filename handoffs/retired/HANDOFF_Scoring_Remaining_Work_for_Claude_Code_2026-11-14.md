@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** Implementation is delivered or superseded by current contracts. Historical instructions and status statements below are not current execution directions. Remaining live/client evidence and scope limits are recorded in [pending observations](../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # Remaining scoring work for Claude Code
 
 Development handoff, 2026-11-14 (America/Chicago). The developer requested this handoff after batch 1 was implemented and reviewed. Start with batch 2. Batch 3 is a separate bounded verification task. The live report diagnosis can proceed independently when its specific access scope is authorized. Smaller observations below are not prerequisites for either batch.
@@ -8,7 +10,7 @@ Work in **Dev**, `D:\Development Projects\CanvasExpert-SE`. Read the current roo
 
 The developer's working arrangement is senior-agent planning with implementation delegated to capable execution agents. This document supplies execution direction; inspect the actual current source and use focused implementations and tests. Keep educational judgment in playbooks/context, arithmetic and guarded Canvas access in the Engine.
 
-Find delivery commits through `git log --oneline -- handoffs/active/HANDOFF_Scoring_Pull_Isolation_2026-11-14.md`. Dev began this work at `1304b71`, equal to fetched `origin/dev`; the commit carrying this handoff includes batch 1. This work has not been released or installed in UserInstall. The incident runtime was release 2.2.2, source `1e6b735b502d`, with userinstall commit `e3c5dd8`. A teacher's unchanged installed binary does not contain the Dev fix.
+Find delivery commits through `git log --oneline -- handoffs/retired/HANDOFF_Scoring_Pull_Isolation_2026-11-14.md`. Dev began this work at `1304b71`, equal to fetched `origin/dev`; the commit carrying this handoff includes batch 1. This work has not been released or installed in UserInstall. The incident runtime was release 2.2.2, source `1e6b735b502d`, with userinstall commit `e3c5dd8`. A teacher's unchanged installed binary does not contain the Dev fix.
 
 This handoff authorizes no real grade/comment writes, family sends, release, binary replacement or changes to teacher setup. Saved credentials and historical IDs are not live authorization. Prepare concrete local changes and a reviewable probe plan before requesting the live scope required by the current scoring rule. Private evidence, receipts, student aliases/names, responses, signed URLs and configuration stay outside Dev. Use synthetic fixtures.
 
