@@ -60,6 +60,8 @@ Deliver code, a concise contract/probe record, focused tests, matching help/exam
 
 ## Batch 3: verify original upload delivery and visual inspection
 
+**Run 2026-11-14 (synthetic only):** ranged MCP transfer and SHA-256 matched for a PNG, a text PDF and an image-only PDF; the client rendered the PNG and the text PDF. Scanned-PDF page rendering is unverified on this machine (no poppler); no transfer or count-labeling gap was found, so no code changed. Still not tried: a real student original, a file near the cap, slide decks, other clients.
+
 Much of the code is already built: commit `1304b71` saves originals of every type under 150,000,000 bytes per file, distinguishes `downloaded`/text-preview `readable` from unavailable files, and adds ranged MCP reads for larger originals. It removed the New Quiz 50 MiB/file and 500 MiB/pull limits. Inspect the current implementation and the November 13 handoff as historical context before proposing more code.
 
 Start with synthetic text/scanned PDFs and PNG posters. Demonstrate the intended client can receive an original through the supported runtime and actually open/render the pages or image. Use existing file/PDF/image tools. A base64 round trip or a local path alone does not prove that a remote client can inspect it. If a destination client is unavailable, report the client-specific evidence limit and continue any independent local verification.
