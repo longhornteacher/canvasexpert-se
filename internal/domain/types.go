@@ -660,6 +660,10 @@ type CommentOnlyOperation struct {
 	// QuizScore is the quiz total Canvas reported once item scores landed,
 	// as X/Y; the whole-assignment comment states it. The Engine owns it.
 	QuizScore string `yaml:"quiz_score,omitempty"`
+	// QuizFloorAdded is the fudge-point raise the Engine wrote for the honest-
+	// effort floor in this save, as a number; the whole-assignment comment
+	// says so, and a later re-score reads it back to unwind it. Engine-owned.
+	QuizFloorAdded string `yaml:"quiz_floor_added,omitempty"`
 }
 
 func (c CommentOnlyOperation) FeedbackOnly() bool {

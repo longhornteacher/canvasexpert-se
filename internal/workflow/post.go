@@ -327,6 +327,9 @@ func (s *Service) postCommentOnly(ctx context.Context, doc *domain.ResultsDocume
 			return save()
 		}
 		whole := fmt.Sprintf("Score: %s (attempt %d)", c.QuizScore, c.Attempt.Attempt)
+		if c.QuizFloorAdded != "" {
+			whole += "\n" + floorCommentPrefix + "+" + c.QuizFloorAdded
+		}
 		if strings.TrimSpace(text) != "" {
 			whole += "\n\n" + strings.TrimSpace(text)
 		}
