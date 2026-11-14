@@ -294,9 +294,7 @@ func withFloor(s *Service, percent string) {
 }
 
 func TestQuizFloorRaisesTheTotalByTheShortfallOnceAndKeepsItemScores(t *testing.T) {
-	quizFloorWrites = true
-	t.Cleanup(func() { quizFloorWrites = false })
-	fixtureHonest = true
+		fixtureHonest = true
 	s, path, posts, comments, body, commentText := itemScoreFixture(t, "15", false, "Strong evidence overall.")
 	withFloor(s, "95") // minimum 19 of 20; items give 5+12 = 17
 	report, err := s.Post(context.Background(), path)
@@ -316,9 +314,7 @@ func TestQuizFloorRaisesTheTotalByTheShortfallOnceAndKeepsItemScores(t *testing.
 }
 
 func TestQuizFloorAddsNothingWhenTheTotalAlreadyMeetsIt(t *testing.T) {
-	quizFloorWrites = true
-	t.Cleanup(func() { quizFloorWrites = false })
-	fixtureHonest = true
+		fixtureHonest = true
 	s, path, _, _, body, _ := itemScoreFixture(t, "15", false, "Strong evidence overall.")
 	withFloor(s, "50") // minimum 10; total 17
 	if _, err := s.Post(context.Background(), path); err != nil {
@@ -330,9 +326,7 @@ func TestQuizFloorAddsNothingWhenTheTotalAlreadyMeetsIt(t *testing.T) {
 }
 
 func TestQuizFloorNeedsAnExplicitJudgmentAndTheCourseFloor(t *testing.T) {
-	quizFloorWrites = true
-	t.Cleanup(func() { quizFloorWrites = false })
-	fixtureHonest = false
+		fixtureHonest = false
 	s, path, _, _, body, _ := itemScoreFixture(t, "15", false, "Strong evidence overall.")
 	withFloor(s, "95") // floor configured, no honest_effort
 	if _, err := s.Post(context.Background(), path); err != nil || (*body)["fudge_points"] != nil {
@@ -348,7 +342,9 @@ func TestQuizFloorNeedsAnExplicitJudgmentAndTheCourseFloor(t *testing.T) {
 	}
 }
 
-func TestQuizFloorStaysAdviceUntilTheProbeEnablesWrites(t *testing.T) {
+func TestQuizFloorStaysAdviceWhenWritesAreOff(t *testing.T) {
+	quizFloorWrites = false
+	t.Cleanup(func() { quizFloorWrites = true })
 	fixtureHonest = true
 	s, path, posts, _, body, _ := itemScoreFixture(t, "15", false, "Strong evidence overall.")
 	withFloor(s, "95")
@@ -361,3 +357,18 @@ func TestQuizFloorStaysAdviceUntilTheProbeEnablesWrites(t *testing.T) {
 		t.Fatalf("item scores should write with no fudge and the numbers reported: posts=%d body=%#v outcomes=%#v", *posts, *body, report.Students[0].Outcomes)
 	}
 }
+
+func TestQuizFloorWritesOnlyWhenQuizPointsMatchTheAssignment(t *testing.T) {
+	g := &canvas.NewQuizGrading{Score: "35.5", PointsPossible: "100", FudgePoints: json.RawMessage("null"), Items: []map[string]any{{"item_id": "8856743", "score": json.Number("2.5")}}}
+	s := &Service{Config: domain.CourseConfig{Courses: []domain.Course{{ID: 1, EffortFloor: ptrDecimal("50")}}}}
+	want := map[string]string{"8856743": "2.5"}
+	plan, why := s.planQuizFloor(1, domain.MustDecimal("100"), g, want)
+	if why != "" || !plan.writable || plan.raise.String() != "14.5" || plan.adjustment.String() != "14.5" {
+		t.Fatalf("observed live case: %#v %q", plan, why)
+	}
+	if plan, _ = s.planQuizFloor(1, domain.MustDecimal("20"), g, want); plan.writable || plan.raise.String() != "14.5" {
+		t.Fatalf("a quiz whose points differ from the assignment's must only advise: %#v", plan)
+	}
+}
+
+func ptrDecimal(s string) *domain.Decimal { d := domain.MustDecimal(s); return &d }

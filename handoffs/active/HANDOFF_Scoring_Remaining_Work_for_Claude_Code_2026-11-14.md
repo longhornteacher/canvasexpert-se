@@ -22,7 +22,7 @@ Required validation passed: `go test ./internal/workflow ./cmd/cse ./internal/mc
 
 ## Batch 2: explicit whole-quiz honest-effort minimum
 
-**Built in Dev 2026-11-14, local tests only.** `comment_only.honest_effort` (needs `item_scores` and a course `effort_floor`) reports earned total, existing adjustment, minimum and total to enter; the raise-only fudge write exists but `quizFloorWrites` is false until the live probe below. Item scores write as before meanwhile.
+**Built in Dev 2026-11-14, local tests only.** `comment_only.honest_effort` (needs `item_scores` and a course `effort_floor`) reports earned total, existing adjustment, minimum and total to enter; the raise-only fudge write is enabled for quizzes whose points equal the assignment's after a live check on one real LANG ARTS 7 student (35.5 raised to 50, gradebook followed, rerun wrote nothing); unequal-scale quizzes, late deductions, the student view and re-score unwinding are unobserved. Item scores write as before meanwhile.
 
 ### Problem and intended behavior
 
