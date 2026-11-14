@@ -2,7 +2,7 @@
 
 Use this for content students will see: assignments, quizzes with their answer keys and rationales, Pages, tier supports, exemplars, rubrics, discussion prompts and scoring feedback. Run it on finished work before the check-in or report, and before any write when the request already included one. Family messages, Inbox replies, discussion replies and parent updates are not reviewed this way yet. The goal is the most reliable product for the fewest tokens: every fact proven against a source, every explanation sound, every teaching choice fit for this teacher and these students, and each helper reading only what its job needs.
 
-Review a Major's tutorial retake against the original: each key against its own passage, questions aimed at the concepts students missed on the original, comparable demand and response types, and a length a typical student finishes in 20 to 30 minutes.
+When scoring a Major, review the tutorial retake you wrote from the aggregate of missed concepts, before creating it privately, against the original: each key against its own passage, questions aimed at the concepts students missed on the original, comparable demand and response types, and a length a typical student finishes in 20 to 30 minutes.
 
 ## Roles
 
@@ -55,7 +55,7 @@ Do the teaching choices fit this teacher, this grade and these students? Judge a
 - wording: `TEACHER.md` budgets, sentence length for the grade, academic words bolded and defined once
 - quiz design: distractors are real misconceptions, choices survive shuffling, the longest choice doesn't give the answer away; in an MC+Why quiz, every MC item is followed by its "why", numbered to match, and each answer has evidence a student could point to
 - tiers scaffold the same standard and never lower it; Green supports actually support emergent bilingual students
-- feedback is specific, actionable and in the teacher's saved voice and `feedback_guidance`
+- feedback is specific, actionable and in the teacher's saved voice and `feedback_guidance`; it does not propose an extra turn-in, correction, retake or grade increase. Check any such promise in directions, instructions or feedback against the applicable teacher policy, and flag one the teacher has not authorized; flag any retake invitation, access code or eligibility announcement in student-facing text
 - authored exemplars (including private models saved for later scoring) show strong, attainable work at the actual grade in both language and thinking, using taught skills; they neither demand adult polish nor excuse shallow thinking, and add no hidden rubric requirements (see `teacher-context.md`)
 - nothing private (accommodations, tier reasons, teacher notes, flags) shows in student-facing text
 
