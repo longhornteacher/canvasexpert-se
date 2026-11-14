@@ -79,15 +79,20 @@ func retakeFor(all []Assignment, original Assignment) (Assignment, error) {
 	return Assignment{}, fmt.Errorf("%d tutorial retakes are paired with %q (%s); delete or fix all but one", len(found), original.Name, strings.Join(ids, ", "))
 }
 
-// retakenOriginals is the set of assignment IDs that have a retake in the list.
-func retakenOriginals(all []Assignment) map[int64]bool {
+// releasedRetakeOriginals is the set of assignment IDs whose retake has been
+// released to students (published, as retake assign leaves it). A retake
+// prepared privately during scoring stays unpublished and does not count: it
+// is not yet a replacement opportunity.
+func releasedRetakeOriginals(all []Assignment) map[int64]bool {
 	out := map[int64]bool{}
 	for _, a := range all {
 		if isRetake(a) {
 			continue
 		}
-		if len(findRetakes(all, a)) > 0 {
-			out[a.ID] = true
+		for _, r := range findRetakes(all, a) {
+			if r.Published {
+				out[a.ID] = true
+			}
 		}
 	}
 	return out

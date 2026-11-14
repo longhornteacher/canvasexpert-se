@@ -9,7 +9,7 @@ A teacher in any subject runs **Student Teams–Achievement Divisions** (Slavin'
 - "Sort my 3rd period into teams." The agent proposes mixed teams of 4–5 from turn-in history and recent work, and explains each placement to the teacher only. The teacher adjusts the teams, and CE-SE creates them as a Canvas group set.
 - Each week, students earn points for **turning work in** and for **beating their own recent level**. Team scores are the **average** of the members' points, so teams of 4 and 5 compete fairly.
 - "Post this week's standings." A single Canvas Page per course shows team names and team totals, and nothing about any one student.
-- "Give Team Comet 3 points for the hallway cleanup." Teacher awards (extra credit, bonuses) are recorded with a reason.
+- "Give Team Comet 3 points for the hallway cleanup." Teacher awards (team points, bonuses) are recorded with a reason.
 - Every 4–6 weeks: "Reshuffle." A new round begins. Earlier rounds keep their own rosters and points.
 
 STAD points **never touch the gradebook.** A STAD point is a celebration number, not an assessment.
@@ -27,7 +27,7 @@ The Engine owns anything that should come out the same every time from the same 
 | Team scores as the average over active members, with ties reported as ties | Team names, celebrations, shout-outs, the wording on the standings Page |
 | Creating and updating the Canvas group set from the teams file | When to reshuffle, and how to handle a student who should switch teams |
 | The standings Page, republished safely, with team-level numbers only | Whether and how to mention STAD in parent updates |
-| Refusing to put individual numbers or role labels on a student-facing surface | Award amounts and caps for extra credit |
+| Refusing to put individual numbers or role labels on a student-facing surface | Award amounts and caps for team awards |
 
 **Points are derived, not stored.** Apart from teacher awards and round rosters, every point can be recalculated from Canvas Live plus the saved files, so there is no ledger to drift, corrupt or migrate. A late regrade or an excused assignment just changes the next tally.
 
@@ -110,7 +110,7 @@ awards:
   - date: 2026-11-18
     student: s-bbbb           # or team: "Comets"
     points: 2
-    reason: "extra credit: vocabulary challenge"
+    reason: "bonus: vocabulary challenge"
 ```
 
 The Engine applies the weekly cap and reports any award it trimmed. It never trims silently.
@@ -205,7 +205,7 @@ Pure judgment, drafted alongside slice 01 and extended with each later slice:
   - Add improvement points once each student has two or three scored items.
 - **Celebrations:** standings Page wording at grade level, team-name ideas, rotating shout-outs that reach every team over a round, and never naming last place.
 - **Reshuffle cadence** and how to explain it to students.
-- **Extra credit:** the award cap, and why it exists (so one student can't carry a team).
+- **Team awards:** the award cap, and why it exists (so one student can't carry a team).
 - **Subject notes:** see the table below.
 - **Tone:** anything a student or family reads uses plain, warm, grade-level wording.
 
@@ -256,7 +256,7 @@ The Engine sees only scored items, rubric rows and turn-ins, so it doesn't care 
 ## Settled decisions (2026-11-08, developer)
 
 1. Engine = deterministic facts, math and safe writes. Playbook = judgment, style, subjectivity. No reader-facing wording or point policy hard-coded in Go: point values come from `rules.md`.
-2. Points never touch the gradebook. Extra credit in the gradebook is a separate teacher choice.
+2. Points never touch the gradebook. Gradebook credit is a separate teacher choice; nothing here offers it to students by default.
 3. Students see team-level results only. Individual numbers and role labels are teacher-only.
 4. Points are derived from Canvas Live plus saved files. Only rounds and awards are stored.
 5. Team score is the average over active members.

@@ -478,6 +478,9 @@ func ValidateResults(doc *ResultsDocument) ([]ValidatedStudent, error) {
 					return fail(e)
 				}
 			}
+			if c.HonestEffort && !c.ItemScores {
+				return fail(fmt.Errorf("honest_effort in comment_only needs item_scores on a New Quiz"))
+			}
 			if !validHeader(c.Header) {
 				return fail(fmt.Errorf("header must be score, full or none"))
 			}

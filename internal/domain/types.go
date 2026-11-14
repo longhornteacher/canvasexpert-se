@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -66,16 +67,29 @@ func (p *RetakePolicy) Validate() error {
 // assignment's grading timetable. Zero leaves that row out. The penalty and
 // its floor are not here: they come from Canvas's course late policy.
 type LateWorkPolicy struct {
-	CorrectionSchoolDays int `yaml:"correction_school_days,omitempty" json:"correction_school_days,omitempty"`
-	CloseAfterSchoolDays int `yaml:"close_after_school_days,omitempty" json:"close_after_school_days,omitempty"`
-	ExtraTimeSchoolDays  int `yaml:"extra_time_school_days,omitempty" json:"extra_time_school_days,omitempty"`
+	// CorrectionSchoolDays is the teacher's correction window. Only a positive
+	// value offers corrections; there is no default. A course line of 0 turns
+	// off a window set in context/grading.md for that course.
+	CorrectionSchoolDays *int `yaml:"correction_school_days,omitempty" json:"correction_school_days,omitempty"`
+	CloseAfterSchoolDays int  `yaml:"close_after_school_days,omitempty" json:"close_after_school_days,omitempty"`
+	ExtraTimeSchoolDays  int  `yaml:"extra_time_school_days,omitempty" json:"extra_time_school_days,omitempty"`
 	// LateCutoffSchoolDays is the school's late-work limit: work is not accepted
 	// more than this many school days after the due date, and the assignment
 	// locks then. 0 means late work is not accepted at all; nil means no limit.
 	LateCutoffSchoolDays *int `yaml:"late_cutoff_school_days,omitempty" json:"late_cutoff_school_days,omitempty"`
 }
 
-// Merged returns p with every line set in course taking its place.
+// CorrectionWindow is the authorized correction window in school days; 0
+// means the teacher has not offered corrections.
+func (p *LateWorkPolicy) CorrectionWindow() int {
+	if p == nil || p.CorrectionSchoolDays == nil || *p.CorrectionSchoolDays < 0 {
+		return 0
+	}
+	return *p.CorrectionSchoolDays
+}
+
+// Merged returns p with every line set in course taking its place. A course's
+// correction_school_days, including 0, replaces the shared one.
 func (p *LateWorkPolicy) Merged(course *LateWorkPolicy) *LateWorkPolicy {
 	if course == nil {
 		return p
@@ -84,7 +98,7 @@ func (p *LateWorkPolicy) Merged(course *LateWorkPolicy) *LateWorkPolicy {
 	if p != nil {
 		out = *p
 	}
-	if course.CorrectionSchoolDays > 0 {
+	if course.CorrectionSchoolDays != nil {
 		out.CorrectionSchoolDays = course.CorrectionSchoolDays
 	}
 	if course.CloseAfterSchoolDays > 0 {
@@ -107,10 +121,13 @@ func (p *LateWorkPolicy) Validate() error {
 	for _, v := range []struct {
 		name string
 		n    int
-	}{{"correction_school_days", p.CorrectionSchoolDays}, {"close_after_school_days", p.CloseAfterSchoolDays}, {"extra_time_school_days", p.ExtraTimeSchoolDays}} {
+	}{{"close_after_school_days", p.CloseAfterSchoolDays}, {"extra_time_school_days", p.ExtraTimeSchoolDays}} {
 		if v.n < 0 || v.n > 60 {
 			return fmt.Errorf("late_work.%s must be between 0 and 60 school days", v.name)
 		}
+	}
+	if n := p.CorrectionSchoolDays; n != nil && (*n < 0 || *n > 60) {
+		return fmt.Errorf("late_work.correction_school_days must be between 0 and 60 school days")
 	}
 	if n := p.LateCutoffSchoolDays; n != nil && (*n < 0 || *n > 60) {
 		return fmt.Errorf("late_work.late_cutoff_school_days must be between 0 and 60 school days")
@@ -247,6 +264,10 @@ type TimetableRecord struct {
 	HTML   string `yaml:"html,omitempty"`
 	LockAt string `yaml:"lock_at,omitempty"`
 	Note   string `yaml:"note,omitempty"`
+	// DropCorrections: no new timetable was made and an earlier CE timetable in
+	// the body (for example from a copy) loses its correction lines, because no
+	// correction window applies here.
+	DropCorrections bool `yaml:"drop_corrections,omitempty"`
 }
 type AssignmentOverrideOutcome struct {
 	Key        string        `yaml:"key"`
@@ -281,7 +302,8 @@ type AssignmentDocument struct {
 	Tiers                          []Tier                  `yaml:"tiers,omitempty"` // create-time differentiated hub
 	GradingTimetable               *bool                   `yaml:"grading_timetable,omitempty"`
 	// OmitCorrections (create only) leaves the corrections row out of the
-	// timetable, for a Major that is not reopened for a second submission.
+	// timetable even where a correction window is configured. Without a
+	// configured window the timetable says nothing about corrections anyway.
 	OmitCorrections bool `yaml:"omit_corrections,omitempty"`
 	Observed                       *AssignmentSnapshot     `yaml:"observed,omitempty"`
 	Created                        *CreatedResources       `yaml:"created,omitempty"`
@@ -317,19 +339,52 @@ type AttemptRef struct {
 	Attempt     int    `yaml:"attempt" json:"attempt"`
 	SubmittedAt string `yaml:"submitted_at" json:"submitted_at"`
 }
+// Attachment is one student upload. Status is downloaded (original saved at
+// Path; inspect it), readable (also a text preview at ReadablePath), failed
+// (Reason says why the file is unavailable; no Path) or not-downloaded.
+// Packets before 2026-11 used unreadable for a saved original of any
+// non-text type; with a Path it still names an original to inspect.
+//
+// Source says where the file came from: empty for a file uploaded with the
+// work, embedded for a Canvas file referenced inside the student's own rich
+// text (a pasted screenshot), media for a Canvas media recording submission,
+// and comment for a file on a submission comment (supplemental, never the
+// answer itself; only the student's own comment files are downloaded).
 type Attachment struct {
 	ID           int64  `yaml:"id"`
 	Name         string `yaml:"name"`
+	Source       string `yaml:"source,omitempty"`
 	Path         string `yaml:"path,omitempty"`
 	ReadablePath string `yaml:"readable_path,omitempty"`
-	Status       string `yaml:"status"`
-	Reason       string `yaml:"reason,omitempty"`
+	ContentType  string `yaml:"content_type,omitempty"`
+	Size         int64  `yaml:"size,omitempty"` // bytes; saved size when downloaded, else Canvas's report
+	// UpdatedAt is Canvas's updated_at for the file when Canvas returned it.
+	// With ID it identifies the exact file a discussion entry carried.
+	UpdatedAt string `yaml:"updated_at,omitempty"`
+	Status    string `yaml:"status"`
+	Reason    string `yaml:"reason,omitempty"`
+}
+
+// HasOriginal reports whether the record names a saved original to inspect,
+// including a legacy unreadable row that kept its path.
+func (a Attachment) HasOriginal() bool {
+	return a.Path != "" && (a.Status == "downloaded" || a.Status == "readable" || a.Status == "unreadable")
+}
+
+// HasOriginal reports whether a New Quiz answer file was saved at Path.
+func (f WrittenFile) HasOriginal() bool {
+	return f.Path != "" && (f.Status == "downloaded" || f.Status == "readable")
 }
 type ExistingComment struct {
 	ID        int64  `yaml:"id"`
 	Attempt   *int   `yaml:"attempt,omitempty"`
 	Text      string `yaml:"text"`
 	CreatedAt string `yaml:"created_at,omitempty"`
+	// ByStudent is true when the student wrote this comment. Attachments are
+	// the comment's files (source comment): downloaded only for the student's
+	// own comment, as supplemental evidence; anyone else's are listed only.
+	ByStudent   bool         `yaml:"by_student,omitempty"`
+	Attachments []Attachment `yaml:"attachments,omitempty"`
 }
 type AttemptWork struct {
 	Ref              AttemptRef        `yaml:"ref"`
@@ -596,11 +651,19 @@ type CommentOnlyOperation struct {
 	// ItemScores, on a New Quiz, first writes each part's item points (the
 	// numbers the comment shows) into the quiz result, then posts the comment.
 	// It uses an undocumented internal New Quizzes call.
-	ItemScores        bool          `yaml:"item_scores,omitempty"`
+	ItemScores bool `yaml:"item_scores,omitempty"`
+	// HonestEffort is the agent's explicit judgment that the written work is a
+	// genuine try. With item_scores and a course effort_floor it raises the
+	// whole-quiz total to the floor, never lowering it.
+	HonestEffort      bool          `yaml:"honest_effort,omitempty"`
 	ItemScoresOutcome ActionOutcome `yaml:"item_scores_outcome,omitempty"`
 	// QuizScore is the quiz total Canvas reported once item scores landed,
 	// as X/Y; the whole-assignment comment states it. The Engine owns it.
 	QuizScore string `yaml:"quiz_score,omitempty"`
+	// QuizFloorAdded is the fudge-point raise the Engine wrote for the honest-
+	// effort floor in this save, as a number; the whole-assignment comment
+	// says so, and a later re-score reads it back to unwind it. Engine-owned.
+	QuizFloorAdded string `yaml:"quiz_floor_added,omitempty"`
 }
 
 func (c CommentOnlyOperation) FeedbackOnly() bool {
@@ -640,18 +703,65 @@ func DiscussionEntryRef(e DiscussionEntry) string {
 	return fmt.Sprintf("%s:%d:%d:%d", e.ContextType, e.ContextID, e.TopicID, e.EntryID)
 }
 
-// DiscussionEntrySignature changes whenever a post's text, deletion state or
-// edit time changes.
+// DiscussionEntrySignature changes whenever a post's text, deletion state,
+// edit time or attached files change. Files enter as Canvas file ID plus
+// Canvas's updated_at, so a replaced file never validates against old
+// evidence. A post with no attached files keeps its pre-2026-11 signature.
+// Files embedded in the post's text are already covered by its HTML.
 func DiscussionEntrySignature(e DiscussionEntry) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%t\x00%s", e.UpdatedAt, e.HTML, e.Deleted, e.CreatedAt)))
+	base := discussionEntryBase(e)
+	if files := DiscussionEntryFiles(e, true); len(files) > 0 {
+		base += "\x00files:" + strings.Join(files, ",")
+	}
+	sum := sha256.Sum256([]byte(base))
 	return hex.EncodeToString(sum[:])
+}
+
+// DiscussionEntryLegacySignature is the signature packets saved before
+// 2026-11 used: text, deletion state and times, without file identity.
+func DiscussionEntryLegacySignature(e DiscussionEntry) string {
+	sum := sha256.Sum256([]byte(discussionEntryBase(e)))
+	return hex.EncodeToString(sum[:])
+}
+
+func discussionEntryBase(e DiscussionEntry) string {
+	return fmt.Sprintf("%s\x00%s\x00%t\x00%s", e.UpdatedAt, e.HTML, e.Deleted, e.CreatedAt)
+}
+
+// DiscussionEntryFiles lists the sorted identities of the files attached to
+// the entry itself (not those embedded in its text): the Canvas file ID, and
+// with versions also Canvas's updated_at.
+func DiscussionEntryFiles(e DiscussionEntry, versions bool) []string {
+	var files []string
+	for _, a := range e.Attachments {
+		if a.Source != "" || a.ID <= 0 {
+			continue
+		}
+		id := strconv.FormatInt(a.ID, 10)
+		if versions {
+			id += "@" + a.UpdatedAt
+		}
+		files = append(files, id)
+	}
+	sort.Strings(files)
+	return files
 }
 
 // DiscussionEvidenceDigest is a deterministic digest of a set of entries.
 func DiscussionEvidenceDigest(entries []DiscussionEntry) string {
+	return discussionDigest(entries, DiscussionEntrySignature)
+}
+
+// DiscussionEvidenceLegacyDigest is the digest packets saved before 2026-11
+// recorded, from legacy signatures.
+func DiscussionEvidenceLegacyDigest(entries []DiscussionEntry) string {
+	return discussionDigest(entries, DiscussionEntryLegacySignature)
+}
+
+func discussionDigest(entries []DiscussionEntry, sign func(DiscussionEntry) string) string {
 	lines := make([]string, 0, len(entries))
 	for _, e := range entries {
-		lines = append(lines, DiscussionEntryRef(e)+"="+DiscussionEntrySignature(e))
+		lines = append(lines, DiscussionEntryRef(e)+"="+sign(e))
 	}
 	sort.Strings(lines)
 	sum := sha256.Sum256([]byte(strings.Join(lines, "\n")))

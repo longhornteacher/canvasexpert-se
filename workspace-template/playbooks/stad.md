@@ -53,7 +53,7 @@ awards:
 
 Add an `improvement` block only when the teacher wants true STAD scoring (see "Improvement points").
 
-**`awards.md`** (teacher awards such as extra credit):
+**`awards.md`** (teacher awards such as a hallway-cleanup bonus):
 
 ```yaml
 ---
@@ -62,7 +62,7 @@ awards:
   - date: 2026-11-18
     student: s-bbbb          # or team: "Comets"
     points: 2
-    reason: "extra credit: vocabulary challenge"
+    reason: "team bonus: vocabulary challenge"
 ---
 ```
 
@@ -136,7 +136,7 @@ A rubric row is matched by its exact description across rubrics; a differently w
 1. When the teacher asks for standings, run `stad_standings`. The `teams` section is safe to share with students; the `teacher` section names individual students and stays in the conversation.
 2. Give the teacher the picture in a few lines: who leads this week and this round (or which level each team reached), anything surprising, any award the weekly cap trimmed (the Engine reports every trimmed award; never hide one), and notes the Engine returned. Ties are ties; say "tied for first."
 3. For "give Team Comet 3 points for the hallway cleanup," add an entry to `awards.md` (keep earlier entries) with the date, the team or student, points and a reason. Explain the cap: it exists so one student can't carry a team.
-4. Extra credit in the gradebook is a separate choice. If the teacher wants it, handle it as ordinary grading, not through STAD.
+4. Team points and standings never change a grade. Whether to give academic credit for anything is the teacher's own choice; if they make it, handle it as ordinary grading, not through STAD.
 
 ## The standings Page
 

@@ -24,7 +24,7 @@ func TestTimetableCountsSchoolDaysForRegularAndExtraTime(t *testing.T) {
 	// after that skips the weekend to Monday.
 	tt, err := buildTimetable(timetableInput{
 		Due: mustTime(t, "2026-11-05T23:59:00-06:00"), Points: domain.MustDecimal("100"), Calendar: timetableCalendar(),
-		Policy: domain.LateWorkPolicy{CorrectionSchoolDays: 4, CloseAfterSchoolDays: 11, ExtraTimeSchoolDays: 1}, Late: defaultLatePolicy, ProposeLock: true,
+		Policy: domain.LateWorkPolicy{CorrectionSchoolDays: four(), CloseAfterSchoolDays: 11, ExtraTimeSchoolDays: 1}, Late: defaultLatePolicy, ProposeLock: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +50,7 @@ func TestTimetableCountsSchoolDaysForRegularAndExtraTime(t *testing.T) {
 
 func TestTimetableSkipsClosuresAndRespectsTeacherChoices(t *testing.T) {
 	due := mustTime(t, "2026-11-05T23:59:00-06:00")
-	policy := domain.LateWorkPolicy{CorrectionSchoolDays: 4, CloseAfterSchoolDays: 11}
+	policy := domain.LateWorkPolicy{CorrectionSchoolDays: four(), CloseAfterSchoolDays: 11}
 	tt, err := buildTimetable(timetableInput{Due: due, Points: domain.MustDecimal("50"), Calendar: timetableCalendar("2026-11-10"), Policy: policy, Late: &CanvasLatePolicy{Known: true, DeductionEnabled: true, Deduction: 5, Interval: "day"}, ProposeLock: true})
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +143,7 @@ func TestPushCreateAddsTimetableAndUpdateKeepsItCurrent(t *testing.T) {
 	if err := workspace.WriteTeacherDocument(s.Root, "context/school-calendar.md", timetableCalendar(), "Synthetic calendar"); err != nil {
 		t.Fatal(err)
 	}
-	grading := domain.GradingConfig{Schema: 1, LateWork: &domain.LateWorkPolicy{CorrectionSchoolDays: 4, CloseAfterSchoolDays: 11, ExtraTimeSchoolDays: 1}}
+	grading := domain.GradingConfig{Schema: 1, LateWork: &domain.LateWorkPolicy{CorrectionSchoolDays: four(), CloseAfterSchoolDays: 11, ExtraTimeSchoolDays: 1}}
 	if err := workspace.WriteTeacherDocument(s.Root, "context/grading.md", grading, "Synthetic grading rules"); err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func ptr(v string) *string { return &v }
 func TestTimetableLateWorkCutoff(t *testing.T) {
 	due := mustTime(t, "2026-11-05T23:59:00-06:00") // Thursday
 	three, zero := 3, 0
-	policy := domain.LateWorkPolicy{CorrectionSchoolDays: 4, CloseAfterSchoolDays: 11, ExtraTimeSchoolDays: 1, LateCutoffSchoolDays: &three}
+	policy := domain.LateWorkPolicy{CorrectionSchoolDays: four(), CloseAfterSchoolDays: 11, ExtraTimeSchoolDays: 1, LateCutoffSchoolDays: &three}
 	tt, err := buildTimetable(timetableInput{Due: due, Points: domain.MustDecimal("100"), Calendar: timetableCalendar(), Policy: policy, Late: defaultLatePolicy, ProposeLock: true})
 	if err != nil {
 		t.Fatal(err)
@@ -243,9 +243,9 @@ func TestTimetableLateWorkCutoff(t *testing.T) {
 
 func TestCourseLateWorkLineOverridesGradingMd(t *testing.T) {
 	two, five := 2, 5
-	base := &domain.LateWorkPolicy{LateCutoffSchoolDays: &five, CorrectionSchoolDays: 4}
+	base := &domain.LateWorkPolicy{LateCutoffSchoolDays: &five, CorrectionSchoolDays: four()}
 	got := base.Merged(&domain.LateWorkPolicy{LateCutoffSchoolDays: &two})
-	if got.LateCutoffSchoolDays == nil || *got.LateCutoffSchoolDays != 2 || got.CorrectionSchoolDays != 4 {
+	if got.LateCutoffSchoolDays == nil || *got.LateCutoffSchoolDays != 2 || got.CorrectionWindow() != 4 {
 		t.Fatalf("merged=%+v", got)
 	}
 }
@@ -253,7 +253,7 @@ func TestCourseLateWorkLineOverridesGradingMd(t *testing.T) {
 func TestTimetableOmitCorrectionsLeavesOtherRowsAlone(t *testing.T) {
 	in := timetableInput{
 		Due: mustTime(t, "2026-11-05T23:59:00-06:00"), Points: domain.MustDecimal("100"), Calendar: timetableCalendar(),
-		Policy: domain.LateWorkPolicy{CorrectionSchoolDays: 4, CloseAfterSchoolDays: 11}, Late: defaultLatePolicy, ProposeLock: true,
+		Policy: domain.LateWorkPolicy{CorrectionSchoolDays: four(), CloseAfterSchoolDays: 11}, Late: defaultLatePolicy, ProposeLock: true,
 	}
 	with, err := buildTimetable(in)
 	if err != nil {
@@ -277,7 +277,140 @@ func TestTimetableOmitCorrectionsLeavesOtherRowsAlone(t *testing.T) {
 	if strings.Contains(html, "orrections") || !hasTimetable(html) {
 		t.Fatalf("html still talks about corrections: %s", html)
 	}
-	if !strings.Contains(with.HTML(), "Corrections are available") {
-		t.Fatal("default block lost its corrections sentence")
+	if !strings.Contains(with.HTML(), "Corrections are accepted through the last day for corrections") || strings.Contains(with.HTML(), "as soon as you finish") {
+		t.Fatalf("configured window should describe only its dates: %s", with.HTML())
+	}
+}
+
+func four() *int { n := 4; return &n }
+
+func TestTimetableWithoutCorrectionWindowSaysNothingAboutCorrections(t *testing.T) {
+	three, zero := 3, 0
+	due := mustTime(t, "2026-11-05T23:59:00-06:00")
+	for _, policy := range []domain.LateWorkPolicy{
+		{LateCutoffSchoolDays: &three, ExtraTimeSchoolDays: 1},
+		{CloseAfterSchoolDays: 11},
+		{CloseAfterSchoolDays: 11, CorrectionSchoolDays: &zero},
+	} {
+		tt, err := buildTimetable(timetableInput{Due: due, Points: domain.MustDecimal("100"), Calendar: timetableCalendar(), Policy: policy, Late: defaultLatePolicy, ProposeLock: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		html := tt.HTML()
+		if !tt.NoCorrections || strings.Contains(html, "orrections") || !strings.Contains(html, "(late work)") || !strings.Contains(html, "Due:") {
+			t.Fatalf("policy %+v offered corrections: %s", policy, html)
+		}
+	}
+}
+
+func TestCourseCorrectionWindowOverridesGradingMd(t *testing.T) {
+	zero, six := 0, 6
+	global := &domain.LateWorkPolicy{CorrectionSchoolDays: four(), CloseAfterSchoolDays: 11}
+	if got := global.Merged(&domain.LateWorkPolicy{CorrectionSchoolDays: &zero}); got.CorrectionWindow() != 0 || got.CloseAfterSchoolDays != 11 {
+		t.Fatalf("course 0 should turn the window off: %+v", got)
+	}
+	if got := global.Merged(&domain.LateWorkPolicy{CorrectionSchoolDays: &six}); got.CorrectionWindow() != 6 {
+		t.Fatalf("course window: %+v", got)
+	}
+	if got := global.Merged(&domain.LateWorkPolicy{CloseAfterSchoolDays: 5}); got.CorrectionWindow() != 4 {
+		t.Fatalf("an unset course line keeps the shared window: %+v", got)
+	}
+	var none *domain.LateWorkPolicy
+	if none.CorrectionWindow() != 0 || none.Merged(&domain.LateWorkPolicy{CloseAfterSchoolDays: 5}).CorrectionWindow() != 0 {
+		t.Fatal("no policy is no window")
+	}
+}
+
+// oldTimetable is a block as Engine versions before 2026-11-13 wrote it.
+const oldTimetable = `<details data-cse="grading-timetable"><summary><strong>Grading timetable</strong> (late work and corrections)</summary><ul><li><strong>Due:</strong> Thu 11/05</li><li><strong>Last day for corrections:</strong> Wed 11/11</li></ul><p>Dates count school days only. Corrections are available as soon as you finish; check your feedback for rationales and exemplars.</p></details>`
+
+func TestWithoutCorrectionOfferTouchesOnlyTheTimetable(t *testing.T) {
+	body := "<p>Teacher note: corrections are discussed in class.</p>\n" + oldTimetable
+	got := withoutCorrectionOffer(body)
+	block := timetableBlock.FindString(got)
+	if strings.Contains(block, "orrections") || !strings.Contains(block, "(late work)") || !strings.Contains(block, "Due:</strong> Thu 11/05") || !strings.Contains(block, "Dates count school days only.</p>") {
+		t.Fatalf("block: %s", block)
+	}
+	if !strings.HasPrefix(got, "<p>Teacher note: corrections are discussed in class.</p>") {
+		t.Fatalf("teacher text changed: %s", got)
+	}
+	if !correctionsLeftOut(got) || correctionsLeftOut(body) || correctionsLeftOut("<p>No timetable.</p>") {
+		t.Fatal("correctionsLeftOut reads the timetable's corrections row")
+	}
+}
+
+// A copied CE timetable keeps no correction promise in a course without a
+// window, on create (no new timetable made) and on a later edit.
+func TestCopiedTimetableLosesUnauthorizedCorrectionOffer(t *testing.T) {
+	live := Assignment{}
+	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "POST" && r.URL.Path == "/api/v1/courses/1/assignments":
+			var payload struct {
+				Assignment Assignment `json:"assignment"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			live = payload.Assignment
+			live.ID, live.CourseID = 10, 1
+			_ = json.NewEncoder(w).Encode(live)
+		case r.Method == "PUT" && r.URL.Path == "/api/v1/courses/1/assignments/10":
+			var payload struct {
+				Assignment map[string]json.RawMessage `json:"assignment"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			if d, ok := payload.Assignment["description"]; ok {
+				_ = json.Unmarshal(d, &live.Description)
+			}
+			if n, ok := payload.Assignment["name"]; ok {
+				_ = json.Unmarshal(n, &live.Name)
+			}
+			_ = json.NewEncoder(w).Encode(live)
+		case r.Method == "GET" && r.URL.Path == "/api/v1/courses/1/assignments/10":
+			_ = json.NewEncoder(w).Encode(live)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.String())
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+		}
+	})
+	due := "2026-11-05T23:59:00-06:00"
+	doc := domain.AssignmentDocument{Schema: 1, Kind: "assignment", Operation: "create", Course: "TEST", Title: "Copied", BodyFormat: "html", Points: domain.MustDecimal("100"), SubmissionTypes: []string{"online_text_entry"}, DueAt: &due}
+	path := filepath.Join(s.Root, "drafts", "copied.md")
+	if err := workspace.WriteDocument(path, doc, "<p>Write.</p>\n"+oldTimetable); err != nil {
+		t.Fatal(err)
+	}
+	report, err := s.Push(context.Background(), path)
+	if err != nil || report.Status != "completed" {
+		t.Fatalf("create: %+v %v", report, err)
+	}
+	if strings.Contains(live.Description, "orrections") || !strings.Contains(live.Description, "<p>Write.</p>") || !hasTimetable(live.Description) || !strings.Contains(report.Timetable, "correction lines removed") {
+		t.Fatalf("create kept the promise: %s (%q)", live.Description, report.Timetable)
+	}
+	// A resumed create sends the same recorded body.
+	if c := report.Resources; c == nil || c.Timetable == nil || !c.Timetable.DropCorrections || c.IntendedHTML != live.Description {
+		t.Fatalf("record: %+v", c)
+	}
+
+	// An assignment already in Canvas with the old block: an ordinary edit
+	// (dates unchanged) drops the promise and keeps the teacher's text.
+	live.Description = "<p>Write.</p>\n" + oldTimetable
+	pulled, err := s.PullItem(context.Background(), "TEST", "10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var edit domain.AssignmentDocument
+	body, err := workspace.ReadDocument(pulled, &edit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edit.Title = "Copied, renamed"
+	if err = workspace.WriteDocument(pulled, edit, body); err != nil {
+		t.Fatal(err)
+	}
+	report, err = s.Push(context.Background(), pulled)
+	if err != nil || report.Status != "succeeded" {
+		t.Fatalf("update: %+v %v", report, err)
+	}
+	if strings.Contains(live.Description, "orrections") || !strings.Contains(live.Description, "<p>Write.</p>") || !strings.Contains(report.Timetable, "correction lines removed") {
+		t.Fatalf("update kept the promise: %s (%q)", live.Description, report.Timetable)
 	}
 }

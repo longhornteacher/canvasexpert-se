@@ -1,5 +1,7 @@
 # Slice 04 - Apply the retake to the original
 
+> **Superseded in part 2026-11-13:** see [HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md](../HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md) section 2. The retake is created privately during Major scoring and `retake assign` / `retake apply` run only on explicit teacher direction; any wording below that triggers them automatically after grading, a low grade or a saved `retakes` block is superseded. Engine operation behavior is otherwise unchanged.
+
 Status: **built in Dev 2026-11-11, local tests only. A New Quiz original's raise is held with the number to enter, because slice 03 is not built; the lowering hold covers the grade-post path only, not the New Quiz item-score path**. Kind: Engine scoring operation. Needs [02](02-retake-quiz-and-assignment.md); needs [03](03-new-quiz-floor.md) only when the original is a New Quiz. Read the [README](README.md) and `docs/SCORING-RULES.md` first.
 
 ## Result

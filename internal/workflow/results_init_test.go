@@ -112,3 +112,25 @@ func TestInitResultsFillsMechanicsAndLeavesJudgmentBlank(t *testing.T) {
 		t.Fatalf("earlier interpretation not reused:\n%s", b)
 	}
 }
+
+// A legacy unreadable row with a saved original is inspected, not held; one
+// whose original is gone, or that never had one, is unavailable.
+func TestStudentHintTreatsSavedOriginalsAsEvidence(t *testing.T) {
+	root := t.TempDir()
+	if err := workspace.WriteFile(filepath.Join(root, "courses", "TEST", "a", "scan.pdf"), []byte("%PDF"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	work := domain.StudentWorkDocument{Current: domain.AttemptWork{
+		Attachments: []domain.Attachment{
+			{Name: "scan.pdf", Path: "courses/TEST/a/scan.pdf", Status: "unreadable", Reason: "unsupported attachment format; original preserved"},
+			{Name: "moved.pdf", Path: "courses/TEST/a/moved.pdf", Status: "unreadable"},
+			{Name: "slides.pptx", Path: "courses/TEST/a/slides.pptx", Status: "downloaded"},
+			{Name: "gone.pdf", Status: "failed", Reason: "file unavailable: Canvas no longer has this file"},
+		},
+		WrittenFiles: []domain.WrittenFile{{Name: "answer.png", Path: "courses/TEST/a/answer.png", Status: "downloaded"}, {Name: "late.png", Status: "not-retrieved"}},
+	}}
+	hint := studentHint(root, work)
+	if !strings.Contains(hint, "3 saved file(s)") || !strings.Contains(hint, "3 file(s) unavailable") {
+		t.Fatalf("hint: %s", hint)
+	}
+}

@@ -13,13 +13,10 @@ import (
 // A session already needs submission history and comments. Read them once per
 // assignment, concurrently, instead of listing then fetching each student.
 // Group assignments retain their assignment-specific audience and evidence path.
-func detailedSessionSubmissions(ctx context.Context, client *canvas.Client, courseID int64, assignments []Assignment, broad bool) (map[int64][]Submission, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+func detailedSessionSubmissions(ctx context.Context, client *canvas.Client, courseID int64, assignments []Assignment, broad bool) (map[int64][]Submission, map[int64]error) {
 	out := map[int64][]Submission{}
+	failures := map[int64]error{}
 	var mu sync.Mutex
-	var once sync.Once
-	var first error
 	var wg sync.WaitGroup
 	for _, assignment := range assignments {
 		if broad && (assignment.NeedsGradingCount != nil && *assignment.NeedsGradingCount == 0 || assignment.InClosedGradingPeriod) || assignment.GroupCategoryID != nil && *assignment.GroupCategoryID > 0 || unpullableAssignment(assignment) != "" {
@@ -38,7 +35,9 @@ func detailedSessionSubmissions(ctx context.Context, client *canvas.Client, cour
 				}
 			}
 			if err != nil {
-				once.Do(func() { first = err; cancel() })
+				mu.Lock()
+				failures[a.ID] = err
+				mu.Unlock()
 				return
 			}
 			mu.Lock()
@@ -47,7 +46,7 @@ func detailedSessionSubmissions(ctx context.Context, client *canvas.Client, cour
 		}(assignment)
 	}
 	wg.Wait()
-	return out, first
+	return out, failures
 }
 
 func assignmentDueState(a Assignment, now time.Time) string {

@@ -170,8 +170,14 @@ func (c *Client) NewQuizFiles(ctx context.Context, courseID, assignmentID, userI
 			continue
 		}
 		for _, f := range uploaded {
-			if f.Name != "" && f.URL != "" && f.Size >= 0 {
-				files = append(files, NewQuizFile{ItemID: itemID, Name: f.Name, Size: f.Size, URL: f.URL})
+			// A file without a URL is still returned, so the caller can
+			// report it unavailable. Size 0 means Canvas did not say.
+			if f.Name != "" {
+				size := f.Size
+				if size < 0 {
+					size = 0
+				}
+				files = append(files, NewQuizFile{ItemID: itemID, Name: f.Name, Size: size, URL: f.URL})
 			}
 		}
 	}

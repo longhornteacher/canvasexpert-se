@@ -141,10 +141,13 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 	if containsSubmissionType(d.SubmissionTypes, "on_paper") && len(d.SubmissionTypes) != 1 {
 		return fmt.Errorf("on_paper must be the only submission type; it cannot be mixed with online submission types")
 	}
+	if containsSubmissionType(d.SubmissionTypes, "none") && len(d.SubmissionTypes) != 1 {
+		return fmt.Errorf("none must be the only submission type")
+	}
 	seen := map[string]bool{}
 	for _, s := range d.SubmissionTypes {
 		// PlanEdit restricts a pulled New Quiz to assignment group and base dates.
-		if s != "online_text_entry" && s != "online_upload" && s != "on_paper" && (s != "external_tool" || d.Operation == "create") {
+		if s != "online_text_entry" && s != "online_upload" && s != "on_paper" && s != "none" && (s != "external_tool" || d.Operation == "create") {
 			return fmt.Errorf("unsupported submission type %q", s)
 		}
 		if seen[s] {

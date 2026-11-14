@@ -2,6 +2,8 @@
 
 # Handoff: Grading timetable on new assignments (2026-11-04)
 
+> **Superseded in part 2026-11-13:** see [HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md](HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md) section 2. The corrections row appears only for a teacher-set `correction_school_days` window and never mentions points; there is no default window, and the end-of-block corrections sentence is dropped with no window.
+
 **Status:** On 2026-11-04 the developer accepted every proposed default in §1.
 
 **Slices 1–5 are built in Dev (2026-11-04), not yet committed.** The code is `internal/workflow/timetable.go` with its tests, plus the create and update hooks in `author.go`, the `validate` preview and the parent-report `correctionDeadlineFor`. `go test ./...`, `go vet ./...`, the 58-tool MCP smoke and `git diff --check` passed.

@@ -15,7 +15,6 @@ failing_below: 70
 sign_off: ""
 # Older settings, no longer used by grade updates.
 skip_score: 90
-correction_days: 14
 ---
 
 Parent-update rules (teacher instruction, 2026-11-07; all courses):

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"canvasexpertse/internal/domain"
@@ -11,10 +12,11 @@ import (
 )
 
 // Personal dates give one student their own Canvas due and lock dates on an
-// assignment, as a single-student Canvas override. Three things earn one:
-// saved extra time, an absence on the due date, and (after the due date)
-// on-time work that may still be corrected once the assignment has closed to
-// late work. Dates only ever move later.
+// assignment, as a single-student Canvas override. Saved extra time and an
+// absence on the due date earn one. Only where the teacher configures a
+// correction window (late_work.correction_school_days) does on-time work also
+// stay open through that window after the assignment closes to late work.
+// Dates only ever move later.
 
 const personalDatesTitle = "Personal dates"
 
@@ -101,7 +103,8 @@ func firstSubmittedAt(sub Submission) *time.Time {
 
 // PersonalDates plans, and unless preview writes, personal Canvas dates. With
 // assignmentID 0 it covers the course's published assignments due in the last
-// three weeks or later.
+// three weeks or later. A course-wide run reopens nothing for corrections
+// unless the teacher has configured a correction window.
 func (s *Service) PersonalDates(ctx context.Context, nickname string, assignmentID int64, preview bool, now time.Time) (PersonalDatesReport, error) {
 	course, err := s.Course(nickname)
 	if err != nil {
@@ -182,11 +185,12 @@ func (s *Service) PersonalDates(ctx context.Context, nickname string, assignment
 			}
 		}
 	}
-	// A retake never gets personal dates of its own, and an original that has
-	// one is not reopened for corrections: the retake replaces the second try.
+	// A retake never gets personal dates of its own, and an original whose
+	// retake has been released to students is not reopened for corrections: the
+	// retake replaces the second try. A privately prepared retake changes nothing.
 	var retaken map[int64]bool
 	if all, e := sweepAssignments(ctx, s, course.ID); e == nil {
-		retaken = retakenOriginals(all)
+		retaken = releasedRetakeOriginals(all)
 	} else if assignmentID > 0 {
 		return report, e
 	}
@@ -196,8 +200,8 @@ func (s *Service) PersonalDates(ctx context.Context, nickname string, assignment
 			continue
 		}
 		aPolicy := *policy
-		if retaken[a.ID] {
-			aPolicy.CorrectionSchoolDays = 0
+		if retaken[a.ID] || correctionsLeftOut(a.Description) {
+			aPolicy.CorrectionSchoolDays = nil
 		}
 		if owned && !domain.HasConsentTag(a.Name) {
 			untagged++
@@ -219,6 +223,15 @@ func (s *Service) PersonalDates(ctx context.Context, nickname string, assignment
 		report.Skipped = append(report.Skipped, fmt.Sprintf("%d assignments not tagged (CE) were skipped.", untagged))
 	}
 	return report, nil
+}
+
+// correctionsLeftOut reports an assignment whose CE grading timetable has no
+// corrections row: it was created with omit_corrections, or without a
+// correction window, so it is never reopened for corrections. An assignment
+// without a CE timetable follows the course's configured window.
+func correctionsLeftOut(description string) bool {
+	blocks := timetableBlock.FindAllString(description, -1)
+	return len(blocks) > 0 && !correctionRow.MatchString(strings.Join(blocks, ""))
 }
 
 func (s *Service) personalDatesFor(ctx context.Context, course domain.Course, a Assignment, active []workspace.Student, absences *workspace.AbsenceStore, cal workspace.SchoolCalendar, policy domain.LateWorkPolicy, preview bool, now time.Time, report *PersonalDatesReport) (PersonalDatesAssignment, error) {
@@ -329,7 +342,7 @@ func (s *Service) personalDatesFor(ctx context.Context, course domain.Course, a 
 			} else if newDue.After(*curLock) {
 				target = &newDue
 			}
-			if n := policy.CorrectionSchoolDays; n > 0 && has && now.After(newDue) {
+			if n := policy.CorrectionWindow(); n > 0 && has && now.After(newDue) {
 				if first := firstSubmittedAt(sub); first != nil && !first.After(newDue) {
 					end, e := own.AddSchoolDays(newDue, n)
 					if e != nil {

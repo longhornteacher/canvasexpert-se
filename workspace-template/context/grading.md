@@ -12,7 +12,6 @@ To give new assignments a grading timetable, add a `late_work` block to the sett
 
 ```yaml
 late_work:
-  correction_school_days: 4    # last day for corrections, after the due date
   close_after_school_days: 11  # the assignment locks this many school days after the due date
   extra_time_school_days: 1    # the general extra-time allowance shown as "(extra time: ...)"
   late_cutoff_school_days: 3   # late work is accepted this many school days after the due date; 0 = none; leave out for no limit
@@ -24,14 +23,16 @@ Extra time can be a whole number of days or, on the Students page, a percent of 
 
 `extra_time_school_days` is also the allowance used to correct late marks for a student with Extra time ticked and no number of their own. A number typed beside a student's Extra time box on the Students page wins for that student.
 
-To set the Major tutorial-retake policy, add a `retakes` block to the settings above:
+The Major tutorial retake is created privately during scoring and needs no settings. To set its release terms for later, teacher-directed assignment and credit, add a `retakes` block to the settings above:
 
 ```yaml
 retakes:
-  cap_percent: 70   # a retake adds at most this percent to the original, and a student below it is assigned the retake
+  cap_percent: 70   # a retake adds at most this percent to the original, and a student below it is eligible
   school_days: 4    # the retake window, counted in school days from the day the grade was posted
 ```
 
-With no `retakes` block the retake operations report that no retake policy is set; nothing is assumed.
+`retakes` supplies eligibility, window and cap when the teacher later directs assigning a retake and applying its credit. A missing block does not stop private creation and is not a reason to ask for release terms during routine scoring; with none, assign and apply report that no retake policy is set and nothing is assumed.
+
+Reopening work for corrections is off unless the teacher selects it. To allow it, the teacher sets `correction_school_days` (the last day for corrections, counted in school days after the due date) in `late_work`, here or per course. A course line of `correction_school_days: 0` in `context/courses.md` turns off a window set here for that course. There is no fallback: with no value, no correction window exists, none is shown in the timetable, and nothing is reopened.
 
 Leave out a line to leave that row out. The late penalty and lowest late grade come from the course's Canvas late policy.

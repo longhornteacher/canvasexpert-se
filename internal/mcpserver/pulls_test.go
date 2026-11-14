@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -36,5 +37,29 @@ func TestLongPullReturnsPendingAndRepeatWaitsOnSameRun(t *testing.T) {
 	}
 	if len(s.pulls) != 0 {
 		t.Fatal("collected result was not cleared")
+	}
+}
+
+func TestLongPullPartialResultKeepsTheSameRun(t *testing.T) {
+	old := pullWait
+	pullWait = time.Millisecond
+	t.Cleanup(func() { pullWait = old })
+	release := make(chan struct{})
+	var starts atomic.Int32
+	s := &Server{ctx: context.Background(), run: func(context.Context, ...string) (TextOutput, error) {
+		starts.Add(1)
+		<-release
+		return TextOutput{State: "incomplete", Outcome: "partial", Text: "available packet; failed assignment 11"}, nil
+	}}
+	for i := 0; i < 2; i++ {
+		out, err := s.longCommand(context.Background(), "pull-work", "Synthetic", "--session")
+		if err != nil || out.State != "pending" {
+			t.Fatalf("poll = %+v %v", out, err)
+		}
+	}
+	close(release)
+	out, err := s.longCommand(context.Background(), "pull-work", "Synthetic", "--session")
+	if err != nil || out.State != "incomplete" || out.Outcome != "partial" || out.Text == "" || starts.Load() != 1 || len(s.pulls) != 0 {
+		t.Fatalf("partial pull lost or repeated: %+v %v starts=%d", out, err, starts.Load())
 	}
 }

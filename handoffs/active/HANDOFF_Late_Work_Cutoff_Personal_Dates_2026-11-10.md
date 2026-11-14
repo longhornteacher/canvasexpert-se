@@ -1,5 +1,7 @@
 # Handoff: Late-work cutoff and personal dates (2026-11-10)
 
+> **Superseded in part 2026-11-13:** see [HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md](HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md) section 2. Reopening on-time work through the correction window happens only under a teacher-set positive `correction_school_days`; the cutoff, extra-time and absence dates are unaffected.
+
 **Status:** Engine code is partly built in Dev and compiles (`go build ./...` clean at the last check). **No tests exist for the new code, no playbook or doc is updated, nothing is committed, nothing is checked in Canvas Live.** It sits on top of the uncommitted late-work reconciliation ([handoff](HANDOFF_Late_Work_Reconciliation_2026-11-10.md)); commit that first if the developer agrees.
 
 ## Policy (developer, 2026-11-10)

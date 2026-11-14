@@ -503,15 +503,30 @@ func submissionText(w domain.StudentWorkDocument, attempt int) string {
 		if text == "" {
 			text = "(no typed text in this attempt)"
 		}
+		fileLine := func(kind, name string, saved bool, reason string) string {
+			line := "\n[" + kind + ": " + name + ", "
+			if saved {
+				line += "original saved"
+			} else {
+				line += "unavailable"
+				if reason != "" {
+					line += ": " + strings.TrimPrefix(reason, "file unavailable: ")
+				}
+			}
+			return line + "]"
+		}
 		for _, f := range a.Attachments {
-			text += "\n[attachment: " + f.Name + "]"
+			kind := "attachment"
+			switch f.Source {
+			case "embedded":
+				kind = "file in the answer text"
+			case "media":
+				kind = "recording"
+			}
+			text += fileLine(kind, f.Name, f.HasOriginal(), f.Reason)
 		}
 		for _, f := range a.WrittenFiles {
-			text += "\n[New Quiz file: " + f.Name + ", " + f.Status
-			if f.Reason != "" {
-				text += ": " + f.Reason
-			}
-			text += "]"
+			text += fileLine("New Quiz file", f.Name, f.HasOriginal(), f.Reason)
 		}
 		return text
 	}

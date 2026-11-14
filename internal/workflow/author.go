@@ -182,7 +182,7 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	// The timetable is fixed on the first attempt so a resume sends the same body.
 	// An in-flight create from before timetables existed keeps its recorded body.
 	if doc.Created == nil || (doc.Created.Timetable == nil && doc.Created.IntendedHTML == "" && doc.Created.AssignmentID == 0) {
-		rec := s.createTimetable(ctx, &doc, course.ID)
+		rec := s.createTimetable(ctx, &doc, course.ID, html)
 		if doc.Created == nil {
 			doc.Created = &domain.CreatedResources{StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 		}
@@ -191,6 +191,8 @@ func (s *Service) Push(ctx context.Context, path string) (report PushReport, err
 	if t := doc.Created.Timetable; t != nil {
 		if t.HTML != "" {
 			html = withTimetable(html, t.HTML)
+		} else if t.DropCorrections {
+			html = withoutCorrectionOffer(html)
 		}
 		report.Timetable = t.Note
 		if t.LockAt != "" {

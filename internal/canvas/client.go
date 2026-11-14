@@ -46,6 +46,10 @@ func (e *Error) Error() string {
 		return "Canvas write completion is uncertain; check live state before retrying"
 	case "canceled":
 		return "Canvas request canceled"
+	case "too_large":
+		return "file is larger than the download size limit"
+	case "local":
+		return "downloaded file could not be saved locally"
 	default:
 		return "Canvas connection failed"
 	}
@@ -253,7 +257,13 @@ func (c *Client) wrote(method string, u *url.URL, status int, uncertain bool) {
 }
 
 func (c *Client) request(ctx context.Context, method string, u *url.URL, body []byte, download bool, consume func(*http.Response) error) error {
-	err := c.send(ctx, method, u, body, download, consume)
+	return c.requestStall(ctx, method, u, body, download, 0, consume)
+}
+
+// requestStall with stall > 0 drops the whole-request timeout and instead
+// cancels an attempt once no response or body bytes arrive for stall.
+func (c *Client) requestStall(ctx context.Context, method string, u *url.URL, body []byte, download bool, stall time.Duration, consume func(*http.Response) error) error {
+	err := c.send(ctx, method, u, body, download, stall, consume)
 	if err != nil && c.MapError != nil {
 		err = c.MapError(err)
 	}
@@ -261,18 +271,29 @@ func (c *Client) request(ctx context.Context, method string, u *url.URL, body []
 }
 
 // send retries safe reads only. The slot remains occupied through body use.
-func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byte, download bool, consume func(*http.Response) error) error {
+func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byte, download bool, stall time.Duration, consume func(*http.Response) error) error {
 	write := method != http.MethodGet
 	attempts := 1
 	if !write {
 		attempts = 3
 	}
+	hc := c.http
+	if stall > 0 {
+		// Same transport and redirect rules; only the whole-request limit goes.
+		copied := *c.http
+		copied.Timeout = 0
+		hc = &copied
+	}
 	for attempt := 0; attempt < attempts; attempt++ {
 		if err := c.acquire(ctx); err != nil {
 			return err
 		}
-		req, err := http.NewRequestWithContext(ctx, method, u.String(), bytes.NewReader(body))
+		// The stall watchdog starts only after a request slot is held, so
+		// waiting behind other downloads never counts as a stall.
+		reqCtx, progress, stop := stallWatch(ctx, stall)
+		req, err := http.NewRequestWithContext(reqCtx, method, u.String(), bytes.NewReader(body))
 		if err != nil {
+			stop()
 			c.release()
 			return &Error{Kind: "validation"}
 		}
@@ -286,8 +307,9 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 		if download {
 			req.Header.Set("X-CSE-Download", "1")
 		}
-		resp, err := c.http.Do(req)
+		resp, err := hc.Do(req)
 		if err != nil {
+			stop()
 			c.release()
 			if write {
 				c.wrote(method, u, 0, true)
@@ -311,6 +333,7 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 			resp.Body.Close()
+			stop()
 			c.release()
 			ce := statusError(resp.StatusCode, data, write)
 			c.wrote(method, u, resp.StatusCode, ce.Uncertain)
@@ -327,8 +350,12 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 			}
 			return ce
 		}
+		if progress != nil {
+			resp.Body = progressBody{resp.Body, progress}
+		}
 		err = consume(resp)
 		resp.Body.Close()
+		stop()
 		c.release()
 		if write {
 			c.wrote(method, u, resp.StatusCode, err != nil)
@@ -621,14 +648,117 @@ func (c *Client) Download(ctx context.Context, rawURL string, dst io.Writer) err
 	})
 }
 
+// DownloadStall is how long a student-work download may wait for a response
+// or go without receiving bytes before it fails. Student-work downloads have
+// no whole-request limit, so a large file on a slow school connection can
+// finish while a dead connection still ends. Tests shorten it.
+var DownloadStall = 60 * time.Second
+
+// stallWatch returns ctx unchanged when stall is zero. Otherwise the returned
+// context is canceled once progress has not been called for stall.
+func stallWatch(ctx context.Context, stall time.Duration) (context.Context, func(), func()) {
+	if stall <= 0 {
+		return ctx, nil, func() {}
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	timer := time.AfterFunc(stall, cancel)
+	return ctx, func() { timer.Reset(stall) }, func() { timer.Stop(); cancel() }
+}
+
+type progressBody struct {
+	io.ReadCloser
+	progress func()
+}
+
+func (b progressBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if n > 0 {
+		b.progress()
+	}
+	return n, err
+}
+
+// copyLimited copies at most max bytes. It tells a size rejection
+// (too_large), a local write failure (local) and a network failure
+// (transport, or canceled when ctx ended) apart.
+func copyLimited(ctx context.Context, dst io.Writer, src io.Reader, max int64) (int64, error) {
+	buf := make([]byte, 64<<10)
+	var n int64
+	for {
+		r, readErr := src.Read(buf)
+		if r > 0 {
+			if n+int64(r) > max {
+				return n, &Error{Kind: "too_large"}
+			}
+			w, writeErr := dst.Write(buf[:r])
+			n += int64(w)
+			if writeErr != nil || w != r {
+				return n, &Error{Kind: "local"}
+			}
+		}
+		if readErr == io.EOF {
+			return n, nil
+		}
+		if readErr != nil {
+			if ctx.Err() != nil {
+				return n, &Error{Kind: "canceled"}
+			}
+			return n, &Error{Kind: "transport"}
+		}
+	}
+}
+
+// DownloadLimited fetches incoming student work: at most max bytes, with a
+// stall limit in place of the whole-request timeout. It uses the same
+// credential and redirect rules as Download, rejects a declared length over
+// max before reading the body and returns the number of bytes written. The
+// caller removes the incomplete destination on failure.
+func (c *Client) DownloadLimited(ctx context.Context, rawURL string, dst io.Writer, max int64) (int64, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" || dst == nil || max < 0 {
+		return 0, &Error{Kind: "validation"}
+	}
+	var written int64
+	err = c.requestStall(ctx, http.MethodGet, u, nil, true, DownloadStall, func(resp *http.Response) error {
+		if resp.ContentLength > max {
+			return &Error{Kind: "too_large"}
+		}
+		var copyErr error
+		written, copyErr = copyLimited(ctx, dst, resp.Body, max)
+		return copyErr
+	})
+	return written, err
+}
+
 // DownloadUnauthenticated fetches a Canvas supplied signed URL without ever
 // attaching the Canvas PAT, including on same-origin URLs and redirects.
 func (c *Client) DownloadUnauthenticated(ctx context.Context, rawURL string, dst io.Writer) error {
-	u, err := url.Parse(rawURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" || dst == nil {
+	if dst == nil {
 		return &Error{Kind: "validation"}
 	}
+	_, err := c.downloadUnauthenticated(ctx, rawURL, dst, -1, 0)
+	return err
+}
+
+// DownloadUnauthenticatedLimited is DownloadUnauthenticated for incoming
+// student work: at most max bytes and a stall limit instead of a whole-request
+// timeout. It returns the number of bytes written.
+func (c *Client) DownloadUnauthenticatedLimited(ctx context.Context, rawURL string, dst io.Writer, max int64) (int64, error) {
+	if dst == nil || max < 0 {
+		return 0, &Error{Kind: "validation"}
+	}
+	return c.downloadUnauthenticated(ctx, rawURL, dst, max, DownloadStall)
+}
+
+func (c *Client) downloadUnauthenticated(ctx context.Context, rawURL string, dst io.Writer, max int64, stall time.Duration) (int64, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
+		return 0, &Error{Kind: "validation"}
+	}
 	hc := &http.Client{Transport: c.http.Transport, Timeout: 5 * time.Minute}
+	if stall > 0 {
+		hc.Timeout = 0
+	}
 	hc.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 || req.URL.Scheme != "https" || req.URL.User != nil {
 			return &Error{Kind: "validation"}
@@ -636,20 +766,36 @@ func (c *Client) DownloadUnauthenticated(ctx context.Context, rawURL string, dst
 		req.Header.Del("Authorization")
 		return nil
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	reqCtx, progress, stop := stallWatch(ctx, stall)
+	defer stop()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return &Error{Kind: "validation"}
+		return 0, &Error{Kind: "validation"}
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return &Error{Kind: "transport"}
+		if ctx.Err() != nil {
+			return 0, &Error{Kind: "canceled"}
+		}
+		return 0, &Error{Kind: "transport"}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &Error{Kind: "validation", Status: resp.StatusCode}
+		return 0, &Error{Kind: "validation", Status: resp.StatusCode}
 	}
-	if _, err = io.Copy(dst, resp.Body); err != nil {
-		return &Error{Kind: "transport"}
+	if max < 0 {
+		n, err := io.Copy(dst, resp.Body)
+		if err != nil {
+			return n, &Error{Kind: "transport"}
+		}
+		return n, nil
 	}
-	return nil
+	if resp.ContentLength > max {
+		return 0, &Error{Kind: "too_large"}
+	}
+	var body io.Reader = resp.Body
+	if progress != nil {
+		body = progressBody{resp.Body, progress}
+	}
+	return copyLimited(ctx, dst, body, max)
 }

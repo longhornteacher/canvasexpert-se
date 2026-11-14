@@ -29,6 +29,12 @@ const maxWorkspaceFile = 1 << 20
 
 var commandTimeout = 15 * time.Minute
 
+// pullCommandTimeout applies to pulls, which download every student upload
+// (each under 150,000,000 bytes) for a whole class and can outlast
+// commandTimeout on a school connection. Each download still fails on its
+// own once it stalls.
+var pullCommandTimeout = 2 * time.Hour
+
 type Server struct {
 	root              string
 	ctx               context.Context
@@ -95,6 +101,13 @@ type PersonalDatesInput struct {
 	Course       string `json:"course" jsonschema:"Configured course nickname"`
 	AssignmentID int64  `json:"assignment_id,omitempty" jsonschema:"Canvas assignment ID; omit to cover the course's published assignments due in the last three weeks or later"`
 	Preview      bool   `json:"preview,omitempty" jsonschema:"Report the planned dates without writing to Canvas"`
+}
+
+type CarryGradesInput struct {
+	Course    string  `json:"course" jsonschema:"Configured course nickname"`
+	TargetID  int64   `json:"target_id" jsonschema:"Canvas assignment ID of the one gradebook column that receives the scores (an ordinary points assignment, not a quiz)"`
+	SourceIDs []int64 `json:"source_ids" jsonschema:"Canvas assignment IDs whose entered scores are carried; each student should have a score on exactly one"`
+	Preview   bool    `json:"preview,omitempty" jsonschema:"Report the plan and save it for review without writing to Canvas"`
 }
 
 type RetakeInput struct {
@@ -322,7 +335,7 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.longCommand(ctx, args...)
 	})
-	addActionTool(server, "personal_dates", "Give students their own Canvas due and lock dates on an assignment, as single-student Canvas overrides. A student with saved extra time gets a later due date (saved school days, or a saved percent of the school days from the assigned date to the due date, rounded up); a student absent on the due date is due the next day back; where the course has a late-work limit the lock date follows the student's own due date; and after the due date, students whose work was on time are reopened through the correction window. Dates only move later, a student who already has a personal Canvas due date keeps it, and group assignments are skipped. Returns planned, written and held rows by student_ref and alias; the why list is private. Use preview first, then write after the teacher's go-ahead.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PersonalDatesInput) (TextOutput, error) {
+	addActionTool(server, "personal_dates", "Give students their own Canvas due and lock dates on an assignment, as single-student Canvas overrides. A student with saved extra time gets a later due date (saved school days, or a saved percent of the school days from the assigned date to the due date, rounded up); a student absent on the due date is due the next day back; where the course has a late-work limit the lock date follows the student's own due date. Only when the teacher has configured a correction window (late_work.correction_school_days) are students whose work was on time kept open through it, and never on an assignment whose grading timetable leaves corrections out or whose tutorial retake has been released. Dates only move later, a student who already has a personal Canvas due date keeps it, and group assignments are skipped. Returns planned, written and held rows by student_ref and alias; the why list is private. Use preview first, then write after the teacher's go-ahead.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PersonalDatesInput) (TextOutput, error) {
 		args := []string{"personal-dates", in.Course}
 		if in.AssignmentID > 0 {
 			args = append(args, strconv.FormatInt(in.AssignmentID, 10))
@@ -340,6 +353,16 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		if len(in.Genuine) > 0 {
 			args = append(args, "--genuine")
 			args = append(args, in.Genuine...)
+		}
+		return s.longCommand(ctx, args...)
+	})
+	addActionTool(server, "carry_grades", "Carry scores from several assignments into one gradebook column (a bridge), for example five per-book quizzes into one \"Book Club Quiz 1\" column. Each active student's value is the score entered on the one source they have a score on, before any late deduction, scaled to the target's points when they differ. Held, with the reason and nothing entered: no source score, excused, an attempt not fully graded, different scores on more than one source, a target not assigned to the student, and a target grade already higher than the source (a grade is never lowered). The first run saves the reviewed values in the course drafts folder and writes nothing; the second writes exactly those, holds any student whose source score or target grade changed since, and reads the grades back. A rerun writes nothing new. It never enters a zero for missing work and does not change posting: grades stay hidden under a manual posting policy. The target must be an ordinary points assignment (on_paper or none), not a quiz; team-taught courses are refused. The sources still count toward the course grade until they are moved to a no-weight assignment group with an assignment update. Use preview first, then write after the teacher's go-ahead.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in CarryGradesInput) (TextOutput, error) {
+		args := []string{"carry-grades", in.Course, strconv.FormatInt(in.TargetID, 10)}
+		for _, id := range in.SourceIDs {
+			args = append(args, strconv.FormatInt(id, 10))
+		}
+		if in.Preview {
+			args = append(args, "--preview")
 		}
 		return s.longCommand(ctx, args...)
 	})
@@ -575,7 +598,7 @@ func addActionTool[In any](server *mcp.Server, name, description string, destruc
 
 func externalTool(name string) bool {
 	switch name {
-	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "late_sweep", "personal_dates", "retake", "stad_teams", "stad_standings", "stad_publish", "stad_push_teams", "stad_print_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
+	case "set_quiz_accommodations", "set_tags", "list_tags", "assign_to", "assign_modules_by_tag", "audience_report", "set_file_access", "list_external_resources", "copy_assignment", "engine_info", "prepare_audience", "prepare_family_contact", "list_courses", "list_modules", "list_group_sets", "list_groups", "pull_group_set", "pull_group_memberships", "pull_assignment_dates", "pull_work", "pull_parent_report", "work_habits", "late_sweep", "personal_dates", "retake", "carry_grades", "stad_teams", "stad_standings", "stad_publish", "stad_push_teams", "stad_print_teams", "copy_module", "pull_assignment", "pull_quiz", "list_rubrics", "pull_rubric", "pull_page", "replace_text", "pull_discussion", "list_page_revisions", "inbox_list", "inbox_read", "inbox_reply", "inbox_set_state", "start_parent_review", "print_student_reports", "start_local_ui", "push_document", "post_results", "push_quiz", "upload_file", "list_quiz_points", "set_quiz_points", "canvas_get":
 		return true
 	default:
 		return false
@@ -617,7 +640,11 @@ func (s *Server) command(ctx context.Context, args ...string) (TextOutput, error
 	}
 	full := append([]string{"--workspace", s.root}, args...)
 	// A stalled Canvas call must not hold the client's tool call forever.
-	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	timeout := commandTimeout
+	if len(args) > 0 && (args[0] == "pull-work" || args[0] == "pull-discussion") && pullCommandTimeout > timeout {
+		timeout = pullCommandTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	graceful := len(args) > 0 && gracefulStop[args[0]]
 	var cmd *exec.Cmd
@@ -714,7 +741,7 @@ func runGraceful(ctx context.Context, cmd *exec.Cmd) error {
 func exit3Outcome(args []string) string {
 	if len(args) > 0 {
 		switch args[0] {
-		case "post", "push", "push-quiz", "set-tags", "assign-to", "assign-modules", "quiz-accommodations", "upload-file", "prepare-audience", "inbox-set-state":
+		case "pull-work", "post", "push", "push-quiz", "set-tags", "assign-to", "assign-modules", "quiz-accommodations", "upload-file", "prepare-audience", "inbox-set-state":
 			return "partial"
 		}
 	}

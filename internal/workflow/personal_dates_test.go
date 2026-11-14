@@ -37,8 +37,11 @@ type pdFixture struct {
 	writes []string
 	bodies map[string]map[string]any
 	over   string
-	// retake, when set, adds a tutorial retake of assignment 10 to the course list.
-	retake bool
+	// retake, when set, adds a tutorial retake of assignment 10 to the course
+	// list; retakePrivate leaves it unpublished, as scoring prepares it.
+	retake, retakePrivate bool
+	// desc is assignment 10's description.
+	desc string
 }
 
 func newPDFixture(t *testing.T, overrides string, personalDue map[int64]string) *pdFixture {
@@ -57,7 +60,10 @@ func newPDFixture(t *testing.T, overrides string, personalDue map[int64]string) 
 	for id, due := range personalDue {
 		subs[id] = strings.ReplaceAll(subs[id], pdDue, due)
 	}
-	assignment := fmt.Sprintf(`{"id":10,"course_id":1,"name":"Essay","points_possible":100,"submission_types":["online_text_entry"],"published":true,"due_at":%q,"lock_at":%q,"unlock_at":%q,"grading_type":"points"}`, pdDue, pdLock, pdUnlock)
+	assignmentJSON := func() string {
+		desc, _ := json.Marshal(f.desc)
+		return fmt.Sprintf(`{"id":10,"course_id":1,"name":"Essay","description":%s,"points_possible":100,"submission_types":["online_text_entry"],"published":true,"due_at":%q,"lock_at":%q,"unlock_at":%q,"grading_type":"points"}`, desc, pdDue, pdLock, pdUnlock)
+	}
 	s, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
@@ -68,14 +74,14 @@ func newPDFixture(t *testing.T, overrides string, personalDue map[int64]string) 
 			}
 			_ = json.NewEncoder(w).Encode(list)
 		case r.URL.Path == "/api/v1/courses/1/assignments":
-			list := assignment
+			list := assignmentJSON()
 			if f.retake {
 				desc, _ := json.Marshal("<p>Retake</p>" + retakeMarker(10))
-				list += `,{"id":11,"course_id":1,"name":"TUTORIAL-ONLY RETAKE - Essay","description":` + string(desc) + `,"published":true,"due_at":null}`
+				list += `,{"id":11,"course_id":1,"name":"TUTORIAL-ONLY RETAKE - Essay","description":` + string(desc) + `,"published":` + strconv.FormatBool(!f.retakePrivate) + `,"due_at":null}`
 			}
 			_, _ = io.WriteString(w, "["+list+"]")
 		case r.URL.Path == "/api/v1/courses/1/assignments/10":
-			_, _ = io.WriteString(w, assignment)
+			_, _ = io.WriteString(w, assignmentJSON())
 		case r.URL.Path == "/api/v1/courses/1/assignments/10/submissions":
 			var all []string
 			for id := int64(3); id <= 9; id++ {
@@ -103,7 +109,7 @@ func newPDFixture(t *testing.T, overrides string, personalDue map[int64]string) 
 		}
 	})
 	three := 3
-	s.Config.Courses[0].LateWork = &domain.LateWorkPolicy{LateCutoffSchoolDays: &three, CorrectionSchoolDays: 4}
+	s.Config.Courses[0].LateWork = &domain.LateWorkPolicy{LateCutoffSchoolDays: &three, CorrectionSchoolDays: four()}
 	cal := workspace.SchoolCalendar{Schema: 1, Timezone: "America/Chicago", StartDate: "2026-08-19", EndDate: "2027-05-27",
 		GradingPeriods: []workspace.GradingPeriod{{Name: "Term 2", StartDate: "2026-10-13", EndDate: "2026-12-18"}}}
 	if err := workspace.WriteTeacherDocument(s.Root, "context/school-calendar.md", cal, ""); err != nil {
@@ -258,5 +264,46 @@ func TestPersonalDatesDoesNotReopenAMajorThatHasARetake(t *testing.T) {
 	}
 	if rows[f.refs[3]].Status != "planned" {
 		t.Fatalf("extra time still applies: %+v", rows)
+	}
+}
+
+func TestPersonalDatesPrivateRetakeKeepsAnAuthorizedCorrectionWindow(t *testing.T) {
+	now := time.Date(2026, 11, 6, 18, 0, 0, 0, time.UTC)
+	f := newPDFixture(t, "[]", nil)
+	f.retake, f.retakePrivate = true, true
+	r, err := f.s.PersonalDates(context.Background(), "TEST", 10, true, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row := pdRows(r)[f.refs[4]]; row.Status != "planned" || strings.Join(row.Why, ",") != "on time: open for corrections" {
+		t.Fatalf("a prepared, unreleased retake must not close the correction window: %+v", row)
+	}
+}
+
+func TestPersonalDatesReopenNothingWithoutAnAuthorizedWindow(t *testing.T) {
+	now := time.Date(2026, 11, 6, 18, 0, 0, 0, time.UTC)
+	// No correction window configured: extra time and absences only.
+	f := newPDFixture(t, "[]", nil)
+	f.s.Config.Courses[0].LateWork.CorrectionSchoolDays = nil
+	r, err := f.s.PersonalDates(context.Background(), "TEST", 0, true, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := pdRows(r)
+	if row, ok := rows[f.refs[4]]; ok {
+		t.Fatalf("on-time work reopened without a window: %+v", row)
+	}
+	if rows[f.refs[3]].Status != "planned" || rows[f.refs[7]].Status != "planned" {
+		t.Fatalf("extra time and absence dates still apply: %+v", rows)
+	}
+	// A window is configured, but this assignment's timetable left corrections out.
+	g := newPDFixture(t, "[]", nil)
+	g.desc = "<p>Major.</p>" + `<details data-cse="grading-timetable"><summary><strong>Grading timetable</strong> (late work)</summary><ul><li><strong>Due:</strong> Thu 11/05</li></ul><p>Dates count school days only.</p></details>`
+	r, err = g.s.PersonalDates(context.Background(), "TEST", 0, true, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row, ok := pdRows(r)[g.refs[4]]; ok {
+		t.Fatalf("assignment that omits corrections was reopened: %+v", row)
 	}
 }

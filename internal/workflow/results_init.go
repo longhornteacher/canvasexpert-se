@@ -86,7 +86,7 @@ func InitResults(root, packetRel string, now time.Time) (string, error) {
 		}
 		fmt.Fprintf(&b, "  - student_ref: %s\n", quoteYAML(work.StudentRef))
 		fmt.Fprintf(&b, "    # work: %s (use this student_ref; Canvas identity is resolved privately)\n", rel)
-		if hint := studentHint(work); hint != "" {
+		if hint := studentHint(root, work); hint != "" {
 			fmt.Fprintf(&b, "    # %s\n", hint)
 		}
 		fmt.Fprintf(&b, "    operation: %s\n    %s:\n", operation, body)
@@ -147,7 +147,7 @@ func earlierScoringBasis(root, dir string, assignmentID int64) (string, *domain.
 	return relSlash(root, newest.path), &newest.doc.Interpretation, newest.doc.ScoringBasis
 }
 
-func studentHint(w domain.StudentWorkDocument) string {
+func studentHint(root string, w domain.StudentWorkDocument) string {
 	var hints []string
 	if w.Excused {
 		hints = append(hints, "excused in Canvas")
@@ -157,19 +157,12 @@ func studentHint(w domain.StudentWorkDocument) string {
 	} else if w.Current.Late {
 		hints = append(hints, "Canvas marks late")
 	}
-	unreadable := 0
-	for _, a := range w.Current.Attachments {
-		if a.Status != "readable" {
-			unreadable++
-		}
+	originals, missing := fileAvailability(root, w.Current)
+	if originals > 0 {
+		hints = append(hints, strconv.Itoa(originals)+" saved file(s): inspect each original at its path (or readable_path text) before scoring")
 	}
-	for _, f := range w.Current.WrittenFiles {
-		if f.Status != "" && f.Status != "readable" && f.Status != "downloaded" {
-			unreadable++
-		}
-	}
-	if unreadable > 0 {
-		hints = append(hints, strconv.Itoa(unreadable)+" file(s) not readable: evidence unknown, hold")
+	if missing > 0 {
+		hints = append(hints, strconv.Itoa(missing)+" file(s) unavailable: that evidence is unknown, hold")
 	}
 	if ev := w.DiscussionEvidence; ev != nil && ev.Status != "" && ev.Status != "complete" {
 		hints = append(hints, "discussion coverage "+ev.Status)

@@ -38,6 +38,7 @@ func (t anyHostTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 // rubric, so 12 item points.
 func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closing string, liveGradedAt ...string) (s *Service, resultsPath string, posts, comments *int, body *map[string]any, commentText *string) {
 	t.Helper()
+	t.Cleanup(func() { fixtureHonest = false })
 	posts, comments, body, commentText = new(int), new(int), new(map[string]any), new(string)
 	assignment := fixtureAssignment()
 	assignment.NewQuiz = true
@@ -55,6 +56,7 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closin
 		live.GradedAt = &liveGradedAt[0]
 	}
 	landed := false
+	fudge, fudgeValue := "null", 0.0
 	live.ExternalToolURL = "https://quiz-lti.instructure.com/lti/launch?participant_session_id=ps1&quiz_session_id=qs1"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -75,9 +77,9 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closin
 		case r.URL.Path == "/api/quiz_sessions/qs1":
 			total := "5.0"
 			if landed {
-				total = "17.0"
+				total = fmt.Sprint(17.0 + fudgeValue)
 			}
-			io.WriteString(w, `{"authoritative_result":{"id":"900","fudge_points":null,"score":`+total+`,"points_possible":20.0}}`)
+			io.WriteString(w, `{"authoritative_result":{"id":"900","fudge_points":`+fudge+`,"score":`+total+`,"points_possible":20.0}}`)
 		case r.URL.Path == "/api/quiz_sessions/qs1/results/900/session_item_results":
 			score, status, grader := "0.0", "ungraded", ""
 			if landed {
@@ -88,12 +90,15 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closin
 			*posts++
 			_ = json.NewDecoder(r.Body).Decode(body)
 			landed = true
+			if f, ok := (*body)["fudge_points"].(float64); ok {
+				fudge, fudgeValue = fmt.Sprint(f), f
+			}
 			if failFirstPost && *posts == 1 {
 				w.WriteHeader(http.StatusBadGateway)
 				return
 			}
 			w.WriteHeader(http.StatusCreated)
-			io.WriteString(w, `{"id":"901","score":17.0,"points_possible":20.0,"status":"graded"}`)
+			io.WriteString(w, fmt.Sprintf(`{"id":"901","score":%v,"points_possible":20.0,"status":"graded"}`, 17.0+fudgeValue))
 		case r.Method == http.MethodPut:
 			*comments++
 			var put map[string]map[string]any
@@ -142,7 +147,7 @@ func itemScoreFixture(t *testing.T, liveScore string, failFirstPost bool, closin
 	}
 	results := domain.ResultsDocument{Schema: 1, Kind: "results", Packet: "courses/TEST/packet.md", Assignment: snapshot,
 		Interpretation: domain.Interpretation{Mapping: "repeated", Rationale: "Use the rubric for the essay.", Components: []domain.Component{{Key: "essay", Label: "Q1 Essay", Weight: domain.MustDecimal("1"), ItemID: "21"}}},
-		Students: []domain.StudentResult{{StudentRef: student.Ref, Operation: "comment-only", CommentOnly: &domain.CommentOnlyOperation{Attempt: ref, ItemScores: true,
+		Students: []domain.StudentResult{{StudentRef: student.Ref, Operation: "comment-only", CommentOnly: &domain.CommentOnlyOperation{Attempt: ref, ItemScores: true, HonestEffort: fixtureHonest,
 			Components: []domain.ComponentScore{{Key: "essay", Evidence: "present", Criteria: []domain.CriterionScore{{CriterionID: "c1", Points: domain.MustDecimal("80")}}, Feedback: "Clear claim. Next, add a second example."}}, Feedback: closing}}}}
 	resultsPath = filepath.Join(s.Root, "courses", "TEST", "results.md")
 	if err = workspace.WriteDocument(resultsPath, results, "results"); err != nil {
@@ -276,5 +281,152 @@ func TestTeammateItemScoreWriteIsLoggedOnceAndRedacted(t *testing.T) {
 		if strings.Contains(string(raw), secret) {
 			t.Fatalf("log leaked %q: %s", secret, raw)
 		}
+	}
+}
+
+// fixtureHonest marks the next fixture's comment-only result honest_effort.
+var fixtureHonest bool
+
+
+func withFloor(s *Service, percent string) {
+	f := domain.MustDecimal(percent)
+	s.Config.Courses[0].EffortFloor = &f
+}
+
+func TestQuizFloorRaisesTheTotalByTheShortfallOnceAndKeepsItemScores(t *testing.T) {
+		fixtureHonest = true
+	s, path, posts, comments, body, commentText := itemScoreFixture(t, "15", false, "Strong evidence overall.")
+	withFloor(s, "95") // minimum 19 of 20; items give 5+12 = 17
+	report, err := s.Post(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := (*body)["results"].([]any)[0].(map[string]any)
+	if *posts != 1 || (*body)["fudge_points"] != float64(2) || row["score"] != float64(12) {
+		t.Fatalf("expected earned item score 12 and a 2-point adjustment: posts=%d body=%#v report=%#v", *posts, *body, report.Students)
+	}
+	if !strings.Contains(*commentText, "Score: 19/20") || !strings.Contains(*commentText, "Fudge points added to boost the score to the honest-effort floor: +2") || *comments != 1 {
+		t.Fatalf("comment should state Canvas's total: %q", *commentText)
+	}
+	if _, err = s.Post(context.Background(), path); err != nil || *posts != 1 {
+		t.Fatalf("rerun must not add the floor again: posts=%d err=%v", *posts, err)
+	}
+}
+
+func TestQuizFloorAddsNothingWhenTheTotalAlreadyMeetsIt(t *testing.T) {
+		fixtureHonest = true
+	s, path, _, _, body, _ := itemScoreFixture(t, "15", false, "Strong evidence overall.")
+	withFloor(s, "50") // minimum 10; total 17
+	if _, err := s.Post(context.Background(), path); err != nil {
+		t.Fatal(err)
+	}
+	if (*body)["fudge_points"] != nil {
+		t.Fatalf("no adjustment expected: %#v", *body)
+	}
+}
+
+func TestQuizFloorNeedsAnExplicitJudgmentAndTheCourseFloor(t *testing.T) {
+		fixtureHonest = false
+	s, path, _, _, body, _ := itemScoreFixture(t, "15", false, "Strong evidence overall.")
+	withFloor(s, "95") // floor configured, no honest_effort
+	if _, err := s.Post(context.Background(), path); err != nil || (*body)["fudge_points"] != nil {
+		t.Fatalf("a low total alone must not raise it: %#v err=%v", *body, err)
+	}
+	fixtureHonest = true
+	s, path, posts, _, _, _ := itemScoreFixture(t, "15", false, "Strong evidence overall.")
+	withFloor(s, "95")
+	s.Config.Courses[0].EffortFloor = nil
+	report, err := s.Post(context.Background(), path)
+	if err != nil || *posts != 0 || report.Students[0].Status != "held" || !strings.Contains(report.Students[0].Message, "effort_floor") {
+		t.Fatalf("expected a hold naming effort_floor: posts=%d report=%#v err=%v", *posts, report.Students, err)
+	}
+}
+
+func TestQuizFloorStaysAdviceWhenWritesAreOff(t *testing.T) {
+	quizFloorWrites = false
+	t.Cleanup(func() { quizFloorWrites = true })
+	fixtureHonest = true
+	s, path, posts, _, body, _ := itemScoreFixture(t, "15", false, "Strong evidence overall.")
+	withFloor(s, "95")
+	report, err := s.Post(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := report.Students[0].Outcomes.Grade.Message
+	if *posts != 1 || (*body)["fudge_points"] != nil || !strings.Contains(msg, "minimum 19") || !strings.Contains(msg, "enter total 19") {
+		t.Fatalf("item scores should write with no fudge and the numbers reported: posts=%d body=%#v outcomes=%#v", *posts, *body, report.Students[0].Outcomes)
+	}
+}
+
+func TestQuizFloorWritesOnlyWhenQuizPointsMatchTheAssignment(t *testing.T) {
+	g := &canvas.NewQuizGrading{Score: "35.5", PointsPossible: "100", FudgePoints: json.RawMessage("null"), Items: []map[string]any{{"item_id": "8856743", "score": json.Number("2.5")}}}
+	s := &Service{Config: domain.CourseConfig{Courses: []domain.Course{{ID: 1, EffortFloor: ptrDecimal("50")}}}}
+	want := map[string]string{"8856743": "2.5"}
+	plan, why := s.planQuizFloor(1, domain.MustDecimal("100"), g, want, domain.MustDecimal("0"))
+	if why != "" || !plan.writable || plan.raise.String() != "14.5" || plan.adjustment.String() != "14.5" {
+		t.Fatalf("observed live case: %#v %q", plan, why)
+	}
+	if plan, _ = s.planQuizFloor(1, domain.MustDecimal("20"), g, want, domain.MustDecimal("0")); plan.writable || plan.raise.String() != "14.5" {
+		t.Fatalf("a quiz whose points differ from the assignment's must only advise: %#v", plan)
+	}
+}
+
+func ptrDecimal(s string) *domain.Decimal { d := domain.MustDecimal(s); return &d }
+
+func TestQuizFloorUnwindsItsEarlierRaiseOnRescore(t *testing.T) {
+	s := &Service{Config: domain.CourseConfig{Courses: []domain.Course{{ID: 1, EffortFloor: ptrDecimal("50")}}}}
+	hundred := domain.MustDecimal("100")
+	// Entered 35.5 earned + 14.5 floor raise = 50; essay at 2.5.
+	grading := func(fudge string) *canvas.NewQuizGrading {
+		return &canvas.NewQuizGrading{Score: "50", PointsPossible: "100", FudgePoints: json.RawMessage(fudge), Items: []map[string]any{{"item_id": "8856743", "score": json.Number("2.5")}}}
+	}
+	prior := domain.MustDecimal("14.5")
+	// Re-scored up by 10: still short by 4.5, so the raise shrinks to 4.5.
+	plan, why := s.planQuizFloor(1, hundred, grading("14.5"), map[string]string{"8856743": "12.5"}, prior)
+	if why != "" || plan.raise.String() != "4.5" || plan.adjustment.String() != "4.5" || plan.change.String() != "-10" {
+		t.Fatalf("partial unwind: %#v %q", plan, why)
+	}
+	// Re-scored far up: the floor no longer applies and the raise is removed.
+	plan, _ = s.planQuizFloor(1, hundred, grading("14.5"), map[string]string{"8856743": "25"}, prior)
+	if plan.raise.Sign() != 0 || plan.adjustment.Sign() != 0 || plan.change.String() != "-14.5" {
+		t.Fatalf("full unwind: %#v", plan)
+	}
+	// Another teacher adjustment of 3 stays.
+	g := grading("17.5")
+	g.Score = "53"
+	plan, _ = s.planQuizFloor(1, hundred, g, map[string]string{"8856743": "25"}, prior)
+	if plan.adjustment.String() != "3" || plan.change.String() != "-14.5" {
+		t.Fatalf("other adjustment must stay: %#v", plan)
+	}
+	// Same scores again: nothing to write.
+	plan, _ = s.planQuizFloor(1, hundred, grading("14.5"), map[string]string{"8856743": "2.5"}, prior)
+	if plan.change.Sign() != 0 || plan.raise.String() != "14.5" {
+		t.Fatalf("rerun must be a no-op: %#v", plan)
+	}
+	// The adjustment is smaller than the raise the Engine recorded: hold.
+	if _, why = s.planQuizFloor(1, hundred, grading("10"), map[string]string{"8856743": "2.5"}, prior); why == "" {
+		t.Fatal("a changed adjustment must hold")
+	}
+}
+
+func TestPriorFloorRaiseReadsTheEnginesLatestScoreComment(t *testing.T) {
+	one := 1
+	next := int64(0)
+	mk := func(author int64, text string) SubmissionComment {
+		next++
+		return SubmissionComment{ID: next, AuthorID: author, Comment: text, Attempt: &one}
+	}
+	line := "Score: 50/100 (attempt 1)\n" + floorCommentPrefix + "+14.5"
+	live := Submission{UserID: 5, Comments: []SubmissionComment{mk(9, line)}}
+	if got := priorFloorRaise(live, domain.AttemptRef{Attempt: 1}); got.String() != "14.5" {
+		t.Fatalf("got %s", got)
+	}
+	live.Comments = append(live.Comments, mk(5, line+"0"), mk(5, "Score: 99/100 (attempt 1)\n"+floorCommentPrefix+"+90"))
+	if got := priorFloorRaise(live, domain.AttemptRef{Attempt: 1}); got.String() != "14.5" {
+		t.Fatalf("a student's comment must not count: %s", got)
+	}
+	live.Comments = append(live.Comments, mk(9, "Score: 55/100 (attempt 1)"))
+	if got := priorFloorRaise(live, domain.AttemptRef{Attempt: 1}); got.Sign() != 0 {
+		t.Fatalf("a later score comment without the line means no raise: %s", got)
 	}
 }

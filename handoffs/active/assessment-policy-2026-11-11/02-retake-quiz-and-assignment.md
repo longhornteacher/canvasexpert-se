@@ -1,5 +1,7 @@
 # Slice 02 - Retake quiz creation and assignment
 
+> **Superseded in part 2026-11-13:** see [HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md](../HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md) section 2. The retake is created privately during Major scoring and `retake assign` / `retake apply` run only on explicit teacher direction; any wording below that triggers them automatically after grading, a low grade or a saved `retakes` block is superseded. Engine operation behavior is otherwise unchanged.
+
 Status: **built in Dev 2026-11-11, local tests only; pairing is by hidden marker with a unique-title fallback; the marker surviving in New Quiz instructions is unobserved**. Kind: Engine authoring and audience. Needs the config from [01](01-playbooks-and-config.md). Read the [README](README.md) first.
 
 ## Result

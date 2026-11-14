@@ -181,13 +181,15 @@ type Attachment struct {
 	URL         string `json:"url"`
 	ContentType string `json:"content-type"`
 	Size        int64  `json:"size"`
+	UpdatedAt   string `json:"updated_at"`
 }
 type SubmissionComment struct {
-	ID        int64  `json:"id"`
-	Comment   string `json:"comment"`
-	Attempt   *int   `json:"attempt"`
-	CreatedAt string `json:"created_at"`
-	AuthorID  int64  `json:"author_id"`
+	ID          int64        `json:"id"`
+	Comment     string       `json:"comment"`
+	Attempt     *int         `json:"attempt"`
+	CreatedAt   string       `json:"created_at"`
+	AuthorID    int64        `json:"author_id"`
+	Attachments []Attachment `json:"attachments"`
 }
 type Submission struct {
 	ID                            int64                  `json:"id"`
@@ -232,6 +234,7 @@ type Submission struct {
 		URL         string `json:"url"`
 		DisplayName string `json:"display_name"`
 		MediaType   string `json:"media_type"`
+		ContentType string `json:"content-type"`
 	} `json:"media_comment"`
 	DiscussionEntries []struct {
 		Message   string `json:"message"`
@@ -523,7 +526,7 @@ func UnsupportedAssignment(a Assignment) string {
 		return "no supported submission mode"
 	}
 	for _, t := range a.SubmissionTypes {
-		if t != "online_text_entry" && t != "online_upload" && t != "on_paper" {
+		if t != "online_text_entry" && t != "online_upload" && t != "on_paper" && t != "none" {
 			return "unsupported submission mode: " + t
 		}
 	}

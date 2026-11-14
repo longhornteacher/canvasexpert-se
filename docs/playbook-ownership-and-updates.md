@@ -65,18 +65,22 @@ Neither choice makes that decision disposable during a product update.
   so independent feedback never waits. The follow-up never touches a grade.
 - Use school-day lateness, excluding weekends and calendar breaks;
   early-release days count as full days.
-- Corrections are available as soon as a student finishes the assignment.
-  The official correction deadline is 14 calendar days from that student's
-  applicable due date, not 14 days from feedback publication. Availability
-  does not wait for agent scoring or for feedback to be posted. Turning work
-  in and doing corrections are separate; lateness rules govern the first, not
-  the correction window. This is a shipped default only, and teachers replace
-  it with their own correction systems.
-- In planning/creation, say "Corrections available" in the assignment itself
-  and direct students to feedback for rationales/exemplars. This does not
-  prescribe a correction method, promise a point increase, or require the
-  teacher to establish a formula before the assignment can be created.
-  Teachers develop their own correction norms; remember them when expressed.
+- Superseded 2026-11-13 (see
+  [the handoff](../handoffs/active/HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md),
+  section 2): the earlier default of corrections open for 14 calendar days,
+  advertised as "Corrections available" in every assignment, is gone. With no
+  explicit teacher correction policy, a new assignment, quiz or feedback comment
+  offers no further submission, extra credit or correction points. Feedback
+  still explains how to improve, and rationales and exemplars stay. A teacher's
+  own correction system, from `Teacher_Override.md` or `context/grading.md`,
+  governs; remember it when expressed. A teacher-set `correction_school_days`
+  window puts a corrections row in the Engine timetable and lets `personal_dates`
+  reopen on-time work, and it never mentions points.
+- During Major scoring the agent writes the tutorial retake from what students
+  missed and creates it privately: unpublished, assigned to nobody, omitted from
+  the final grade. `retake assign` and `retake apply` run only on explicit
+  teacher direction. Implemented in Dev with local tests only; no Canvas Live
+  check of this behavior.
 - Parent updates use Engine-resolved Missing/0 classifications: a positive
   teacher-entered grade overrides stale missing/no-submission indicators;
   a current recorded zero belongs in Missing/0 without implying it was
@@ -84,7 +88,11 @@ Neither choice makes that decision disposable during a product update.
   Corrections. Skip only after classification, when every included course
   meets `skip_score` (90 by default) and no Missing/0 items remain. Never
   request parent replies or invent extra-credit opportunities; include only
-  existing coursework and teacher-authorized opportunities.
+  existing coursework and teacher-authorized opportunities. Superseded
+  2026-11-07 and 2026-11-13: the current parent-report contract is
+  [parent-update-flow.md](parent-update-flow.md), which has no Corrections
+  section, correction deadlines, Missing/0 inventory or `skip_score`; read that
+  rather than this bullet.
 
 - Parent reports are scoped by the active grading period in
   `context/school-calendar.md`. The Engine inventories all required visible
@@ -92,7 +100,9 @@ Neither choice makes that decision disposable during a product update.
   effective dates, and limits Missing/0, Corrections and History to that
   inventory. Email and print render every inventory row even when the agent's
   draft selects none. An empty window is an explicit skip. Do not disclose
-  grades whose `posted_at` is explicitly null.
+  grades whose `posted_at` is explicitly null. (Superseded 2026-11-07: the
+  report now lists below-70% released scores with submission status and has no
+  Corrections or History list; see [parent-update-flow.md](parent-update-flow.md).)
 - Lateness is separate from score arithmetic. The Engine counts school time
   from the first genuine submission using the calendar; the agent records its
   reasoning and accommodation basis. `late-only` changes only Canvas lateness
@@ -113,6 +123,7 @@ example times for the teacher to replace.
   retain their stated scope.
 - Correction methods and point-recovery norms develop with each teacher;
   the shipped feedback practices do not establish those terms by themselves.
+  Shipped text offers none until the teacher chooses one (2026-11-13).
 
 The earlier "spelling never counts for more than 10%" example was illustrative,
 not a requested shipped scoring policy or a confirmed personal preference.
@@ -132,7 +143,7 @@ does not need to request a file edit or know the storage layout.
   (UserInstall, or UserSync when configured), so it follows the teacher across
   PCs. Saving a preference writes the overlay, not the shipped playbook text.
 - `Teacher_Override.md` holds only overrides of shipped defaults (for example
-  a standing review skip, a different correction window, no tiered-support
+  a standing review skip, a correction window, no tiered-support
   offers). `context/teaching-profile.md` and `context/grading.md` stay as
   setup facts the shipped defaults leave open, such as page style, rubric
   scale and feedback voice. Updates never replace either kind.
@@ -207,11 +218,10 @@ authority over teacher choices.
 5. **Shipped 2026-10-17.** New Quiz comments lead with item lines and never an
    overall line. The Engine defect (the default header printed the written
    portion scaled to the whole quiz) is fixed.
-6. **Built 2026-10-17.** The parent report lists corrections for finished work
-   inside the window, with or without feedback. The playbook includes work
-   where the student lost points, points to feedback when it exists, follows a
-   teacher's own correction system from `Teacher_Override.md`, and never
-   promises points.
+6. **Built 2026-10-17; superseded 2026-11-07 and 2026-11-13.** The parent report
+   once listed corrections for finished work inside the window. The Corrections
+   section is gone; see [parent-update-flow.md](parent-update-flow.md). Nothing
+   in a family message promises points or another submission.
 7. **Shipped 2026-10-17.** First-task questions and tier offers check saved
    choices first, including ones from an earlier install or another computer.
 8. **Dropped 2026-10-17.** Parent emails keep assignment-level scores;
@@ -225,6 +235,21 @@ exemplars. X is the earned score before Canvas's deduction. Verified in Canvas
 Live (CS8, 2026-10-17, Test Student), including a real lateness write with a
 past due date: Canvas recorded late, deducted 2 points from the earned 16, and
 the comment read `Overall: 16/20 (late)`.
+
+## Adopting a new seed with a customized copy (2026-11-13)
+
+When the shipped playbooks change, such as the 2026-11-13 removal of default
+correction, extra-credit and points-back offers, a teacher with customized files
+adopts them through the existing mechanism; nothing new is needed. A git install
+updates by pull: git replaces the shipped playbooks, any edit found at update
+time becomes a `Teacher_Override.md` entry once with the old file kept under
+`playbook-old/<date>/`, and `context/` is never touched. A ZIP install runs
+`update-playbooks`, which replaces only playbooks still matching the previous
+shipped copy, keeps every teacher-edited one for background reconciliation, and
+leaves `context/` and `Teacher_Override.md` alone. A teacher who already chose a
+correction window (`correction_school_days`, `retakes`) or wrote their own
+correction rules keeps them; a teacher who relied on the old default gets no
+offers until they choose a policy. Existing Canvas assignments are not edited.
 
 ## History: first ZIP-era update and plan (2026-10-17)
 
