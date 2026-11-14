@@ -18,7 +18,11 @@ Five roles, each with a fixed job. Only the author writes.
 
 Run each role as a separate helper agent when your app can start one: one helper per role for each product or assignment, never one per student. Give the fact-checker the cheapest capable model; it only has to find and quote. Give the reviewers a model at least as strong as yours, and the arbiter the strongest available. Hand each helper file paths and its brief, not a summary of the work: a summary is exactly what the review exists to check. Helpers keep the privacy rules in `AGENTS.md`: aliases only, no `.cse/` or contact files, and no student work sent to the web or any outside service. A helper does only its brief: it does not run the session-start update check, route the task or read playbooks its role doesn't receive.
 
-**Scoring uses two helpers, and the arbiter only when needed.** For scoring feedback, the fact-checker (cheapest capable model) runs as above, and one reviewer (a mid-tier model, such as a Sonnet-class model) does both the logic and the pedagogy review in a single pass over the results file. You answer its findings as in step 4. The arbiter runs only when something is left to rule on: a possible-AI-use flag, a finding you rejected, or a fact you and the fact-checker still disagree on. Give it the strongest available model, since a flag is the highest-stakes call in scoring. When you accepted every finding and there is no flag or disputed fact, apply the findings, run the final fact-check on what changed, and the review is done.
+**Three sizes of review.** Use the smallest that fits; when unsure, use the larger.
+
+- **No helpers**: a correction that changes no meaning, such as a typo, spelling, formatting, a date, points or a setting. Validate locally and look it over yourself. A change inside a quotation, a source passage, an answer key or a rationale is not this size, because it changes a provable item.
+- **Two helpers**: scoring feedback, and authored work not listed under four helpers (edits to existing content, Pages, Daily assignments, discussion prompts, tier supports). The fact-checker (cheapest capable model) runs as above, and one reviewer (a mid-tier model, such as a Sonnet-class model) does both the logic and the pedagogy review in a single pass. You answer its findings as in step 4. The arbiter runs only when something is left to rule on: a possible-AI-use flag, a finding you rejected, or a fact you and the fact-checker still disagree on. Give it the strongest available model, since a flag is the highest-stakes call in scoring. When you accepted every finding and there is no flag or disputed fact, apply the findings, run the final fact-check on what changed, and the review is done.
+- **Four helpers**: a new quiz, a Major and its tutorial retake, and a rubric. Separate logic and pedagogy reviewers run, and the arbiter rules on every finding.
 
 When your app can't start helpers, play each role yourself in turn. Say which role you are starting ("Fact-checking: product and sources only"), set your own reasoning aside, and read only what that role receives. It is weaker than independent agents, so be strict.
 
@@ -67,7 +71,7 @@ The teacher's explicit choices are settled: flag a likely problem with one, but 
 
 Answer every logic and pedagogy finding: accept or reject, with a one-line reason. Don't defend work by habit or agree to look cooperative; both mislead the arbiter.
 
-The arbiter rules on every logic and pedagogy finding, accepted or rejected, on every possible-AI-use flag, and on any fact still disputed. In scoring it runs only when there is a flag, a rejected finding or a disputed fact, and rules on just those; accepted findings are applied without it. It works from the passages and evidence it is handed and opens a source only when a ruling depends on it. Facts the fact-checker found, or that you fixed or cut, never reach it.
+The arbiter rules on every logic and pedagogy finding, accepted or rejected, on every possible-AI-use flag, and on any fact still disputed. In a two-helper review it runs only when there is a flag, a rejected finding or a disputed fact, and rules on just those; accepted findings are applied without it. It works from the passages and evidence it is handed and opens a source only when a ruling depends on it. Facts the fact-checker found, or that you fixed or cut, never reach it.
 
 - **Uphold** a finding when it shows a real error in logic, a factual problem the fact-checker missed, or a departure from the teacher's standards. It may name a better fix than the one suggested.
 - **Dismiss** a finding when it is a matter of taste, when your reason holds, or when it would override the teacher's explicit request.
@@ -78,12 +82,13 @@ Upheld rulings are binding. Apply them, then send only new or changed provable i
 
 ## Scale by output
 
-| Output | Fact-check | Logic | Pedagogy |
-|---|---|---|---|
-| Assignment, rubric, Page, tier supports, discussion prompt | full | full | full |
-| New Quiz: items, key, rationales, instructions | full | full | full |
-| Edit of existing content | changed passages | changed passages | changed passages |
-| Scoring (one reviewer covers both columns) | every quotation, claim about a student's work, exemplar and flag's evidence | interpretation, scoring basis, and every student's scores and feedback | interpretation, scoring basis, and every student's feedback |
+| Output | Helpers | Fact-check | Logic | Pedagogy |
+|---|---|---|---|---|
+| New Quiz (items, key, rationales, instructions), Major and its tutorial retake, rubric | four | full | full | full |
+| New Page, Daily assignment, tier supports, discussion prompt | two (one reviewer covers both columns) | full | full | full |
+| Edit of existing content | two (one reviewer covers both columns) | changed passages | changed passages | changed passages |
+| Correction that changes no meaning; date, points or settings change | none | none | none | none |
+| Scoring | two (one reviewer covers both columns) | every quotation, claim about a student's work, exemplar and flag's evidence | interpretation, scoring basis, and every student's scores and feedback | interpretation, scoring basis, and every student's feedback |
 
 In scoring, the reviewers read the results file against the rubric and interpretation in one pass per assignment, not the packets: the fact-checker has already proven what the feedback says about each student's work. They open a student's work only when a finding depends on it. An upheld finding that reflects a pattern ("feedback misreads criterion 2") is applied to every student it affects, and their changed feedback goes through the final fact-check. A change to the shared interpretation or scoring basis applies to everyone, as `score.md` says. A date, points or settings change with no new wording has nothing to review.
 
