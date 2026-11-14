@@ -119,7 +119,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   results-init PACKET           Start a results file for a pulled packet (attempts and evidence filled in)
   doctor [--json] [--offline]   Check this UserInstall; authenticated Canvas and hub checks unless offline
   version [--json]              Print version and build information
-  help [formats|formats-assignment|formats-page|formats-module|formats-quiz|formats-inbox|fields|examples]
+  help [formats|formats-assignment|formats-page|formats-module|formats-quiz|formats-inbox|formats-results|fields|examples|examples/NAME]
                                 Print offline reference, optionally limited to one document kind
 
 COURSE is an explicit nickname in context/courses.md. FILE paths are relative
@@ -132,6 +132,14 @@ Read the playbooks (playbooks/setup.md, authoring.md, native-content.md, edit.md
 
 // printEngineDoc prints the embedded format reference, field limits, or synthetic examples.
 func printEngineDoc(out io.Writer, topic string) error {
+	if strings.HasPrefix(topic, "examples/") {
+		text, err := embedded.EngineExample(topic)
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, text)
+		return err
+	}
 	if section, ok := strings.CutPrefix(topic, "formats-"); ok {
 		text, err := embedded.EngineFormatSection(section)
 		if err != nil {
@@ -204,7 +212,7 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 	}
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" {
 		if len(args) > 1 && args[0] == "help" {
-			fmt.Fprintf(out, "No separate help for %q. Detailed help topics: formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, fields, examples. The command list below shows what each command does.\n\n", args[1])
+			fmt.Fprintf(out, "No separate help for %q. Detailed help topics: formats, formats-assignment, formats-page, formats-module, formats-quiz, formats-inbox, formats-results, fields, examples, examples/NAME. The command list below shows what each command does.\n\n", args[1])
 		}
 		fmt.Fprint(out, help)
 		return 0
@@ -593,6 +601,9 @@ func run(ctx context.Context, args []string, out, progress io.Writer) int {
 		fmt.Fprintf(out, "Valid document: %s\n", p)
 		previewTimetable(root, p, out)
 		previewResults(root, p, out)
+		if spread, err := workflow.ResultsSpread(root, p); err == nil && spread != "" {
+			fmt.Fprint(out, spread)
+		}
 		return 0
 	}
 	if cmd == "draft-pdf" {

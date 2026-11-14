@@ -4,6 +4,7 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+- Less for the agent to read in a scoring session: `validate` prints the score spread (scored/held, median, middle half, range, percent bands, honest-effort count; per written part for a New Quiz) so the agent quotes the Engine's numbers; `engine_reference` / `help` add `formats-results` and `examples/NAME`; and the scoring playbook moved late timing, the late-mark sweep, personal dates and the bridge column into a new `playbooks/gradebook.md`. Checked with local tests only.
 - Faster scoring: a New Quiz signs in once per quiz instead of once per student at pull and at post, New Quizzes requests share the Engine's four-at-a-time limit and retry reads on rate limits, pulls read New Quiz files four students at a time, and `post` / `post_results` posts four students at a time. Saved outcomes, holds and resume are unchanged. Checked with local tests only.
 
 ## 2.3.0 (2026-11-14)
