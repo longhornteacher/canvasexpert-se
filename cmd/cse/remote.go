@@ -1095,15 +1095,41 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		fmt.Fprintln(out, path)
 		fmt.Fprintf(out, "%d students, %s to %s\n", len(packet.Students), packet.From, packet.To)
 	case "parent-report":
-		fullPeriod := true // --full-period is accepted; every report covers the whole term
+		var options workflow.ParentReportOptions
 		var filtered []string
-		for _, arg := range args {
-			if arg != "--full-period" {
+		for i := 0; i < len(args); i++ {
+			arg := args[i]
+			if arg == "--full-period" {
+				continue
+			}
+			if arg == "--from" || arg == "--through" || arg == "--period" || arg == "--timezone" {
+				if i+1 == len(args) || strings.HasPrefix(args[i+1], "--") {
+					return fail(inputError(fmt.Errorf("%s requires a value", arg)), progress)
+				}
+				i++
+				var dst *string
+				switch arg {
+				case "--from":
+					dst = &options.From
+				case "--through":
+					dst = &options.Through
+				case "--period":
+					dst = &options.Period
+				case "--timezone":
+					dst = &options.Timezone
+				}
+				if *dst != "" {
+					return fail(inputError(fmt.Errorf("%s specified more than once", arg)), progress)
+				}
+				*dst = args[i]
+			} else if strings.HasPrefix(arg, "--") {
+				return fail(inputError(fmt.Errorf("unknown parent-report option %s", arg)), progress)
+			} else {
 				filtered = append(filtered, arg)
 			}
 		}
 		courseList, refList := splitParentArgs(filtered)
-		path, packet, e := service.ParentReportWithScope(ctx, courseList, refList, time.Now(), fullPeriod)
+		path, packet, e := service.ParentReportWithOptions(ctx, courseList, refList, time.Now(), options)
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}
@@ -1112,7 +1138,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 	case "pull-work":
 		nickname, query := "", ""
 		var groupID int64
-		groupScoped, session := false, false
+		groupScoped, session, list := false, false, false
 		positionals := []string{}
 		for i := 0; i < len(args); i++ {
 			switch args[i] {
@@ -1121,6 +1147,11 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 					return fail(fmt.Errorf("--session may be supplied once"), progress)
 				}
 				session = true
+			case "--list":
+				if list {
+					return fail(fmt.Errorf("--list may be supplied once"), progress)
+				}
+				list = true
 			case "--group":
 				if groupScoped || i+1 >= len(args) {
 					return fail(fmt.Errorf("--group requires one positive ID"), progress)
@@ -1139,7 +1170,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			}
 		}
 		if len(positionals) > 2 {
-			return fail(fmt.Errorf("usage: pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session]"), progress)
+			return fail(fmt.Errorf("usage: pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session [--list]]"), progress)
 		}
 		if len(positionals) > 0 {
 			nickname = positionals[0]
@@ -1150,9 +1181,12 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		if groupScoped && (nickname == "" || query == "") {
 			return fail(fmt.Errorf("--group requires explicit course and assignment"), progress)
 		}
+		if list && (!session || query != "" || groupScoped) {
+			return fail(fmt.Errorf("usage: pull-work [COURSE] --session --list (--list takes no assignment or --group)"), progress)
+		}
 		var report workflow.PullReport
 		var e error
-		options := workflow.PullWorkOptions{Session: session}
+		options := workflow.PullWorkOptions{Session: session, List: list}
 		if groupScoped {
 			report, e = service.PullWorkGroupWithOptions(ctx, nickname, query, groupID, options)
 		} else {
@@ -1162,7 +1196,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			if report.Partial {
 				fmt.Fprintln(out, "Pull outcome: partial; use the available packets and retry only failed or not-reached assignments.")
 			}
-			printSessionReport(out, report.Assignments)
+			printSessionReport(out, report.Assignments, list)
 		} else {
 			if len(report.Assignments) > 0 {
 				fmt.Fprintln(table, "Course\tAssignment\tTitle\tPulled\tLate\tMissing\tExcused\tInactive\tUnsupported\tHandled\tUnavailable files\tDetails")
@@ -1183,7 +1217,11 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 			}
 			fmt.Fprintln(out, p)
 		}
-		fmt.Fprintf(out, "%d students in %d packets\n", report.Students, len(report.Packets))
+		if list {
+			fmt.Fprintln(out, "Listed only; nothing pulled.")
+		} else {
+			fmt.Fprintf(out, "%d students in %d packets\n", report.Students, len(report.Packets))
+		}
 		counts := map[string]int{}
 		order := []string{}
 		for _, m := range report.Skipped {
@@ -1202,7 +1240,7 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		for _, m := range report.Warnings {
 			fmt.Fprintln(progress, "Note:", m)
 		}
-		fmt.Fprintf(progress, "Discovery: %s, %d HTTP requests; fetch/download: %s, %d HTTP requests\n", report.DiscoveryElapsed.Round(time.Millisecond), report.DiscoveryRequests, report.FetchElapsed.Round(time.Millisecond), report.FetchRequests)
+		fmt.Fprintf(status, "Discovery: %s, %d HTTP requests; fetch/download: %s, %d HTTP requests\n", report.DiscoveryElapsed.Round(time.Millisecond), report.DiscoveryRequests, report.FetchElapsed.Round(time.Millisecond), report.FetchRequests)
 		if e != nil {
 			var partial *workflow.PullIncompleteError
 			if errors.As(e, &partial) {

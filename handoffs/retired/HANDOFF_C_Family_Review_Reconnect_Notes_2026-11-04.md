@@ -2,7 +2,7 @@
 
 # HANDOFF C: Family review keeps revision notes after reconnect
 
-Date: 2026-11-04. Slice C of the [unified architecture review](../Unified%20Architecture%20Review.md). Layer: **Engine / MCP adapter** (`internal/mcpserver`). Small, bounded fix.
+Date: 2026-11-04. Slice C of the [unified architecture review](Unified%20Architecture%20Review.md). Layer: **Engine / MCP adapter** (`internal/mcpserver`). Small, bounded fix.
 
 Before starting: `git fetch`, bring `dev` up to date, read root `AGENTS.md`, [docs/family-contact-flow.md](../../docs/family-contact-flow.md) and the [shared execution notes](../README.md#execution-notes-for-the-active-handoffs). Facts mapped at `2818e36`.
 

@@ -46,10 +46,7 @@ func TestCourseSaveVisibleToConnectedMCPWithoutRestart(t *testing.T) {
 			t.Fatalf("configured courses: %v %+v", err, result)
 		}
 		var output mcpserver.TextOutput
-		b, _ := json.Marshal(result.StructuredContent)
-		if err := json.Unmarshal(b, &output); err != nil {
-			t.Fatal(err)
-		}
+		output.Text = result.Content[0].(*mcp.TextContent).Text
 		var saved struct {
 			Source, Root, Instance string
 			Courses                []domain.Course
@@ -91,10 +88,7 @@ func TestCourseSaveVisibleToConnectedMCPWithoutRestart(t *testing.T) {
 		t.Fatalf("MCP read of shared grading: %v %+v", err, result)
 	}
 	var grading mcpserver.TextOutput
-	b, _ := json.Marshal(result.StructuredContent)
-	if err := json.Unmarshal(b, &grading); err != nil {
-		t.Fatal(err)
-	}
+	grading.Text = result.Content[0].(*mcp.TextContent).Text
 	if !strings.Contains(grading.Text, "mode: sync") || !strings.Contains(grading.Text, "authority_root: "+syncRoot) || !strings.Contains(grading.Text, "Shared hub voice.") || !strings.Contains(grading.Text, "Shared grading preference.") {
 		t.Fatalf("connected MCP did not read the hub's active UserSync file: %s", grading.Text)
 	}

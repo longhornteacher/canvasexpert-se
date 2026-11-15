@@ -91,14 +91,14 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
                                 Assign each module to its same-named tag
   audience-report COURSE [--module TITLE|ID] Show who can see each module and item; flags items in several modules
   set-file-access COURSE FILE_ID --access course|hidden|locked Change an existing course file's access
-  pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session] Pull scoring-session work; no scope uses current courses
+  pull-work [COURSE [ASSIGNMENT]] [--group ID] [--session [--list]] Pull scoring-session work; no scope uses current courses; --list only lists assignments with work to score
   prepare-late-timing FILE  Check first-genuine choices from a packet and propose late-only timing changes; never writes to Canvas
   late-sweep COURSE [--period NAME] Recompute a course's late marks in school time (weekends, closures, saved absences and extra days) and save late-only results to post; never writes to Canvas
   personal-dates COURSE [ASSIGNMENT_ID] [--preview] Give students their own Canvas due and lock dates for saved extra time and an absence on the due date; on-time work stays open through a correction window only when the teacher configured one; dates only move later
   retake assign COURSE ORIGINAL_ID [--preview] Assign a Major's tutorial retake to every student who failed the original, each with their own deadline counted from the day their grade was posted; reports each student and what was done
   retake apply COURSE ORIGINAL_ID [--preview] [--genuine REF ...] Apply scored tutorial retakes to the original grades: capped at the retake cap, never lowering, one comment each; --genuine names students whose written retake was an honest attempt. Run it twice: the first run saves the reviewed values, the second writes them
   carry-grades COURSE TARGET_ID SOURCE_ID [SOURCE_ID ...] [--preview] Copy each student's entered score from the one source assignment they have a score on into one gradebook column (a bridge), scaled to its points; never lowers a grade and enters nothing for a student without exactly one score. Run it twice: the first run saves the reviewed values, the second writes them
-  parent-report COURSE [REF ...] Read this term's assignment facts (score, percent, due date, turned-in evidence) into courses/COURSE/parent-updates/
+  parent-report COURSE [REF ...] [--from DATE --through DATE | --period NAME] [--timezone IANA] Read assignment facts into courses/COURSE/parent-updates/ (default: current term)
   work-habits COURSE [--from DATE] [--to DATE] [REF ...] Read each student's weekly turn-in record (on time, late, missing, excused) into courses/COURSE/work-habits/; default last four weeks
   stad teams COURSE             Check context/stad/COURSE/teams.md against the course's active students; read-only
   stad standings COURSE [--week DATE] [--round NAME] Tally team points (effort, awards, bonuses) for a round; read-only

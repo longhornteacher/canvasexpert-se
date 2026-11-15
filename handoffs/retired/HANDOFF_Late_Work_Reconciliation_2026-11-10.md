@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** Implementation is delivered or superseded by current contracts. Historical instructions and status statements below are not current execution directions. Remaining live/client evidence and scope limits are recorded in [pending observations](../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # Handoff: Late-work reconciliation (2026-11-10)
 
 **Status:** On 2026-11-10 the developer accepted every default in §1. **Slices 1-5 are built in Dev the same day, local tests only.** No Canvas Live check has run: the read-only CS8 sweep and one corrected late mark in §3 are still open and each needs its own go-ahead.

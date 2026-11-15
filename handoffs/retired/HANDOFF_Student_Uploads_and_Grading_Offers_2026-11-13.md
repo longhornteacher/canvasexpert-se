@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** Implementation is delivered or superseded by current contracts. Historical instructions and status statements below are not current execution directions. Remaining live/client evidence and scope limits are recorded in [pending observations](../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # Student uploads and grading offers
 
 Development handoff, 2026-11-13. Source audit of Dev at `545b848`, one commit ahead of fetched `origin/dev`. The changes below are proposed. The audit used repository sources and existing test cases. It did not exercise an agent client or Canvas Live.

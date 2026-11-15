@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -68,12 +69,32 @@ type ParentDrafts struct {
 type ParentTable struct {
 	// BelowPercent lists rows whose released score is strictly below this
 	// percent of points possible. Nil lists every row in the window.
-	BelowPercent     *float64          `json:"below_percent,omitempty"`
-	Columns          []string          `json:"columns"`
-	Labels           map[string]string `json:"labels"`
-	SubmissionLabels map[string]string `json:"submission_labels,omitempty"`
-	EmptyText        string            `json:"empty_text"`
-	CourseHeadings   map[string]string `json:"course_headings,omitempty"`
+	BelowPercent       *float64                   `json:"below_percent,omitempty"`
+	From               string                     `json:"from,omitempty"`
+	Through            string                     `json:"through,omitempty"`
+	Courses            []string                   `json:"courses,omitempty"`
+	Assignments        []ParentAssignmentSelector `json:"assignments,omitempty"`
+	GradeStatuses      []string                   `json:"grade_statuses,omitempty"`
+	SubmissionStatuses []string                   `json:"submission_statuses,omitempty"`
+	PredicateMode      string                     `json:"predicate_mode,omitempty"` // any | all
+	Columns            []string                   `json:"columns"`
+	Labels             map[string]string          `json:"labels"`
+	SubmissionLabels   map[string]string          `json:"submission_labels,omitempty"`
+	EmptyText          string                     `json:"empty_text"`
+	CourseHeadings     map[string]string          `json:"course_headings,omitempty"`
+}
+
+type ParentAssignmentSelector struct {
+	Course       string `json:"course"`
+	AssignmentID int64  `json:"assignment_id"`
+}
+
+// Reject misspelled selectors rather than silently broadening a message.
+func (t *ParentTable) UnmarshalJSON(data []byte) error {
+	type table ParentTable
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	return dec.Decode((*table)(t))
 }
 
 // ParentStudentDraft overrides the computed decision for one student. After
@@ -113,7 +134,18 @@ func LoadParentRun(root, dir string) (*ParentRun, error) {
 		if e != nil {
 			return nil, fmt.Errorf("read %s: %w", name, e)
 		}
-		if e = json.Unmarshal(b, out); e != nil {
+		if name == "drafts.json" {
+			if !json.Valid(b) {
+				e = fmt.Errorf("invalid JSON")
+			} else {
+				decoder := json.NewDecoder(bytes.NewReader(b))
+				decoder.DisallowUnknownFields()
+				e = decoder.Decode(out)
+			}
+		} else {
+			e = json.Unmarshal(b, out)
+		}
+		if e != nil {
 			return nil, fmt.Errorf("%s is not valid JSON: %v", name, e)
 		}
 	}
@@ -170,6 +202,78 @@ func (r *ParentRun) validate() error {
 		return fmt.Errorf("recipients must be parents_only or omitted")
 	}
 	t := d.Table
+	for _, date := range []string{t.From, t.Through} {
+		if date != "" {
+			if _, err := time.Parse("2006-01-02", date); err != nil {
+				return fmt.Errorf("table date %q must be YYYY-MM-DD", date)
+			}
+		}
+	}
+	if t.From != "" && t.Through != "" && t.From > t.Through {
+		return fmt.Errorf("table.from must not be after table.through")
+	}
+	if (t.From != "" || t.Through != "") && r.Report.Scope == nil {
+		return fmt.Errorf("report has no date scope; pull a fresh report before selecting dates")
+	}
+	if (t.From != "" || t.Through != "") && r.Report.Scope != nil {
+		scope := r.Report.Scope
+		loc, zoneErr := time.LoadLocation(scope.Timezone)
+		start, startErr := time.Parse(time.RFC3339, scope.RecentStartAt)
+		end, endErr := time.Parse(time.RFC3339Nano, scope.RecentEndAt)
+		if zoneErr != nil || startErr != nil || endErr != nil {
+			return fmt.Errorf("report scope cannot establish the table's date coverage; pull a fresh report")
+		}
+		first, last := start.In(loc).Format("2006-01-02"), end.In(loc).Format("2006-01-02")
+		if t.From != "" && (t.From < first || t.From > last) || t.Through != "" && (t.Through < first || t.Through > last) {
+			return fmt.Errorf("table dates must fall within saved due inventory %s through %s; pull a report covering the requested range", first, last)
+		}
+	}
+	if t.PredicateMode != "" && t.PredicateMode != "any" && t.PredicateMode != "all" {
+		return fmt.Errorf("table.predicate_mode must be any or all")
+	}
+	for _, a := range t.Assignments {
+		if strings.TrimSpace(a.Course) == "" || a.AssignmentID <= 0 {
+			return fmt.Errorf("table.assignments requires course and positive assignment_id")
+		}
+		if !parentContains(r.Report.Courses, a.Course) {
+			return fmt.Errorf("table assignment course %q is not in the report", a.Course)
+		}
+		found := false
+		for _, student := range r.Report.Students {
+			for _, course := range student.Courses {
+				if course.Course == a.Course {
+					for _, row := range course.WorkDue {
+						if row.AssignmentID == a.AssignmentID {
+							found = true
+						}
+					}
+					for _, issue := range course.Issues {
+						if issue.AssignmentID == a.AssignmentID {
+							found = true
+						}
+					}
+				}
+			}
+		}
+		if !found {
+			return fmt.Errorf("assignment %s/%d is not present in the saved due inventory; pull a report covering it", a.Course, a.AssignmentID)
+		}
+	}
+	for _, course := range t.Courses {
+		if !parentContains(r.Report.Courses, course) {
+			return fmt.Errorf("table course %q is not in the report", course)
+		}
+	}
+	for _, v := range t.GradeStatuses {
+		if v != "graded" && v != "awaiting_grading" && v != "grade_not_released" && v != "no_grade" {
+			return fmt.Errorf("unknown table grade status %q", v)
+		}
+	}
+	for _, v := range t.SubmissionStatuses {
+		if v != "turned_in" && v != "not_turned_in" && v != "no_online_submission" && v != "unknown" {
+			return fmt.Errorf("unknown table submission status %q", v)
+		}
+	}
 	if t.BelowPercent != nil && (*t.BelowPercent <= 0 || *t.BelowPercent > 1000) {
 		return fmt.Errorf("table.below_percent must be a positive percent")
 	}
@@ -254,12 +358,12 @@ func (r *ParentRun) resolveDecisions() {
 		sd, ok := overrides[rs.Ref]
 		if !ok {
 			sd = ParentStudentDraft{Ref: rs.Ref, Decision: "send"}
-			if r.Drafts.SendWhen != "all" && r.rowCount(rs) == 0 && parentHoldReason(rs) == "" {
+			if r.Drafts.SendWhen != "all" && r.rowCount(rs) == 0 && r.parentHoldReason(rs) == "" {
 				sd.Decision, sd.Reason = "skip", r.Drafts.Table.EmptyText
 			}
 		}
 		if sd.Decision == "send" {
-			if reason := parentHoldReason(rs); reason != "" {
+			if reason := r.parentHoldReason(rs); reason != "" {
 				sd.Decision, sd.Reason = "flag", reason
 			}
 		}
@@ -269,17 +373,33 @@ func (r *ParentRun) resolveDecisions() {
 }
 
 // parentHoldReason names evidence that would make an email incomplete or wrong.
-func parentHoldReason(s ParentReportStudent) string {
+func (r *ParentRun) parentHoldReason(s ParentReportStudent) string {
 	if len(s.Courses) == 0 {
 		return "The report has no course for this student."
 	}
 	for _, c := range s.Courses {
+		if !r.parentCourseSelected(c.Course) {
+			continue
+		}
 		if len(c.Flags) != 0 {
-			return "The report has unresolved course flags: " + strings.Join(c.Flags, "; ")
+			if len(c.Issues) != len(c.Flags) {
+				return "The report has unresolved course flags: " + strings.Join(c.Flags, "; ")
+			}
+			for i, issue := range c.Issues {
+				if issue.Detail != c.Flags[i] || issue.AssignmentID <= 0 || r.parentAssignmentSelected(c.Course, issue.AssignmentID) {
+					return "The report has unresolved course flags: " + issue.Detail
+				}
+			}
 		}
 		for _, item := range c.WorkDue {
+			if !r.parentAssignmentSelected(c.Course, item.AssignmentID) {
+				continue
+			}
 			if _, err := time.Parse(time.RFC3339, item.DueAt); err != nil {
 				return "An assignment has no valid due date."
+			}
+			if !r.parentDateSelected(item.DueAt) {
+				continue
 			}
 			u, err := url.Parse(item.URL)
 			if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
@@ -295,27 +415,122 @@ func parentHoldReason(s ParentReportStudent) string {
 	return ""
 }
 
+func (r *ParentRun) parentCourseSelected(course string) bool {
+	t := r.Drafts.Table
+	if len(t.Courses) > 0 && !parentContains(t.Courses, course) {
+		return false
+	}
+	if len(t.Assignments) == 0 {
+		return true
+	}
+	for _, a := range t.Assignments {
+		if a.Course == course {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *ParentRun) parentAssignmentSelected(course string, id int64) bool {
+	if len(r.Drafts.Table.Assignments) == 0 {
+		return true
+	}
+	for _, a := range r.Drafts.Table.Assignments {
+		if a.Course == course && a.AssignmentID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *ParentRun) parentDateSelected(raw string) bool {
+	t := r.Drafts.Table
+	if t.From == "" && t.Through == "" {
+		return true
+	}
+	due, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return false
+	}
+	date := due.Format("2006-01-02")
+	return (t.From == "" || date >= t.From) && (t.Through == "" || date <= t.Through)
+}
+
 // tableRows returns the course's rows the draft selects, in due-date order.
 func (r *ParentRun) tableRows(c ParentReportCourse) []ParentWorkDueItem {
 	var out []ParentWorkDueItem
-	limit := r.Drafts.Table.BelowPercent
+	t := r.Drafts.Table
+	limit := t.BelowPercent
 	var threshold *big.Rat
 	if limit != nil {
 		threshold = new(big.Rat).SetFloat64(*limit)
 	}
 	for _, item := range c.WorkDue {
-		if threshold != nil {
-			if item.Status != "graded" || item.Current == nil {
+		if len(t.Courses) > 0 && !parentContains(t.Courses, c.Course) {
+			continue
+		}
+		if len(t.Assignments) > 0 {
+			found := false
+			for _, a := range t.Assignments {
+				if a.Course == c.Course && a.AssignmentID == item.AssignmentID {
+					found = true
+					break
+				}
+			}
+			if !found {
 				continue
 			}
-			p, ok := percentRat(*item.Current, item.Possible)
-			if !ok || p.Cmp(threshold) >= 0 {
+		}
+		if t.From != "" || t.Through != "" {
+			due, err := time.Parse(time.RFC3339, item.DueAt)
+			if err != nil {
+				continue
+			}
+			date := due.Format("2006-01-02")
+			if t.From != "" && date < t.From || t.Through != "" && date > t.Through {
+				continue
+			}
+		}
+		var predicates []bool
+		if len(t.GradeStatuses) > 0 {
+			predicates = append(predicates, parentContains(t.GradeStatuses, item.Status))
+		}
+		if len(t.SubmissionStatuses) > 0 {
+			predicates = append(predicates, parentContains(t.SubmissionStatuses, item.Submission))
+		}
+		if threshold != nil {
+			match := false
+			if item.Status == "graded" && item.Current != nil {
+				p, ok := percentRat(*item.Current, item.Possible)
+				match = ok && p.Cmp(threshold) < 0
+			}
+			predicates = append(predicates, match)
+		}
+		if len(predicates) > 0 {
+			match := t.PredicateMode != "any"
+			for _, p := range predicates {
+				if t.PredicateMode == "any" {
+					match = match || p
+				} else {
+					match = match && p
+				}
+			}
+			if !match {
 				continue
 			}
 		}
 		out = append(out, item)
 	}
 	return out // WorkDue is already in due-date, then title, order
+}
+
+func parentContains(values []string, value string) bool {
+	for _, v := range values {
+		if v == value {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *ParentRun) rowCount(s ParentReportStudent) int {

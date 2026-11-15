@@ -84,6 +84,37 @@ type PullWorkInput struct {
 	Assignment string `json:"assignment,omitempty" jsonschema:"Optional assignment title or ID"`
 	GroupID    *int64 `json:"group_id,omitempty" jsonschema:"Optional exact collaborative group ID; requires course and assignment"`
 	Session    bool   `json:"session,omitempty" jsonschema:"Pull unscored submitted work for a scoring session, including not-yet-due work; timing applies only to work being scored"`
+	List       bool   `json:"list,omitempty" jsonschema:"With session: list assignments that have work to score without pulling anything"`
+}
+
+// pullWorkArgs validates a pull_work request and builds the Engine arguments.
+func pullWorkArgs(in PullWorkInput) ([]string, error) {
+	if in.List && (!in.Session || in.Assignment != "" || in.GroupID != nil) {
+		return nil, errors.New("list requires session and cannot be combined with assignment or group_id")
+	}
+	args := []string{"pull-work"}
+	if in.Course != "" {
+		args = append(args, in.Course)
+	}
+	if in.Assignment != "" {
+		if in.Course == "" {
+			return nil, errors.New("course is required when assignment is specified")
+		}
+		args = append(args, in.Assignment)
+	}
+	if in.GroupID != nil {
+		if *in.GroupID <= 0 || in.Course == "" || in.Assignment == "" {
+			return nil, errors.New("positive group_id requires explicit course and assignment")
+		}
+		args = append(args, "--group", strconv.FormatInt(*in.GroupID, 10))
+	}
+	if in.Session {
+		args = append(args, "--session")
+	}
+	if in.List {
+		args = append(args, "--list")
+	}
+	return args, nil
 }
 
 type PrepareLateTimingInput struct {
@@ -137,6 +168,10 @@ type ParentReportInput struct {
 	Courses    []string `json:"courses" jsonschema:"Configured course nicknames; one email can cover several courses"`
 	Students   []string `json:"students,omitempty" jsonschema:"Optional student refs; omit for every active student"`
 	FullPeriod bool     `json:"full_period,omitempty" jsonschema:"Accepted for compatibility; every report now covers the whole current grading period"`
+	From       string   `json:"from,omitempty" jsonschema:"First inclusive local due date YYYY-MM-DD; requires through"`
+	Through    string   `json:"through,omitempty" jsonschema:"Last inclusive local due date YYYY-MM-DD; requires from"`
+	Period     string   `json:"period,omitempty" jsonschema:"Exact named grading period; alternative to from and through"`
+	Timezone   string   `json:"timezone,omitempty" jsonschema:"IANA timezone for explicit scope; defaults to first course timezone for a range"`
 }
 
 type WorkHabitsInput struct {
@@ -291,25 +326,10 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.command(ctx, "help", in.Topic)
 	})
-	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Set session for targeted scoring discovery (Canvas needs-grading counts) Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
-		args := []string{"pull-work"}
-		if in.Course != "" {
-			args = append(args, in.Course)
-		}
-		if in.Assignment != "" {
-			if in.Course == "" {
-				return TextOutput{}, errors.New("course is required when assignment is specified")
-			}
-			args = append(args, in.Assignment)
-		}
-		if in.GroupID != nil {
-			if *in.GroupID <= 0 || in.Course == "" || in.Assignment == "" {
-				return TextOutput{}, errors.New("positive group_id requires explicit course and assignment")
-			}
-			args = append(args, "--group", strconv.FormatInt(*in.GroupID, 10))
-		}
-		if in.Session {
-			args = append(args, "--session")
+	addActionTool(server, "pull_work", "Pull current Canvas work using the CE-SE Engine. Set session for targeted scoring discovery (Canvas needs-grading counts) Student identity is pseudonymized by the Engine; never access .cse. Group assignments produce group-packet/group-work evidence while preserving each member's submission identity. A group_id requires an explicit assignment. With session and list, it only lists the assignments that have work to score (no assignment or group_id) and downloads nothing; then pull the chosen ones with session. A long pull returns state pending; call again with the same inputs to keep waiting on the same run.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in PullWorkInput) (TextOutput, error) {
+		args, err := pullWorkArgs(in)
+		if err != nil {
+			return TextOutput{}, err
 		}
 		return s.longCommand(ctx, args...)
 	})
@@ -366,10 +386,15 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.longCommand(ctx, args...)
 	})
-	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates into courses/<course>/parent-updates/<run>/report.json: for each student and course, every assignment due this grading period so far with its released score, percent, student due date, direct link and turned-in evidence, plus upcoming work for printed sheets. Facts only; the playbook writes the email. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
+	addActionTool(server, "pull_parent_report", "Read Canvas assignment facts for parent updates into a pseudonymized report. Defaults to the current grading period; choose an inclusive date range or named period for another scope. Released scores and submission evidence are current as of the pull; future work is listed separately. No contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
 		args := append(append([]string{"parent-report"}, in.Courses...), in.Students...)
 		if in.FullPeriod {
 			args = append(args, "--full-period")
+		}
+		for _, opt := range []struct{ name, value string }{{"--from", in.From}, {"--through", in.Through}, {"--period", in.Period}, {"--timezone", in.Timezone}} {
+			if opt.value != "" {
+				args = append(args, opt.name, opt.value)
+			}
 		}
 		return s.longCommand(ctx, args...)
 	})
@@ -608,9 +633,15 @@ func externalTool(name string) bool {
 func boolPointer(v bool) *bool { return &v }
 
 func addTool[In any](server *mcp.Server, name, description string, annotations mcp.ToolAnnotations, fn func(context.Context, *mcp.CallToolRequest, In) (TextOutput, error)) {
-	mcp.AddTool(server, &mcp.Tool{Name: name, Description: description, Annotations: &annotations}, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, TextOutput, error) {
+	// Results are prose or Markdown, so they go out as one plain text block. Out is
+	// any on purpose: the SDK then adds no output schema to the tool list and no
+	// second structured copy of every result.
+	mcp.AddTool(server, &mcp.Tool{Name: name, Description: description, Annotations: &annotations}, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
 		out, err := fn(ctx, req, in)
-		return nil, out, err
+		if err != nil {
+			return nil, nil, err
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: resultText(out)}}}, nil, nil
 	})
 }
 

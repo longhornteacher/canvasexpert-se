@@ -74,7 +74,7 @@ Do **not** edit `parent-updates.md`.
 
 **`AGENTS.md`** (root): add one paragraph after the Group work paragraph:
 
-> **Team teaching (1.2b1)** is specified in [docs/team/](docs/team/README.md), with execution handoffs in [handoffs/active/team-1.2b1/](handoffs/active/team-1.2b1/00-BRIEF.md). A course may have an `owner`; the Engine routes each course to the right Canvas key, requires the teammate's `(CE)` tag for scoring, writes grades hidden for the teammate to post, copies a Collab module at most once per course, and routes family replies to the actual teacher. Read the README before touching routing, consent, post-policy, copy or family-delivery code.
+> **Team teaching (1.2b1)** is specified in [docs/team/](../../../docs/team/README.md), with execution handoffs in [handoffs/active/team-1.2b1/](00-BRIEF.md). A course may have an `owner`; the Engine routes each course to the right Canvas key, requires the teammate's `(CE)` tag for scoring, writes grades hidden for the teammate to post, copies a Collab module at most once per course, and routes family replies to the actual teacher. Read the README before touching routing, consent, post-policy, copy or family-delivery code.
 
 **`docs/ARCHITECTURE.md`**: add a short "Team courses" section near the credential paragraph (the one beginning "PAT and Canvas origin live in per-machine Windows Credential Manager"). Summarize, without restating the brief:
 - R1 storage locations (named Credential Manager entries; `context/team.md`; `.cse/team-log.jsonl` in UserInstall);

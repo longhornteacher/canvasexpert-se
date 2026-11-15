@@ -36,6 +36,9 @@ type PullReport struct {
 // retaining the existing PullWork entry point and defaults.
 type PullWorkOptions struct {
 	Session bool
+	// List, with Session, reports which assignments have work to score and
+	// fetches no submissions, quiz reports or files, and writes no packet.
+	List bool
 }
 
 // PullAssignmentSummary reports observed discovery states and the resulting
@@ -44,7 +47,7 @@ type PullWorkOptions struct {
 // original could not be saved, across current and retrieved preceding
 // attempts. Saved originals of any type are not counted.
 type PullAssignmentSummary struct {
-	Outcome                  string // complete, filtered, skipped, failed, not-reached
+	Outcome                  string // complete, filtered, skipped, failed, not-reached, listed
 	FailurePhase             string
 	FailureReason            string
 	CandidatesKnown          bool
@@ -205,6 +208,9 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 	if groupFilter != nil && (nickname == "" || query == "") {
 		return report, fmt.Errorf("group-scoped pulls require an explicit course and assignment")
 	}
+	if options.List && (!options.Session || query != "" || groupFilter != nil) {
+		return report, fmt.Errorf("list applies only to a scoring session with no assignment or group named")
+	}
 	var courses []domain.Course
 	if nickname != "" {
 		c, e := s.Course(nickname)
@@ -339,6 +345,25 @@ func (s *Service) pullWork(ctx context.Context, nickname, query string, builtin 
 				row.AssignmentGroupName, row.AssignmentGroupWeight = group.Name, group.Weight
 			}
 			report.Assignments = append(report.Assignments, row)
+		}
+		if options.List {
+			// The rows above come from assignment discovery alone. Give each one
+			// its final outcome without fetching anything per assignment.
+			for i, a := range assignments {
+				row := &report.Assignments[summaryStart+i]
+				switch {
+				case a.NeedsGradingCount != nil && *a.NeedsGradingCount == 0:
+					row.Outcome = "skipped"
+					row.SkipReason = "Canvas reports no work needing grading"
+				case a.InClosedGradingPeriod:
+					row.ClosedGradingPeriod = true
+					row.SkipReason = "closed grading period, not pulled"
+					row.Outcome = "skipped"
+				default:
+					row.Outcome = "listed"
+				}
+			}
+			continue
 		}
 		stopPhase = course.Nickname + ": submission discovery"
 		var sessionLists map[int64][]Submission

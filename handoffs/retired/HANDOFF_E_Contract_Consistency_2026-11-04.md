@@ -2,7 +2,7 @@
 
 # HANDOFF E: Make advertised contracts match what is built
 
-Date: 2026-11-04. Slice E of the [unified architecture review](../Unified%20Architecture%20Review.md). Layer: **Engine tool metadata** (`internal/mcpserver`, `internal/localui/capabilities.go`, CLI help), **seed playbooks** and **docs**.
+Date: 2026-11-04. Slice E of the [unified architecture review](Unified%20Architecture%20Review.md). Layer: **Engine tool metadata** (`internal/mcpserver`, `internal/localui/capabilities.go`, CLI help), **seed playbooks** and **docs**.
 
 Developer decision 6: correct behavior-affecting contracts first. Preserve live consumers and unresolved evidence. Retire whole handoffs only when all parts are complete or explicitly carried forward. Decision 12: make concrete low-cost corrections; keep useful redacted test evidence; a numeric Canvas ID is not a credential.
 
@@ -93,7 +93,7 @@ Edit `internal/localui/capabilities.go` and `docs/engine-capabilities.md` togeth
   School-specific bell-schedule and tutoring text in this file (~97–120, ~214–216, ~252) is handled by [HANDOFF G](HANDOFF_G_Parent_Email_Defaults_and_Deadline_Math_2026-11-04.md); coordinate rather than both editing it.
 - **`docs/parent-update-flow.md`**: ~186 "Review/send details remain a proposal." and ~190–195 "Possible coding slices…" including "the class-wide Band post", while ~3 says Band is dropped. Mark the delivered parts current and remove the proposal list.
 - **`docs/SCORING-RULES.md:3`**: "Teacher policy updated 2026-10-18", while the body has decisions from 2026-10-24/28/29. Update the date.
-- **Active quiz handoff** (`handoffs/active/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md`): **keep active.** Q7 (the course/quiz accommodation combination) is unobserved; the §2.3 done-when (a live push of an Engine-built timed quiz) is unmet; a disposable quiz still needs deleting; and L9–L11 are optional. Correct its stale §0 bullets (~13 "a write requires all three values", ~16 "No accommodation POST is sent", ~18 "the teacher enters item points in SpeedGrader") with a dated note saying they were superseded, and keep the records.
+- **Active quiz handoff** (`handoffs/retired/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md`): **keep active.** Q7 (the course/quiz accommodation combination) is unobserved; the §2.3 done-when (a live push of an Engine-built timed quiz) is unmet; a disposable quiz still needs deleting; and L9–L11 are optional. Correct its stale §0 bullets (~13 "a write requires all three values", ~16 "No accommodation POST is sent", ~18 "the teacher enters item points in SpeedGrader") with a dated note saying they were superseded, and keep the records.
 - **Retirement candidates:** `docs/REVIEW-2026-10-19.md` and `docs/book-club-group-work-discovery.md` are linked as evidence from `capabilities.go` (~82, ~135), `engine-capabilities.md` (~21, ~69) and `group-work/README.md:151`. Leave them; they are live evidence links. Retiring them is out of scope.
 - **The duplicate book-group source handoff** was removed on purpose on 2026-11-04, and the index link was updated then. Nothing to do.
 

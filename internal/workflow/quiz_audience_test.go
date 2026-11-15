@@ -24,9 +24,10 @@ const quizAudienceFixture = `{
 }`
 
 type quizAudienceFixtureState struct {
-	Service   *Service
-	Members   map[int64][]int64
-	Published bool
+	Service      *Service
+	ExistingQuiz bool
+	Members      map[int64][]int64
+	Published    bool
 	// Overrides is the live assignment override collection.
 	Overrides []AssignmentOverrideLive
 	// Visible is the live only_visible_to_overrides setting.
@@ -80,7 +81,11 @@ func newQuizAudienceFixture(t *testing.T, members map[int64][]int64) *quizAudien
 			}
 			write(rows)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/quiz/v1/courses/1/quizzes":
-			write([]any{})
+			if f.ExistingQuiz {
+				write([]any{map[string]any{"id": "55"}})
+			} else {
+				write([]any{})
+			}
 		case r.Method == http.MethodPost && r.URL.Path == "/api/quiz/v1/courses/1/quizzes":
 			f.QuizCreates++
 			write(map[string]any{"id": "55"})
@@ -360,6 +365,7 @@ func TestQuizAudienceSettingsRejectInvalidIntent(t *testing.T) {
 func TestQuizAudienceSidecarKeepsOldRecordsUsable(t *testing.T) {
 	f := newQuizAudienceFixture(t, map[int64][]int64{60: {9001}})
 	f.seedStudents(t, 9001)
+	f.ExistingQuiz = true
 	path := f.writeQuiz(t, strings.Replace(quizAudienceFixture, `"audience": {"mode": "individual", "policy": "snapshot", "source": {"group_category_id": 50, "group_ids": [60]}}`, `"published": true`, 1))
 	// An old sidecar has only assignment_id and tier pages.
 	if err := os.WriteFile(sidecarPath(path), []byte(`{"assignment_id":55,"tier_pages":[{"label":"Core","title":"Core page","page_id":7}]}`), 0o644); err != nil {
@@ -373,10 +379,46 @@ func TestQuizAudienceSidecarKeepsOldRecordsUsable(t *testing.T) {
 	if rec.AssignmentID != 55 || len(rec.TierPages) != 1 || rec.TierPages[0].PageID != 7 {
 		t.Fatalf("old sidecar fields lost: %+v", rec)
 	}
-	if rec.Stages != nil {
-		t.Fatal("ordinary quiz gained restricted stages")
+	if rec.Stages == nil || rec.CourseID != 1 || rec.Instance == "" {
+		t.Fatal("legacy receipt was not bound and staged")
 	}
 }
 
 var _ = io.Discard
 var _ = domain.ActionOutcome{}
+
+func TestOrdinaryQuizReceiptBindsAndSkipsAcceptedWrites(t *testing.T) {
+	f := newQuizAudienceFixture(t, nil)
+	body := strings.Replace(quizAudienceFixture, `, "audience": {"mode": "individual", "policy": "snapshot", "source": {"group_category_id": 50, "group_ids": [60]}}`, "", 1)
+	path := writeQF(t, body)
+	first, err := f.Service.PushQuiz(t.Context(), "TEST", path)
+	if err != nil || first.Status != "completed" || !first.Published {
+		t.Fatalf("first: %+v %v", first, err)
+	}
+	rec := readSidecar(path)
+	if rec.Instance == "" || rec.CourseID != 1 || rec.Stages == nil || !definite(rec.Stages.Items) || !definite(rec.Stages.Publication) {
+		t.Fatalf("receipt: %+v", rec)
+	}
+	creates, items, settings := f.QuizCreates, f.ItemPosts, f.SettingsPuts
+	again, err := f.Service.PushQuiz(t.Context(), "TEST", path)
+	if err != nil || again.Status != "completed" || !again.Published {
+		t.Fatalf("rerun: %+v %v", again, err)
+	}
+	if f.QuizCreates != creates || f.ItemPosts != items || f.SettingsPuts != settings {
+		t.Fatal("rerun repeated an accepted write")
+	}
+}
+
+func TestQuizReceiptRejectsConflictingCourseBeforeWrites(t *testing.T) {
+	f := newQuizAudienceFixture(t, nil)
+	path := writeQF(t, quizAudienceFixture)
+	if err := writeSidecar(path, quizSidecar{AssignmentID: 55, CourseID: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Service.PushQuiz(t.Context(), "TEST", path); err == nil {
+		t.Fatal("expected conflicting course to be rejected")
+	}
+	if f.QuizCreates != 0 || f.ItemPosts != 0 || f.SettingsPuts != 0 {
+		t.Fatal("conflicting receipt caused writes")
+	}
+}

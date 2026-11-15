@@ -2,6 +2,8 @@
 
 Updated 2026-11-07: full-term assignments below 70, with direct links, due dates and submission status. This replaces the correction-window email and its course-average skip rule.
 
+The layout and cutoff below are defaults; follow the teacher's requested scope and selection when different. `pull_parent_report` accepts `from` and `through` (inclusive YYYY-MM-DD) or an exact named `period`, with an optional IANA `timezone`. Table selectors can combine `submission_statuses` and `below_percent` with `predicate_mode: "any"` for missing-or-low work; see `help formats`. The report contains current facts even when the selected due dates are historical. Exact undated and upcoming email selection is not yet supported.
+
 You write the email; the Engine supplies the facts. The Engine reads Canvas, matches students, computes percentages, draws the assignment table from its own facts, fills in real names privately, and sends through Outlook. Everything a family reads around that table is yours: subject, greeting, introduction, column headings, status words, empty-list sentence, links and sign-off. The teacher reviews the private page and chooses Send or Outlook Drafts there. Never send through another service or expose contact details in agent context.
 
 Read AGENTS.md, Teacher_Override.md, context/parent-updates.md and the relevant school-calendar grading period first. Use the saved grade-portal and tutoring links and the teacher's sign-off. Ask for missing settings only when needed; never ask again for saved settings.
@@ -24,7 +26,7 @@ Do not add Due Soon, first/current score history, a complete inventory of passin
 
 ## Which assignments to list
 
-- Every report covers the current grading term from its start (context/school-calendar.md) through the report's as_of date. Do not clip the list to correction_days or correction eligibility.
+- By default the report covers the current grading term from its start (context/school-calendar.md) through the report's as_of date. Use the teacher's explicit range or period when requested; do not infer correction eligibility.
 - List **every current released assignment score below 70%** in that term, including a recorded zero. Set `below_percent: 70` in the draft; the Engine compares each released score to its points possible. Exactly 70% is not below 70: 34/50 is listed, 35/50 is not.
 - The report already uses published, student-visible, non-excused work and each student's own effective due date. An individualized deadline controls term membership.
 - Low-scoring work is listed whether or not it was turned in. A recorded zero does not prove that work was never submitted.

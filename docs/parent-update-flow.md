@@ -2,6 +2,8 @@
 
 Updated 2026-11-07 · The Engine supplies facts; the playbook writes the email. Implemented in Dev with local tests only; no Canvas Live report, Outlook draft or family send has used this format yet.
 
+Dev update 2026-11-14 (local tests only): the current period remains the default, and callers may choose an inclusive date range or named period. Draft tables can select courses, assignments, due dates, grade and submission statuses, and score predicates using union or intersection. Scoped assignment issues hold affected selections; unscoped legacy issues remain conservative. Exact undated and upcoming email selection and the rest of the active boundaries handoff are still in progress. The older whole-term and below-70 instructions below describe defaults, not compulsory scope or policy.
+
 Purpose: the current parent-report contract and the evidence behind it. Read alongside [ARCHITECTURE.md](ARCHITECTURE.md) and [SCORING-RULES.md](SCORING-RULES.md). The authoring workflow is the seed `playbooks/parent-updates.md`; the file contract is `engine-docs/formats.md` ("Parent update reports and drafts"). [Family Contact](family-contact-flow.md) shares the private review, recipient routing, Markdown renderer and Outlook delivery for free-form class messages.
 
 ## Who decides what
@@ -17,7 +19,7 @@ Rule (developer, 2026-11-07): "Engine keeps factual/deterministic things. Playbo
 | Holding a student whose evidence is incomplete; refusing wording with aliases, refs or addresses | When to send (`send_when`, per-student overrides), recipients (`parents_only`) |
 | Real-name substitution, recipient routing, teammate reply-to note, Outlook delivery, outcomes and no-resend | Anything else a family reads |
 
-Before 2026-11-07 the Engine also wrote the subject, section headings, an AI disclaimer, the weekly email's sentences, and the correction, Due Soon and skip policies. Those are gone from the Engine; the [handoff](../handoffs/active/HANDOFF_Parent_Email_Content_to_Playbook_2026-11-07.md) records the audit.
+Before 2026-11-07 the Engine also wrote the subject, section headings, an AI disclaimer, the weekly email's sentences, and the correction, Due Soon and skip policies. Those are gone from the Engine; the [handoff](../handoffs/retired/HANDOFF_Parent_Email_Content_to_Playbook_2026-11-07.md) records the audit.
 
 ## Current requirements (teacher, 2026-11-07)
 

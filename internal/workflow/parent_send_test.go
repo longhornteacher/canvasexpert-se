@@ -258,6 +258,60 @@ func TestParentTableTokenMustStandAlone(t *testing.T) {
 	}
 }
 
+func TestParentTableSelectors(t *testing.T) {
+	limit := 70.0
+	run := ParentRun{Drafts: ParentDrafts{Table: ParentTable{From: "2026-10-01", Through: "2026-10-31", SubmissionStatuses: []string{"not_turned_in"}, BelowPercent: &limit, PredicateMode: "any"}}}
+	c := ParentReportCourse{Course: "ELA", WorkDue: []ParentWorkDueItem{
+		{ParentReportItem: ParentReportItem{AssignmentID: 1, DueAt: "2026-10-05T12:00:00-05:00"}, Status: "no_grade", Submission: "not_turned_in"},
+		{ParentReportItem: ParentReportItem{AssignmentID: 2, DueAt: "2026-10-06T12:00:00-05:00"}, Status: "graded", Current: str("6"), Possible: "10", Submission: "turned_in"},
+		{ParentReportItem: ParentReportItem{AssignmentID: 3, DueAt: "2026-10-07T12:00:00-05:00"}, Status: "graded", Current: str("7"), Possible: "10", Submission: "turned_in"},
+		{ParentReportItem: ParentReportItem{AssignmentID: 4, DueAt: "2026-11-01T12:00:00-06:00"}, Status: "no_grade", Submission: "not_turned_in"},
+	}}
+	rows := run.tableRows(c)
+	if len(rows) != 2 || rows[0].AssignmentID != 1 || rows[1].AssignmentID != 2 {
+		t.Fatalf("unexpected union: %+v", rows)
+	}
+	run.Drafts.Table.PredicateMode = "all"
+	if rows = run.tableRows(c); len(rows) != 0 {
+		t.Fatalf("unexpected intersection: %+v", rows)
+	}
+	var table ParentTable
+	if err := json.Unmarshal([]byte(`{"below_precent":70}`), &table); err == nil {
+		t.Fatal("unknown selector accepted")
+	}
+}
+
+func TestParentSelectorHoldsOnlyRelevantStructuredIssues(t *testing.T) {
+	run := ParentRun{Drafts: ParentDrafts{Table: ParentTable{Assignments: []ParentAssignmentSelector{{Course: "ELA", AssignmentID: 1}}}}}
+	s := ParentReportStudent{Courses: []ParentReportCourse{{Course: "ELA", Flags: []string{"assignment 2 unavailable"}, Issues: []ParentEvidenceIssue{{AssignmentID: 2, Detail: "assignment 2 unavailable"}}}}}
+	if reason := run.parentHoldReason(s); reason != "" {
+		t.Fatalf("excluded issue held selection: %s", reason)
+	}
+	s.Courses[0].Issues[0].AssignmentID = 1
+	if reason := run.parentHoldReason(s); reason == "" {
+		t.Fatal("selected issue must hold")
+	}
+	s.Courses[0].Issues = nil
+	if reason := run.parentHoldReason(s); reason == "" {
+		t.Fatal("legacy unscoped flag must hold")
+	}
+}
+
+func TestParentDraftRejectsUnknownScopeField(t *testing.T) {
+	svc, dir, _, _ := parentFixtureRun(t)
+	raw, err := json.Marshal(parentTestDrafts())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = append(raw[:len(raw)-1], []byte(`,"due_filter":"last week"}`)...)
+	if err := os.WriteFile(filepath.Join(dir, "drafts.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadParentRun(svc.Root, dir); err == nil || !strings.Contains(err.Error(), "due_filter") {
+		t.Fatalf("unknown scope was not rejected: %v", err)
+	}
+}
+
 func TestParentDecisionsFollowSendWhenAndHoldIncompleteEvidence(t *testing.T) {
 	svc, dir, a, b := parentFixtureRun(t)
 	var report ParentReportPacket

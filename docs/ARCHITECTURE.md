@@ -132,7 +132,7 @@ Anything meant to outlive a session is stored in its durable home and can be fou
 | Team log `.cse/team-log.jsonl`, Collab copy records `courses/_team-copies` | Per-PC audit and copy state |
 | Credentials, Engine, machine integration, `playbook-old/`, `shipped/` | Per machine |
 
-The routing and first-connect behavior are covered by `internal/workspace/durable_routing_test.go`. See also the [unified architecture review](../handoffs/Unified%20Architecture%20Review.md).
+The routing and first-connect behavior are covered by `internal/workspace/durable_routing_test.go`. See also the [unified architecture review](../handoffs/retired/Unified%20Architecture%20Review.md).
 
 ## Current scope and future capabilities
 

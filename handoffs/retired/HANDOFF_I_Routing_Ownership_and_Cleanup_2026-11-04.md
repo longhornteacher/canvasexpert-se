@@ -2,7 +2,7 @@
 
 # HANDOFF I: Canvas-key routing fails closed; git ownership is enforced; dead review code goes
 
-Date: 2026-11-04. Slice I of the [unified architecture review](../Unified%20Architecture%20Review.md). Three independent parts, so make three commits:
+Date: 2026-11-04. Slice I of the [unified architecture review](Unified%20Architecture%20Review.md). Three independent parts, so make three commits:
 - **I1:** WebUI course routing. Layer: Engine (`internal/localui`).
 - **I2:** git ownership of product files. Layer: Engine (`internal/mcpserver`, `internal/workspace`) and seed `install.md`.
 - **I3:** unused review code. Layer: Engine (`internal/workflow`).

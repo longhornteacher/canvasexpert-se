@@ -2,7 +2,7 @@
 
 # HANDOFF G: General parent-email defaults; Engine counts accommodated deadlines
 
-Date: 2026-11-04. Slice G of the [unified architecture review](../Unified%20Architecture%20Review.md). Two independent parts:
+Date: 2026-11-04. Slice G of the [unified architecture review](Unified%20Architecture%20Review.md). Two independent parts:
 - **G1**: parent email defaults. Layer: Engine (`internal/workflow/parent_drafts.go`), seed context, playbook and docs.
 - **G2**: deadline arithmetic. Layer: Engine (`internal/workspace/school_calendar.go`, `internal/workflow/late_prepare.go`) and playbooks.
 

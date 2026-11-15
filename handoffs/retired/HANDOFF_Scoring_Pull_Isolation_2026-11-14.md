@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** Implementation is delivered or superseded by current contracts. Historical instructions and status statements below are not current execution directions. Remaining live/client evidence and scope limits are recorded in [pending observations](../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # Batch 1: scoring pull isolation and truthful partial results
 
 Approved by the developer on 2026-11-14 after the scoring-incident evaluation. Dev was clean at `1304b71`, equal to freshly fetched `origin/dev`. This brief owns this batch; the incident is evidence, not authorization to replay grades.

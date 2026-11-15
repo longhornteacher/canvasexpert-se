@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** Implementation is delivered or superseded by current contracts. Historical instructions and status statements below are not current execution directions. Remaining live/client evidence and scope limits are recorded in [pending observations](../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 > Historical development notes: the parent-report correction-date integration described below was superseded by the 2.0 parent-update redesign. Parent emails do not advertise correction deadlines.
 
 # Handoff: Grading timetable on new assignments (2026-11-04)

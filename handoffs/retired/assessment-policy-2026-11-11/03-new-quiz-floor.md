@@ -1,3 +1,5 @@
+> **Retired 2026-11-14.** Implementation is delivered or superseded by current contracts. Historical instructions and status statements below are not current execution directions. Remaining live/client evidence and scope limits are recorded in [pending observations](../../active/PENDING_OBSERVATIONS.md). Retirement does not claim those checks passed.
+
 # Slice 03 - Honest-effort floor on New Quizzes
 
 Status (2026-11-14): superseded in design by scoring batch 2 (`HANDOFF_Scoring_Remaining_Work_for_Claude_Code_2026-11-14.md`): the floor is built in Dev, raise-only, reported from the live total and enabled for equal-point quizzes after a 2026-11-14 live write (see engine-capabilities); the probe items below that remain unobserved are noted there. Earlier status: **step 1 (live probe) not run, it needs an explicit scoped go-ahead; step 2 not built. Fallback in place: the playbook tells the teacher the number to enter in SpeedGrader**. Kind: one live probe, then a small Engine change. Independent of the other slices. Read the [README](README.md), `docs/SCORING-RULES.md` and `docs/new-quiz-written-work-spec.md` first.

@@ -1,86 +1,27 @@
 # Handoffs
 
-A handoff is bounded execution work for an agent session. It should say whether a change belongs to the Engine or the playbooks. Open work lives in `active/`; completed or superseded handoffs move to `retired/` with a retirement banner. Retired files are history and evidence, not instructions. Retiring one does not mean every observation in it was verified.
+Open implementation lives in `active/`; completed or superseded instructions live in `retired/` with a dated banner. Retired text is evidence, not a backlog or permission to repeat work.
 
-## Active work
+## Active
 
-> **Superseded in part 2026-11-13:** [HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md](active/HANDOFF_Student_Uploads_and_Grading_Offers_2026-11-13.md) section 2 removes default offers of extra submissions, extra credit and correction points, and makes Major tutorial retakes private during scoring with `retake assign` / `apply` only on teacher direction. It overrides conflicting wording in the assessment-policy (2026-11-11), Grading timetable and Late-work personal-dates handoffs below.
+- [Parent updates and external communication Engine boundaries](active/HANDOFF_Parent_Family_Contact_Engine_Boundaries_2026-11-14.md): implementation started; scope and table selectors partially delivered, remaining slices open.
+- [Assignment and quiz authoring cleanup](active/HANDOFF_Assignment_Quiz_Authoring_2026-11-14.md): implementation started; item identity and slices 2�4 remain open.
+- [Pending observations](active/PENDING_OBSERVATIONS.md): evidence limits from delivered work, not standing authorization for live probes or prerequisites for authoring cleanup.
 
-**Assessment policy (2026-11-11).** [Four execution slices](active/assessment-policy-2026-11-11/README.md), revised the same day after review, cover: Major retakes as a protected, non-counting parallel New Quiz assigned to students who fail, with a window of 4 school days from the posted date and a 70% contribution cap that never lowers the original; unchanged Daily corrections; and a 40% honest-effort floor for written work, including New Quizzes through fudge points. The slices are playbooks and config, retake quiz creation and assignment, the New Quiz floor (one live probe first), and applying the retake to the original. **Built in Dev 2026-11-11 except the New Quiz floor (slice 03, waiting on a live probe); local tests only.** The brief lists the teacher's decisions, what was cut from the first eight-slice plan (commit `6a2a5b4`) and the planner's own choices still open to challenge.
+## Execution
 
-Execution-readiness review: **2026-10-28**, against the current Dev working tree. The remaining handoffs are written for **6.1 Terra or 6.1 Sol** to execute one bounded slice at a time. Readiness here means the scope, integration points, contracts, checks and unresolved evidence are explicit; it does not mean the features are built or the undocumented Canvas behavior is known.
+Read root `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/SCORING-RULES.md`, then the selected handoff. Fetch and compare `dev...origin/dev`; pull if behind before editing. Preserve existing changes and inspect current symbols rather than trusting historical line numbers.
 
-**Architecture slices (2026-11-04).** Written from the [unified review](Unified%20Architecture%20Review.md) and the developer's decisions, with facts mapped at `2818e36`. Each is self-contained; the source reviews are not needed. All architecture slices A-I are done and retired (2026-11-04); D2 and F were built from specs the developer approved the same day, and H's past-family-message question was answered (a: contact details only, nothing to build).
+Keep judgment in playbooks/context and mechanical Canvas work in the Engine. Use existing operations and typed CLI/MCP adapters. Update reachable contracts, formats/examples and seed instructions together. Preserve accepted writes and unsent work. Follow the selected handoff's proportionate checks, and distinguish local tests from Canvas Live and human/client evidence. Update both capability records when behavior or evidence changes.
 
-| Handoff | Kind | Scope |
-|---|---|---|
-| [Grading timetable](active/HANDOFF_Grading_Timetable_2026-11-04.md) | Decisions accepted and slices 0–5 built 2026-11-04, committed 2026-11-10 (`39157e2`); student view, mobile rendering and a full live create still open | Collapsed late-work/corrections/close-date block on new assignments, computed in school days; parent emails omit correction deadlines |
-| [Late-work reconciliation](active/HANDOFF_Late_Work_Reconciliation_2026-11-10.md) | Decisions D1–D6 accepted and slices 1–5 built in Dev 2026-11-10; local tests only, no Canvas Live check yet | Per-student extra days and absences entered in the WebUI, counted by the Engine; a read-only course sweep that proposes corrected late marks |
+Work sequentially unless the user requests delegation. Handoffs themselves authorize no subagents, release, push, install, UserInstall/UserSync mutation, real grading or family sends. Record implementation and actual checks, then retire completed instructions while preserving unresolved evidence explicitly.
 
-| Handoff | Execution status | What the review clarified |
-|---|---|---|
-| [Quiz accommodation writes and New Quiz item scores](active/HANDOFF_Quiz_Accommodation_Writes_and_New_Quiz_Item_Scores_2026-10-28.md) | Consolidated 2026-10-28 from the open remainder of the two retired handoffs below. Part A writes are implemented and the student-side timer/attempt effect was teacher-confirmed on 2026-10-29; only the course/quiz combination is open. Part B (Engine-written New Quiz item scores) is **complete** (2026-10-29): captured, built, L1–L8 passed live, and the playbooks use it. | Which test identity is available, what each observation enables, and the item-score Engine design to build only after the save is observed. |
+## Cleanup record — 2026-11-14
 
-<a id="execution-notes-for-the-three-active-handoffs"></a>
+- All five playbook-orchestration slices are committed: `c8b5a17`, `612629d`, `23202b2`, `9631f84`, `5dc068c`. Their source [Astra review](retired/Astra-overview.md) is retired too; unselected proposals are not approved work.
+- Timetable and personal-date/reconciliation work is delivered in the 2.1 line (`39157e2`, `0503603`; see release history). Old uncommitted/untested instructions are historical.
+- Assessment policy, upload/offer changes and scoring isolation/floor work are delivered or superseded in 2.2–2.3. Evidence includes `44e9b7a`, `65e10ca`, `1304b71`, `cad1610`, `666c029`, `5f39eb7` and dated scoring records. Current scoring policy supersedes the earlier automatic-retake and correction-offer proposals.
+- Accommodation/item-score implementation instructions are retired; completed work and dated live evidence remain intact. Open observations are linked above; course accommodation sync stays frozen.
+- The [unified architecture review](retired/Unified%20Architecture%20Review.md) joins its completed A–I slices in `retired/`.
 
-## Execution notes for the active handoffs
-
-1. Follow root `AGENTS.md`: fetch, compare `dev...origin/dev`, and pull if behind before editing. Inspect `git status --short` and preserve any existing changes; do not reset, stash, reimplement or commit someone else's work blindly. The existing-content Engine work and both review passes were committed and pushed to `dev` on 2026-10-28. Line numbers in handoffs are navigation hints; locate the current symbols with `rg`.
-2. Read `docs/ARCHITECTURE.md` and `docs/SCORING-RULES.md`, then the selected handoff. Read the team/group contracts when that slice touches their behavior. Start the next independently executable slice rather than stopping the whole handoff for an unrelated live check. No subagents, release, install, UserInstall/UserSync mutation or real-family send is authorized by these handoffs themselves.
-3. Implement through the existing domain → workflow → CLI/MCP adapters. Register a new CLI name in help, known commands, arity and dispatch; register its typed MCP schema, annotations and command allowlist where needed. Update document validation/dispatch, `engine_reference` help/formats/examples and the relevant seed playbook together. Do not leave a helper that cannot be reached through the advertised teacher flow.
-4. Handoff work overlaps in `cmd/cse/main.go`, `remote.go`, MCP registrations, `scripts/check-mcp.mjs`, capabilities/formats and quiz/edit/score playbooks. Execute slices sequentially in one checkout, or explicitly coordinate ownership if the user later requests parallel work. Reconcile these files against the then-current tree; never replace a whole file from an old handoff. Content-edit documents, QuizForge creation, accommodations and student item-score results are separate operations with separate outcomes.
-5. A concrete teacher request already authorizes its ordinary product write. Development probes require the explicitly scoped live go-ahead described in each handoff; missing live approval/account access blocks only that probe or dependent unknown protocol. Explain the exact missing evidence and continue independent work. Never use the classroom MCP connection to execute a Dev test accidentally.
-6. For implementation, run focused tests while editing, then these checks once for the completed slice. The build is a temporary Dev test binary, not a package or teacher install:
-
-   ```powershell
-   go test ./...
-   go vet ./...
-   $handoffCheckEngine = Join-Path ([System.IO.Path]::GetTempPath()) ("cse-handoff-check-" + [guid]::NewGuid().ToString("N") + ".exe")
-   go build -o $handoffCheckEngine ./cmd/cse
-   node scripts/check-mcp.mjs $handoffCheckEngine
-   git diff --check
-   ```
-
-   Run each command after the previous succeeds; use the available Node runtime if it is not on PATH. Recount the discovered MCP tools and test the changed schemas; do not assume the starting count of 53 survives other slices. After review-page retirement the scoring `--review` smoke branch is removed, while family review has its own surviving tests. Do not run Canvas writes to make this smoke check pass.
-7. Record what changed, checks actually run, and evidence still pending at the end of the slice. Update both capability records and their review date when implementation changes a capability. A fake-server pass is local evidence; an API reference is documented behavior; neither is Canvas Live proof. Retire a whole handoff only when its requested independent parts are complete, or clearly superseded with remaining work linked. A completed part may be recorded while the rest stays active.
-
-This 2026-10-28 readiness review changed handoff documentation only, checked official public API references, and made no Canvas calls or teacher-install changes. It does not update product capability status by itself.
-
-A second pass the same day checked the named files, symbols and call sites against the Dev tree (they hold; `hideGrades`/`gradeVisibleHold` live in `team_consent.go`) and removed recovery machinery that idempotent writes do not need, per root `AGENTS.md`: content-edit resume is a three-way live/observed/desired compare, not a pending-intent store. Quiz accommodations rerun the whole absolute-value array unless §3.1 shows otherwise, and course-level sync (Canvas 2026 §4.5) is frozen until the teacher asks, so Part C does not wait on it. Tag management resumes by re-resolving names and memberships, with one removal flag rather than two. Invalid saved quiz settings fail loading like the existing flags. Non-idempotent writes (New Quiz result versions) keep their pending/accepted records.
-
-## Architecture review: direction agreed
-
-The [unified architecture review](Unified%20Architecture%20Review.md) (2026-11-04) combines the Opus55 and Sol 61 reviews (in git history at `a1b4817`) of Dev at `f58ecaf` into candidate slices A–I. The developer answered its twelve questions the same day; its Developer decisions table governs the slices and their order. It is a planning document, not an execution handoff: each slice still gets bounded execution before code changes.
-
-## Completed work and evidence
-
-The 2026-11-04 architecture slices B-I are retired in `retired/` with banners naming their commits.
-
-The [parent email content to playbook handoff](retired/HANDOFF_Parent_Email_Content_to_Playbook_2026-11-07.md) is retired (2026-11-10): implemented in Dev 2026-11-07, committed as `1ce88d5` and released in 2.0.0. The Engine keeps facts, an Engine-drawn table and safe delivery; the playbook writes the email's wording, sections and send policy. Full tests, vet, the 58-tool compiled MCP smoke and `git diff --check` passed at implementation; local tests only.
-
-The [Canvas 2026 additions handoff](retired/HANDOFF_Canvas_2026_Additions_2026-10-28.md) is retired (2026-10-28): authenticated direction-image downloads, bulk differentiation tags and shared rubrics (with CS8 Canvas Live library-reuse, New Quiz attachment and Test Student assessment evidence) are complete; the explicit accommodation tool, saved quiz settings, `from_saved` planning and the publication hold are in Dev with local evidence. The [review-page retirement handoff](retired/HANDOFF_Retire_Review_Page_and_New_Quiz_Item_Scores_2026-10-28.md) is retired with Part 1 complete: the scoring/authoring review page and `start_review` are gone, the check-in is in the conversation with an Engine-rendered sample, and family review is unchanged. Accommodation writes and New Quiz item scores moved to the active handoff above. Full uncached tests, vet, the 57-tool compiled MCP smoke and `git diff --check` were rerun and passed at retirement.
-
-The [existing New Quiz content-edit handoff](retired/HANDOFF_Existing_New_Quiz_Content_Edits_2026-10-27.md) is complete in Dev (2026-10-28): fresh exact quiz/item pulls, narrow text/link changes, independent conflict outcomes and three-way reruns. Full uncached Go tests, vet and the 54-tool compiled MCP smoke passed. An unpublished disposable CS8 quiz exercised the Engine instructions/prompt/general-feedback edits and a no-PATCH rerun; requested fields and sibling feedback matched a dev read-back, then the quiz was deleted. Linked-file access, student rendering and attempt effects retain explicit evidence limits.
-
-The [existing-content editing handoff](retired/HANDOFF_Existing_Content_Edit_Gaps_2026-10-27.md) is complete in Dev: inherited Page audiences, exact module-item removal/replacement and narrow New Quiz group/base-date edits. Its banner records the read-only Page pull, disposable quiz API probe and remaining live Engine evidence limits.
-
-The retired [WebUI width handoff](retired/HANDOFF_WebUI_Width_2026-10-26.md) records the implemented layout changes and the limit on recorded visual verification. The retired [parent-report and weekly ELA layout handoff](retired/HANDOFF_Parent_Report_Fix_and_Weekly_Layout_2026-10-26.md) records the Dev fix and read-only live inventory evidence; the independent Missing count, Outlook draft inspection, delivery and UserInstall adoption remain pending.
-
-Current development authority lives in the root `AGENTS.md`, `docs/ARCHITECTURE.md` and `docs/SCORING-RULES.md`; build instructions and dated observations live under `docs/`.
-
-The retired [team teaching 1.2b1 handoffs](retired/team-1.2b1/00-BRIEF.md) (2026-10-22) planned teammates' Canvas keys on one team PC, per-course key routing, `(CE)` scoring consent with hidden grades, a copy-once Collab module copy and family replies routed to the actual teacher. Slices 01-06 are built in Dev; the developer-run live checks (07) passed A1, A2, A3, A4 and A7 on 2026-10-22, with A5, A6 and the teammate and co-teacher parts left to happen on real use. The [product plan](../docs/team/README.md) carries the status table.
-
-The retired [targeted scoring session brief](retired/TARGETED-SCORING-SESSION.md) (2026-10-21) replaced whole-course session discovery with Canvas's `needs_grading_count`, added assignment-group/due-state reporting and one local results index per pull. Implementation and local tests are complete; remaining live observations wait for real work.
-
-The [Family Contact handoff](retired/FAMILY-ANNOUNCEMENTS.md) is complete in Dev. General family messages reuse the parent-update review, private recipient routing and Outlook delivery, with course/group/student audiences, per-message previews, inline images and file attachments. Full Go tests, vet and the compiled 40-tool MCP smoke passed; actual classic Outlook inspection confirmed a visible inline cover and an ordinary file attachment. No family email was sent. The [current contract](../docs/family-contact-flow.md) carries the supported flow and remaining evidence limits.
-
-The retired [book-group audience brief](retired/BOOK-GROUP-AUDIENCES.md) records all five slices implemented, validated and committed in Dev: individual assignment audiences and refresh, course Page audiences, New Quiz audiences, and the integrated shared-module unit. Its original pause checkpoint is retained as history and superseded by the dated execution records. Its original source handoff was removed on 2026-11-04 as a duplicate; it remains in git history. Canvas Live access, student views and UserInstall/UserSync adoption remain separate observations; no release or adoption is claimed by this Dev work.
-
-The [group, timing and parent-report fixes](retired/REVIEW-REGRESSION-FIXES.md) are complete and reviewed in Dev: all nine Engine findings have fixes and normal-suite regressions, and group-work guidance/evidence records are reconciled. Full tests, vet, diff checks and the compiled 38-tool MCP smoke passed before the audience integration. Distribution and UserInstall/UserSync adoption were not part of this work.
-
-
-The [calendar/scoring delivery follow-up](retired/CALENDAR-SCORING-DELIVERY.md) is complete: the user requested the Git merge and local update, the beta ZIP was built and adopted in UserInstall, effective UserSync playbooks updated, and teacher context/overrides were preserved. The existing 1.0 adapter still needs a reconnect; pending Canvas/client/family observations remain in the capability record and are not prerequisites for ordinary supported use.
-
-The [school-calendar/scoring plan](retired/SCHOOL-CALENDAR-SCORING-AND-PARENT-UPDATES.md), [current-term parent-report contract](retired/PARENT-REPORT-CURRENT-TERM.md), and [parent-date/Extra time follow-up](retired/PARENT-DATES-AND-EXTRA-TIME-FOLLOWUP.md) are retired with completion banners and dated evidence. The last closes the explicit-null parent date defect and exposes the saved private flag for documented accommodation decisions; it supplies no default allowance. Full Go tests, vet and a fresh 38-tool compiled MCP smoke passed on 2026-10-18, without Canvas writes.
-
-Earlier group-work and parent-update handoffs are in `retired/` with banners, alongside the completed [Studio light/dark handoff](retired/STUDIO-LIGHT-DARK.md), approved reference, implemented screenshots and dated local checks. `retired/` keeps the records that carry unique dated evidence (the fresh-install notes and triage, the New Quiz scoring probe results, the MCP verification record) and the retired Antigravity/streamlined-install spec; everything else is in Git history.
+This cleanup preserves evidence and repairs references. It does not rerun historical tests or promote pending observations to verified behavior. Current authority remains root `AGENTS.md` and architecture/scoring contracts; [Engine capabilities](../docs/engine-capabilities.md) records supported behavior and limits.
