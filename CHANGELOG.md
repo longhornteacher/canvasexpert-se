@@ -4,6 +4,11 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 2.5.0 (2026-11-14)
+
+- Scoring-session discovery can list assignments before pulling student work; playbooks refine scoring preparation, review, update checks and retake timing. Checked locally; live and client adoption remain unverified.
+- Parent report pulls support explicit date ranges or named periods, and draft tables support typed row selectors and scoped assignment evidence holds. Focused local tests only; the family-contact boundaries handoff remains incomplete.
+
 - New Quiz push receipts now bind ordinary quizzes to their Canvas and course and retain accepted stages; older unbound receipts are checked against the course before reuse. Completed publication is retained in rerun reports. Focused local tests only; the authoring handoff remains incomplete.
 
 ## 2.4.0 (2026-11-14)

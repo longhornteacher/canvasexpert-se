@@ -1095,15 +1095,41 @@ func runRemote(ctx context.Context, root, cmd string, args []string, out, progre
 		fmt.Fprintln(out, path)
 		fmt.Fprintf(out, "%d students, %s to %s\n", len(packet.Students), packet.From, packet.To)
 	case "parent-report":
-		fullPeriod := true // --full-period is accepted; every report covers the whole term
+		var options workflow.ParentReportOptions
 		var filtered []string
-		for _, arg := range args {
-			if arg != "--full-period" {
+		for i := 0; i < len(args); i++ {
+			arg := args[i]
+			if arg == "--full-period" {
+				continue
+			}
+			if arg == "--from" || arg == "--through" || arg == "--period" || arg == "--timezone" {
+				if i+1 == len(args) || strings.HasPrefix(args[i+1], "--") {
+					return fail(inputError(fmt.Errorf("%s requires a value", arg)), progress)
+				}
+				i++
+				var dst *string
+				switch arg {
+				case "--from":
+					dst = &options.From
+				case "--through":
+					dst = &options.Through
+				case "--period":
+					dst = &options.Period
+				case "--timezone":
+					dst = &options.Timezone
+				}
+				if *dst != "" {
+					return fail(inputError(fmt.Errorf("%s specified more than once", arg)), progress)
+				}
+				*dst = args[i]
+			} else if strings.HasPrefix(arg, "--") {
+				return fail(inputError(fmt.Errorf("unknown parent-report option %s", arg)), progress)
+			} else {
 				filtered = append(filtered, arg)
 			}
 		}
 		courseList, refList := splitParentArgs(filtered)
-		path, packet, e := service.ParentReportWithScope(ctx, courseList, refList, time.Now(), fullPeriod)
+		path, packet, e := service.ParentReportWithOptions(ctx, courseList, refList, time.Now(), options)
 		if e != nil {
 			return fail(workflowError(e), progress)
 		}

@@ -4,6 +4,7 @@ Open implementation lives in `active/`; completed or superseded instructions liv
 
 ## Active
 
+- [Parent updates and external communication Engine boundaries](active/HANDOFF_Parent_Family_Contact_Engine_Boundaries_2026-11-14.md): implementation started; scope and table selectors partially delivered, remaining slices open.
 - [Assignment and quiz authoring cleanup](active/HANDOFF_Assignment_Quiz_Authoring_2026-11-14.md): implementation started; item identity and slices 2–4 remain open.
 - [Pending observations](active/PENDING_OBSERVATIONS.md): evidence limits from delivered work, not standing authorization for live probes or prerequisites for authoring cleanup.
 

@@ -98,7 +98,7 @@ Usage: cse [--workspace PATH] COMMAND [ARGS]
   retake assign COURSE ORIGINAL_ID [--preview] Assign a Major's tutorial retake to every student who failed the original, each with their own deadline counted from the day their grade was posted; reports each student and what was done
   retake apply COURSE ORIGINAL_ID [--preview] [--genuine REF ...] Apply scored tutorial retakes to the original grades: capped at the retake cap, never lowering, one comment each; --genuine names students whose written retake was an honest attempt. Run it twice: the first run saves the reviewed values, the second writes them
   carry-grades COURSE TARGET_ID SOURCE_ID [SOURCE_ID ...] [--preview] Copy each student's entered score from the one source assignment they have a score on into one gradebook column (a bridge), scaled to its points; never lowers a grade and enters nothing for a student without exactly one score. Run it twice: the first run saves the reviewed values, the second writes them
-  parent-report COURSE [REF ...] Read this term's assignment facts (score, percent, due date, turned-in evidence) into courses/COURSE/parent-updates/
+  parent-report COURSE [REF ...] [--from DATE --through DATE | --period NAME] [--timezone IANA] Read assignment facts into courses/COURSE/parent-updates/ (default: current term)
   work-habits COURSE [--from DATE] [--to DATE] [REF ...] Read each student's weekly turn-in record (on time, late, missing, excused) into courses/COURSE/work-habits/; default last four weeks
   stad teams COURSE             Check context/stad/COURSE/teams.md against the course's active students; read-only
   stad standings COURSE [--week DATE] [--round NAME] Tally team points (effort, awards, bonuses) for a round; read-only

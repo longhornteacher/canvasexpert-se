@@ -35,6 +35,9 @@ type ParentReportPacket struct {
 // build a report: period start through as_of. It is provenance for this saved
 // run, not a live policy switch.
 type ParentReportScope struct {
+	Kind            string `json:"kind,omitempty"`
+	From            string `json:"from,omitempty"`
+	Through         string `json:"through,omitempty"`
 	Timezone        string `json:"timezone"`
 	PeriodName      string `json:"period_name"`
 	PeriodStartDate string `json:"period_start_date"`
@@ -50,17 +53,24 @@ type ParentReportStudent struct {
 }
 
 type ParentReportCourse struct {
-	Course            string              `json:"course"`
-	Timezone          string              `json:"timezone"`
-	CourseScore       *string             `json:"course_score"`
-	CourseScoreSource string              `json:"course_score_source"`
-	Flags             []string            `json:"flags,omitempty"`
-	WorkDue           []ParentWorkDueItem `json:"work_due"`
+	Course            string                `json:"course"`
+	Timezone          string                `json:"timezone"`
+	CourseScore       *string               `json:"course_score"`
+	CourseScoreSource string                `json:"course_score_source"`
+	Flags             []string              `json:"flags,omitempty"`
+	Issues            []ParentEvidenceIssue `json:"issues,omitempty"`
+	WorkDue           []ParentWorkDueItem   `json:"work_due"`
 	// Upcoming lists all work due after as_of through the period end, for
 	// the printed grade sheet.
 	Upcoming []ParentUpcomingItem `json:"upcoming,omitempty"`
 	// upcomingEnd, when set, is the exclusive end of the Upcoming list.
 	upcomingEnd time.Time
+}
+
+// ParentEvidenceIssue identifies the assignment whose evidence is incomplete.
+type ParentEvidenceIssue struct {
+	AssignmentID int64  `json:"assignment_id,omitempty"`
+	Detail       string `json:"detail"`
 }
 
 // ParentUpcomingItem is published, visible work not yet due for this student.
@@ -103,21 +113,42 @@ func (s *Service) ParentReport(ctx context.Context, nicknames []string, refs []s
 // ParentReportWithScope is kept for callers that pass the former full-period
 // switch. Every report now covers the whole current grading period through now.
 func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string, refs []string, now time.Time, _ bool) (string, ParentReportPacket, error) {
+	return s.ParentReportWithOptions(ctx, nicknames, refs, now, ParentReportOptions{})
+}
+
+// ParentReportOptions selects an inclusive local-date range or a named period.
+// An empty selection preserves the current-period default.
+type ParentReportOptions struct {
+	From, Through, Period, Timezone string
+}
+
+func (s *Service) ParentReportWithOptions(ctx context.Context, nicknames []string, refs []string, now time.Time, options ParentReportOptions) (string, ParentReportPacket, error) {
 	if len(nicknames) == 0 {
 		return "", ParentReportPacket{}, fmt.Errorf("at least one course is required")
 	}
-	calendar, e := workspace.ReadSchoolCalendar(s.Root)
-	if e != nil {
-		return "", ParentReportPacket{}, fmt.Errorf("school calendar: %w", e)
+	if (options.From == "") != (options.Through == "") {
+		return "", ParentReportPacket{}, fmt.Errorf("both from and through are required for a date range")
 	}
-	if e = calendar.Validate(); e != nil {
-		return "", ParentReportPacket{}, fmt.Errorf("school calendar: %w; correct context/school-calendar.md before creating a parent report", e)
+	if options.Period != "" && options.From != "" {
+		return "", ParentReportPacket{}, fmt.Errorf("period and date range are alternative scopes")
 	}
-	period, e := calendar.CurrentPeriod(now)
-	if e != nil {
-		return "", ParentReportPacket{}, fmt.Errorf("school calendar: %w; correct context/school-calendar.md before creating a parent report", e)
+	var calendar workspace.SchoolCalendar
+	var e error
+	if options.From == "" && options.Through == "" || options.Period != "" {
+		calendar, e = workspace.ReadSchoolCalendar(s.Root)
+		if e != nil {
+			return "", ParentReportPacket{}, fmt.Errorf("school calendar: %w", e)
+		}
 	}
-	scope, periodStart, upcomingEnd, e := makeParentReportScope(calendar, period, now)
+	zone := options.Timezone
+	if zone == "" && options.From != "" && options.Through != "" {
+		course, err := s.Course(nicknames[0])
+		if err != nil {
+			return "", ParentReportPacket{}, err
+		}
+		zone = course.Timezone
+	}
+	scope, periodStart, upcomingEnd, reportEnd, e := selectParentReportScope(calendar, options, zone, now)
 	if e != nil {
 		return "", ParentReportPacket{}, e
 	}
@@ -213,17 +244,22 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 		for _, id := range order {
 			en := byUser[id]
 			rc := ParentReportCourse{Course: course.Nickname, Timezone: zone, CourseScore: en.score, CourseScoreSource: "canvas_enrollment_current_score", WorkDue: []ParentWorkDueItem{}}
-			studentSubs, incomplete := completeStudentSubmissionsWithResolver(ctx, resolver, id, assignments, perStudent[id], periodStart, now, upcomingEnd)
+			studentSubs, incomplete := completeStudentSubmissionsWithResolver(ctx, resolver, id, assignments, perStudent[id], periodStart, reportEnd, upcomingEnd)
 			rc.Flags = append(rc.Flags, incomplete...)
+			for _, flag := range incomplete {
+				var assignmentID int64
+				_, _ = fmt.Sscanf(flag, "assignment %d", &assignmentID)
+				rc.Issues = append(rc.Issues, ParentEvidenceIssue{AssignmentID: assignmentID, Detail: flag})
+			}
 			for _, sub := range studentSubs {
 				a, ok := byAssignment[sub.AssignmentID]
 				due := effectiveDueForStudent(sub, a, id)
-				if ok && a.Published && a.GradingType != "not_graded" && !sub.Excused && sub.AssignmentVisible != nil && *sub.AssignmentVisible && due != nil && !due.Before(periodStart) && !due.After(now) {
+				if ok && a.Published && a.GradingType != "not_graded" && !sub.Excused && sub.AssignmentVisible != nil && *sub.AssignmentVisible && due != nil && !due.Before(periodStart) && !due.After(reportEnd) {
 					verifiedInWindow = true
 				}
 			}
 			rc.upcomingEnd = upcomingEnd
-			buildStudentReport(&rc, studentSubs, byAssignment, now, loc, periodStart)
+			buildStudentReport(&rc, studentSubs, byAssignment, reportEnd, loc, periodStart)
 			courseWorkCount += len(rc.WorkDue)
 			rs := byRef[en.st.Ref]
 			if rs == nil {
@@ -270,6 +306,69 @@ func (s *Service) ParentReportWithScope(ctx context.Context, nicknames []string,
 
 // makeParentReportScope returns the saved scope, the period start (the window
 // start) and the exclusive period end (the end of the upcoming list).
+func selectParentReportScope(calendar workspace.SchoolCalendar, options ParentReportOptions, zone string, now time.Time) (*ParentReportScope, time.Time, time.Time, time.Time, error) {
+	zero := time.Time{}
+	if options.Period != "" && (options.From != "" || options.Through != "") {
+		return nil, zero, zero, zero, fmt.Errorf("period and date range are alternative scopes")
+	}
+	if (options.From == "") != (options.Through == "") {
+		return nil, zero, zero, zero, fmt.Errorf("both from and through are required for a date range")
+	}
+	if options.From == "" && options.Period == "" {
+		if options.Timezone != "" {
+			return nil, zero, zero, zero, fmt.Errorf("timezone requires an explicit date range or period")
+		}
+		period, err := calendar.CurrentPeriod(now)
+		if err != nil {
+			return nil, zero, zero, zero, fmt.Errorf("school calendar: %w", err)
+		}
+		scope, start, end, err := makeParentReportScope(calendar, period, now)
+		return scope, start, end, now, err
+	}
+	from, through := options.From, options.Through
+	if options.Period != "" {
+		matches := 0
+		for _, p := range calendar.GradingPeriods {
+			if p.Name == options.Period {
+				matches++
+				from, through = p.StartDate, p.EndDate
+			}
+		}
+		if matches != 1 {
+			return nil, zero, zero, zero, fmt.Errorf("grading period %q must identify exactly one period", options.Period)
+		}
+		if zone == "" {
+			zone = calendar.Timezone
+		}
+	}
+	loc, err := time.LoadLocation(zone)
+	if zone == "" || err != nil {
+		return nil, zero, zero, zero, fmt.Errorf("a valid IANA timezone is required for the report scope")
+	}
+	start, err := time.ParseInLocation("2006-01-02", from, loc)
+	if err != nil {
+		return nil, zero, zero, zero, fmt.Errorf("from must be YYYY-MM-DD")
+	}
+	last, err := time.ParseInLocation("2006-01-02", through, loc)
+	if err != nil {
+		return nil, zero, zero, zero, fmt.Errorf("through must be YYYY-MM-DD")
+	}
+	if last.Before(start) {
+		return nil, zero, zero, zero, fmt.Errorf("through must not be before from")
+	}
+	end := last.AddDate(0, 0, 1)
+	reportEnd := now
+	if !end.After(now) {
+		reportEnd = end.Add(-time.Nanosecond)
+	}
+	scope := &ParentReportScope{Kind: "range", Timezone: zone, From: from, Through: through, RecentStartAt: start.Format(time.RFC3339), RecentEndAt: reportEnd.Format(time.RFC3339Nano)}
+	if options.Period != "" {
+		scope.Kind = "period"
+		scope.PeriodName, scope.PeriodStartDate, scope.PeriodEndDate = options.Period, from, through
+	}
+	return scope, start, end, reportEnd, nil
+}
+
 func makeParentReportScope(calendar workspace.SchoolCalendar, period workspace.GradingPeriod, asOf time.Time) (*ParentReportScope, time.Time, time.Time, error) {
 	loc, err := time.LoadLocation(calendar.Timezone)
 	if err != nil {
@@ -520,7 +619,7 @@ func buildStudentReport(rs *ParentReportCourse, subs []Submission, assignments m
 		}
 		item := ParentReportItem{AssignmentID: a.ID, Title: a.Name, URL: a.HTMLURL, DueAt: due.In(loc).Format(time.RFC3339)}
 		submitted := sub.SubmittedAt != nil && sub.Attempt >= 1
-		if !rs.upcomingEnd.IsZero() && due.After(now) && due.Before(rs.upcomingEnd) {
+		if !rs.upcomingEnd.IsZero() && !due.Before(windowStart) && due.After(now) && due.Before(rs.upcomingEnd) {
 			rs.Upcoming = append(rs.Upcoming, ParentUpcomingItem{ParentReportItem: item, TurnedIn: submitted})
 		}
 		if due.Before(windowStart) || due.After(now) {

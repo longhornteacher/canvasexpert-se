@@ -16,6 +16,28 @@ import (
 func num(s string) *json.Number { n := json.Number(s); return &n }
 func str(s string) *string      { return &s }
 
+func TestParentReportExplicitScope(t *testing.T) {
+	now := time.Date(2026, 11, 14, 18, 0, 0, 0, time.UTC)
+	// No calendar or active grading period is needed for a complete range.
+	scope, start, end, asOf, err := selectParentReportScope(workspace.SchoolCalendar{}, ParentReportOptions{From: "2025-03-01", Through: "2025-03-31"}, "America/Chicago", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scope.Kind != "range" || scope.PeriodName != "" || start.Format("2006-01-02") != "2025-03-01" || end.Format("2006-01-02") != "2025-04-01" || !asOf.Before(end) {
+		t.Fatalf("unexpected scope: %+v %v %v %v", scope, start, end, asOf)
+	}
+	calendar := workspace.SchoolCalendar{Timezone: "America/Chicago", GradingPeriods: []workspace.GradingPeriod{{Name: "Old", StartDate: "2025-03-01", EndDate: "2025-03-31"}}}
+	scope, _, _, _, err = selectParentReportScope(calendar, ParentReportOptions{Period: "Old"}, "", now)
+	if err != nil || scope.Kind != "period" || scope.PeriodName != "Old" {
+		t.Fatalf("named period: %+v %v", scope, err)
+	}
+	for _, options := range []ParentReportOptions{{From: "2025-04-01", Through: "2025-03-01"}, {From: "2025-03-01"}, {From: "2025-03-01", Through: "2025-03-31", Period: "Old"}} {
+		if _, _, _, _, err := selectParentReportScope(calendar, options, "America/Chicago", now); err == nil {
+			t.Fatalf("invalid scope accepted: %+v", options)
+		}
+	}
+}
+
 func TestParentWindowUsesEffectiveDueDatesAndCompleteInventory(t *testing.T) {
 	loc, _ := time.LoadLocation("America/Chicago")
 	now := time.Date(2026, 10, 18, 12, 0, 0, 0, loc)
@@ -493,6 +515,16 @@ func TestParentReportWritesFactsForTheWholeTerm(t *testing.T) {
 			}
 		} else if *work.Percent != "0" || work.Submission != "turned_in" {
 			t.Fatalf("submitted zero = %+v", work)
+		}
+	}
+	_, historical, err := svc.ParentReportWithOptions(context.Background(), []string{"TEST"}, nil, time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC), ParentReportOptions{From: "2026-10-08", Through: "2026-10-12", Timezone: "America/Chicago"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, student := range historical.Students {
+		rows := student.Courses[0].WorkDue
+		if len(rows) != 2 || rows[0].AssignmentID != 2 || rows[1].AssignmentID != 3 {
+			t.Fatalf("historical range: %+v", rows)
 		}
 	}
 }

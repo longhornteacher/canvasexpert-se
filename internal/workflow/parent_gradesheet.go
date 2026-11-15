@@ -83,6 +83,8 @@ func (r *ParentRun) RenderStudent(sd ParentStudentDraft, student workspace.Stude
 	fmt.Fprintf(&b, `<p style="margin:0 0 4px;font-size:17px"><b>%s</p>`, header)
 	if scope := r.Report.Scope; scope != nil && scope.PeriodName != "" {
 		fmt.Fprintf(&b, `<p style="margin:0 0 8px;color:#52606d">%s · %s–%s</p>`, esc(scope.PeriodName), esc(scope.PeriodStartDate), esc(scope.PeriodEndDate))
+	} else if scope != nil && scope.Kind == "range" {
+		fmt.Fprintf(&b, `<p style="margin:0 0 8px;color:#52606d">%s–%s</p>`, esc(scope.From), esc(scope.Through))
 	}
 	if sd.StudentIntro != "" {
 		fmt.Fprintf(&b, `<p style="margin:6px 0">%s</p>`, esc(workspace.ReplaceStudentName(sd.StudentIntro, student)))

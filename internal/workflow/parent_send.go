@@ -437,7 +437,12 @@ func (s *Service) BuildStudentSheets(dir string) (sheets []StudentSheet, label s
 	}
 	label = strings.Join(run.Report.Courses, ", ")
 	if run.Report.Scope != nil {
-		label += " · " + run.Report.Scope.PeriodName + " " + run.Report.Scope.PeriodStartDate + "–" + run.Report.Scope.PeriodEndDate
+		scope := run.Report.Scope
+		if scope.Kind == "range" {
+			label += " · " + scope.From + "–" + scope.Through
+		} else if scope.PeriodName != "" {
+			label += " · " + scope.PeriodName + " " + scope.PeriodStartDate + "–" + scope.PeriodEndDate
+		}
 	}
 	if t, e := time.Parse(time.RFC3339, run.Report.AsOf); e == nil {
 		loc := time.UTC

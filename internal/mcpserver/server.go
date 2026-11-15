@@ -168,6 +168,10 @@ type ParentReportInput struct {
 	Courses    []string `json:"courses" jsonschema:"Configured course nicknames; one email can cover several courses"`
 	Students   []string `json:"students,omitempty" jsonschema:"Optional student refs; omit for every active student"`
 	FullPeriod bool     `json:"full_period,omitempty" jsonschema:"Accepted for compatibility; every report now covers the whole current grading period"`
+	From       string   `json:"from,omitempty" jsonschema:"First inclusive local due date YYYY-MM-DD; requires through"`
+	Through    string   `json:"through,omitempty" jsonschema:"Last inclusive local due date YYYY-MM-DD; requires from"`
+	Period     string   `json:"period,omitempty" jsonschema:"Exact named grading period; alternative to from and through"`
+	Timezone   string   `json:"timezone,omitempty" jsonschema:"IANA timezone for explicit scope; defaults to first course timezone for a range"`
 }
 
 type WorkHabitsInput struct {
@@ -382,10 +386,15 @@ func NewServer(ctx context.Context, root string) (*mcp.Server, func()) {
 		}
 		return s.longCommand(ctx, args...)
 	})
-	addActionTool(server, "pull_parent_report", "Read current Canvas facts for parent updates into courses/<course>/parent-updates/<run>/report.json: for each student and course, every assignment due this grading period so far with its released score, percent, student due date, direct link and turned-in evidence, plus upcoming work for printed sheets. Facts only; the playbook writes the email. Students are pseudonymized; no contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
+	addActionTool(server, "pull_parent_report", "Read Canvas assignment facts for parent updates into a pseudonymized report. Defaults to the current grading period; choose an inclusive date range or named period for another scope. Released scores and submission evidence are current as of the pull; future work is listed separately. No contacts are included.", false, func(ctx context.Context, _ *mcp.CallToolRequest, in ParentReportInput) (TextOutput, error) {
 		args := append(append([]string{"parent-report"}, in.Courses...), in.Students...)
 		if in.FullPeriod {
 			args = append(args, "--full-period")
+		}
+		for _, opt := range []struct{ name, value string }{{"--from", in.From}, {"--through", in.Through}, {"--period", in.Period}, {"--timezone", in.Timezone}} {
+			if opt.value != "" {
+				args = append(args, opt.name, opt.value)
+			}
 		}
 		return s.longCommand(ctx, args...)
 	})
