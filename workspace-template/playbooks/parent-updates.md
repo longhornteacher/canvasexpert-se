@@ -24,7 +24,7 @@ Use one short introduction naming the class and requested term (for example **Te
 |---|---|
 | Assignment title linked directly to that Canvas assignment | Current released score with its points possible |
 
-The Engine draws this table: every title links directly to that Canvas assignment, rows run by due date then title, and a student in several classes gets one table per class. Show each assignment once. Due date and turned-in status are not shown by default; add those columns only if the teacher asks. After the table, list the links with a short description each: the tutorial sign-up (the saved tutoring link and text), the grade portal for official grades, and the Canvas parent-account link when one is saved. Then the teacher's sign-off.
+The Engine draws this table: every title links directly to that Canvas assignment, rows run by due date then title, and a student in several classes gets one table per class. Show each assignment once. Due date and turned-in status are not shown by default; add those columns only if the teacher asks. After the table, list the links with a short description each: the tutorial sign-up (the saved tutoring link and text), the grade portal for official grades, and a Canvas parent-account link when the teacher's context rules name one (write it in the body; it is not a saved setting). Then the teacher's sign-off.
 
 Do not include an AI disclaimer, AI-assistance explanation, Pokémon name, alias, or explanation of how aliases protect identities anywhere in family-facing subjects, introductions, tables or footers. This is a presentation rule: keep internal pseudonymization and private identity matching intact. Use `{{student_name}}` where the child's name belongs; the Engine fills it in privately.
 

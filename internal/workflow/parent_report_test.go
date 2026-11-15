@@ -544,6 +544,23 @@ func TestParentConfigKeepsLoadingExistingTeacherKeys(t *testing.T) {
 	}
 }
 
+func TestShippedParentSeedSettingsLoad(t *testing.T) {
+	seed, err := os.ReadFile(filepath.Join("..", "..", "workspace-template", "context", "parent-updates.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "context"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "context", "parent-updates.md"), seed, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadParentConfig(root); err != nil {
+		t.Fatalf("a context file created from the shipped seed must load: %v", err)
+	}
+}
+
 func TestParentFalseBulkVisibilityUsesAssignmentBatchAndKeepsStudentDue(t *testing.T) {
 	reads := 0
 	svc, _ := workflowFixture(t, func(w http.ResponseWriter, r *http.Request) {
