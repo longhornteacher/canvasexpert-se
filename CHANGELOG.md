@@ -4,6 +4,12 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 2.5.1 (2026-11-15)
+
+Playbook wording only; no Engine behavior changed.
+
+- Parent updates now send the student back to Canvas to own the next steps: look through each linked assignment, do what they can at home and bring questions and needs to tutorials. The table shows only Assignment and Score by default, the email says in general terms that some work is locked and other work might have corrections or late turn-in available (never per assignment), and a responsibility paragraph precedes the close. A teacher can save Student Handbook text and a Parent Canvas account link (`canvas_parent_url`, `canvas_parent_text`) in their own context; the seed ships both blank. The body must end with the sign-off, because the Engine adds it itself unless the body already ends with it. Checked with a saved draft only; no rendered review or send was observed.
+
 ## 2.5.0 (2026-11-14)
 
 - Scoring-session discovery can list assignments before pulling student work; playbooks refine scoring preparation, review, update checks and retake timing. Checked locally; live and client adoption remain unverified.
