@@ -8,19 +8,27 @@ You write the email; the Engine supplies the facts. The Engine reads Canvas, mat
 
 Read AGENTS.md, Teacher_Override.md, context/parent-updates.md and the relevant school-calendar grading period first. Use the saved grade-portal and tutoring links and the teacher's sign-off. Ask for missing settings only when needed; never ask again for saved settings.
 
+## Purpose of the email
+
+The email exists to send the student back to Canvas to take ownership, not to list failures. The list is a convenience: the links get the student to each assignment in one click. They are not a promise that anything can be redone or earn points back.
+
+The introduction speaks to the family about the student's own next steps: look through each linked assignment in Canvas, do what they know they can do at home, and make a list of questions and needs to bring to tutorials. Keep the responsibility with the student ({{student_name}}) in a warm, plain tone. State plainly, in general terms, that some of the listed work is locked at its grade while other work might have corrections or late turn-in available; never say which assignments or promise points back. Do not offer to build a plan together, schedule a meeting, or invite a reply; the student works out the plan. Do not scold or catalogue shortcomings.
+
+After the links, add one short paragraph: before attending tutorials the student must already know which assignments they have questions about and must already have begun the work they know they need to do. Responsibility for the work belongs to the student. Then include any Student Handbook text the teacher saved in context/parent-updates.md, verbatim. End the body with the closing and the teacher's sign-off as its last lines: the Engine appends the sign-off itself unless the body already ends with it, so anything placed after it gets a second sign-off.
+
 ## Required parent-update format
 
-Use one short introduction naming the class and requested term (for example **Term 2**), followed by one assignment list. Use the saved term's actual dates, not a rolling correction window.
+Use one short introduction naming the class and requested term (for example **Term 2**) and giving the student's next steps as above, followed by one assignment list. Use the saved term's actual dates, not a rolling correction window.
 
-| Assignment | Score | Due date | Turned in? |
-|---|---|---|---|
-| Assignment title linked directly to that Canvas assignment | Current released score with its points possible | Student-effective due date | Evidence-based submission status |
+| Assignment | Score |
+|---|---|
+| Assignment title linked directly to that Canvas assignment | Current released score with its points possible |
 
-The Engine draws this table: every title links directly to that Canvas assignment, rows run by due date then title, and a student in several classes gets one table per class. Show each assignment once. End with the configured grade-portal link (the official grade), the tutoring link when one is saved, and the teacher's sign-off.
+The Engine draws this table: every title links directly to that Canvas assignment, rows run by due date then title, and a student in several classes gets one table per class. Show each assignment once. Due date and turned-in status are not shown by default; add those columns only if the teacher asks. After the table, list the links with a short description each: the tutorial sign-up (the saved tutoring link and text), the grade portal for official grades, and the Canvas parent-account link when one is saved. Then the teacher's sign-off.
 
 Do not include an AI disclaimer, AI-assistance explanation, Pokémon name, alias, or explanation of how aliases protect identities anywhere in family-facing subjects, introductions, tables or footers. This is a presentation rule: keep internal pseudonymization and private identity matching intact. Use `{{student_name}}` where the child's name belongs; the Engine fills it in privately.
 
-Do not include a **Corrections available** section or announcement, correction deadlines, promises of points back, retake invitations or statements that listed work can be resubmitted. A low grade does not establish correction eligibility. This email reports current work and links to it; it does not announce a correction policy.
+Do not include a **Corrections available** section, per-assignment correction or retake eligibility, correction deadlines, or promises of points back. A low grade does not establish eligibility for any particular assignment. The only correction and late-work wording is the general sentence in the introduction and the saved Student Handbook text.
 
 Do not add Due Soon, first/current score history, a complete inventory of passing assignments, announcements, conferences, practice or requests for families to reply unless the teacher separately asks.
 
@@ -50,7 +58,7 @@ The report gives each row a `submission` value. Word them for families in `submi
 Save `drafts.json` beside the report with write_draft (schema 3; the exact fields are in engine_reference formats under "Parent update reports and drafts"):
 
 - `subject` and `body` in Markdown. The body holds `{{assignment_table}}` once, on its own line, where the list goes. Write the links from context into the body, for example `[Skyward Family Access](URL) for official grades.`
-- `table`: `below_percent: 70`, `columns: ["assignment", "score", "due", "submission"]`, a family-friendly label for each column, the four `submission_labels` above, and `empty_text` such as "No assignments below 70% this term." Add `course_headings` with each class's family-facing name when an update covers several classes.
+- `table`: `below_percent: 70`, `columns: ["assignment", "score"]`, a family-friendly label for each column, the four `submission_labels` above only if a `submission` column is added, and `empty_text` such as "No assignments below 70% this term." Add `course_headings` with each class's family-facing name when an update covers several classes.
 - `send_when: "rows"` sends to every student with at least one listed assignment and skips the rest. Add a `students` entry only to override one student's decision (send, skip or flag, with a reason).
 - `recipients: "parents_only"` only when the teacher wants the student left off; otherwise the student is To and enabled parents are CC.
 
