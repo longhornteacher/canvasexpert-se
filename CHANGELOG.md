@@ -4,6 +4,11 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 2.5.3 (2026-11-17)
+
+- The assignment playbook adds dated late penalties and the closing time to the collapsed grading timetable for courses with the three-school-day policy. The dates skip weekends and school closures. Genuine work submitted by the cutoff remains eligible if extra credit is offered.
+- The edit playbook keeps the dated timetable current when a deadline or point total changes.
+
 ## 2.5.2 (2026-11-15)
 
 - Fix: the 2.5.1 seed `context/parent-updates.md` declared `canvas_parent_url` and `canvas_parent_text`, which the Engine's settings parser does not accept, so a context file created from that seed stopped the parent review page from opening ("Could not show this review"). The keys are removed; a Parent Canvas account link is written in the email body from the teacher's rules instead.
