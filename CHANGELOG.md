@@ -4,6 +4,16 @@ Notable changes are recorded here. Version names use semantic versioning; **1.0*
 
 ## Unreleased
 
+## 2.6.0 (2026-11-20)
+
+- The full four-helper review (separate logic and pedagogy reviewers, arbiter on every finding) is now only for a Major and its tutorial retake. New quizzes and rubrics use the two-helper review, with the arbiter only for a flag or a dispute. In a four-helper review, the logic and pedagogy reviewers start together once the fact-check corrections are in.
+- When scoring several assignments, each one's review starts as soon as its results file is valid, while the next is scored.
+- Feedback, instructions and messages no longer offer tutorials, a conference or "see me" unless the teacher authorized it, alongside the existing rule against offering resubmissions, corrections, retakes or points back.
+
+Engine:
+
+- New online assignments are created with one submission. Canvas otherwise allows unlimited submissions. A create may set `allowed_attempts` (a number, or `-1` for unlimited) when the teacher asks for more. Local tests only; no Canvas Live check yet.
+
 ## 2.5.3 (2026-11-17)
 
 - The assignment playbook adds dated late penalties and the closing time to the collapsed grading timetable for courses with the three-school-day policy. The dates skip weekends and school closures. Genuine work submitted by the cutoff remains eligible if extra credit is offered.

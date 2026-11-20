@@ -129,6 +129,14 @@ func ValidateAssignment(d AssignmentDocument, body string) error {
 	if d.OmitCorrections && d.Operation != "create" {
 		return fmt.Errorf("omit_corrections applies only to a create")
 	}
+	if d.AllowedAttempts != nil {
+		if d.Operation != "create" {
+			return fmt.Errorf("allowed_attempts applies only to a create; change attempts on an existing assignment in Canvas")
+		}
+		if n := *d.AllowedAttempts; n != -1 && n < 1 {
+			return fmt.Errorf("allowed_attempts must be a positive whole number or -1 for unlimited; omit it for one attempt")
+		}
+	}
 	if d.Instance != "" && !validInstance(d.Instance) {
 		return fmt.Errorf("instance must be an HTTPS Canvas origin")
 	}

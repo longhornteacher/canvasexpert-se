@@ -305,6 +305,9 @@ type AssignmentDocument struct {
 	// timetable even where a correction window is configured. Without a
 	// configured window the timetable says nothing about corrections anyway.
 	OmitCorrections bool `yaml:"omit_corrections,omitempty"`
+	// AllowedAttempts (create only) is the number of online submissions a
+	// student may make; -1 is unlimited. Omitted means one.
+	AllowedAttempts *int `yaml:"allowed_attempts,omitempty"`
 	Observed                       *AssignmentSnapshot     `yaml:"observed,omitempty"`
 	Created                        *CreatedResources       `yaml:"created,omitempty"`
 	UpdateOutcome                  ActionOutcome           `yaml:"update_outcome,omitempty"`

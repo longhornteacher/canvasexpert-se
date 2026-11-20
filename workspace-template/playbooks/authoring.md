@@ -14,6 +14,8 @@ Follow `teacher-context.md`: read the target course's notes and that class's ope
 
 Apply `TEACHER.md` for the 100-point default, grade-level rigor in plain wording, a one-line Learning Target and three-step directions at the top, a grade-representative exemplar for writing assignments, and accessible images and links. A writing assignment includes its rubric in the create draft (`rubric`, totaling the assignment's points, STAAR-shaped as `TEACHER.md` describes). Once the content is shaped, check the course's Green tag with `list_tags` and add a Green tier when it has students, then offer Silver/Red/Blue once unless saved choices settle it (Hub section below).
 
+An online assignment gets one submission: the Engine sends that when `allowed_attempts` is left out, so leave it out unless the teacher asked for more (then set the number, or `-1` for unlimited). Directions and feedback offer nothing beyond what the teacher authorized (`TEACHER.md`, Corrections).
+
 ## Grading timetable
 
 Put one collapsed **Grading timetable** at the end of each new dated assignment by default. Use the dated penalty breakdown below for an assignment due on a school day in a course with a three-school-day cutoff, a Canvas late deduction of 10% of the assignment's possible points per day, and no active correction window. Read `late_work` in `context/grading.md` with per-course values from `context/courses.md` taking precedence. Read the target course's Canvas policy with `canvas_get` (`GET /api/v1/courses/COURSE_ID/late_policy`). Use the Engine's standard timetable when these conditions can't be verified or the teacher sets a lock different from the three-day cutoff. If the teacher opts out, set `grading_timetable: false` and omit the box.
