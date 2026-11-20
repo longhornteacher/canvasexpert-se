@@ -1071,6 +1071,22 @@ func TestGroupAssignmentCreateFieldsAndRecoveryIdentity(t *testing.T) {
 	}
 }
 
+func TestCreateFieldsDefaultToOneAttempt(t *testing.T) {
+	doc := domain.AssignmentDocument{Title: "Essay", Points: domain.MustDecimal("10"), SubmissionTypes: []string{"online_upload"}}
+	if got := createFields(doc, "x")["allowed_attempts"]; got != 1 {
+		t.Fatalf("default attempts = %#v, want 1", got)
+	}
+	three := 3
+	doc.AllowedAttempts = &three
+	if got := createFields(doc, "x")["allowed_attempts"]; got != 3 {
+		t.Fatalf("requested attempts = %#v, want 3", got)
+	}
+	paper := domain.AssignmentDocument{Title: "Worksheet", Points: domain.MustDecimal("10"), SubmissionTypes: []string{"on_paper"}}
+	if _, ok := createFields(paper, "x")["allowed_attempts"]; ok {
+		t.Fatal("on-paper create sent an attempts limit")
+	}
+}
+
 func ptrInt64(v int64) *int64 { return &v }
 
 func TestRepresentativeSyntheticClassPullPost(t *testing.T) {

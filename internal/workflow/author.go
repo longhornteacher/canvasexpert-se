@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -552,6 +553,13 @@ func createFields(d domain.AssignmentDocument, html string) map[string]any {
 	fields := map[string]any{"name": d.Title, "description": html, "points_possible": d.Points, "grading_type": "points", "submission_types": d.SubmissionTypes, "due_at": d.DueAt, "unlock_at": d.UnlockAt, "lock_at": d.LockAt, "published": false}
 	if d.AssignmentGroupID != nil {
 		fields["assignment_group_id"] = *d.AssignmentGroupID
+	}
+	// Canvas defaults to unlimited submissions; CE-SE's default is one.
+	if slices.Contains(d.SubmissionTypes, "online_text_entry") || slices.Contains(d.SubmissionTypes, "online_upload") {
+		fields["allowed_attempts"] = 1
+		if d.AllowedAttempts != nil {
+			fields["allowed_attempts"] = *d.AllowedAttempts
+		}
 	}
 	if d.GroupCategoryID > 0 {
 		fields["group_category_id"] = d.GroupCategoryID

@@ -24,7 +24,7 @@ type capabilityGroup struct {
 
 // Keep this teacher-facing snapshot aligned with docs/engine-capabilities.md.
 // Recorded live evidence and local checks are different kinds of verification.
-const capabilitiesReviewed = "2026-11-14"
+const capabilitiesReviewed = "2026-11-20"
 
 var capabilityGroups = []capabilityGroup{
 	{
@@ -42,7 +42,7 @@ var capabilityGroups = []capabilityGroup{
 			{"A whole club unit in one shared module", "Added in Dev, reviewed 2026-10-19: one club audience can produce a course Page, an individual assignment and a New Quiz, each prepared, reviewed and pushed on its own so a held resource never blocks the others. Each resource is created unpublished, restricted to the selected clubs, placed in the requested existing module and published last. The module is a navigation list and carries no audience; each child keeps its own restriction, and an existing module keeps its unrelated entries while gaining one native entry per resource in the requested order. Membership refresh is per resource: assignment and quiz removals are work-protected, Page removals are not. Focused synthetic checks only; Canvas Live module-list, direct-access and student views remain pending."},
 			{"Manage book clubs and collaborative group work", "Tier A and B are implemented; reviewed 2026-10-19. The CS8 dev Engine check on 2026-10-17 exercised group sets/clubs, membership changes, Pages, ungraded and graded discussion authoring, whole-thread pulls/replies, module links, group assignments/dates, real shared submissions, shared and individual grades/rubrics/comments, shared timing and review cards. The seed playbook covers these delivered paths. Local regression fixes have no new live evidence. Self sign-up/allocation, checkpoints, excused/hidden members and student views/notifications remain pending. Tier C remains frozen until requested; external provider provisioning remains separate."},
 
-			{"Create assignments with directions, points, dates, and submission settings", "Creation and edits verified in Canvas Live."},
+			{"Create assignments with directions, points, dates, and submission settings", "Creation and edits verified in Canvas Live. Dev 2026-11-20, local tests only: a new online assignment is created with one submission unless the draft sets `allowed_attempts`; not yet checked in Canvas Live."},
 			{"Publish assignments when requested", "Verified in Canvas Live. New assignments wait for requested rubric and module pieces to succeed before publication."},
 			{"Edit existing assignments while preserving unrelated content", "Verified in Canvas Live, including preservation of unsent edits when conflicts occur."},
 			{"Create and attach assignment rubrics", "Verified in Canvas Live. Criterion maxima are preserved when ratings are omitted. New rubrics are attached independently of grade calculation. Local fixes on 2026-10-11 reject use_for_grading true on newly authored rubrics and explain independent grading in review; existing coupled snapshots remain supported. These fixes have local checks, not a new Canvas Live trial."},

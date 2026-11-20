@@ -21,8 +21,8 @@ Run each role as a separate helper agent when your app can start one: one helper
 **Three sizes of review.** Use the smallest that fits; when unsure, use the larger.
 
 - **No helpers**: a correction that changes no meaning, such as a typo, spelling, formatting, a date, points or a setting. Validate locally and look it over yourself. A change inside a quotation, a source passage, an answer key or a rationale is not this size, because it changes a provable item.
-- **Two helpers**: scoring feedback, and authored work not listed under four helpers (edits to existing content, Pages, Daily assignments, discussion prompts, tier supports). The fact-checker (cheapest capable model) runs as above, and one reviewer (a mid-tier model, such as a Sonnet-class model) does both the logic and the pedagogy review in a single pass. You answer its findings as in step 4. The arbiter runs only when something is left to rule on: a possible-AI-use flag, a finding you rejected, or a fact you and the fact-checker still disagree on. Give it the strongest available model, since a flag is the highest-stakes call in scoring. When you accepted every finding and there is no flag or disputed fact, apply the findings, run the final fact-check on what changed, and the review is done.
-- **Four helpers**: a new quiz, a Major and its tutorial retake, and a rubric. Separate logic and pedagogy reviewers run, and the arbiter rules on every finding.
+- **Two helpers**: scoring feedback, and all authored work except a Major (new quizzes, rubrics, Daily assignments, Pages, edits to existing content, discussion prompts, tier supports). The fact-checker (cheapest capable model) runs as above, and one reviewer (a mid-tier model, such as a Sonnet-class model) does both the logic and the pedagogy review in a single pass. You answer its findings as in step 4. The arbiter runs only when something is left to rule on: a possible-AI-use flag, a finding you rejected, or a fact you and the fact-checker still disagree on. Give it the strongest available model, since a flag is the highest-stakes call in scoring. When you accepted every finding and there is no flag or disputed fact, apply the findings, run the final fact-check on what changed, and the review is done.
+- **Four helpers**: a Major and its tutorial retake. Separate logic and pedagogy reviewers run, and the arbiter rules on every finding. Once the fact-check corrections are in, start both reviewers at the same time: neither needs the other's findings.
 
 When your app can't start helpers, play each role yourself in turn. Say which role you are starting ("Fact-checking: product and sources only"), set your own reasoning aside, and read only what that role receives. It is weaker than independent agents, so be strict.
 
@@ -61,7 +61,7 @@ Do the teaching choices fit this teacher, this grade and these students? Judge a
 - wording: `TEACHER.md` budgets, sentence length for the grade, academic words bolded and defined once
 - quiz design: distractors are real misconceptions, choices survive shuffling, the longest choice doesn't give the answer away; in an MC+Why quiz, every MC item is followed by its "why", numbered to match, and each answer has evidence a student could point to
 - tiers scaffold the same standard and never lower it; Green supports actually support emergent bilingual students
-- feedback is specific, actionable and in the teacher's saved voice and `feedback_guidance`; it does not propose an extra turn-in, correction, retake or grade increase. Check any such promise in directions, instructions or feedback against the applicable teacher policy, and flag one the teacher has not authorized; flag any retake invitation, access code or eligibility announcement in student-facing text
+- feedback is specific, actionable and in the teacher's saved voice and `feedback_guidance`; it does not propose an extra turn-in, correction, retake, grade increase, tutorials, a conference or extra help ("see me", "come talk to me"). Check any such promise in directions, instructions or feedback against the applicable teacher policy, and flag one the teacher has not authorized; flag any retake invitation, access code or eligibility announcement in student-facing text
 - authored exemplars (including private models saved for later scoring) show strong, attainable work at the actual grade in both language and thinking, using taught skills; they neither demand adult polish nor excuse shallow thinking, and add no hidden rubric requirements (see `teacher-context.md`)
 - nothing private (accommodations, tier reasons, teacher notes, flags) shows in student-facing text
 
@@ -84,8 +84,8 @@ Upheld rulings are binding. Apply them, then send only new or changed provable i
 
 | Output | Helpers | Fact-check | Logic | Pedagogy |
 |---|---|---|---|---|
-| New Quiz (items, key, rationales, instructions), Major and its tutorial retake, rubric | four | full | full | full |
-| New Page, Daily assignment, tier supports, discussion prompt | two (one reviewer covers both columns) | full | full | full |
+| Major and its tutorial retake | four | full | full | full |
+| New Quiz (items, key, rationales, instructions), rubric, new Page, Daily assignment, tier supports, discussion prompt | two (one reviewer covers both columns) | full | full | full |
 | Edit of existing content | two (one reviewer covers both columns) | changed passages | changed passages | changed passages |
 | Correction that changes no meaning; date, points or settings change | none | none | none | none |
 | Scoring | two (one reviewer covers both columns) | every quotation, claim about a student's work, exemplar and flag's evidence | interpretation, scoring basis, and every student's scores and feedback | interpretation, scoring basis, and every student's feedback |
