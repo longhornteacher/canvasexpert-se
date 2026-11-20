@@ -1,6 +1,6 @@
 # Written by scripts/package-userinstall.ps1. get-engine.cmd and the Engine read this file.
-version=2.5.3
-identity=2.5.3
-base_url=https://github.com/longhornteacher/canvasexpert-se/releases/download/v2.5.3
-sha256.cse.exe=bbc2839ad6aa4b08d84c3eade8a549763785feaf8540331dd4559188aedfa27e
-sha256.CanvasExpert-SE-Cowork.mcpb=77e6ebb2060d52564731dc89058c941bc99dfcd0a57432feb9587fcc0b0ba0d1
+version=2.6.0
+identity=2.6.0
+base_url=https://github.com/longhornteacher/canvasexpert-se/releases/download/v2.6.0
+sha256.cse.exe=336ce5d09cedb1a5dbb20894649e403dc4bdbf6b3e3c4867e30304d679f0d210
+sha256.CanvasExpert-SE-Cowork.mcpb=d1e9e9461aa932c9a99413088bdbcc6956c5173c13d17059b4da4e62eba5e427
